@@ -1,0 +1,85 @@
+{
+  "name": "phanmienoffline-electron",
+  "version": "1.1.2",
+  "description": "Bán hàng offline ",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vankhadev/phanmemoffline.git"
+  },
+  "homepage": "https://github.com/Vankhadev/phanmemoffline#readme",
+  "bugs": {
+    "url": "https://github.com/Vankhadev/phanmemoffline/issues"
+  },
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm start",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:electron": "set ELECTRON_DEV_URL=http://localhost:5173&& electron .",
+    "build:frontend": "cd frontend && npm run build",
+    "build:portable": "electron-builder --win portable",
+    "build:installer": "electron-builder --win nsis",
+    "build:electron": "npm run build:installer",
+    "build": "npm run build:frontend && npm run build:installer",
+    "build:all": "npm run build:frontend && electron-builder --win portable nsis",
+    "generate:update-manifest": "node scripts/generate-update-manifest.js"
+  },
+  "build": {
+    "appId": "com.vankhammo.phanmienoffline",
+    "productName": "Ban hang offline - Van kha mmo",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "backend/**/*",
+      "!backend/phanmienoffline.db.json",
+      "!**/*.db",
+      "!**/*.db.json",
+      "!**/*.sql",
+      "frontend/dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "BanHangOffline_v${version}.exe"
+    },
+    "nsis": {
+      "artifactName": "BanHangOffline-Setup-v${version}.exe",
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ban hang offline - Van kha mmo"
+    },
+    "asar": true
+  },
+  "khaUpdate": {
+    "provider": "github",
+    "owner": "Vankhadev",
+    "repo": "phanmemoffline",
+    "manifestUrl": "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/update-manifest.json",
+    "assetBaseUrl": "https://github.com/Vankhadev/phanmemoffline/releases/download"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "node-cron": "^3.0.3",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^28.2.2",
+    "electron-builder": "^24.13.3"
+  }
+}
