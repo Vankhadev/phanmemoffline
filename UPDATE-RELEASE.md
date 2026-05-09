@@ -1,127 +1,84 @@
 # Hướng dẫn phát hành và cập nhật ứng dụng Windows
 
-Tài liệu này mô tả quy trình phát hành ứng dụng Electron Windows qua GitHub Release public, dùng installer NSIS do Electron Builder tạo ra và manifest JSON do app tự đọc.
+Tài liệu này mô tả quy trình phát hành ứng dụng Electron Windows qua GitHub Releases bằng `electron-builder` + `electron-updater`.
 
-> Cấu hình production hiện tại dùng GitHub repo public `Vankhadev/phanmemoffline`; app mặc định đọc manifest từ GitHub Release latest của repo này.
+> Cấu hình production hiện tại dùng GitHub repo public `Vankhadev/phanmemoffline`. Cơ chế auto-update chính đọc `latest.yml` từ GitHub Release latest của repo này.
 
-## Tổng quan cơ chế cập nhật
+## Tổng quan cơ chế cập nhật hiện tại
 
-- Mặc định app đọc manifest tại `https://github.com/Vankhadev/phanmemoffline/releases/latest/download/update-manifest.json`.
-- Có thể override feed khi test nội bộ bằng biến môi trường `KHA_UPDATE_MANIFEST_URL`, `KHA_UPDATE_FEED_URL`, hoặc file `update-config.json`/`kha-update-config.json` trong userData. Khi chạy development, có thể đặt file cấu hình ở thư mục gốc repo.
-- Main process tải manifest JSON, validate cấu trúc, so sánh version SemVer với version hiện tại và gửi trạng thái qua IPC an toàn cho renderer.
-- Renderer chỉ có API hẹp qua preload: lấy thông tin ứng dụng, kiểm tra update, tải, hủy tải, cài đặt và nhận trạng thái/progress. Không expose filesystem hoặc shell tùy ý.
-- Installer được tải vào `userData/update-cache`, tính SHA256 và chỉ được chạy khi checksum khớp tuyệt đối.
-- Log cập nhật được ghi bền vững tại `userData/logs/update.log`, gồm các bước resolve feed, fetch manifest, download/copy installer, checksum, backup database, spawn installer và lỗi mạng. Log không ghi token/mật khẩu.
-- Trước khi chạy installer, ứng dụng backup database runtime `phanmienoffline.db.json` trong userData sang `userData/backups`.
-- Bộ cài NSIS chạy ở chế độ assisted mặc định. App không truyền tham số xóa app data và sẽ thoát sau khi spawn installer thành công.
+- Main process dùng `electron-updater`, không còn dùng manifest JSON custom làm cơ chế startup chính.
+- App chỉ tự kiểm tra cập nhật sau khi Electron `app.whenReady()` xong và cửa sổ chính đã hiển thị.
+- Bản development/unpacked không tự auto-update. Nếu cần test có chủ đích, bật `KHA_ENABLE_ELECTRON_UPDATER=1` hoặc `KHA_FORCE_AUTO_UPDATE=1`.
+- `autoDownload` được tắt mặc định ở updater, nhưng startup check của app sẽ tự tải bản mới sau khi phát hiện update để chuẩn bị sẵn cho người dùng.
+- `autoInstallOnAppQuit` bị tắt để tránh tự cài khi người dùng thoát app.
+- Khi tải xong, app hiển thị dialog tiếng Việt với hai nút:
+  - `Cập nhật ngay`: backup database runtime rồi gọi `autoUpdater.quitAndInstall(false, true)`.
+  - `Để sau`: không restart/cài đặt, app tiếp tục chạy bình thường.
+- Trạng thái check/download/downloaded/error vẫn được gửi sang renderer qua IPC `kha:update:*` để UI hiện tại tiếp tục hoạt động.
+- Log cập nhật được ghi tại `userData/logs/update.log`, gồm các bước cấu hình feed, check, download, dialog, backup, install và lỗi mạng. Log không ghi token/mật khẩu.
+- Trước khi cài đặt, ứng dụng backup database runtime `phanmienoffline.db.json` trong userData sang `userData/backups`.
 
-## Manifest update feed GitHub Release
+## Asset GitHub Release bắt buộc cho electron-updater
 
-Manifest là JSON object có các trường tối thiểu:
+Mỗi release production cho Windows cần có các asset do `electron-builder` tạo:
 
-| Trường | Bắt buộc | Mô tả |
+| Asset | Bắt buộc | Mục đích |
 |---|---:|---|
-| `version` | Có | Phiên bản SemVer hợp lệ, ví dụ `1.1.3`. |
-| `url` | Có | URL HTTPS tới installer GitHub Release asset. Test nội bộ vẫn có thể dùng file URL hoặc đường dẫn local tuyệt đối. |
-| `sha256` | Có | SHA256 hex 64 ký tự của installer. |
-| `releaseNotes` | Có | Ghi chú phát hành dạng chuỗi hoặc mảng chuỗi. |
-| `releaseDate` | Có | Thời điểm phát hành dạng ISO 8601. |
-| `platform` | Không | Ví dụ `win32`; nếu có thì app chỉ nhận manifest đúng platform. |
-| `arch` | Không | Ví dụ `x64`; nếu có thì app chỉ nhận manifest đúng kiến trúc. |
-| `size` | Không | Dung lượng installer tính theo byte, dùng để hiển thị UI. |
-| `mandatory` | Không | `true` nếu muốn đánh dấu bản cập nhật bắt buộc trên UI. |
-| `installerType` | Không | Ví dụ `nsis`. |
+| `BanHangOffline-Setup-vVERSION.exe` | Có | Installer NSIS Windows. |
+| `BanHangOffline-Setup-vVERSION.exe.blockmap` | Có | Dữ liệu differential download/kiểm tra gói cập nhật. |
+| `latest.yml` | Có | Metadata chuẩn để `electron-updater` biết version, file, size, sha512 và releaseDate. |
+| `update-manifest.json` | Không bắt buộc cho cơ chế mới | Legacy manifest custom, vẫn upload để tương thích/tự kiểm tra thủ công nếu cần. |
 
-Ví dụ production qua GitHub Release:
+Ví dụ `latest.yml` do `electron-builder` tạo:
 
-```json
-{
-  "version": "1.1.3",
-  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.1.3/BanHangOffline-Setup-v1.1.3.exe",
-  "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.1.3.",
-  "releaseDate": "2026-05-09T00:00:00.000Z",
-  "platform": "win32",
-  "arch": "x64",
-  "size": 76817873,
-  "mandatory": false,
-  "installerType": "nsis"
-}
+```yaml
+version: 1.1.3
+files:
+  - url: BanHangOffline-Setup-v1.1.3.exe
+    sha512: BASE64_SHA512
+    size: 76845764
+path: BanHangOffline-Setup-v1.1.3.exe
+sha512: BASE64_SHA512
+releaseDate: '2026-05-09T13:52:51.450Z'
 ```
 
-Manifest mẫu nằm tại `release/update-manifest.example.json`. Manifest production được tạo bằng script `npm run generate:update-manifest` và được upload lên Release asset với tên `update-manifest.json`.
+## Cấu hình production trong package.json
 
-## Cấu hình GitHub production
-
-Cấu hình hiện tại nằm trong `package.json`:
+Cấu hình chính nằm trong `package.json`:
 
 ```json
 {
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Vankhadev/phanmemoffline.git"
-  },
-  "khaUpdate": {
-    "provider": "github",
-    "owner": "Vankhadev",
-    "repo": "phanmemoffline",
-    "manifestUrl": "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/update-manifest.json",
-    "assetBaseUrl": "https://github.com/Vankhadev/phanmemoffline/releases/download"
+  "build": {
+    "appId": "com.vankhammo.phanmienoffline",
+    "productName": "Ban hang offline - Van kha mmo",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "artifactName": "BanHangOffline-Setup-v${version}.exe",
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Vankhadev",
+        "repo": "phanmemoffline",
+        "releaseType": "release"
+      }
+    ]
   }
 }
 ```
 
-Nếu cần test repo khác, chỉ override bằng biến môi trường hoặc file cấu hình local; cấu hình production mặc định phải tiếp tục trỏ tới `Vankhadev/phanmemoffline`.
-
-## Override feed để test nội bộ
-
-Ví dụ file `update-config.json` trong userData hoặc thư mục gốc khi development:
-
-```json
-{
-  "manifestUrl": "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/update-manifest.json"
-}
-```
-
-Test local bằng file URL hoặc đường dẫn tuyệt đối tới manifest JSON:
-
-```json
-{
-  "manifestUrl": "file:///G:/phanmienoffline/release/update-manifest.json"
-}
-```
-
-Có thể dùng biến môi trường trên Windows cmd:
-
-```cmd
-set KHA_UPDATE_MANIFEST_URL=file:///G:/phanmienoffline/release/update-manifest.json&& npm run dev:electron
-```
-
-## Script tạo manifest production
-
-Script `scripts/generate-update-manifest.js` đọc version từ `package.json`, tìm installer `release/BanHangOffline-Setup-vVERSION.exe`, tính SHA256, lấy size và ghi `release/update-manifest.json`.
-
-Chạy sau khi build installer:
-
-```cmd
-npm run generate:update-manifest
-```
-
-Các biến môi trường có thể dùng khi cần:
-
-| Biến | Mục đích |
-|---|---|
-| `KHA_UPDATE_OWNER` | Override GitHub owner. |
-| `KHA_UPDATE_REPO` | Override GitHub repo. |
-| `KHA_UPDATE_REPOSITORY` | Override dạng `owner/repo`. |
-| `KHA_RELEASE_TAG` | Override tag release, mặc định `vVERSION`. |
-| `KHA_RELEASE_NOTES` | Ghi chú phát hành đưa vào manifest. |
-| `KHA_RELEASE_DATE` | ISO release date, mặc định thời điểm chạy script. |
-| `KHA_UPDATE_INSTALLER` | Đường dẫn installer khác mặc định. |
-| `KHA_UPDATE_ASSET_URL` | Override URL asset đầy đủ. |
-| `KHA_UPDATE_MANDATORY` | `true`/`false` cho trường mandatory. |
-
-Script sẽ fail rõ nếu installer không tồn tại hoặc version không hợp lệ.
+`electron-builder` dùng cấu hình `publish` để tạo `resources/app-update.yml` trong app đã đóng gói và để `electron-updater` biết GitHub owner/repo.
 
 ## GitHub Actions release Windows
 
@@ -139,31 +96,32 @@ Workflow thực hiện:
 3. Chạy `npm ci` ở root và frontend.
 4. Kiểm tra tag `vX.Y.Z` khớp `package.json.version`.
 5. Chạy `npm run build` để build frontend và NSIS installer.
-6. Chạy `npm run generate:update-manifest`.
-7. Kiểm tra tồn tại installer, blockmap và manifest; in SHA256.
-8. Upload các asset lên GitHub Release bằng `GITHUB_TOKEN` mặc định:
+6. Chạy `npm run generate:update-manifest` để tạo legacy `update-manifest.json`.
+7. Kiểm tra tồn tại installer, blockmap, `latest.yml` và manifest legacy; in SHA256.
+8. Upload asset lên GitHub Release bằng `secrets.GITHUB_TOKEN` mặc định:
    - `BanHangOffline-Setup-vVERSION.exe`
    - `BanHangOffline-Setup-vVERSION.exe.blockmap`
+   - `latest.yml`
    - `update-manifest.json`
 
-Không đưa token GitHub vào source. Workflow chỉ dùng `secrets.GITHUB_TOKEN` mặc định của GitHub Actions.
+Không đưa token GitHub vào source. Workflow chỉ dùng `secrets.GITHUB_TOKEN` của GitHub Actions.
 
-## Quy trình phát hành version mới
+## Quy trình phát hành version mới qua GitHub Actions
 
 1. Đảm bảo cấu hình production vẫn trỏ tới repo thật `Vankhadev/phanmemoffline`.
-2. Cập nhật version SemVer ở các package liên quan:
+2. Cập nhật version SemVer ở root:
    - `package.json`
    - `package-lock.json`
+3. Nếu các package frontend/backend cũng đang duy trì version riêng, cập nhật tương ứng:
    - `frontend/package.json`
    - `frontend/package-lock.json`
    - `backend/package.json`
    - `backend/package-lock.json`
-3. Cập nhật ghi chú phát hành hoặc chuẩn bị biến `KHA_RELEASE_NOTES` cho script.
 4. Commit thay đổi code/version.
 5. Tạo tag khớp version root package:
 
 ```cmd
-git tag v1.1.3
+git tag v1.1.4
 git push origin main --tags
 ```
 
@@ -171,54 +129,86 @@ git push origin main --tags
 7. Sau khi workflow xong, mở Release trên GitHub và kiểm tra đủ asset:
    - Installer `.exe`
    - File `.exe.blockmap`
-   - `update-manifest.json`
-8. Tải `update-manifest.json` từ Release, kiểm tra:
+   - `latest.yml`
+   - `update-manifest.json` nếu vẫn muốn giữ legacy manifest
+8. Tải `latest.yml` từ Release và kiểm tra:
    - `version` đúng.
-   - `url` trỏ tới asset `.exe` cùng tag.
-   - `sha256` khớp installer.
+   - `path`/`files[0].url` trỏ tới installer cùng release.
+   - `sha512` có giá trị.
    - `size` đúng dung lượng installer.
-9. Kiểm tra SHA256 độc lập nếu cần:
 
-```powershell
-Get-FileHash .\release\BanHangOffline-Setup-v1.1.3.exe -Algorithm SHA256
+## Publish từ máy dev nếu cần
+
+Chỉ dùng khi thật sự cần publish thủ công từ máy dev. Không hard-code token vào source.
+
+Trên Windows cmd:
+
+```cmd
+set GH_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+npm run build:frontend
+npx electron-builder --win nsis --publish always
 ```
 
-10. Test cập nhật từ máy/VM đang cài version cũ:
-    - Mở app bản cũ.
-    - Đợi startup check hoặc vào Cài đặt > Cập nhật > Kiểm tra cập nhật.
-    - Xác nhận UI hiển thị GitHub Release feed mặc định hoặc feed override đang dùng.
-    - Xác nhận UI hiển thị bản mới, release notes, dung lượng và SHA256.
-    - Tải update, theo dõi progress.
-    - Xác nhận checksum pass và nút cài đặt khả dụng.
-    - Bấm cài đặt, xác nhận app backup database rồi mở installer.
-    - Cài xong, mở lại app và kiểm tra version mới, database, cấu hình người dùng và localStorage vẫn còn.
+Lưu ý:
+
+- `GH_TOKEN` cần có quyền tạo/cập nhật GitHub Release trong repo `Vankhadev/phanmemoffline`.
+- Lệnh `--publish always` sẽ upload asset lên GitHub Release theo tag/version hiện tại; không chạy nếu chưa chắc version/tag đúng.
+- Không commit token, không ghi token vào file cấu hình.
+- Nếu chỉ cần build local để test installer, dùng `npm run build` hoặc `npm run build:installer`, không cần `GH_TOKEN`.
+
+## Test cập nhật
+
+Test nên thực hiện trên máy thật/VM Windows đang cài phiên bản cũ, không test bằng bản development/unpacked.
+
+1. Cài version cũ bằng installer NSIS.
+2. Publish GitHub Release version mới có đủ `.exe`, `.blockmap`, `latest.yml`.
+3. Mở app version cũ.
+4. Đợi startup check hoặc vào `Cài đặt > Cập nhật > Kiểm tra cập nhật`.
+5. Xác nhận UI hiển thị feed GitHub Releases `latest.yml`.
+6. Xác nhận UI hiển thị bản mới, release notes nếu có và dung lượng.
+7. Theo dõi tiến trình tải.
+8. Khi tải xong, xác nhận dialog hiển thị nút `Cập nhật ngay` và `Để sau`.
+9. Chọn `Để sau`: app phải tiếp tục chạy, không restart/cài đặt.
+10. Mở lại thao tác cài đặt hoặc tải lại nếu cần, chọn `Cập nhật ngay`: app backup database rồi restart/cài đặt qua `electron-updater`.
+11. Sau khi cập nhật xong, mở app và kiểm tra version mới, database, cấu hình người dùng và localStorage vẫn còn.
+
+## Legacy custom manifest
+
+Dự án vẫn giữ script `scripts/generate-update-manifest.js` và asset `update-manifest.json` để tương thích tài liệu/tooling cũ. Cơ chế startup chính hiện tại không đọc manifest JSON này.
+
+Nếu cần dùng legacy manifest cho test nội bộ/tự động hóa cũ:
+
+```cmd
+npm run generate:update-manifest
+```
+
+Manifest legacy vẫn gồm `version`, `url`, `sha256`, `releaseNotes`, `releaseDate`, `platform`, `arch`, `size`, `mandatory`, `installerType`. Không dùng manifest legacy để thay thế `latest.yml` cho `electron-updater` production.
 
 ## Rollback
 
 - Nếu release bị lỗi trước khi nhiều máy cập nhật: đánh dấu Release cũ là latest hoặc publish release mới có version cao hơn để app nhận bản sửa.
-- Nếu manifest sai SHA256/URL: upload lại `update-manifest.json` đúng vào Release latest. App sẽ không chạy installer nếu checksum không khớp.
+- Nếu `latest.yml` sai hoặc thiếu asset: upload lại đúng `latest.yml`, `.exe`, `.blockmap` vào GitHub Release latest.
 - Không phát hành lại cùng version cho installer khác nội dung nếu người dùng đã tải trước đó; nên tăng patch version để tránh cache và nhầm checksum.
-- Nếu cần khôi phục dữ liệu local trên máy người dùng, dùng backup trong `userData/backups` được tạo trước khi mở installer.
+- Nếu cần khôi phục dữ liệu local trên máy người dùng, dùng backup trong `userData/backups` được tạo trước khi cài đặt cập nhật.
 
 ## Lưu ý bảo toàn dữ liệu
 
-- Không đổi rule Electron Builder đang loại trừ `*.db`, `*.db.json`, `*.sql` khỏi installer.
+- Không đổi rule `electron-builder` đang loại trừ `*.db`, `*.db.json`, `*.sql` khỏi installer.
 - Không bundle database runtime vào installer.
 - Runtime database của bản Electron nằm trong userData theo biến `KHA_DB_PATH` và file `phanmienoffline.db.json`.
-- Cập nhật qua NSIS không truyền tham số xóa dữ liệu ứng dụng.
-- Trước khi spawn installer, app tạo bản sao database trong `userData/backups` nếu file database tồn tại.
-- localStorage và cấu hình renderer nằm trong userData/session data của Electron; installer assisted không được xóa userData.
+- Cập nhật qua NSIS/electron-updater không truyền tham số xóa dữ liệu ứng dụng.
+- Trước khi gọi `quitAndInstall`, app tạo bản sao database trong `userData/backups` nếu file database tồn tại.
+- localStorage và cấu hình renderer nằm trong userData/session data của Electron; installer/update không được xóa userData.
 - Nếu cần migration dữ liệu trong tương lai, migration phải chạy idempotent và backup trước khi sửa dữ liệu.
 
 ## Kiểm tra khuyến nghị cho mỗi release
 
 - Kiểm tra cú pháp main process/updater/preload và script manifest bằng Node.
-- Chạy `npm run generate:update-manifest` sau khi build installer.
-- Chạy `npm run build:frontend` nếu có thay đổi frontend.
-- Test manifest local bằng file URL hoặc đường dẫn tuyệt đối.
-- Test URL GitHub Release latest download khi Release public đã có manifest.
-- Test checksum sai: sửa một ký tự `sha256` trong manifest và xác nhận app xóa installer, không chạy bộ cài.
-- Test mất mạng hoặc URL sai: UI phải hiển thị lỗi nhưng startup không bị block.
+- Chạy `npm run build:frontend` nếu có thay đổi renderer/preload liên quan UI.
+- Chạy `npm run build:installer` hoặc `npm run build` để xác nhận `electron-builder` tạo installer, `.blockmap`, `latest.yml`.
+- Chạy `npm run generate:update-manifest` nếu vẫn upload legacy manifest.
+- Test mất mạng hoặc GitHub Release thiếu `latest.yml`: UI/log phải báo lỗi nhưng app không crash.
 - Test hủy tải khi đang downloading.
-- Test nâng cấp từ version cũ lên version mới trên máy thật/VM Windows.
+- Test lựa chọn `Để sau`: app không restart/cài đặt.
+- Test lựa chọn `Cập nhật ngay`: app backup database rồi cài đặt/restart.
 - Kiểm tra `userData/logs/update.log` khi cần debug.

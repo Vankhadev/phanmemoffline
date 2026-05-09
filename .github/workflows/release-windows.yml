@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -49,8 +51,14 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=$expectedTag" >> $env:GITHUB_OUTPUT
 
+      - name: Build frontend
+        run: npm run build:frontend
+
       - name: Build Windows NSIS installer
-        run: npm run build
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --win nsis --publish never
 
       - name: Generate update manifest
         run: npm run generate:update-manifest
@@ -61,13 +69,15 @@ jobs:
           $version = '${{ steps.version.outputs.version }}'
           $installer = "release/BanHangOffline-Setup-v$version.exe"
           $blockmap = "$installer.blockmap"
+          $latest = 'release/latest.yml'
           $manifest = 'release/update-manifest.json'
-          foreach ($file in @($installer, $blockmap, $manifest)) {
+          foreach ($file in @($installer, $blockmap, $latest, $manifest)) {
             if (-not (Test-Path $file)) {
               throw "Missing release artifact: $file"
             }
           }
           Get-FileHash $installer -Algorithm SHA256 | Format-List
+          Get-Content $latest
           Get-Content $manifest
 
       - name: Publish GitHub Release assets
@@ -80,6 +90,7 @@ jobs:
           files: |
             release/BanHangOffline-Setup-v${{ steps.version.outputs.version }}.exe
             release/BanHangOffline-Setup-v${{ steps.version.outputs.version }}.exe.blockmap
+            release/latest.yml
             release/update-manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

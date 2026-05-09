@@ -2,8 +2,8 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
-const { spawn } = require('child_process');
-const { fileURLToPath } = require('url');
+const { dialog } = require('electron');
+const { autoUpdater, CancellationToken } = require('electron-updater');
 
 const CHANNELS = Object.freeze({
   appInfo: 'kha:app:get-info',
@@ -15,15 +15,11 @@ const CHANNELS = Object.freeze({
   status: 'kha:update:status',
 });
 
-const CONFIG_FILE_NAMES = Object.freeze(['update-config.json', 'kha-update-config.json']);
-const MANIFEST_ENV_KEYS = Object.freeze(['KHA_UPDATE_MANIFEST_URL', 'KHA_UPDATE_FEED_URL']);
-const DEFAULT_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
-const DEFAULT_MANIFEST_TIMEOUT_MS = 15000;
 const DB_FILE_NAME = 'phanmienoffline.db.json';
 const DEFAULT_GITHUB_OWNER = 'Vankhadev';
 const DEFAULT_GITHUB_REPO = 'phanmemoffline';
-const DEFAULT_GITHUB_MANIFEST_URL = `https://github.com/${DEFAULT_GITHUB_OWNER}/${DEFAULT_GITHUB_REPO}/releases/latest/download/update-manifest.json`;
 const SENSITIVE_LOG_KEY_PATTERN = /(token|secret|password|authorization|cookie|api[-_]?key)/i;
+const STARTUP_CHECK_DELAY_MS = 3500;
 
 function createPublicError(code, message, details) {
   const err = new Error(message);
@@ -116,17 +112,6 @@ function compareVersions(leftVersion, rightVersion) {
   return comparePrerelease(left.prerelease, right.prerelease);
 }
 
-function isSupportedUrl(value, { allowLocalPath = false } = {}) {
-  if (!value || typeof value !== 'string') return false;
-  if (allowLocalPath && path.isAbsolute(value)) return true;
-  try {
-    const parsed = new URL(value);
-    return ['https:', 'http:', 'file:'].includes(parsed.protocol);
-  } catch (_) {
-    return false;
-  }
-}
-
 function sanitizeFileName(value) {
   return String(value || 'update')
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, '-')
@@ -140,6 +125,10 @@ function formatTimestampForFile(date = new Date()) {
   return date.toISOString().replace(/[:.]/g, '-');
 }
 
+function isTruthy(value) {
+  return ['1', 'true', 'yes', 'y', 'on'].includes(String(value || '').trim().toLowerCase());
+}
+
 async function pathExists(filePath) {
   try {
     await fsp.access(filePath, fs.constants.F_OK);
@@ -147,6 +136,16 @@ async function pathExists(filePath) {
   } catch (_) {
     return false;
   }
+}
+
+async function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', chunk => hash.update(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
 }
 
 let packageConfigCache = null;
@@ -168,41 +167,57 @@ function cleanRepoPart(value, fallback) {
   return cleaned || fallback;
 }
 
-function buildGitHubLatestManifestUrl(owner = DEFAULT_GITHUB_OWNER, repo = DEFAULT_GITHUB_REPO) {
-  return `https://github.com/${cleanRepoPart(owner, DEFAULT_GITHUB_OWNER)}/${cleanRepoPart(repo, DEFAULT_GITHUB_REPO)}/releases/latest/download/update-manifest.json`;
+function getPublishCandidates(packageConfig) {
+  const candidates = [];
+  const rootPublish = packageConfig?.build?.publish;
+  const winPublish = packageConfig?.build?.win?.publish;
+
+  for (const value of [rootPublish, winPublish]) {
+    if (Array.isArray(value)) candidates.push(...value);
+    else if (value && typeof value === 'object') candidates.push(value);
+  }
+
+  return candidates;
 }
 
-function resolveDefaultManifestUrl() {
+function resolveElectronUpdaterFeed() {
   const packageConfig = getPackageConfig();
-  const updateConfig = packageConfig.khaUpdate && typeof packageConfig.khaUpdate === 'object'
-    ? packageConfig.khaUpdate
-    : {};
-  const packageManifestUrl = String(updateConfig.manifestUrl || '').trim();
+  const githubPublish = getPublishCandidates(packageConfig).find(item => String(item?.provider || '').toLowerCase() === 'github') || {};
+  const legacyConfig = packageConfig.khaUpdate && typeof packageConfig.khaUpdate === 'object' ? packageConfig.khaUpdate : {};
+  const repositoryOverride = String(process.env.KHA_UPDATE_REPOSITORY || process.env.KHA_ELECTRON_UPDATE_REPOSITORY || '').trim();
+  const [ownerFromRepository, repoFromRepository] = repositoryOverride.includes('/') ? repositoryOverride.split('/', 2) : [];
 
-  if (packageManifestUrl && isSupportedUrl(packageManifestUrl)) {
-    return {
-      manifestUrl: packageManifestUrl,
-      source: 'default:package.khaUpdate.manifestUrl',
-      configured: false,
-      isDefault: true,
-    };
-  }
+  const owner = cleanRepoPart(
+    process.env.KHA_UPDATE_OWNER
+      || process.env.KHA_ELECTRON_UPDATE_OWNER
+      || ownerFromRepository
+      || githubPublish.owner
+      || legacyConfig.owner,
+    DEFAULT_GITHUB_OWNER,
+  );
+  const repo = cleanRepoPart(
+    process.env.KHA_UPDATE_REPO
+      || process.env.KHA_ELECTRON_UPDATE_REPO
+      || repoFromRepository
+      || githubPublish.repo
+      || legacyConfig.repo,
+    DEFAULT_GITHUB_REPO,
+  );
+  const provider = String(githubPublish.provider || legacyConfig.provider || 'github').trim().toLowerCase();
+  const releaseType = String(githubPublish.releaseType || 'release').trim();
+  const channel = String(process.env.KHA_UPDATE_CHANNEL || githubPublish.channel || '').trim();
+  const feedUrl = `https://github.com/${owner}/${repo}/releases/latest/download/${channel || 'latest'}.yml`;
 
   return {
-    manifestUrl: buildGitHubLatestManifestUrl(updateConfig.owner, updateConfig.repo),
-    source: 'default:github-release',
-    configured: false,
-    isDefault: true,
+    provider,
+    owner,
+    repo,
+    releaseType,
+    channel,
+    feedUrl,
+    source: githubPublish.provider ? 'package.build.publish' : 'package.khaUpdate/default',
+    configured: Boolean(githubPublish.provider || legacyConfig.provider),
   };
-}
-
-function safeParseUrl(value) {
-  if (typeof value === 'string' && path.isAbsolute(value)) return null;
-  try {
-    return new URL(value);
-  } catch (_) {
-    return null;
-  }
 }
 
 function sanitizeUrlForLog(value) {
@@ -246,19 +261,27 @@ function createUpdateLogger(app) {
   const logDir = path.join(app.getPath('userData'), 'logs');
   const logPath = path.join(logDir, 'update.log');
 
-  async function write(level, message, details) {
-    try {
-      await fsp.mkdir(logDir, { recursive: true });
-      const entry = {
-        at: new Date().toISOString(),
-        level,
-        message,
-        ...(details !== undefined ? { details: sanitizeForLog(details) } : {}),
-      };
-      await fsp.appendFile(logPath, `${JSON.stringify(entry)}\n`, 'utf8');
-    } catch (_) {
-      // Logging must never break the update flow.
-    }
+  function write(level, message, details) {
+    const entry = {
+      at: new Date().toISOString(),
+      level,
+      message: String(message || ''),
+      ...(details !== undefined ? { details: sanitizeForLog(details) } : {}),
+    };
+
+    const consoleMessage = `[KHA Update] ${entry.message}`;
+    if (level === 'error') console.error(consoleMessage, entry.details || '');
+    else if (level === 'warn') console.warn(consoleMessage, entry.details || '');
+    else console.log(consoleMessage, entry.details || '');
+
+    void (async () => {
+      try {
+        await fsp.mkdir(logDir, { recursive: true });
+        await fsp.appendFile(logPath, `${JSON.stringify(entry)}\n`, 'utf8');
+      } catch (_) {
+        // Logging must never break the update flow.
+      }
+    })();
   }
 
   return {
@@ -270,299 +293,75 @@ function createUpdateLogger(app) {
   };
 }
 
-function getConfigSearchPaths(app) {
-  const userData = app.getPath('userData');
-  const candidates = [];
-
-  for (const fileName of CONFIG_FILE_NAMES) {
-    candidates.push(path.join(userData, fileName));
-  }
-
-  if (process.resourcesPath) {
-    for (const fileName of CONFIG_FILE_NAMES) {
-      candidates.push(path.join(process.resourcesPath, fileName));
-    }
-  }
-
-  if (!app.isPackaged) {
-    for (const fileName of CONFIG_FILE_NAMES) {
-      candidates.push(path.join(process.cwd(), fileName));
-    }
-  }
-
-  return candidates;
-}
-
-async function readManifestUrlFromConfigFile(filePath) {
-  if (!(await pathExists(filePath))) return '';
-  const raw = await fsp.readFile(filePath, 'utf8');
-  const config = JSON.parse(raw);
-  return String(config.manifestUrl || config.updateManifestUrl || config.updateFeedUrl || '').trim();
-}
-
-async function resolveManifestUrl(app) {
-  for (const envKey of MANIFEST_ENV_KEYS) {
-    const envValue = String(process.env[envKey] || '').trim();
-    if (envValue) {
-      return { manifestUrl: envValue, source: `env:${envKey}`, configured: true, isDefault: false };
-    }
-  }
-
-  for (const filePath of getConfigSearchPaths(app)) {
-    try {
-      const manifestUrl = await readManifestUrlFromConfigFile(filePath);
-      if (manifestUrl) {
-        return { manifestUrl, source: filePath, configured: true, isDefault: false };
-      }
-    } catch (err) {
-      throw createPublicError('CONFIG_INVALID', `File cấu hình cập nhật không hợp lệ: ${filePath}`, err.message);
-    }
-  }
-
-  return resolveDefaultManifestUrl();
-}
-
-function withTimeout(ms, timeoutMessage) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(createPublicError('TIMEOUT', timeoutMessage)), ms);
-  return {
-    signal: controller.signal,
-    cancel: () => clearTimeout(timer),
-  };
-}
-
-async function readLocalText(urlOrPath) {
-  let filePath = urlOrPath;
-  const parsed = safeParseUrl(urlOrPath);
-  if (parsed?.protocol === 'file:') filePath = fileURLToPath(parsed);
-
-  if (!path.isAbsolute(filePath)) {
-    throw createPublicError('URL_INVALID', 'Manifest local phải là đường dẫn tuyệt đối hoặc file URL.');
-  }
-
-  return fsp.readFile(filePath, 'utf8');
-}
-
-async function readRemoteText(urlString, timeoutMs = DEFAULT_MANIFEST_TIMEOUT_MS) {
-  const timeout = withTimeout(timeoutMs, 'Quá thời gian tải manifest cập nhật.');
-  try {
-    const response = await fetch(urlString, {
-      signal: timeout.signal,
-      cache: 'no-store',
-      headers: {
-        Accept: 'application/json',
-        'Cache-Control': 'no-cache',
-      },
-    });
-
-    if (!response.ok) {
-      throw createPublicError('MANIFEST_HTTP_ERROR', `Không tải được manifest cập nhật (HTTP ${response.status}).`);
-    }
-
-    return await response.text();
-  } catch (err) {
-    if (err?.code) throw err;
-    if (err?.name === 'AbortError') {
-      throw createPublicError('NETWORK_TIMEOUT', 'Quá thời gian kết nối tới manifest cập nhật.');
-    }
-    throw createPublicError('NETWORK_ERROR', 'Không thể kết nối tới manifest cập nhật. Vui lòng kiểm tra mạng hoặc URL cấu hình.', err.message);
-  } finally {
-    timeout.cancel();
-  }
-}
-
-async function readManifest(manifestUrl) {
-  if (!isSupportedUrl(manifestUrl, { allowLocalPath: true })) {
-    throw createPublicError('URL_INVALID', 'URL manifest cập nhật không hợp lệ. Chỉ hỗ trợ https, http, file URL hoặc đường dẫn local tuyệt đối.');
-  }
-
-  let raw;
-  const parsed = safeParseUrl(manifestUrl);
-
-  if (!parsed || parsed.protocol === 'file:') {
-    raw = await readLocalText(manifestUrl);
-  } else {
-    raw = await readRemoteText(manifestUrl);
-  }
-
-  try {
-    return JSON.parse(raw);
-  } catch (err) {
-    throw createPublicError('MANIFEST_INVALID_JSON', 'Manifest cập nhật không phải JSON hợp lệ.', err.message);
-  }
-}
-
 function normalizeReleaseNotes(releaseNotes) {
-  if (Array.isArray(releaseNotes)) return releaseNotes.map(item => String(item)).join('\n');
+  if (Array.isArray(releaseNotes)) {
+    return releaseNotes
+      .map(item => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') return item.note || item.notes || item.body || JSON.stringify(item);
+        return String(item || '');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+  }
   return String(releaseNotes || '').trim();
 }
 
-function validateManifest(manifest) {
-  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
-    throw createPublicError('MANIFEST_INVALID', 'Manifest cập nhật phải là một JSON object.');
-  }
+function getPrimaryFileInfo(updateInfo) {
+  if (Array.isArray(updateInfo?.files) && updateInfo.files.length > 0) return updateInfo.files[0];
+  return null;
+}
 
-  const version = normalizeVersion(manifest.version);
-  if (!parseSemVer(version)) {
-    throw createPublicError('MANIFEST_INVALID_VERSION', 'Manifest thiếu version SemVer hợp lệ.');
-  }
-
-  const url = String(manifest.url || '').trim();
-  if (!isSupportedUrl(url, { allowLocalPath: true })) {
-    throw createPublicError('MANIFEST_INVALID_URL', 'Manifest thiếu URL installer hợp lệ.');
-  }
-
-  const sha256 = String(manifest.sha256 || '').trim().toLowerCase();
-  if (!/^[a-f0-9]{64}$/.test(sha256)) {
-    throw createPublicError('MANIFEST_INVALID_SHA256', 'Manifest thiếu SHA256 hợp lệ cho installer.');
-  }
-
-  const releaseDate = String(manifest.releaseDate || '').trim();
-  if (!releaseDate) {
-    throw createPublicError('MANIFEST_INVALID_RELEASE_DATE', 'Manifest thiếu releaseDate.');
-  }
+function normalizeUpdateInfo(updateInfo) {
+  if (!updateInfo) return null;
+  const primaryFile = getPrimaryFileInfo(updateInfo);
+  const version = normalizeVersion(updateInfo.version);
+  const size = Number(primaryFile?.size || updateInfo.size || 0) || 0;
+  const sha512 = String(primaryFile?.sha512 || updateInfo.sha512 || '').trim();
+  const updatePath = String(updateInfo.path || primaryFile?.url || '').trim();
 
   return {
     version,
-    url,
-    sha256,
-    releaseNotes: normalizeReleaseNotes(manifest.releaseNotes),
-    releaseDate,
-    platform: manifest.platform ? String(manifest.platform).trim() : '',
-    arch: manifest.arch ? String(manifest.arch).trim() : '',
-    size: Number.isFinite(Number(manifest.size)) ? Number(manifest.size) : 0,
-    mandatory: Boolean(manifest.mandatory),
-    installerType: String(manifest.installerType || 'nsis').trim().toLowerCase(),
+    releaseName: String(updateInfo.releaseName || '').trim(),
+    releaseNotes: normalizeReleaseNotes(updateInfo.releaseNotes),
+    releaseDate: String(updateInfo.releaseDate || '').trim(),
+    stagingPercentage: updateInfo.stagingPercentage,
+    path: updatePath,
+    url: updatePath,
+    sha512,
+    sha256: '',
+    files: Array.isArray(updateInfo.files) ? updateInfo.files : [],
+    size,
+    mandatory: false,
+    installerType: 'nsis',
+    provider: 'github',
+    updater: 'electron-updater',
   };
 }
 
-function isManifestForCurrentRuntime(updateInfo) {
-  const platformOk = !updateInfo.platform || updateInfo.platform === process.platform;
-  const archOk = !updateInfo.arch || updateInfo.arch === process.arch;
-  return platformOk && archOk;
-}
-
-async function sha256File(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256');
-    const stream = fs.createReadStream(filePath);
-    stream.on('data', chunk => hash.update(chunk));
-    stream.on('error', reject);
-    stream.on('end', () => resolve(hash.digest('hex')));
-  });
-}
-
-async function unlinkQuietly(filePath) {
-  try {
-    await fsp.unlink(filePath);
-  } catch (_) {
-    // Ignore cleanup errors.
-  }
-}
-
-async function pipeLocalFileWithProgress(sourcePath, destinationPath, onProgress, cancelToken) {
-  const stat = await fsp.stat(sourcePath);
-  const total = stat.size;
-  let transferred = 0;
-
-  await new Promise((resolve, reject) => {
-    const reader = fs.createReadStream(sourcePath);
-    const writer = fs.createWriteStream(destinationPath, { flags: 'w' });
-
-    cancelToken.cancel = () => {
-      cancelToken.cancelled = true;
-      reader.destroy(createPublicError('DOWNLOAD_CANCELLED', 'Người dùng đã hủy tải cập nhật.'));
-      writer.destroy();
-    };
-
-    reader.on('data', chunk => {
-      transferred += chunk.length;
-      onProgress({ transferred, total, percent: total ? Math.round((transferred / total) * 100) : 0 });
-    });
-    reader.on('error', reject);
-    writer.on('error', reject);
-    writer.on('finish', resolve);
-    reader.pipe(writer);
-  });
-
-  return { transferred, total };
-}
-
-async function downloadRemoteFile(urlString, destinationPath, onProgress, cancelToken, timeoutMs = DEFAULT_DOWNLOAD_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(createPublicError('NETWORK_TIMEOUT', 'Quá thời gian tải installer cập nhật.')), timeoutMs);
-  cancelToken.cancel = () => {
-    cancelToken.cancelled = true;
-    controller.abort(createPublicError('DOWNLOAD_CANCELLED', 'Người dùng đã hủy tải cập nhật.'));
+function normalizeProgress(progress) {
+  const total = Number(progress?.total) || 0;
+  const transferred = Number(progress?.transferred) || 0;
+  const percent = Math.max(0, Math.min(100, Number(progress?.percent) || (total ? (transferred / total) * 100 : 0)));
+  return {
+    bytesPerSecond: Number(progress?.bytesPerSecond) || 0,
+    percent,
+    transferred,
+    total,
   };
-
-  let writer;
-  try {
-    const response = await fetch(urlString, {
-      signal: controller.signal,
-      headers: {
-        Accept: 'application/octet-stream',
-        'Cache-Control': 'no-cache',
-      },
-    });
-
-    if (!response.ok) {
-      throw createPublicError('DOWNLOAD_HTTP_ERROR', `Không tải được installer cập nhật (HTTP ${response.status}).`);
-    }
-
-    const total = Number(response.headers.get('content-length')) || 0;
-    let transferred = 0;
-    writer = fs.createWriteStream(destinationPath, { flags: 'w' });
-
-    if (!response.body) {
-      throw createPublicError('DOWNLOAD_FAILED', 'Phản hồi tải installer không có dữ liệu.');
-    }
-
-    const reader = response.body.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (cancelToken.cancelled) throw createPublicError('DOWNLOAD_CANCELLED', 'Người dùng đã hủy tải cập nhật.');
-      const chunk = Buffer.from(value);
-      transferred += chunk.length;
-      if (!writer.write(chunk)) {
-        await new Promise(resolve => writer.once('drain', resolve));
-      }
-      onProgress({ transferred, total, percent: total ? Math.round((transferred / total) * 100) : 0 });
-    }
-
-    await new Promise((resolve, reject) => {
-      writer.end(err => (err ? reject(err) : resolve()));
-    });
-
-    return { transferred, total };
-  } catch (err) {
-    if (err?.code) throw err;
-    if (err?.name === 'AbortError') {
-      throw cancelToken.cancelled
-        ? createPublicError('DOWNLOAD_CANCELLED', 'Người dùng đã hủy tải cập nhật.')
-        : createPublicError('NETWORK_TIMEOUT', 'Quá thời gian tải installer cập nhật.');
-    }
-    throw createPublicError('DOWNLOAD_FAILED', 'Tải installer cập nhật thất bại.', err.message);
-  } finally {
-    clearTimeout(timer);
-    if (writer && !writer.closed) writer.destroy();
-  }
 }
 
-function getLocalFilePath(urlOrPath) {
-  if (typeof urlOrPath === 'string' && path.isAbsolute(urlOrPath)) return urlOrPath;
-  const parsed = safeParseUrl(urlOrPath);
-  if (parsed?.protocol === 'file:') return fileURLToPath(parsed);
-  return '';
-}
-
-async function copyOrDownloadInstaller(updateInfo, destinationPath, onProgress, cancelToken) {
-  const localPath = getLocalFilePath(updateInfo.url);
-  if (localPath) {
-    return pipeLocalFileWithProgress(localPath, destinationPath, onProgress, cancelToken);
+function formatBytes(value) {
+  const bytes = Number(value) || 0;
+  if (!bytes) return 'không rõ dung lượng';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = bytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
   }
-  return downloadRemoteFile(updateInfo.url, destinationPath, onProgress, cancelToken);
+  return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
 async function backupDatabase(app, targetVersion) {
@@ -580,25 +379,48 @@ async function backupDatabase(app, targetVersion) {
   return { dbPath, backupPath, skipped: false };
 }
 
-function createUpdateManager({ app, getMainWindow }) {
-  let currentDownload = null;
-  let startupCheckScheduled = false;
-  const logger = createUpdateLogger(app);
-  const initialDefaultManifest = resolveDefaultManifestUrl();
+function isCancellationError(err) {
+  return err?.name === 'CancellationError'
+    || err?.message === 'cancelled'
+    || err?.code === 'ERR_UPDATER_CANCELLED'
+    || err?.code === 'DOWNLOAD_CANCELLED';
+}
 
-  void logger.info('Update manager initialized', {
-    currentVersion: app.getVersion(),
-    defaultManifestUrl: initialDefaultManifest.manifestUrl,
-    logPath: logger.logPath,
-  });
+function isDevUpdaterForced() {
+  return isTruthy(process.env.KHA_FORCE_AUTO_UPDATE)
+    || isTruthy(process.env.KHA_ENABLE_ELECTRON_UPDATER)
+    || isTruthy(process.env.ELECTRON_FORCE_AUTO_UPDATE)
+    || isTruthy(process.env.ELECTRON_ENABLE_UPDATER);
+}
+
+function createUpdateManager({ app, getMainWindow }) {
+  const logger = createUpdateLogger(app);
+  const feed = resolveElectronUpdaterFeed();
+  let startupCheckScheduled = false;
+  let updaterConfigured = false;
+  let listenersRegistered = false;
+  let currentCheckPromise = null;
+  let currentDownloadPromise = null;
+  let currentDownloadToken = null;
+  let currentDownloadSilent = false;
+  let installInProgress = false;
+  let promptInProgress = false;
+  let downloadedDialogShownForVersion = '';
+  let activeCheckOptions = { silent: true, source: 'init', autoDownload: false };
 
   const state = {
     currentVersion: app.getVersion(),
-    manifestUrl: '',
-    manifestSource: '',
-    manifestUrlConfigured: false,
-    manifestUrlDefault: false,
-    defaultManifestUrl: initialDefaultManifest.manifestUrl,
+    updateEngine: 'electron-updater',
+    feedProvider: feed.provider,
+    feedOwner: feed.owner,
+    feedRepo: feed.repo,
+    feedUrl: feed.feedUrl,
+    feedSource: feed.source,
+    manifestUrl: feed.feedUrl,
+    manifestSource: feed.source,
+    manifestUrlConfigured: feed.configured,
+    manifestUrlDefault: true,
+    defaultManifestUrl: feed.feedUrl,
     updateLogPath: logger.logPath,
     status: 'idle',
     updateAvailable: false,
@@ -606,14 +428,22 @@ function createUpdateManager({ app, getMainWindow }) {
     progress: null,
     downloadedFile: '',
     downloadedSha256: '',
+    downloadedSha512: '',
     backupPath: '',
     lastCheckedAt: '',
     lastError: null,
+    devUpdateForced: isDevUpdaterForced(),
   };
 
   function getPublicState() {
     return {
       currentVersion: state.currentVersion,
+      updateEngine: state.updateEngine,
+      feedProvider: state.feedProvider,
+      feedOwner: state.feedOwner,
+      feedRepo: state.feedRepo,
+      feedUrl: state.feedUrl,
+      feedSource: state.feedSource,
       manifestUrl: state.manifestUrl,
       manifestSource: state.manifestSource,
       manifestUrlConfigured: state.manifestUrlConfigured,
@@ -626,9 +456,11 @@ function createUpdateManager({ app, getMainWindow }) {
       progress: state.progress,
       downloadedFile: state.downloadedFile,
       downloadedSha256: state.downloadedSha256,
+      downloadedSha512: state.downloadedSha512,
       backupPath: state.backupPath,
       lastCheckedAt: state.lastCheckedAt,
       lastError: state.lastError,
+      devUpdateForced: state.devUpdateForced,
     };
   }
 
@@ -640,7 +472,14 @@ function createUpdateManager({ app, getMainWindow }) {
       at: new Date().toISOString(),
     };
 
-    const shouldNotifyRenderer = !silent || type === 'update-available' || type === 'downloaded';
+    const shouldNotifyRenderer = !silent || [
+      'update-available',
+      'downloading',
+      'download-progress',
+      'downloaded',
+      'installing',
+      'install-deferred',
+    ].includes(type);
     const win = typeof getMainWindow === 'function' ? getMainWindow() : null;
     if (shouldNotifyRenderer && win && !win.isDestroyed() && win.webContents) {
       win.webContents.send(CHANNELS.status, publicPayload);
@@ -649,32 +488,292 @@ function createUpdateManager({ app, getMainWindow }) {
     return publicPayload;
   }
 
-  async function refreshConfig() {
-    const resolved = await resolveManifestUrl(app);
-    const defaultManifest = resolveDefaultManifestUrl();
-    state.manifestUrl = resolved.manifestUrl;
-    state.manifestSource = resolved.source;
-    state.manifestUrlConfigured = Boolean(resolved.configured);
-    state.manifestUrlDefault = Boolean(resolved.isDefault);
-    state.defaultManifestUrl = defaultManifest.manifestUrl;
-    state.updateLogPath = logger.logPath;
-    await logger.debug('Resolved update manifest source', {
-      manifestUrl: state.manifestUrl,
-      source: state.manifestSource,
-      configured: state.manifestUrlConfigured,
-      isDefault: state.manifestUrlDefault,
+  function configureUpdater() {
+    if (updaterConfigured) return;
+    updaterConfigured = true;
+
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.allowPrerelease = false;
+    autoUpdater.allowDowngrade = false;
+    autoUpdater.disableWebInstaller = true;
+    autoUpdater.forceDevUpdateConfig = state.devUpdateForced;
+    autoUpdater.logger = {
+      info: message => logger.info('electron-updater: thông tin', { message }),
+      warn: message => logger.warn('electron-updater: cảnh báo', { message }),
+      error: message => logger.error('electron-updater: lỗi', { message }),
+      debug: message => logger.debug('electron-updater: debug', { message }),
+    };
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: feed.owner,
+      repo: feed.repo,
+      releaseType: feed.releaseType,
+      ...(feed.channel ? { channel: feed.channel } : {}),
     });
-    return resolved;
+
+    logger.info('Đã cấu hình electron-updater cho GitHub Releases', {
+      owner: feed.owner,
+      repo: feed.repo,
+      feedUrl: feed.feedUrl,
+      appVersion: state.currentVersion,
+      isPackaged: app.isPackaged,
+      devUpdateForced: state.devUpdateForced,
+      autoDownload: autoUpdater.autoDownload,
+      autoInstallOnAppQuit: autoUpdater.autoInstallOnAppQuit,
+    });
   }
 
-  async function getState() {
-    try {
-      await refreshConfig();
-    } catch (err) {
-      state.lastError = { code: err.code || 'CONFIG_INVALID', message: err.message };
-      await logger.warn('Cannot refresh update config for renderer state', err);
+  async function installUpdate(options = {}) {
+    if (installInProgress) {
+      const err = createPublicError('INSTALL_IN_PROGRESS', 'Ứng dụng đang chuẩn bị cài đặt bản cập nhật.');
+      return failure(err, getPublicState());
     }
-    return success({ state: getPublicState() });
+
+    try {
+      installInProgress = true;
+      if (state.status !== 'downloaded' || !state.updateInfo) {
+        throw createPublicError('UPDATE_NOT_DOWNLOADED', 'Chưa có bản cập nhật đã tải xong để cài đặt.');
+      }
+
+      logger.info('Người dùng đồng ý cài đặt bản cập nhật', {
+        source: options.source || 'manual',
+        version: state.updateInfo.version,
+        downloadedFile: state.downloadedFile,
+      });
+
+      if (state.downloadedFile && !(await pathExists(state.downloadedFile))) {
+        logger.warn('File cập nhật không còn thấy ở đường dẫn sự kiện, vẫn để electron-updater xử lý cache nội bộ', {
+          downloadedFile: state.downloadedFile,
+        });
+      }
+
+      const backup = await backupDatabase(app, state.updateInfo.version);
+      state.backupPath = backup.backupPath;
+      logger.info(
+        backup.skipped
+          ? 'Bỏ qua backup database trước cập nhật vì chưa có file dữ liệu runtime'
+          : 'Đã backup database trước khi cài đặt cập nhật',
+        backup,
+      );
+
+      state.status = 'installing';
+      state.lastError = null;
+      emit('installing', {
+        message: 'Đang khởi động cài đặt bản cập nhật...',
+        backup,
+        updateInfo: state.updateInfo,
+      }, { silent: false });
+
+      logger.info('Gọi electron-updater quitAndInstall sau khi người dùng xác nhận', {
+        isSilent: false,
+        isForceRunAfter: true,
+      });
+      autoUpdater.quitAndInstall(false, true);
+      return success({ installing: true, backupPath: state.backupPath, state: getPublicState() });
+    } catch (err) {
+      installInProgress = false;
+      state.status = 'error';
+      state.lastError = { code: err.code || 'INSTALL_FAILED', message: err.message, details: err.details };
+      logger.error('Cài đặt cập nhật thất bại, ứng dụng tiếp tục chạy', err);
+      emit('error', { error: state.lastError }, { silent: false });
+      return failure(err, getPublicState());
+    }
+  }
+
+  async function promptToInstallDownloadedUpdate(updateInfo, downloadedFile) {
+    const normalizedInfo = normalizeUpdateInfo(updateInfo) || state.updateInfo;
+    if (!normalizedInfo || promptInProgress) return;
+    if (downloadedDialogShownForVersion === normalizedInfo.version) return;
+
+    const win = typeof getMainWindow === 'function' ? getMainWindow() : null;
+    if (!win || win.isDestroyed()) {
+      logger.warn('Không hiển thị được hộp thoại cập nhật vì cửa sổ chính chưa sẵn sàng', {
+        version: normalizedInfo.version,
+        downloadedFile,
+      });
+      return;
+    }
+
+    promptInProgress = true;
+    downloadedDialogShownForVersion = normalizedInfo.version;
+    try {
+      logger.info('Hiển thị hộp thoại hỏi người dùng có cập nhật ngay hay để sau', {
+        version: normalizedInfo.version,
+        downloadedFile,
+      });
+      const releaseNotes = normalizedInfo.releaseNotes ? `\n\nGhi chú phát hành:\n${normalizedInfo.releaseNotes}` : '';
+      const detail = [
+        `Phiên bản hiện tại: ${state.currentVersion}`,
+        `Phiên bản mới: ${normalizedInfo.version}`,
+        `Dung lượng: ${formatBytes(normalizedInfo.size)}`,
+        'Ứng dụng chỉ cài đặt/restart khi bạn chọn “Cập nhật ngay”. Nếu chọn “Để sau”, ứng dụng tiếp tục chạy bình thường.',
+        releaseNotes,
+      ].filter(Boolean).join('\n');
+
+      const result = await dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'Bản cập nhật đã sẵn sàng',
+        message: `Đã tải xong bản cập nhật ${normalizedInfo.version}.`,
+        detail,
+        buttons: ['Cập nhật ngay', 'Để sau'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+        normalizeAccessKeys: true,
+      });
+
+      if (result.response === 0) {
+        await installUpdate({ source: 'downloaded-dialog' });
+        return;
+      }
+
+      logger.info('Người dùng chọn để sau, không cài đặt hoặc restart ứng dụng', {
+        version: normalizedInfo.version,
+      });
+      state.status = 'downloaded';
+      emit('install-deferred', {
+        message: 'Người dùng chọn để sau. Ứng dụng tiếp tục chạy bình thường.',
+        updateInfo: normalizedInfo,
+      }, { silent: false });
+    } catch (err) {
+      logger.error('Không xử lý được hộp thoại cập nhật, ứng dụng tiếp tục chạy', err);
+      state.status = 'downloaded';
+    } finally {
+      promptInProgress = false;
+    }
+  }
+
+  function registerUpdaterEvents() {
+    if (listenersRegistered) return;
+    listenersRegistered = true;
+
+    autoUpdater.on('checking-for-update', () => {
+      state.status = 'checking';
+      state.progress = null;
+      state.lastError = null;
+      logger.info('Đang kiểm tra bản cập nhật qua electron-updater', {
+        source: activeCheckOptions.source,
+        silent: activeCheckOptions.silent,
+        feedUrl: state.feedUrl,
+      });
+      emit('checking', { message: 'Đang kiểm tra bản cập nhật...' }, { silent: activeCheckOptions.silent });
+    });
+
+    autoUpdater.on('update-not-available', updateInfo => {
+      const normalizedInfo = normalizeUpdateInfo(updateInfo);
+      state.status = 'no-update';
+      state.updateAvailable = false;
+      state.updateInfo = normalizedInfo;
+      state.progress = null;
+      state.downloadedFile = '';
+      state.downloadedSha256 = '';
+      state.downloadedSha512 = '';
+      state.lastCheckedAt = new Date().toISOString();
+      state.lastError = null;
+      logger.info('Không có bản cập nhật mới', {
+        currentVersion: state.currentVersion,
+        latestVersion: normalizedInfo?.version,
+      });
+      emit('no-update', {
+        message: 'Ứng dụng đang ở phiên bản mới nhất.',
+        updateInfo: normalizedInfo,
+      }, { silent: activeCheckOptions.silent });
+    });
+
+    autoUpdater.on('update-available', updateInfo => {
+      const normalizedInfo = normalizeUpdateInfo(updateInfo);
+      state.status = 'update-available';
+      state.updateAvailable = true;
+      state.updateInfo = normalizedInfo;
+      state.progress = null;
+      state.downloadedFile = '';
+      state.downloadedSha256 = '';
+      state.downloadedSha512 = normalizedInfo?.sha512 || '';
+      state.lastCheckedAt = new Date().toISOString();
+      state.lastError = null;
+      logger.info('Có bản cập nhật mới trên GitHub Releases', {
+        currentVersion: state.currentVersion,
+        updateInfo: normalizedInfo,
+      });
+      emit('update-available', {
+        message: normalizedInfo?.version ? `Có bản cập nhật ${normalizedInfo.version}.` : 'Có bản cập nhật mới.',
+        updateInfo: normalizedInfo,
+      }, { silent: false });
+    });
+
+    autoUpdater.on('download-progress', progress => {
+      state.status = 'downloading';
+      state.progress = normalizeProgress(progress);
+      state.lastError = null;
+      emit('download-progress', {
+        message: 'Đang tải bản cập nhật...',
+        progress: state.progress,
+        updateInfo: state.updateInfo,
+      }, { silent: currentDownloadSilent });
+    });
+
+    autoUpdater.on('update-downloaded', updateInfo => {
+      const normalizedInfo = normalizeUpdateInfo(updateInfo);
+      state.status = 'downloaded';
+      state.updateAvailable = true;
+      state.updateInfo = normalizedInfo;
+      state.progress = { ...(state.progress || {}), percent: 100 };
+      state.downloadedFile = String(updateInfo?.downloadedFile || '').trim();
+      state.downloadedSha512 = normalizedInfo?.sha512 || state.downloadedSha512 || '';
+      state.downloadedSha256 = '';
+      state.lastError = null;
+      logger.info('Đã tải xong bản cập nhật, chờ người dùng xác nhận cài đặt', {
+        version: normalizedInfo?.version,
+        downloadedFile: state.downloadedFile,
+        sha512: state.downloadedSha512,
+      });
+      emit('downloaded', {
+        message: 'Đã tải xong bản cập nhật. Chờ người dùng chọn cập nhật ngay hoặc để sau.',
+        updateInfo: normalizedInfo,
+        downloadedFile: state.downloadedFile,
+      }, { silent: false });
+      void promptToInstallDownloadedUpdate(updateInfo, state.downloadedFile);
+    });
+
+    autoUpdater.on('update-cancelled', updateInfo => {
+      const normalizedInfo = normalizeUpdateInfo(updateInfo);
+      state.status = 'cancelled';
+      state.progress = null;
+      state.lastError = null;
+      logger.warn('Đã hủy tải bản cập nhật', { updateInfo: normalizedInfo });
+      emit('cancelled', {
+        message: 'Đã hủy tải cập nhật theo yêu cầu người dùng.',
+        updateInfo: normalizedInfo,
+      }, { silent: false });
+    });
+
+    autoUpdater.on('error', err => {
+      if (isCancellationError(err)) {
+        state.status = 'cancelled';
+        state.lastError = null;
+        logger.warn('Luồng tải cập nhật đã bị hủy', err);
+        emit('cancelled', { message: 'Đã hủy tải cập nhật.' }, { silent: currentDownloadSilent });
+        return;
+      }
+
+      state.status = 'error';
+      state.lastError = {
+        code: err?.code || 'ELECTRON_UPDATER_ERROR',
+        message: err?.message || 'electron-updater báo lỗi không xác định.',
+      };
+      logger.error('electron-updater báo lỗi, ứng dụng tiếp tục chạy', err);
+      emit('error', { error: state.lastError }, { silent: activeCheckOptions.silent || currentDownloadSilent });
+    });
+  }
+
+  function ensureUpdaterReady() {
+    configureUpdater();
+    registerUpdaterEvents();
+  }
+
+  function updatesAllowed() {
+    return app.isPackaged || state.devUpdateForced;
   }
 
   function getAppInfo() {
@@ -690,366 +789,291 @@ function createUpdateManager({ app, getMainWindow }) {
     });
   }
 
-  async function checkForUpdates(options = {}) {
-    const silent = Boolean(options.silent);
-    const checkSource = String(options.source || (silent ? 'silent' : 'manual'));
-    try {
-      state.status = 'checking';
-      state.progress = null;
-      state.lastError = null;
-      await logger.info('Checking for updates', {
-        currentVersion: state.currentVersion,
-        source: checkSource,
-        silent,
-      });
-      await refreshConfig();
-      await logger.info('Using update manifest', {
-        manifestUrl: state.manifestUrl,
-        manifestSource: state.manifestSource,
-        manifestUrlConfigured: state.manifestUrlConfigured,
-        manifestUrlDefault: state.manifestUrlDefault,
-      });
-      emit('checking', { message: 'Đang kiểm tra bản cập nhật...' }, { silent });
-
-      if (!state.manifestUrl) {
-        throw createPublicError('MANIFEST_URL_MISSING', 'Chưa cấu hình URL manifest cập nhật.');
-      }
-
-      await logger.debug('Fetching update manifest', { manifestUrl: state.manifestUrl });
-      const manifest = await readManifest(state.manifestUrl);
-      await logger.debug('Update manifest fetched', {
-        version: manifest?.version,
-        url: manifest?.url,
-        platform: manifest?.platform,
-        arch: manifest?.arch,
-        size: manifest?.size,
-      });
-      const updateInfo = validateManifest(manifest);
-      await logger.info('Update manifest validated', {
-        version: updateInfo.version,
-        url: updateInfo.url,
-        sha256: updateInfo.sha256,
-        platform: updateInfo.platform,
-        arch: updateInfo.arch,
-        size: updateInfo.size,
-        installerType: updateInfo.installerType,
-      });
-      state.lastCheckedAt = new Date().toISOString();
-
-      if (!isManifestForCurrentRuntime(updateInfo)) {
-        await logger.info('Update manifest ignored because platform or arch does not match current runtime', {
-          manifestPlatform: updateInfo.platform,
-          manifestArch: updateInfo.arch,
-          currentPlatform: process.platform,
-          currentArch: process.arch,
-        });
-        state.status = 'no-update';
-        state.updateAvailable = false;
-        state.updateInfo = null;
-        state.downloadedFile = '';
-        state.downloadedSha256 = '';
-        return success({
-          updateAvailable: false,
-          reason: 'platform-or-arch-mismatch',
-          updateInfo,
-          state: getPublicState(),
-          event: emit('no-update', { message: 'Manifest không dành cho nền tảng/kiến trúc hiện tại.', updateInfo }, { silent }),
-        });
-      }
-
-      const compared = compareVersions(updateInfo.version, state.currentVersion);
-      if (compared <= 0) {
-        await logger.info('No update available after version comparison', {
-          manifestVersion: updateInfo.version,
-          currentVersion: state.currentVersion,
-          compared,
-        });
-        state.status = 'no-update';
-        state.updateAvailable = false;
-        state.updateInfo = updateInfo;
-        state.downloadedFile = '';
-        state.downloadedSha256 = '';
-        return success({
-          updateAvailable: false,
-          updateInfo,
-          state: getPublicState(),
-          event: emit('no-update', { message: 'Ứng dụng đang ở phiên bản mới nhất.', updateInfo }, { silent }),
-        });
-      }
-
-      await logger.info('Update available', {
-        manifestVersion: updateInfo.version,
-        currentVersion: state.currentVersion,
-        url: updateInfo.url,
-      });
-      state.status = 'update-available';
-      state.updateAvailable = true;
-      state.updateInfo = updateInfo;
-      state.downloadedFile = '';
-      state.downloadedSha256 = '';
-
-      return success({
-        updateAvailable: true,
-        updateInfo,
-        state: getPublicState(),
-        event: emit('update-available', { message: `Có bản cập nhật ${updateInfo.version}.`, updateInfo }, { silent }),
-      });
-    } catch (err) {
-      state.status = 'error';
-      state.lastError = { code: err.code || 'CHECK_FAILED', message: err.message, details: err.details };
-      await logger.error('Update check failed', err);
-      if (!silent) emit('error', { error: state.lastError }, { silent: false });
-      return failure(err, getPublicState());
-    }
+  async function getState() {
+    return success({ state: getPublicState() });
   }
 
-  async function downloadUpdate() {
-    if (currentDownload) {
-      await logger.warn('Download request ignored because another download is already running');
+  async function checkForUpdates(options = {}) {
+    ensureUpdaterReady();
+    const silent = Boolean(options.silent);
+    const source = String(options.source || (options.manual ? 'manual' : (silent ? 'silent' : 'manual')));
+    const autoDownload = Boolean(options.autoDownload);
+
+    if (!updatesAllowed()) {
+      const err = createPublicError(
+        'DEV_UPDATER_DISABLED',
+        'Auto-update bị tắt khi chạy development/unpacked. Đặt KHA_ENABLE_ELECTRON_UPDATER=1 nếu cần test có chủ đích.',
+      );
+      logger.info('Bỏ qua kiểm tra cập nhật vì ứng dụng chưa đóng gói production', {
+        isPackaged: app.isPackaged,
+        devUpdateForced: state.devUpdateForced,
+        source,
+      });
+      if (!silent) {
+        state.status = 'error';
+        state.lastError = { code: err.code, message: err.message };
+        emit('error', { error: state.lastError }, { silent: false });
+        return failure(err, getPublicState());
+      }
+      return success({ skipped: true, reason: 'development-mode', state: getPublicState() });
+    }
+
+    const win = typeof getMainWindow === 'function' ? getMainWindow() : null;
+    if (!app.isReady() || !win || win.isDestroyed()) {
+      const err = createPublicError('WINDOW_NOT_READY', 'Chỉ kiểm tra cập nhật sau khi app ready và cửa sổ chính đã sẵn sàng.');
+      logger.warn('Bỏ qua kiểm tra cập nhật vì app/window chưa sẵn sàng', {
+        appReady: app.isReady(),
+        hasWindow: Boolean(win),
+        source,
+      });
+      if (!silent) return failure(err, getPublicState());
+      return success({ skipped: true, reason: 'window-not-ready', state: getPublicState() });
+    }
+
+    if (currentCheckPromise) {
+      logger.warn('Bỏ qua yêu cầu kiểm tra cập nhật trùng lặp vì một lượt check đang chạy', { source });
+      return currentCheckPromise;
+    }
+
+    activeCheckOptions = { silent, source, autoDownload };
+    currentCheckPromise = (async () => {
+      try {
+        state.status = 'checking';
+        state.progress = null;
+        state.lastError = null;
+        logger.info('Bắt đầu kiểm tra cập nhật', {
+          source,
+          silent,
+          autoDownload,
+          feedUrl: state.feedUrl,
+          currentVersion: state.currentVersion,
+        });
+
+        const result = await autoUpdater.checkForUpdates();
+        if (!result) {
+          logger.warn('electron-updater không active, không kiểm tra cập nhật', {
+            isPackaged: app.isPackaged,
+            devUpdateForced: state.devUpdateForced,
+          });
+          return success({ skipped: true, reason: 'updater-inactive', state: getPublicState() });
+        }
+
+        const normalizedInfo = normalizeUpdateInfo(result.updateInfo);
+        state.lastCheckedAt = new Date().toISOString();
+
+        if (!result.isUpdateAvailable) {
+          state.status = 'no-update';
+          state.updateAvailable = false;
+          state.updateInfo = normalizedInfo;
+          return success({
+            updateAvailable: false,
+            updateInfo: normalizedInfo,
+            state: getPublicState(),
+          });
+        }
+
+        state.status = 'update-available';
+        state.updateAvailable = true;
+        state.updateInfo = normalizedInfo;
+
+        const response = success({
+          updateAvailable: true,
+          updateInfo: normalizedInfo,
+          state: getPublicState(),
+        });
+
+        if (autoDownload && !state.downloadedFile && !currentDownloadPromise) {
+          logger.info('Startup check thấy bản mới, tự bắt đầu tải cập nhật nhưng chưa cài đặt', {
+            version: normalizedInfo?.version,
+          });
+          void downloadUpdate({ source: 'startup-auto-download', silent: false }).catch(err => {
+            logger.error('Tự tải cập nhật sau startup check thất bại', err);
+          });
+        }
+
+        return response;
+      } catch (err) {
+        state.status = 'error';
+        state.lastError = { code: err.code || 'CHECK_FAILED', message: err.message, details: err.details };
+        logger.error('Kiểm tra cập nhật thất bại, ứng dụng tiếp tục chạy', err);
+        if (!silent) emit('error', { error: state.lastError }, { silent: false });
+        return failure(err, getPublicState());
+      } finally {
+        currentCheckPromise = null;
+        activeCheckOptions = { silent: true, source: 'idle', autoDownload: false };
+      }
+    })();
+
+    return currentCheckPromise;
+  }
+
+  async function downloadUpdate(options = {}) {
+    ensureUpdaterReady();
+    const silent = Boolean(options.silent);
+    const source = String(options.source || 'manual');
+
+    if (!updatesAllowed()) {
+      const err = createPublicError(
+        'DEV_UPDATER_DISABLED',
+        'Auto-update bị tắt khi chạy development/unpacked. Đặt KHA_ENABLE_ELECTRON_UPDATER=1 nếu cần test có chủ đích.',
+      );
+      return failure(err, getPublicState());
+    }
+
+    if (currentDownloadPromise) {
+      logger.warn('Bỏ qua yêu cầu tải cập nhật trùng lặp vì một lượt tải đang chạy', { source });
       return failure(createPublicError('DOWNLOAD_IN_PROGRESS', 'Một lượt tải cập nhật đang chạy.'), getPublicState());
     }
 
-    let tempPath = '';
+    if (state.status === 'downloaded' && state.updateInfo) {
+      logger.info('Bản cập nhật đã tải sẵn, không tải lại', {
+        source,
+        version: state.updateInfo.version,
+        downloadedFile: state.downloadedFile,
+      });
+      return success({
+        downloadedFile: state.downloadedFile,
+        updateInfo: state.updateInfo,
+        state: getPublicState(),
+      });
+    }
 
     try {
-      if (!state.updateInfo || !state.updateAvailable) {
-        const checked = await checkForUpdates({ silent: false });
+      if (!state.updateAvailable || !state.updateInfo) {
+        const checked = await checkForUpdates({ silent: false, source: 'download-precheck', autoDownload: false });
         if (!checked.ok) return checked;
         if (!checked.updateAvailable) {
           return failure(createPublicError('UPDATE_NOT_AVAILABLE', 'Không có bản cập nhật mới để tải.'), getPublicState());
         }
       }
 
-      const updateInfo = state.updateInfo;
-      await logger.info('Starting update download', {
-        version: updateInfo.version,
-        url: updateInfo.url,
-        expectedSha256: updateInfo.sha256,
-        expectedSize: updateInfo.size,
-      });
+      currentDownloadSilent = silent;
+      currentDownloadToken = new CancellationToken();
       state.status = 'downloading';
-      state.progress = { transferred: 0, total: updateInfo.size || 0, percent: 0 };
-      state.downloadedFile = '';
-      state.downloadedSha256 = '';
+      state.progress = { bytesPerSecond: 0, percent: 0, transferred: 0, total: state.updateInfo?.size || 0 };
       state.lastError = null;
-
-      const cacheDir = path.join(app.getPath('userData'), 'update-cache');
-      await fsp.mkdir(cacheDir, { recursive: true });
-      const localSourcePath = getLocalFilePath(updateInfo.url);
-      let installerExtension = '.bin';
-      if (process.platform === 'win32') {
-        installerExtension = '.exe';
-      } else if (localSourcePath) {
-        installerExtension = path.extname(localSourcePath) || '.bin';
-      } else {
-        installerExtension = path.extname(new URL(updateInfo.url).pathname) || '.bin';
-      }
-      const baseName = sanitizeFileName(`${app.getName()}-${updateInfo.version}-${updateInfo.sha256.slice(0, 8)}`);
-      const finalPath = path.join(cacheDir, `${baseName}${installerExtension}`);
-      tempPath = `${finalPath}.download`;
-      await unlinkQuietly(tempPath);
-      await unlinkQuietly(finalPath);
-
-      await logger.debug('Prepared update cache paths', {
-        cacheDir,
-        localSourcePath,
-        tempPath,
-        finalPath,
+      logger.info('Bắt đầu tải bản cập nhật bằng electron-updater', {
+        source,
+        version: state.updateInfo?.version,
+        feedUrl: state.feedUrl,
       });
+      emit('downloading', {
+        message: 'Đang tải bản cập nhật...',
+        progress: state.progress,
+        updateInfo: state.updateInfo,
+      }, { silent });
 
-      const cancelToken = { cancelled: false, cancel: null };
-      currentDownload = cancelToken;
-      emit('downloading', { progress: state.progress, updateInfo }, { silent: false });
+      currentDownloadPromise = autoUpdater.downloadUpdate(currentDownloadToken);
+      const downloadedFiles = await currentDownloadPromise;
+      const downloadedFile = Array.isArray(downloadedFiles) ? String(downloadedFiles[0] || '') : '';
 
-      let lastLoggedProgressBucket = -1;
-      const onProgress = progress => {
-        state.progress = progress;
-        const percent = Number(progress?.percent) || 0;
-        const bucket = Math.floor(percent / 25) * 25;
-        if (bucket !== lastLoggedProgressBucket || percent >= 100) {
-          lastLoggedProgressBucket = bucket;
-          void logger.debug('Update download progress', progress);
-        }
-        emit('download-progress', { progress, updateInfo }, { silent: false });
-      };
-
-      await logger.debug(localSourcePath ? 'Copying local update installer' : 'Downloading remote update installer', {
-        source: localSourcePath || updateInfo.url,
-        destination: tempPath,
-      });
-      const transferResult = await copyOrDownloadInstaller(updateInfo, tempPath, onProgress, cancelToken);
-      await logger.info('Installer transfer completed', transferResult);
-      if (cancelToken.cancelled) throw createPublicError('DOWNLOAD_CANCELLED', 'Người dùng đã hủy tải cập nhật.');
-
-      await logger.debug('Verifying downloaded installer SHA256', {
-        filePath: tempPath,
-        expectedSha256: updateInfo.sha256,
-      });
-      const actualSha256 = await sha256File(tempPath);
-      if (actualSha256.toLowerCase() !== updateInfo.sha256.toLowerCase()) {
-        await logger.error('Installer SHA256 mismatch after download', {
-          expected: updateInfo.sha256,
-          actual: actualSha256,
-          filePath: tempPath,
-        });
-        await unlinkQuietly(tempPath);
-        await unlinkQuietly(finalPath);
-        throw createPublicError('CHECKSUM_MISMATCH', 'Checksum SHA256 không khớp. Installer đã bị xóa và sẽ không được chạy.', { expected: updateInfo.sha256, actual: actualSha256 });
+      if (state.status !== 'downloaded') {
+        state.status = 'downloaded';
+        state.progress = { ...(state.progress || {}), percent: 100 };
+        state.downloadedFile = downloadedFile;
+        state.downloadedSha512 = state.updateInfo?.sha512 || state.downloadedSha512 || '';
+        state.lastError = null;
+        emit('downloaded', {
+          message: 'Đã tải xong bản cập nhật. Chờ người dùng chọn cập nhật ngay hoặc để sau.',
+          updateInfo: state.updateInfo,
+          downloadedFile,
+        }, { silent: false });
+        void promptToInstallDownloadedUpdate(state.updateInfo, downloadedFile);
       }
 
-      await logger.info('Installer SHA256 verified', {
-        filePath: tempPath,
-        sha256: actualSha256,
+      logger.info('Tải cập nhật hoàn tất', {
+        source,
+        version: state.updateInfo?.version,
+        downloadedFiles,
       });
-      await fsp.rename(tempPath, finalPath);
-      await logger.info('Installer stored in update cache', { finalPath });
-      state.status = 'downloaded';
-      state.progress = { ...(state.progress || {}), percent: 100 };
-      state.downloadedFile = finalPath;
-      state.downloadedSha256 = actualSha256;
-
       return success({
-        downloadedFile: finalPath,
-        sha256: actualSha256,
-        updateInfo,
+        downloadedFile: state.downloadedFile || downloadedFile,
+        downloadedFiles,
+        updateInfo: state.updateInfo,
         state: getPublicState(),
-        event: emit('downloaded', { message: 'Đã tải và xác thực installer cập nhật.', updateInfo, downloadedFile: finalPath }, { silent: false }),
       });
     } catch (err) {
-      const isCancelled = err?.code === 'DOWNLOAD_CANCELLED';
-      state.status = isCancelled ? 'cancelled' : 'error';
+      if (isCancellationError(err)) {
+        state.status = 'cancelled';
+        state.progress = null;
+        state.lastError = null;
+        logger.warn('Tải cập nhật đã bị hủy theo yêu cầu', err);
+        emit('cancelled', { message: 'Đã hủy tải cập nhật theo yêu cầu người dùng.' }, { silent: false });
+        return success({ cancelled: true, state: getPublicState() });
+      }
+
+      state.status = 'error';
       state.lastError = { code: err.code || 'DOWNLOAD_FAILED', message: err.message, details: err.details };
-      await logger[isCancelled ? 'warn' : 'error'](isCancelled ? 'Update download cancelled' : 'Update download failed', err);
-      if (typeof tempPath === 'string') await unlinkQuietly(tempPath);
-      emit(isCancelled ? 'cancelled' : 'error', { error: state.lastError }, { silent: false });
+      logger.error('Tải cập nhật thất bại, ứng dụng tiếp tục chạy', err);
+      emit('error', { error: state.lastError }, { silent });
       return failure(err, getPublicState());
     } finally {
-      currentDownload = null;
+      if (currentDownloadToken && typeof currentDownloadToken.dispose === 'function') currentDownloadToken.dispose();
+      currentDownloadToken = null;
+      currentDownloadPromise = null;
+      currentDownloadSilent = false;
     }
   }
 
   async function cancelDownload() {
-    if (!currentDownload || typeof currentDownload.cancel !== 'function') {
-      await logger.warn('Cancel update request ignored because no download is running');
+    if (!currentDownloadToken || typeof currentDownloadToken.cancel !== 'function') {
+      logger.warn('Bỏ qua yêu cầu hủy tải vì không có lượt tải nào đang chạy');
       return failure(createPublicError('NO_DOWNLOAD_IN_PROGRESS', 'Không có lượt tải cập nhật nào đang chạy.'), getPublicState());
     }
-    await logger.info('Cancelling update download by user request');
-    currentDownload.cancel();
+
+    logger.info('Người dùng yêu cầu hủy tải cập nhật');
+    currentDownloadToken.cancel();
     state.status = 'cancelled';
+    state.progress = null;
     state.lastError = null;
     emit('cancelled', { message: 'Đã hủy tải cập nhật theo yêu cầu người dùng.' }, { silent: false });
     return success({ cancelled: true, state: getPublicState() });
   }
 
-  async function installUpdate() {
-    try {
-      await logger.info('Preparing update installation', {
-        downloadedFile: state.downloadedFile,
-        updateVersion: state.updateInfo?.version,
-      });
-      if (!state.downloadedFile) {
-        throw createPublicError('INSTALLER_NOT_DOWNLOADED', 'Chưa có installer đã tải để cài đặt.');
-      }
-      if (!(await pathExists(state.downloadedFile))) {
-        throw createPublicError('INSTALLER_NOT_FOUND', 'Không tìm thấy installer đã tải. Vui lòng tải lại bản cập nhật.');
-      }
-      if (!state.updateInfo) {
-        throw createPublicError('UPDATE_INFO_MISSING', 'Thiếu thông tin bản cập nhật. Vui lòng kiểm tra cập nhật lại.');
-      }
-
-      await logger.debug('Verifying downloaded installer before install', {
-        downloadedFile: state.downloadedFile,
-        expectedSha256: state.updateInfo.sha256,
-      });
-      const actualSha256 = await sha256File(state.downloadedFile);
-      if (actualSha256.toLowerCase() !== state.updateInfo.sha256.toLowerCase()) {
-        await logger.error('Installer SHA256 mismatch before install', {
-          expected: state.updateInfo.sha256,
-          actual: actualSha256,
-          downloadedFile: state.downloadedFile,
-        });
-        await unlinkQuietly(state.downloadedFile);
-        state.downloadedFile = '';
-        state.downloadedSha256 = '';
-        throw createPublicError('CHECKSUM_MISMATCH', 'Checksum SHA256 không khớp trước khi cài đặt. Installer đã bị xóa.', { expected: state.updateInfo.sha256, actual: actualSha256 });
-      }
-      await logger.info('Downloaded installer SHA256 verified before install', {
-        downloadedFile: state.downloadedFile,
-        sha256: actualSha256,
-      });
-
-      await logger.debug('Backing up database before update install', {
-        targetVersion: state.updateInfo.version,
-      });
-      const backup = await backupDatabase(app, state.updateInfo.version);
-      await logger.info(backup.skipped ? 'Database backup skipped because database file does not exist' : 'Database backup completed before update install', backup);
-      state.backupPath = backup.backupPath;
-      state.status = 'installing';
-      emit('installing', { message: 'Đang mở bộ cài cập nhật...', backup }, { silent: false });
-
-      await logger.info('Spawning update installer', {
-        installer: state.downloadedFile,
-        args: [],
-      });
-      await new Promise((resolve, reject) => {
-        let settled = false;
-        const child = spawn(state.downloadedFile, [], {
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: false,
-        });
-
-        child.once('error', err => {
-          if (settled) return;
-          settled = true;
-          reject(createPublicError('SPAWN_INSTALLER_FAILED', 'Không thể chạy installer cập nhật.', err.message));
-        });
-
-        child.once('spawn', () => {
-          if (settled) return;
-          settled = true;
-          void logger.info('Update installer process spawned', {
-            installer: state.downloadedFile,
-            pid: child.pid,
-          });
-          child.unref();
-          resolve();
-        });
-      });
-
-      await logger.info('Installer spawned successfully; scheduling application quit');
-      setTimeout(() => app.quit(), 250);
-      return success({ installing: true, backupPath: state.backupPath, state: getPublicState() });
-    } catch (err) {
-      state.status = 'error';
-      state.lastError = { code: err.code || 'INSTALL_FAILED', message: err.message, details: err.details };
-      await logger.error('Update install failed', err);
-      emit('error', { error: state.lastError }, { silent: false });
-      return failure(err, getPublicState());
-    }
-  }
-
   function registerIpc(ipcMain) {
+    ensureUpdaterReady();
     ipcMain.handle(CHANNELS.appInfo, () => getAppInfo());
     ipcMain.handle(CHANNELS.getState, () => getState());
     ipcMain.handle(CHANNELS.check, (_event, options) => checkForUpdates(options || {}));
-    ipcMain.handle(CHANNELS.download, () => downloadUpdate());
+    ipcMain.handle(CHANNELS.download, () => downloadUpdate({ source: 'manual' }));
     ipcMain.handle(CHANNELS.cancel, () => cancelDownload());
-    ipcMain.handle(CHANNELS.install, () => installUpdate());
+    ipcMain.handle(CHANNELS.install, () => installUpdate({ source: 'manual' }));
   }
 
-  function scheduleStartupCheck(delayMs = 3500) {
+  function scheduleStartupCheck(delayMs = STARTUP_CHECK_DELAY_MS) {
     if (startupCheckScheduled) return;
     startupCheckScheduled = true;
-    void logger.info('Scheduling startup update check', { delayMs });
+
+    if (!updatesAllowed()) {
+      logger.info('Không tự kiểm tra cập nhật khi chạy development/unpacked', {
+        isPackaged: app.isPackaged,
+        devUpdateForced: state.devUpdateForced,
+      });
+      return;
+    }
+
+    const win = typeof getMainWindow === 'function' ? getMainWindow() : null;
+    if (!app.isReady() || !win || win.isDestroyed()) {
+      logger.warn('Không lên lịch kiểm tra cập nhật vì app/window chưa sẵn sàng', {
+        appReady: app.isReady(),
+        hasWindow: Boolean(win),
+      });
+      startupCheckScheduled = false;
+      return;
+    }
+
+    ensureUpdaterReady();
+    logger.info('Lên lịch kiểm tra cập nhật sau khi app ready và cửa sổ chính đã hiển thị', { delayMs });
     setTimeout(() => {
-      checkForUpdates({ silent: true, source: 'startup' }).catch(err => {
+      checkForUpdates({ silent: true, source: 'startup', autoDownload: true }).catch(err => {
         state.status = 'error';
         state.lastError = { code: err.code || 'STARTUP_CHECK_FAILED', message: err.message };
-        void logger.error('Startup update check failed outside normal flow', err);
+        logger.error('Startup update check lỗi ngoài luồng xử lý chính', err);
       });
     }, delayMs);
   }
+
+  ensureUpdaterReady();
 
   return {
     CHANNELS,

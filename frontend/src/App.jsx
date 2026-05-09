@@ -202,7 +202,7 @@ function AppLayout({
         setUpdateToast({
           tone: 'success',
           title: 'Đã tải xong bản cập nhật',
-          message: 'Installer đã được xác thực SHA256. Có thể vào Cài đặt để cài đặt.',
+          message: 'Bản cập nhật đã được electron-updater xác thực. Có thể chọn Cập nhật ngay hoặc để sau.',
         });
       }
     });

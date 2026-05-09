@@ -25,9 +25,9 @@ function getUpdateStatusLabel(status) {
     checking: 'Đang kiểm tra...',
     'no-update': 'Không có bản mới',
     'update-available': 'Có bản cập nhật',
-    downloading: 'Đang tải installer...',
+    downloading: 'Đang tải cập nhật...',
     downloaded: 'Đã tải xong',
-    installing: 'Đang mở bộ cài...',
+    installing: 'Đang cập nhật...',
     cancelled: 'Đã hủy tải',
     error: 'Có lỗi',
   };
@@ -37,26 +37,32 @@ function getUpdateStatusLabel(status) {
 function getUpdateErrorMessage(error) {
   if (!error) return '';
   const messages = {
-    MANIFEST_URL_MISSING: 'Chưa xác định được URL manifest cập nhật. Mặc định ứng dụng dùng GitHub Release latest, hoặc có thể override bằng biến môi trường/file cấu hình.',
+    MANIFEST_URL_MISSING: 'Chưa xác định được URL cập nhật. Mặc định ứng dụng dùng GitHub Releases latest.yml.',
     CONFIG_INVALID: 'File cấu hình cập nhật không hợp lệ.',
-    URL_INVALID: 'URL manifest hoặc installer không hợp lệ.',
+    URL_INVALID: 'URL cập nhật hoặc installer không hợp lệ.',
+    DEV_UPDATER_DISABLED: 'Auto-update bị tắt khi chạy development/unpacked. Hãy test trên bản đã cài hoặc bật KHA_ENABLE_ELECTRON_UPDATER=1 có chủ đích.',
+    WINDOW_NOT_READY: 'Chỉ kiểm tra cập nhật sau khi cửa sổ chính đã sẵn sàng.',
+    ELECTRON_UPDATER_ERROR: 'electron-updater báo lỗi trong quá trình kiểm tra/tải cập nhật.',
+    CHECK_FAILED: 'Kiểm tra cập nhật thất bại.',
     NETWORK_ERROR: 'Không thể kết nối tới máy chủ cập nhật. Vui lòng kiểm tra mạng.',
     NETWORK_TIMEOUT: 'Kết nối tới máy chủ cập nhật quá thời gian chờ.',
-    MANIFEST_HTTP_ERROR: 'Máy chủ không trả manifest cập nhật hợp lệ.',
-    MANIFEST_INVALID_JSON: 'Manifest cập nhật không phải JSON hợp lệ.',
-    MANIFEST_INVALID: 'Manifest cập nhật thiếu hoặc sai cấu trúc.',
-    MANIFEST_INVALID_VERSION: 'Manifest thiếu version SemVer hợp lệ.',
-    MANIFEST_INVALID_URL: 'Manifest thiếu URL installer hợp lệ.',
-    MANIFEST_INVALID_SHA256: 'Manifest thiếu SHA256 hợp lệ.',
-    MANIFEST_INVALID_RELEASE_DATE: 'Manifest thiếu releaseDate.',
+    MANIFEST_HTTP_ERROR: 'Máy chủ không trả metadata cập nhật hợp lệ.',
+    MANIFEST_INVALID_JSON: 'Metadata cập nhật không phải JSON/YAML hợp lệ.',
+    MANIFEST_INVALID: 'Metadata cập nhật thiếu hoặc sai cấu trúc.',
+    MANIFEST_INVALID_VERSION: 'Metadata thiếu version SemVer hợp lệ.',
+    MANIFEST_INVALID_URL: 'Metadata thiếu URL gói cập nhật hợp lệ.',
+    MANIFEST_INVALID_SHA256: 'Metadata thiếu checksum hợp lệ.',
+    MANIFEST_INVALID_RELEASE_DATE: 'Metadata thiếu releaseDate.',
     UPDATE_NOT_AVAILABLE: 'Không có bản cập nhật mới để tải.',
     DOWNLOAD_IN_PROGRESS: 'Một lượt tải cập nhật đang chạy.',
-    DOWNLOAD_HTTP_ERROR: 'Không tải được installer cập nhật từ máy chủ.',
-    DOWNLOAD_FAILED: 'Tải installer cập nhật thất bại.',
+    DOWNLOAD_HTTP_ERROR: 'Không tải được gói cập nhật từ máy chủ.',
+    DOWNLOAD_FAILED: 'Tải gói cập nhật thất bại.',
     DOWNLOAD_CANCELLED: 'Người dùng đã hủy tải cập nhật.',
-    CHECKSUM_MISMATCH: 'Checksum SHA256 không khớp. Installer đã bị xóa và sẽ không được chạy.',
-    INSTALLER_NOT_DOWNLOADED: 'Chưa tải installer cập nhật.',
+    CHECKSUM_MISMATCH: 'Checksum không khớp. Gói cập nhật đã bị xóa và sẽ không được chạy.',
+    INSTALLER_NOT_DOWNLOADED: 'Chưa tải gói cập nhật.',
+    UPDATE_NOT_DOWNLOADED: 'Chưa có bản cập nhật đã tải xong để cài đặt.',
     INSTALLER_NOT_FOUND: 'Không tìm thấy installer đã tải. Vui lòng tải lại.',
+    INSTALL_IN_PROGRESS: 'Ứng dụng đang chuẩn bị cài đặt bản cập nhật.',
     SPAWN_INSTALLER_FAILED: 'Không thể chạy installer cập nhật.',
   };
   return messages[error.code] || error.message || 'Đã xảy ra lỗi cập nhật.';
@@ -64,7 +70,12 @@ function getUpdateErrorMessage(error) {
 
 function getManifestSourceLabel(updateState) {
   if (!updateState) return 'Chưa nạp cấu hình cập nhật';
-  if (updateState.manifestUrlDefault) return 'GitHub Release mặc định (package.json khaUpdate)';
+  if (updateState.updateEngine === 'electron-updater') {
+    return updateState.feedSource === 'package.build.publish'
+      ? 'GitHub Releases/electron-updater (package.json build.publish)'
+      : 'GitHub Releases/electron-updater';
+  }
+  if (updateState.manifestUrlDefault) return 'GitHub Release mặc định';
   if (updateState.manifestUrlConfigured) return `Override nội bộ: ${updateState.manifestSource || 'env/config file'}`;
   return updateState.manifestSource || 'GitHub Release mặc định';
 }
@@ -156,7 +167,8 @@ export default function Settings({ store }) {
         const version = payload.updateInfo?.version || payload.state?.updateInfo?.version;
         setUpdateNotice(version ? `Có bản cập nhật ${version}.` : 'Có bản cập nhật mới.');
       }
-      if (payload?.type === 'downloaded') setUpdateNotice('Đã tải và xác thực installer cập nhật.');
+      if (payload?.type === 'downloaded') setUpdateNotice('Đã tải và xác thực gói cập nhật. Chọn Cập nhật ngay hoặc Để sau.');
+      if (payload?.type === 'install-deferred') setUpdateNotice('Đã chọn để sau. Ứng dụng tiếp tục chạy bình thường.');
       if (payload?.type === 'cancelled') setUpdateNotice('Đã hủy tải cập nhật.');
       if (payload?.type === 'error') setUpdateNotice(getUpdateErrorMessage(payload.error || payload.state?.lastError));
     });
@@ -328,9 +340,9 @@ export default function Settings({ store }) {
       } else if (busyKey === 'checking') {
         setUpdateNotice(result.updateAvailable ? `Có bản cập nhật ${result.updateInfo?.version}.` : 'Ứng dụng đang ở phiên bản mới nhất.');
       } else if (busyKey === 'downloading') {
-        setUpdateNotice('Đã tải và xác thực installer cập nhật.');
+        setUpdateNotice('Đã tải và xác thực gói cập nhật. Chọn Cập nhật ngay hoặc Để sau.');
       } else if (busyKey === 'installing') {
-        setUpdateNotice('Đang mở bộ cài cập nhật. Ứng dụng sẽ thoát sau khi bộ cài khởi động.');
+        setUpdateNotice('Đang cài đặt cập nhật. Ứng dụng sẽ restart theo electron-updater.');
       }
       return result;
     } catch (err) {
@@ -347,7 +359,7 @@ export default function Settings({ store }) {
   const handleDownloadUpdate = () => runUpdateAction('downloading', updates => updates.download());
   const handleCancelUpdate = () => runUpdateAction('cancelling', updates => updates.cancel());
   const handleInstallUpdate = () => {
-    if (!confirm('Ứng dụng sẽ tạo backup database rồi mở bộ cài cập nhật. Tiếp tục?')) return null;
+    if (!confirm('Ứng dụng sẽ tạo backup database rồi cài đặt/restart cập nhật. Tiếp tục?')) return null;
     return runUpdateAction('installing', updates => updates.install());
   };
 
@@ -357,7 +369,7 @@ export default function Settings({ store }) {
   const progress = updateState?.progress || null;
   const progressPercent = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
   const hasUpdate = Boolean(updateState?.updateAvailable && updateInfo);
-  const downloaded = Boolean(updateState?.downloadedFile);
+  const downloaded = Boolean(updateState?.status === 'downloaded' || updateState?.downloadedFile);
   const updateError = updateState?.lastError || (updateResult?.ok === false ? updateResult.error : null);
   const manifestUrl = updateState?.manifestUrl || updateState?.defaultManifestUrl || '';
   const manifestSourceLabel = getManifestSourceLabel(updateState);
@@ -604,7 +616,7 @@ export default function Settings({ store }) {
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
                 <h2 className="font-bold flex items-center gap-2"><Settings2 size={18} /> Cập nhật ứng dụng</h2>
-                <p className="text-sm text-gray-500 mt-1">Kiểm tra manifest, tải installer, xác thực SHA256 và chạy bộ cài Windows hiện tại.</p>
+                <p className="text-sm text-gray-500 mt-1">Kiểm tra GitHub Releases latest.yml, tải bản cập nhật bằng electron-updater và chỉ cài khi người dùng xác nhận.</p>
               </div>
               <span className={`px-3 py-1 rounded-full text-xs font-semibold ${updateState?.status === 'error' ? 'bg-red-100 text-red-700' : hasUpdate ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
                 {getUpdateStatusLabel(updateState?.status)}
@@ -618,8 +630,8 @@ export default function Settings({ store }) {
                 <div className="text-xs text-gray-500 mt-2">Nền tảng: {appInfo?.platform || window.khaDesktop?.platform || 'offline'} · Kiến trúc: {appInfo?.arch || 'unknown'}</div>
               </div>
               <div className="border rounded-xl p-4 bg-gray-50">
-                <div className="text-gray-500">Manifest update</div>
-                <div className="font-medium text-gray-800 break-all mt-1">{manifestUrl || 'Chưa nạp URL manifest'}</div>
+                <div className="text-gray-500">Feed cập nhật</div>
+                <div className="font-medium text-gray-800 break-all mt-1">{manifestUrl || 'Chưa nạp URL feed'}</div>
                 <div className="text-xs text-gray-500 mt-2">Nguồn: {manifestSourceLabel}</div>
                 {updateState?.manifestUrlDefault && (
                   <div className="mt-2 inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
@@ -633,7 +645,7 @@ export default function Settings({ store }) {
               <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
                 <div className="font-semibold text-gray-700">Log cập nhật</div>
                 <div className="break-all mt-1">{updateLogPath}</div>
-                <div className="mt-1">File này ghi các bước check/fetch/download/checksum/backup/spawn và lỗi mạng để debug, không chứa token hay mật khẩu.</div>
+                <div className="mt-1">File này ghi các bước check/download/dialog/backup/quitAndInstall và lỗi mạng để debug, không chứa token hay mật khẩu.</div>
               </div>
             )}
 
@@ -673,8 +685,8 @@ export default function Settings({ store }) {
                   <pre className="whitespace-pre-wrap bg-gray-50 border rounded-lg p-3 text-gray-700 text-sm">{updateInfo.releaseNotes || 'Không có ghi chú phát hành.'}</pre>
                 </div>
                 <div className="mt-3 text-xs text-gray-500 break-all">
-                  <div>Installer: {updateInfo.url}</div>
-                  <div>SHA256: {updateInfo.sha256}</div>
+                  <div>Installer/feed path: {updateInfo.url || updateInfo.path || 'Theo latest.yml'}</div>
+                  {updateInfo.sha512 ? <div>SHA512: {updateInfo.sha512}</div> : updateInfo.sha256 ? <div>SHA256: {updateInfo.sha256}</div> : null}
                 </div>
               </div>
             )}
@@ -700,7 +712,7 @@ export default function Settings({ store }) {
 
             {downloaded && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                Installer đã tải và xác thực SHA256 thành công. Khi bấm cài đặt, ứng dụng sẽ backup database trước rồi mở bộ cài assisted NSIS.
+                electron-updater đã tải và xác thực gói cập nhật thành công. Khi bấm Cập nhật ngay, ứng dụng sẽ backup database trước rồi cài đặt/restart.
               </div>
             )}
 
@@ -715,7 +727,7 @@ export default function Settings({ store }) {
                 <button onClick={handleCancelUpdate} disabled={updateBusy === 'cancelling'} className="btn-danger disabled:opacity-60">Hủy tải</button>
               )}
               <button onClick={handleInstallUpdate} disabled={!desktopAvailable || !downloaded || updateBusy === 'installing'} className="btn-danger disabled:opacity-60">
-                {updateBusy === 'installing' ? 'Đang mở bộ cài...' : 'Cài đặt và thoát ứng dụng'}
+                {updateBusy === 'installing' ? 'Đang cập nhật...' : 'Cập nhật ngay'}
               </button>
             </div>
           </div>
@@ -723,11 +735,11 @@ export default function Settings({ store }) {
           <div className="card bg-blue-50 border-blue-100 text-sm text-blue-800">
             <h3 className="font-bold mb-2">Cấu hình update feed</h3>
             <ul className="list-disc pl-5 space-y-1">
-              <li>Mặc định app đọc GitHub Release manifest: {updateState?.defaultManifestUrl || 'https://github.com/Vankhadev/phanmemoffline/releases/latest/download/update-manifest.json'}.</li>
-              <li>Có thể override khi test bằng KHA_UPDATE_MANIFEST_URL, KHA_UPDATE_FEED_URL hoặc file update-config.json trong userData.</li>
-              <li>Manifest phải có version, url, sha256, releaseNotes và releaseDate; URL installer production nên là GitHub Release asset.</li>
-              <li>Installer chỉ chạy sau khi tải xong và SHA256 khớp tuyệt đối; checksum sai sẽ xóa installer đã tải.</li>
-              <li>Trước khi mở installer, ứng dụng backup phanmienoffline.db.json trong userData/backups và không xóa userData.</li>
+              <li>Mặc định app dùng electron-updater đọc GitHub Releases latest.yml: {updateState?.defaultManifestUrl || 'https://github.com/Vankhadev/phanmemoffline/releases/latest/download/latest.yml'}.</li>
+              <li>Bản development/unpacked không auto-update trừ khi bật KHA_ENABLE_ELECTRON_UPDATER=1 có chủ đích để test.</li>
+              <li>GitHub Release production cần có installer .exe, .exe.blockmap và latest.yml do electron-builder tạo.</li>
+              <li>Ứng dụng có thể tự tải cập nhật, nhưng chỉ gọi cài đặt/restart sau khi người dùng chọn “Cập nhật ngay”.</li>
+              <li>Trước khi cài đặt, ứng dụng backup phanmienoffline.db.json trong userData/backups và không xóa userData.</li>
             </ul>
           </div>
         </div>
@@ -870,10 +882,10 @@ export default function Settings({ store }) {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">🔄 Tab Cập nhật</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Mặc định kiểm tra manifest GitHub Release latest download, có thể override bằng env/file khi test.</li>
-                  <li>Tải installer về cache người dùng và xác thực SHA256 trước khi chạy.</li>
-                  <li>Hiển thị đường dẫn update.log để debug trạng thái check, tải, checksum, backup, spawn installer và lỗi mạng.</li>
-                  <li>Backup database userData trước khi mở bộ cài cập nhật, không xóa dữ liệu cục bộ.</li>
+                  <li>Mặc định kiểm tra GitHub Releases latest.yml bằng electron-updater.</li>
+                  <li>Tải gói cập nhật về cache người dùng và chỉ cài đặt khi người dùng chọn “Cập nhật ngay”.</li>
+                  <li>Hiển thị đường dẫn update.log để debug trạng thái check, tải, dialog, backup, quitAndInstall và lỗi mạng.</li>
+                  <li>Backup database userData trước khi cài đặt cập nhật, không xóa dữ liệu cục bộ.</li>
                 </ul>
               </div>
 

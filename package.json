@@ -17,11 +17,11 @@
     "dev:frontend": "cd frontend && npm run dev",
     "dev:electron": "set ELECTRON_DEV_URL=http://localhost:5173&& electron .",
     "build:frontend": "cd frontend && npm run build",
-    "build:portable": "electron-builder --win portable",
-    "build:installer": "electron-builder --win nsis",
+    "build:portable": "electron-builder --win portable --publish never",
+    "build:installer": "electron-builder --win nsis --publish never",
     "build:electron": "npm run build:installer",
     "build": "npm run build:frontend && npm run build:installer",
-    "build:all": "npm run build:frontend && electron-builder --win portable nsis",
+    "build:all": "npm run build:frontend && electron-builder --win portable nsis --publish never",
     "generate:update-manifest": "node scripts/generate-update-manifest.js"
   },
   "build": {
@@ -64,6 +64,14 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Ban hang offline - Van kha mmo"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Vankhadev",
+        "repo": "phanmemoffline",
+        "releaseType": "release"
+      }
+    ],
     "asar": true
   },
   "khaUpdate": {
@@ -75,6 +83,7 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "electron-updater": "^6.8.3",
     "express": "^4.18.2",
     "node-cron": "^3.0.3",
     "uuid": "^9.0.1"
