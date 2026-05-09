@@ -352,7 +352,7 @@ export default function Settings({ store }) {
   };
 
   const desktopAvailable = Boolean(window.khaDesktop?.isElectron && window.khaDesktop?.updates);
-  const currentVersion = appInfo?.version || updateState?.currentVersion || '1.1.2';
+  const currentVersion = appInfo?.version || updateState?.currentVersion || '1.1.3';
   const updateInfo = updateState?.updateInfo || null;
   const progress = updateState?.progress || null;
   const progressPercent = Math.max(0, Math.min(100, Number(progress?.percent) || 0));

@@ -68,7 +68,130 @@ h1 { margin: 10px 0; text-align: center; font-size: 18px; }
 .signatures span { display: block; margin-top: 4px; font-size: 11px; color: #4b5563; }
 `;
 
+const sapoA4InvoiceHtml = `
+<div class="print-template sapo-a4-html sale-invoice">
+  <div class="sapo-a4-topbar">
+    <div>{invoice_created_at}</div>
+    <div>Chi tiết đơn hàng {order_code} | SAPO</div>
+    <div></div>
+  </div>
+
+  <div class="sapo-a4-brand-row">
+    <div>
+      <div class="sapo-a4-store-name">{store_name}</div>
+      <div class="sapo-a4-store-meta">Địa chỉ: {store_address}</div>
+      <div class="sapo-a4-store-meta">ĐT: {store_phone} - MST: {store_tax_code}</div>
+    </div>
+    <div class="sapo-a4-order-block">
+      <span>Mã đơn hàng</span>
+      <strong>{order_code}</strong>
+    </div>
+    <div class="sapo-a4-title-block">
+      <div>HOÁ ĐƠN</div>
+      <div>BÁN HÀNG</div>
+    </div>
+  </div>
+
+  <div class="sapo-a4-customer">
+    <div>
+      <div><span>KHÁCH HÀNG:</span> <strong>{customer_name}</strong></div>
+      <div><span>Địa chỉ:</span> {customer_address}</div>
+    </div>
+    <div>
+      <div><span>Điện thoại:</span> {customer_phone}</div>
+      <div><span>Email:</span> {customer_email}</div>
+    </div>
+  </div>
+
+  <table class="items-table sapo-a4-items">
+    <thead>
+      <tr>
+        <th>STT</th>
+        <th>Tên sản phẩm</th>
+        <th>Đơn vị</th>
+        <th>Số lượng</th>
+        <th>Đơn giá</th>
+        <th>Chiết khấu</th>
+        <th>Thành tiền</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#items}}
+      <tr>
+        <td class="text-center">{index}</td>
+        <td>{name}</td>
+        <td class="text-center">{unit}</td>
+        <td class="text-right">{quantity}</td>
+        <td class="text-right">{price}</td>
+        <td class="text-right">{discount}</td>
+        <td class="text-right">{line_total}</td>
+      </tr>
+      {{/items}}
+    </tbody>
+  </table>
+
+  <div class="sapo-a4-totals">
+    <div><span>THÀNH TIỀN</span><strong>{subtotal}</strong></div>
+    <div><span>CHIẾT KHẤU</span><strong>{discount}</strong></div>
+    <div><span>TỔNG</span><strong>{total}</strong></div>
+    <div><span>NỢ CŨ</span><strong>{old_debt}</strong></div>
+    <div><span>THÀNH TIỀN</span><strong>{total_amount}</strong></div>
+  </div>
+
+  <div class="sapo-a4-signature-section">
+    <div class="sapo-a4-date-note">{store_name}, ngày {invoice_date}</div>
+    <div class="sapo-a4-signature"><strong>NGƯỜI NHẬN HÀNG.</strong><span>(Ký, ghi rõ họ tên)</span></div>
+    <div class="sapo-a4-signature"><strong>NGƯỜI VIẾT HÓA ĐƠN</strong><span>(Ký, ghi rõ họ tên)</span></div>
+  </div>
+
+  <div class="sapo-a4-print-footer">
+    <span>www.sapo.vn</span>
+    <span>1/1</span>
+  </div>
+</div>`.trim();
+
+const sapoA4LegacyCss = `
+.sapo-a4-html { min-height: 277mm; display: flex; flex-direction: column; color: #111; font-family: Arial, Roboto, Helvetica, sans-serif; font-size: 12px; line-height: 1.32; }
+.sapo-a4-html .sapo-a4-topbar { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px; align-items: center; font-size: 11px; margin-bottom: 11mm; }
+.sapo-a4-html .sapo-a4-topbar > div:nth-child(2) { text-align: center; font-weight: 600; }
+.sapo-a4-html .sapo-a4-brand-row { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(42mm, 0.7fr) minmax(48mm, 0.85fr); gap: 10mm; align-items: start; border-bottom: 1.5px solid #111; padding-bottom: 5mm; margin-bottom: 5mm; }
+.sapo-a4-html .sapo-a4-store-name { font-size: 19px; font-weight: 700; line-height: 1.2; margin-bottom: 2mm; }
+.sapo-a4-html .sapo-a4-store-meta { font-size: 11px; color: #333; }
+.sapo-a4-html .sapo-a4-order-block span { display: block; margin-bottom: 1mm; color: #333; }
+.sapo-a4-html .sapo-a4-order-block strong { display: block; font-size: 17px; }
+.sapo-a4-html .sapo-a4-title-block { text-align: right; font-size: 24px; line-height: 1.08; font-weight: 800; letter-spacing: 0.04em; }
+.sapo-a4-html .sapo-a4-customer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(58mm, 0.72fr); gap: 10mm; margin: 0 0 5mm; }
+.sapo-a4-html .sapo-a4-customer div { margin: 1.2mm 0; }
+.sapo-a4-html .sapo-a4-customer span { font-weight: 700; }
+.sapo-a4-html .sapo-a4-items { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 2mm; }
+.sapo-a4-html .sapo-a4-items th, .sapo-a4-html .sapo-a4-items td { border: 1px solid #9ca3af; padding: 4px 6px; vertical-align: top; word-break: break-word; }
+.sapo-a4-html .sapo-a4-items th { font-weight: 700; text-align: center; }
+.sapo-a4-html .sapo-a4-totals { width: 76mm; margin: 4mm 0 0 auto; break-inside: avoid; page-break-inside: avoid; }
+.sapo-a4-html .sapo-a4-totals div { display: grid; grid-template-columns: 1fr 34mm; gap: 8mm; padding: 1.2mm 0; border-bottom: 1px solid #e5e7eb; }
+.sapo-a4-html .sapo-a4-totals span, .sapo-a4-html .sapo-a4-totals strong { font-weight: 700; }
+.sapo-a4-html .sapo-a4-totals strong { text-align: right; }
+.sapo-a4-html .sapo-a4-signature-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(44mm, 0.72fr) minmax(44mm, 0.72fr); gap: 8mm; align-items: start; margin-top: auto; padding-top: 11mm; break-inside: avoid; page-break-inside: avoid; }
+.sapo-a4-html .sapo-a4-signature { min-height: 31mm; text-align: center; }
+.sapo-a4-html .sapo-a4-signature span { display: block; margin-top: 1mm; font-size: 10px; color: #4b5563; }
+.sapo-a4-html .sapo-a4-print-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #d1d5db; display: flex; justify-content: space-between; font-size: 10px; color: #374151; }
+@media print { .sapo-a4-html tr, .sapo-a4-html .sapo-a4-totals, .sapo-a4-html .sapo-a4-signature-section { break-inside: avoid; page-break-inside: avoid; } }
+`.trim();
+
 export const DEFAULT_PRINT_TEMPLATES = [
+  {
+    id: 'fallback-sale_invoice-A4',
+    code: 'sale_invoice_a4_sapo_frontend',
+    name: 'Mẫu mặc định - Đơn bán hàng A4 SAPO',
+    type: 'sale_invoice',
+    paper_size: 'A4',
+    width_mm: 210,
+    is_default: true,
+    is_fallback: true,
+    active: true,
+    html: sapoA4InvoiceHtml,
+    css: sapoA4LegacyCss,
+    config: createDefaultInvoiceVisualConfig('sale_invoice', 'A4', 210),
+  },
   {
     id: 'fallback-sale_invoice-80mm',
     code: 'sale_invoice_80mm_frontend',
@@ -76,7 +199,7 @@ export const DEFAULT_PRINT_TEMPLATES = [
     type: 'sale_invoice',
     paper_size: '80mm',
     width_mm: 80,
-    is_default: true,
+    is_default: false,
     is_fallback: true,
     active: true,
     html: `
@@ -238,18 +361,22 @@ export function getFallbackTemplates(type) {
   return DEFAULT_PRINT_TEMPLATES.map(cloneTemplate);
 }
 
-export function getDefaultTemplate(type = 'sale_invoice', paperSize = '80mm') {
+export function getDefaultTemplate(type = 'sale_invoice', paperSize = 'A4') {
   const exact = DEFAULT_PRINT_TEMPLATES.find(template => template.type === type && template.paper_size === paperSize);
   const sameType = DEFAULT_PRINT_TEMPLATES.find(template => template.type === type);
   const base = exact || sameType || DEFAULT_PRINT_TEMPLATES[0];
+  const cloned = cloneTemplate(base);
   const widthMm = getPaperWidth(paperSize);
+  const isDifferentPaperFallback = !exact && cloned.paper_size && cloned.paper_size !== paperSize;
   return {
-    ...cloneTemplate(base),
+    ...cloned,
     id: `fallback-${type}-${paperSize}`,
     name: `Mẫu mặc định - ${getTemplateTypeLabel(type)} ${paperSize}`,
     type,
     paper_size: paperSize,
     width_mm: widthMm,
+    html: isDifferentPaperFallback ? '' : cloned.html,
+    css: isDifferentPaperFallback ? '' : cloned.css,
     config: createDefaultInvoiceVisualConfig(type, paperSize, widthMm),
     is_default: false,
     is_fallback: true,

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { API } from '../App';
-import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown } from 'lucide-react';
+import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown, Printer } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import ProductLabelPrintModal from '../components/ProductLabelPrintModal';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
 
 function formatVND(n) {
@@ -17,7 +18,7 @@ const random5Digits = () => {
   return result;
 };
 
-export default function Products() {
+export default function Products({ store }) {
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const excelInputRef = useRef(null);
@@ -32,6 +33,7 @@ export default function Products() {
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryForm, setCategoryForm] = useState({ name: '', group_name: '', keywords: '' });
   const [stockSortDirection, setStockSortDirection] = useState(null);
+  const [labelPrintModal, setLabelPrintModal] = useState({ open: false, items: [], source: '' });
 
   // Get supplier name by ID
   const getSupplierName = (supplierId) => {
@@ -71,6 +73,38 @@ export default function Products() {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   useEffect(() => { fetchProducts(); fetchCombos(); fetchSuppliers(); fetchCategories(); }, []);
+
+  const buildProductLabelItem = (product, quantity = 1) => ({
+    id: product?.id || product?.product_id || product?.variant_id || product?.sku,
+    product_id: product?.product_id || (!product?.parent_id ? product?.id : product?.parent_id) || null,
+    variant_id: product?.variant_id || (product?.parent_id ? product?.id : null) || null,
+    name: product?.parent_name && product?.parent_id ? `${product.parent_name} / ${product.name || ''}` : (product?.name || ''),
+    sku: product?.sku || '',
+    retail_price: product?.retail_price || product?.price || 0,
+    quantity,
+    unit: product?.unit || 'cái',
+  });
+
+  const openProductLabelModal = (product, { quantity = 1, source = '' } = {}) => {
+    if (!product) return;
+    setLabelPrintModal({
+      open: true,
+      items: [buildProductLabelItem(product, quantity)],
+      source,
+    });
+  };
+
+  const closeProductLabelModal = () => {
+    setLabelPrintModal({ open: false, items: [], source: '' });
+  };
+
+  const getCurrentFormProductForLabel = () => ({
+    id: editing?.id || null,
+    name: form.name || editing?.name || '',
+    sku: form.sku || editing?.sku || '',
+    retail_price: form.retail_price !== '' ? form.retail_price : (editing?.retail_price || 0),
+    unit: form.unit || editing?.unit || 'cái',
+  });
 
   // ── Refresh khi có đơn mới được tạo ──
   useEffect(() => {
@@ -428,7 +462,7 @@ export default function Products() {
       'Default category name': getDefaultCategoryDisplayName(product, parent),
       'Supplier name': getSupplierDisplayName(supplierId),
       'Ghi chú': type === 'VARIANT'
-        ? 'Biến thể: SKU được đồng bộ theo SKU cha; Parent SKU phải trùng SKU của sản phẩm cha'
+        ? 'Biến thể: SKU riêng; Parent SKU là SKU sản phẩm cha dùng để giữ quan hệ'
         : 'Sản phẩm cha: để trống Parent SKU',
     };
   };
@@ -437,9 +471,9 @@ export default function Products() {
     const guideRows = [
       ['Cột', 'Bắt buộc', 'Ý nghĩa / cách nhập'],
       ['Loại dòng', 'Khuyến nghị', 'Nhập PARENT cho sản phẩm cha, VARIANT cho biến thể. Có thể bỏ trống để backend tự suy luận: có Parent SKU là VARIANT, không có Parent SKU là PARENT.'],
-      ['SKU', 'Có', 'Sản phẩm cha dùng SKU để thêm mới/cập nhật. Biến thể sẽ được backend lưu trùng SKU cha; khi import biến thể nên nhập SKU trùng Parent SKU, hoặc SKU cũ nếu cần nhận diện dữ liệu legacy.'],
+      ['SKU', 'Có với PARENT/import', 'Sản phẩm cha dùng SKU để thêm mới/cập nhật. Khi tạo biến thể qua giao diện/API, backend tự sinh SKU riêng tăng dần từ SKU cha và không cần nhập thủ công.'],
       ['Parent SKU', 'Có với VARIANT', 'SKU của sản phẩm cha. Parent SKU phải tồn tại trong cùng file hoặc đã có trong hệ thống. Dòng PARENT phải để trống cột này.'],
-      ['Tên sản phẩm', 'Có với SKU mới', 'Tên sản phẩm cha hoặc tên biến thể. Với biến thể đã đồng bộ SKU theo SKU cha, tên biến thể là dữ liệu phân biệt để cập nhật đúng dòng.'],
+      ['Tên sản phẩm', 'Có với SKU mới', 'Tên sản phẩm cha hoặc tên biến thể. Với biến thể, tên biến thể là dữ liệu phân biệt để cập nhật đúng dòng trong cùng sản phẩm cha.'],
       ['Tên cha', 'Tham khảo', 'Chỉ giúp người dùng đọc file; backend liên kết bằng Parent SKU.'],
       ['Giá nhập / Giá sỉ / Giá lẻ / Giá VIP', 'Không', 'Nhập số không âm. Có thể dùng định dạng 100000, 100.000 hoặc 100,000.'],
       ['Tồn kho', 'Không', 'Nhập số nguyên không âm.'],
@@ -494,7 +528,7 @@ export default function Products() {
     const sampleRows = [
       {
         'Loại dòng': 'PARENT',
-        'SKU': 'SP-MAU-001',
+        'SKU': '220000186',
         'Parent SKU': '',
         'Tên sản phẩm': 'Áo thun cotton',
         'Tên cha': '',
@@ -516,8 +550,8 @@ export default function Products() {
       },
       {
         'Loại dòng': 'VARIANT',
-        'SKU': 'SP-MAU-001',
-        'Parent SKU': 'SP-MAU-001',
+        'SKU': '220000187',
+        'Parent SKU': '220000186',
         'Tên sản phẩm': 'Màu đỏ / Size S',
         'Tên cha': 'Áo thun cotton',
         'Giá nhập': 80000,
@@ -534,12 +568,12 @@ export default function Products() {
         'Parent ID': '',
         'Default category name': '',
         'Supplier name': '',
-        'Ghi chú': 'Dòng biến thể: SKU được backend đồng bộ trùng SKU cha',
+        'Ghi chú': 'Dòng biến thể: SKU riêng tăng dần từ SKU cha',
       },
       {
         'Loại dòng': 'VARIANT',
-        'SKU': 'SP-MAU-001',
-        'Parent SKU': 'SP-MAU-001',
+        'SKU': '220000188',
+        'Parent SKU': '220000186',
         'Tên sản phẩm': 'Màu xanh / Size M',
         'Tên cha': 'Áo thun cotton',
         'Giá nhập': 82000,
@@ -556,7 +590,7 @@ export default function Products() {
         'Parent ID': '',
         'Default category name': '',
         'Supplier name': '',
-        'Ghi chú': 'Có thể bỏ Loại dòng, backend vẫn suy luận là VARIANT vì có Parent SKU; SKU sau lưu trùng SKU cha',
+        'Ghi chú': 'Có thể bỏ Loại dòng, backend vẫn suy luận là VARIANT vì có Parent SKU; SKU biến thể nên là mã riêng duy nhất',
       },
       {
         'Loại dòng': 'PARENT',
@@ -682,7 +716,7 @@ export default function Products() {
       `Cập nhật sản phẩm cha: ${summary.updatedParents ?? 0}`,
       `Tạo mới biến thể: ${summary.createdVariants ?? 0}`,
       `Cập nhật biến thể: ${summary.updatedVariants ?? 0}`,
-      `Đồng bộ SKU biến thể: ${summary.syncedVariantSkus ?? 0}`,
+      `Đánh lại SKU biến thể: ${summary.reassignedVariantSkus ?? summary.syncedVariantSkus ?? 0}`,
       `Bỏ qua: ${skipped}`,
       `Số lỗi: ${summary.errors ?? 0}`,
     ].filter(Boolean).join('\n');
@@ -741,7 +775,7 @@ export default function Products() {
         return;
       }
 
-      if (!confirm(`Tìm thấy ${importRows.length} dòng dữ liệu trong sheet "${sheetName}".\nCột nhận được: ${formatColumnList(displayColumns)}\n\nImport sẽ upsert sản phẩm cha theo SKU; biến thể liên kết theo Parent SKU và sẽ được backend đồng bộ SKU trùng SKU cha. Nếu thiếu "Loại dòng", backend sẽ tự suy luận theo Parent SKU. Dữ liệu chỉ ghi khi toàn bộ file hợp lệ. Tiếp tục?`)) return;
+      if (!confirm(`Tìm thấy ${importRows.length} dòng dữ liệu trong sheet "${sheetName}".\nCột nhận được: ${formatColumnList(displayColumns)}\n\nImport sẽ upsert sản phẩm cha theo SKU; biến thể liên kết theo Parent SKU. Khi tạo biến thể qua giao diện/API, SKU biến thể được backend tự sinh tăng dần từ SKU cha. Nếu thiếu "Loại dòng", backend sẽ tự suy luận theo Parent SKU. Dữ liệu chỉ ghi khi toàn bộ file hợp lệ. Tiếp tục?`)) return;
 
       try {
         const controller = new AbortController();
@@ -829,11 +863,19 @@ export default function Products() {
       clearTimeout(timer);
       const data = await res.json();
       if (data.ok) {
+        const savedProductForLabel = {
+          id: editing?.id || data.id,
+          ...payload,
+          quantity: 1,
+        };
         alert(editing ? '✅ Đã cập nhật sản phẩm!' : `✅ Tạo sản phẩm thành công!\nMã: ${data.id}`);
         setShowForm(false);
         setEditing(null);
         setForm({ sku: '', name: '', import_price: '', wholesale_price: '', retail_price: '', vip_price: '', stock: '', unit: 'cái', category: '', supplier_id: '' });
         fetchProducts();
+        if (!editing) {
+          openProductLabelModal(savedProductForLabel, { quantity: 1, source: 'created-product' });
+        }
       } else {
         alert(`⚠️ Lỗi: ${data.error || 'Không rõ lỗi!'}`);
       }
@@ -864,7 +906,7 @@ export default function Products() {
   const openAddVariant = (parent) => {
     setVariantParent(parent);
     setEditingVariant(null);
-    setVariantForm({ sku: parent.sku || '', name: '', import_price: '', wholesale_price: '', retail_price: '', vip_price: '', stock: '', unit: parent.unit || 'cái' });
+    setVariantForm({ sku: '', name: '', import_price: '', wholesale_price: '', retail_price: '', vip_price: '', stock: '', unit: parent.unit || 'cái' });
     setShowVariantModal(true);
   };
 
@@ -872,7 +914,7 @@ export default function Products() {
     setVariantParent(parent);
     setEditingVariant(variant);
     setVariantForm({
-      sku: parent.sku || variant.sku || '', name: variant.name,
+      sku: variant.sku || '', name: variant.name,
       import_price: variant.import_price || '', wholesale_price: variant.wholesale_price || '',
       retail_price: variant.retail_price || '', vip_price: variant.vip_price || '',
       stock: variant.stock || '', unit: variant.unit || 'cái',
@@ -889,22 +931,24 @@ export default function Products() {
       const url = editingVariant
         ? `${API}/products/variants/${editingVariant.id}`
         : `${API}/products/${variantParent.id}/variants`;
+      const variantPayload = { ...variantForm };
+      delete variantPayload.sku;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...variantForm, sku: variantParent.sku || variantForm.sku || '' }),
+        body: JSON.stringify(variantPayload),
         signal: controller.signal,
       });
       clearTimeout(timer);
       const data = await res.json();
       if (data.ok) {
-        alert(editingVariant ? '✅ Đã cập nhật biến thể!' : '✅ Tạo biến thể thành công!');
+        alert(editingVariant ? '✅ Đã cập nhật biến thể!' : `✅ Tạo biến thể thành công!\nSKU: ${data.sku || 'hệ thống tự sinh'}`);
         setShowVariantModal(false);
         fetchProducts();
       } else {
-        alert(`⚠️ Lỗi: ${data.error || 'Không rõ lỗi!'}`);
+        alert(`⚠️ Lỗi: ${data.detail || data.error || 'Không rõ lỗi!'}`);
       }
     } catch (err) {
       if (err.name === 'AbortError') alert('⏱️ Server không phản hồi!');
@@ -1346,6 +1390,23 @@ export default function Products() {
                   ))}
                 </select>
               </div>
+              {editing && (
+                <div className="border border-blue-200 bg-blue-50 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-bold text-blue-900 flex items-center gap-2">
+                      <Printer size={16} /> In tem
+                    </div>
+                    <p className="text-xs text-blue-700 mt-0.5">In lại tem sản phẩm này với khổ tem/giấy in tùy chọn.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openProductLabelModal(getCurrentFormProductForLabel(), { quantity: 1, source: 'edit-form' })}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-1.5 shrink-0"
+                  >
+                    <Printer size={15} /> In tem
+                  </button>
+                </div>
+              )}
               <div className="flex gap-2 pt-1">
                 <button type="submit" disabled={saving}
                   className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
@@ -1385,9 +1446,13 @@ export default function Products() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500">SKU (tự đồng bộ theo sản phẩm cha)</label>
-                  <input className="input-field w-full bg-gray-100 text-gray-500 cursor-not-allowed" value={variantParent?.sku || variantForm.sku || ''} readOnly disabled placeholder="SKU sản phẩm cha" />
-                  <span className="text-[10px] text-blue-500">Backend luôn lưu SKU biến thể trùng SKU cha; sửa SKU sản phẩm cha sẽ tự cập nhật tất cả biến thể.</span>
+                  <label className="text-xs text-gray-500">SKU biến thể (hệ thống tự sinh)</label>
+                  <input className="input-field w-full bg-gray-100 text-gray-500 cursor-not-allowed" value={editingVariant ? (variantForm.sku || '') : ''} readOnly disabled placeholder="Tự sinh sau khi lưu" />
+                  <span className={`text-[10px] ${/^\d+$/.test(String(variantParent?.sku || '').trim()) ? 'text-blue-500' : 'text-red-500'}`}>
+                    {/^\d+$/.test(String(variantParent?.sku || '').trim())
+                      ? `Khi tạo mới, backend lấy SKU cha ${variantParent?.sku || '—'} rồi tăng dần +1 và bỏ qua mã đã tồn tại.`
+                      : 'SKU cha phải là chuỗi số thuần để hệ thống tự sinh SKU biến thể.'}
+                  </span>
                 </div>
                 <div><label className="text-xs text-gray-500">Đơn vị tính</label><input className="input-field" value={variantForm.unit} onChange={e => setVariantForm({ ...variantForm, unit: e.target.value })} placeholder="cái" /></div>
               </div>
@@ -1565,6 +1630,18 @@ export default function Products() {
         </div>
       )}
 
+      <ProductLabelPrintModal
+        open={labelPrintModal.open}
+        items={labelPrintModal.items}
+        store={store}
+        title="In tem sản phẩm"
+        onClose={closeProductLabelModal}
+        onSkip={() => {}}
+        onPrinted={(rendered) => {
+          alert(`✅ Đã mở hộp thoại in ${rendered.labelCount} tem sản phẩm.`);
+        }}
+      />
+
       {/* Help Modal */}
       {showHelp && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -1597,7 +1674,7 @@ export default function Products() {
                 <ol className="list-decimal pl-5 space-y-1">
                   <li>Nhấn nút <strong>"Thêm sản phẩm"</strong></li>
                   <li>Điền đầy đủ thông tin: Tên, SKU (tự động), giá các loại, tồn kho, đơn vị, danh mục, nhà cung cấp</li>
-                  <li>SKU được tự động tạo: "SP" + 5 số ngẫu nhiên (1-9)</li>
+                  <li>SKU được tự động tạo: "SP" + 5 số ngẫu nhiên (1-9); nếu sản phẩm cần biến thể tự sinh SKU tăng dần thì nên dùng SKU cha dạng số thuần</li>
                   <li>Nhấn "Lưu" để hoàn tất</li>
                 </ol>
               </div>
@@ -1607,7 +1684,7 @@ export default function Products() {
                 <ol className="list-decimal pl-5 space-y-1">
                   <li>Nhấn nút <strong>+</strong> ở cột hành động của sản phẩm cha</li>
                   <li>Nhập tên biến thể (VD: "Màu Đỏ", "Size L")</li>
-                  <li>SKU biến thể được backend tự động đồng bộ trùng SKU của sản phẩm cha</li>
+                  <li>SKU biến thể được backend tự động sinh bằng cách tăng dần từ SKU sản phẩm cha, không cần nhập thủ công</li>
                   <li>Điền giá và tồn kho cho biến thể này</li>
                 </ol>
               </div>
@@ -1619,7 +1696,7 @@ export default function Products() {
                   <li>Sheet chuẩn là <strong>"Sản phẩm"</strong>; nếu file không có sheet này, hệ thống sẽ đọc sheet đầu tiên.</li>
                   <li>Cột chuẩn: <strong>Loại dòng</strong>, <strong>SKU</strong>, <strong>Parent SKU</strong>, <strong>Tên sản phẩm</strong>, các cột giá, <strong>Tồn kho</strong>, <strong>Đơn vị</strong>, <strong>Danh mục text</strong>, <strong>Default category id</strong>, <strong>Supplier id</strong>, <strong>Hoạt động</strong>.</li>
                   <li><strong>Loại dòng</strong>: nhập <strong>PARENT</strong> cho sản phẩm cha, <strong>VARIANT</strong> cho biến thể. Nếu bỏ trống, backend tự suy luận: có Parent SKU là VARIANT, không có Parent SKU là PARENT.</li>
-                  <li><strong>Parent SKU</strong> là khóa giữ quan hệ cha-con; SKU này phải trùng SKU của dòng sản phẩm cha trong file hoặc sản phẩm cha đã có trong hệ thống. Sau khi lưu, SKU của biến thể được đồng bộ trùng SKU cha.</li>
+                  <li><strong>Parent SKU</strong> là khóa giữ quan hệ cha-con; SKU này phải trùng SKU của dòng sản phẩm cha trong file hoặc sản phẩm cha đã có trong hệ thống. Khi tạo biến thể qua giao diện/API, SKU biến thể sẽ được backend tự sinh tăng dần từ SKU cha.</li>
                   <li>Có thể nhập file có alias phổ biến như <strong>Mã SKU</strong>, <strong>Ma SKU</strong>, <strong>Mã sản phẩm</strong>, <strong>Tên</strong>, <strong>SL hàng</strong>, <strong>So luong</strong>, <strong>Giá vốn</strong>, <strong>Giá bán</strong>, <strong>ĐVT</strong>, <strong>Danh mục</strong>, <strong>ParentSKU</strong>, <strong>SKU cha</strong>, <strong>Mã cha</strong>.</li>
                   <li>Import sẽ validate toàn bộ file trước khi ghi. Nếu có lỗi, thông báo sẽ chỉ rõ dòng/cột và dữ liệu chưa được cập nhật.</li>
                   <li>Các cột <strong>ID</strong>, <strong>Parent ID</strong>, <strong>Default category name</strong>, <strong>Supplier name</strong>, <strong>Ghi chú</strong> chỉ để tham khảo khi xuất file; backend bỏ qua khi import.</li>

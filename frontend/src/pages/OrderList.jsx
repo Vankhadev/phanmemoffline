@@ -4,6 +4,7 @@ import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Squa
 import { getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
 import { printInvoice, writePrintWindowMessage } from '../utils/printInvoice';
+import { getProductDisplayName } from '../utils/productSearch';
 
 const STATUS_LABELS = {
   pending: { text: 'Chờ xác nhận', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500', icon: '⏳' },
@@ -328,8 +329,14 @@ export default function OrderList({ store = {} }) {
       const cartDetails = inv.cart?.map((c, i) => ({
         id: c.id || (`offline_${i}`),
         product_id: c.product_id || null,
-        product_name: c.product_name || '',
-        product_sku: c.product_sku || '',
+        variant_id: c.variant_id || null,
+        parent_id: c.parent_id || null,
+        parent_name: c.parent_name || '',
+        variant_name: c.variant_name || '',
+        product_name: c.product_name || c.name || '',
+        product_sku: c.product_sku || c.sku || '',
+        name: c.name || c.product_name || '',
+        sku: c.sku || c.product_sku || '',
         quantity: c.quantity || 1,
         unit_price: c.unit_price || 0,
         discount_percent: c.discount_percent || 0,
@@ -448,11 +455,19 @@ export default function OrderList({ store = {} }) {
 
   // Thêm sản phẩm vào chi tiết sửa
   const addDetailFromPicker = (p) => {
+    const isVariant = Boolean(p.is_variant || p.parent_id || p.parent_name || p.parent?.name);
+    const displayName = getProductDisplayName(p);
     const newDetail = {
       id: Date.now(),
       product_id: p.id,
-      product_name: p.name,
+      variant_id: isVariant ? p.id : null,
+      parent_id: isVariant ? (p.parent_id || p.parent?.id || null) : null,
+      parent_name: isVariant ? (p.parent_name || p.parent?.name || '') : '',
+      variant_name: isVariant ? p.name : '',
+      product_name: displayName,
       product_sku: p.sku || '',
+      name: displayName,
+      sku: p.sku || '',
       quantity: 1,
       unit_price: p.retail_price || 0,
       discount_amount: 0,
@@ -496,8 +511,14 @@ export default function OrderList({ store = {} }) {
           cart: editDetails.map(c => ({
             id: c.id,
             product_id: c.product_id,
-            product_name: c.product_name,
-            product_sku: c.product_sku,
+            variant_id: c.variant_id || null,
+            parent_id: c.parent_id || null,
+            parent_name: c.parent_name || '',
+            variant_name: c.variant_name || '',
+            product_name: c.product_name || c.name || '',
+            product_sku: c.product_sku || c.sku || '',
+            name: c.name || c.product_name || '',
+            sku: c.sku || c.product_sku || '',
             quantity: c.quantity,
             unit_price: c.unit_price,
             discount_percent: c.discount_percent,
@@ -565,8 +586,8 @@ export default function OrderList({ store = {} }) {
           remaining_amount: editForm.remaining_amount || 0,
           status: editForm.status || 'pending',
           created_at: editForm.created_at || null,
-          details: editDetails.map(({ product_id, product_name, product_sku, quantity, unit_price, discount_amount, discount_percent, line_total }) =>
-            ({ product_id, product_name, product_sku, quantity, unit_price, discount_amount, discount_percent, line_total })),
+          details: editDetails.map(({ product_id, variant_id, parent_id, parent_name, variant_name, product_name, product_sku, name, sku, quantity, unit_price, discount_amount, discount_percent, line_total }) =>
+            ({ product_id, variant_id: variant_id || null, parent_id: parent_id || null, parent_name: parent_name || '', variant_name: variant_name || '', product_name: product_name || name || '', product_sku: product_sku || sku || '', name: name || product_name || '', sku: sku || product_sku || '', quantity, unit_price, discount_amount, discount_percent, line_total })),
         }),
         signal: controller.signal,
       });
@@ -716,8 +737,8 @@ export default function OrderList({ store = {} }) {
       const template = await getDefaultPrintTemplate({
         apiBase: inv._isOffline ? '' : API,
         type: 'sale_invoice',
-        paperSize: store?.invoice_width ? `${store.invoice_width}mm` : '',
-        fallbackPaperSize: store?.invoice_width ? `${store.invoice_width}mm` : '80mm',
+        paperSize: 'A4',
+        fallbackPaperSize: 'A4',
       });
       const printData = createInvoicePrintData({
         store,
@@ -1064,7 +1085,7 @@ export default function OrderList({ store = {} }) {
                 {(invoiceDetails || []).map((d, idx) => (
                   <tr key={d.id} className="border-b">
                     <td className="border p-2 text-center">{idx + 1}</td>
-                    <td className="border p-2">{d.product_name}</td>
+                    <td className="border p-2">{getProductDisplayName(d)}</td>
                     <td className="border p-2 text-center">{d.quantity}</td>
                     <td className="border p-2 text-right">{formatVND(d.unit_price)}</td>
                     <td className="border p-2 text-right font-medium">{formatVND(d.line_total)}</td>
@@ -1180,7 +1201,7 @@ export default function OrderList({ store = {} }) {
                         <tr key={d.id} className="border-b last:border-b-0 hover:bg-gray-50 text-xs">
                           <td className="py-2 px-3 text-center text-gray-400">{idx + 1}</td>
                           <td className="py-2 px-3">
-                            <div className="font-medium text-gray-800">{d.product_name}</div>
+                            <div className="font-medium text-gray-800">{getProductDisplayName(d)}</div>
                             <div className="text-[10px] text-gray-400">{d.product_sku}</div>
                           </td>
                           <td className="py-2 px-3 text-center">
@@ -1331,7 +1352,11 @@ export default function OrderList({ store = {} }) {
                   const filteredParents = editProducts.filter(p =>
                     !editProductSearch ||
                     p.name.toLowerCase().includes(searchLower) ||
-                    (p.sku || '').toLowerCase().includes(searchLower)
+                    (p.sku || '').toLowerCase().includes(searchLower) ||
+                    (p.variants || []).some(v =>
+                      String(getProductDisplayName(v, p)).toLowerCase().includes(searchLower) ||
+                      (v.sku || '').toLowerCase().includes(searchLower)
+                    )
                   );
 
                   return filteredParents.map(parent => {
@@ -1381,13 +1406,13 @@ export default function OrderList({ store = {} }) {
                                 className={`border rounded-lg p-2 cursor-pointer hover:border-blue-500 hover:shadow-sm ${variant.stock <= 0 ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (variant.stock > 0) addDetailFromPicker(variant);
+                                  if (variant.stock > 0) addDetailFromPicker({ ...variant, is_variant: true, parent_id: parent.id, parent_name: parent.name, parent });
                                 }}
                               >
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2 flex-1 min-w-0">
                                     <span className="text-gray-300 shrink-0">⊙</span>
-                                    <div className="text-xs font-medium truncate text-blue-600 flex-1">{variant.name}</div>
+                                    <div className="text-xs font-medium truncate text-blue-600 flex-1">{getProductDisplayName(variant, parent)}</div>
                                   </div>
                                   <div className="flex items-center gap-3 shrink-0">
                                     <div className="text-[10px] text-gray-400">{variant.sku || '—'}</div>
@@ -1408,10 +1433,15 @@ export default function OrderList({ store = {} }) {
                   });
                 })()}
                 {(() => {
+                  const searchLower = editProductSearch.toLowerCase();
                   const filteredParents = editProducts.filter(p =>
                     !editProductSearch ||
-                    p.name.toLowerCase().includes(editProductSearch.toLowerCase()) ||
-                    (p.sku || '').toLowerCase().includes(editProductSearch.toLowerCase())
+                    p.name.toLowerCase().includes(searchLower) ||
+                    (p.sku || '').toLowerCase().includes(searchLower) ||
+                    (p.variants || []).some(v =>
+                      String(getProductDisplayName(v, p)).toLowerCase().includes(searchLower) ||
+                      (v.sku || '').toLowerCase().includes(searchLower)
+                    )
                   );
                   return filteredParents.length === 0 && (
                     <div className="text-center text-gray-400 py-8">Không tìm thấy sản phẩm</div>

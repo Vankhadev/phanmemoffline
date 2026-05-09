@@ -4,6 +4,7 @@ import HelpModal from '../components/HelpModal';
 import { getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
 import { printInvoice, writePrintWindowMessage } from '../utils/printInvoice';
+import { getProductDisplayName } from '../utils/productSearch';
 
 const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
 const PAYMENT_METHODS = [
@@ -123,6 +124,12 @@ export default function POS({ user, store }) {
       return;
     }
     const unit_price = v[`${priceType}_price`] || v.retail_price;
+    const displayName = getProductDisplayName({
+      ...v,
+      is_variant: true,
+      parent_id: showVariantPicker?.id || v.parent_id || null,
+      parent_name: showVariantPicker?.name || v.parent_name || v.parent?.name || '',
+    }, showVariantPicker);
     const existing = cart.find(c => c.product_id === v.id && c.unit_price === unit_price);
     if (existing) {
       if (existing.quantity + qty > v.stock) {
@@ -136,8 +143,14 @@ export default function POS({ user, store }) {
       setCart([...cart, {
         id: Date.now(),
         product_id: v.id,
-        product_name: v.name,
+        variant_id: v.id,
+        parent_id: showVariantPicker?.id || v.parent_id || null,
+        parent_name: showVariantPicker?.name || v.parent_name || v.parent?.name || '',
+        variant_name: v.name,
+        product_name: displayName,
         product_sku: v.sku,
+        name: displayName,
+        sku: v.sku,
         quantity: qty,
         unit_price,
         discount_amount: 0,
@@ -241,8 +254,8 @@ export default function POS({ user, store }) {
       delivery_fee: 0,
       payment_method: paymentMethod,
       note,
-      details: cart.map(({ id, product_id, product_name, product_sku, quantity, unit_price, discount_amount, discount_percent, line_total }) =>
-        ({ product_id, product_name, product_sku, quantity, unit_price, discount_amount, discount_percent, line_total })),
+      details: cart.map(({ id, product_id, variant_id, parent_id, parent_name, variant_name, product_name, product_sku, name, sku, quantity, unit_price, discount_amount, discount_percent, line_total }) =>
+        ({ product_id, variant_id: variant_id || null, parent_id: parent_id || null, parent_name: parent_name || '', variant_name: variant_name || '', product_name: product_name || name || '', product_sku: product_sku || sku || '', name: name || product_name || '', sku: sku || product_sku || '', quantity, unit_price, discount_amount, discount_percent, line_total })),
     };
     try {
       const controller = new AbortController();
@@ -308,8 +321,8 @@ export default function POS({ user, store }) {
       const template = await getDefaultPrintTemplate({
         apiBase: API,
         type: 'sale_invoice',
-        paperSize: store?.invoice_width ? `${store.invoice_width}mm` : '',
-        fallbackPaperSize: store?.invoice_width ? `${store.invoice_width}mm` : '80mm',
+        paperSize: 'A4',
+        fallbackPaperSize: 'A4',
       });
       const printData = createInvoicePrintData({
         store,
@@ -508,7 +521,7 @@ export default function POS({ user, store }) {
                       {v.stock <= 0 && (
                         <span className="bg-red-600 text-white text-xs px-1 py-0.5 rounded font-bold">HẾT HÀNG</span>
                       )}
-                      <div className={`text-sm font-medium mt-1 ${v.stock <= 0 ? 'text-red-600 line-through' : ''}`}>{v.name}</div>
+                      <div className={`text-sm font-medium mt-1 ${v.stock <= 0 ? 'text-red-600 line-through' : ''}`}>{getProductDisplayName(v, showVariantPicker)}</div>
                       <div className="text-xs text-gray-400">{v.sku}</div>
                       <div className="text-sm font-bold text-blue-600 mt-1">{formatVND(v[`${priceType}_price`] || v.retail_price)}</div>
                       <div className={`text-xs ${v.stock < 10 && v.stock > 0 ? 'text-red-500' : 'text-gray-400'}`}>Tồn: {v.stock}</div>
@@ -541,6 +554,12 @@ export default function POS({ user, store }) {
                       const qty = variantQty[v.id] || 1;
                       if (qty <= 0) return;
                       const unit_price = v[`${priceType}_price`] || v.retail_price;
+                      const displayName = getProductDisplayName({
+                        ...v,
+                        is_variant: true,
+                        parent_id: showVariantPicker?.id || v.parent_id || null,
+                        parent_name: showVariantPicker?.name || v.parent_name || v.parent?.name || '',
+                      }, showVariantPicker);
                       const existing = cart.find(c => c.product_id === v.id && c.unit_price === unit_price);
                       if (existing) {
                         if (existing.quantity + qty > v.stock) return;
@@ -551,8 +570,14 @@ export default function POS({ user, store }) {
                         setCart(prev => [...prev, {
                           id: Date.now() + Math.random(),
                           product_id: v.id,
-                          product_name: v.name,
+                          variant_id: v.id,
+                          parent_id: showVariantPicker?.id || v.parent_id || null,
+                          parent_name: showVariantPicker?.name || v.parent_name || v.parent?.name || '',
+                          variant_name: v.name,
+                          product_name: displayName,
                           product_sku: v.sku,
+                          name: displayName,
+                          sku: v.sku,
                           quantity: qty,
                           unit_price,
                           discount_amount: 0,
@@ -602,7 +627,7 @@ export default function POS({ user, store }) {
                     <td className="py-1.5 px-2 text-center font-medium text-gray-500">{idx + 1}</td>
                     <td className="py-1.5 px-2">
                       <div className={`font-medium text-gray-800 ${item.quantity > item.max_stock ? 'text-red-600' : ''}`}>
-                        {item.product_name}
+                        {getProductDisplayName(item)}
                       </div>
                       <div className="text-[10px] text-gray-400">{formatVND(item.unit_price)} × {item.quantity}</div>
                     </td>
@@ -838,7 +863,7 @@ export default function POS({ user, store }) {
                   {lastInvoice.cart.map((item, idx) => (
                     <tr key={idx}>
                       <td className="border border-gray-400 p-1 text-center">{idx + 1}</td>
-                      <td className="border border-gray-400 p-1">{item.product_name}</td>
+                      <td className="border border-gray-400 p-1">{getProductDisplayName(item)}</td>
                       <td className="border border-gray-400 p-1 text-center">{item.quantity}</td>
                       <td className="border border-gray-400 p-1 text-right">{formatVND(item.unit_price)}</td>
                       <td className="border border-gray-400 p-1 text-center">{item.discount_percent > 0 ? `${item.discount_percent}%` : '—'}</td>

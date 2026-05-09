@@ -174,44 +174,121 @@ function findSkuConflictOutsideParentFamily(sku, parentId = null) {
   });
 }
 
-function syncVariantSkusToParent(parentId, parentSku, timestamp = now()) {
+function isPureNumericSku(value) {
+  return /^\d+$/.test(normalizeSku(value));
+}
+
+function createVariantSkuGenerationError(parentSku) {
+  const parentSkuText = normalizeSku(parentSku) || '(trống)';
+  const err = new Error(`Không thể tự sinh SKU biến thể vì SKU cha "${parentSkuText}" không phải chuỗi số thuần`);
+  err.statusCode = 400;
+  return err;
+}
+
+function buildOccupiedSkuKeys(products = getAll('products'), excludeIds = []) {
+  const excludedIds = new Set((excludeIds || [])
+    .map(id => Number(id))
+    .filter(id => Number.isFinite(id) && id > 0));
+
+  return new Set((products || [])
+    .filter(product => {
+      const id = Number(product?.id);
+      return !(Number.isFinite(id) && excludedIds.has(id));
+    })
+    .map(product => normalizeSkuKey(product?.sku))
+    .filter(Boolean));
+}
+
+function generateSequentialVariantSkus(parentSku, count = 1, options = {}) {
+  const parentSkuText = normalizeSku(parentSku);
+  if (!isPureNumericSku(parentSkuText)) throw createVariantSkuGenerationError(parentSkuText);
+
+  const total = Math.max(0, parseInt(count, 10) || 0);
+  if (total === 0) return [];
+
+  const occupiedSkuKeys = buildOccupiedSkuKeys(options.products || getAll('products'), options.excludeIds || []);
+  const generatedSkus = [];
+  const width = parentSkuText.length;
+  let nextValue = BigInt(parentSkuText) + 1n;
+
+  while (generatedSkus.length < total) {
+    const rawCandidate = nextValue.toString();
+    const candidate = rawCandidate.length < width ? rawCandidate.padStart(width, '0') : rawCandidate;
+    const candidateKey = normalizeSkuKey(candidate);
+
+    if (!occupiedSkuKeys.has(candidateKey)) {
+      occupiedSkuKeys.add(candidateKey);
+      generatedSkus.push(candidate);
+    }
+
+    nextValue += 1n;
+  }
+
+  return generatedSkus;
+}
+
+function generateNextVariantSku(parentSku, options = {}) {
+  return generateSequentialVariantSkus(parentSku, 1, options)[0];
+}
+
+function reassignVariantSkusToParentSequence(parentId, parentSku, timestamp = now()) {
   const numericParentId = Number(parentId);
   if (!Number.isFinite(numericParentId) || numericParentId <= 0) return 0;
 
-  const syncedSku = normalizeSku(parentSku);
-  const variants = getAll('products', variant => Number(variant.parent_id) === numericParentId);
-  let syncedCount = 0;
+  const allProducts = getAll('products');
+  const variants = allProducts
+    .filter(variant => variant.active !== 0 && Number(variant.parent_id) === numericParentId)
+    .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+  if (variants.length === 0 || !isPureNumericSku(parentSku)) return 0;
 
-  for (const variant of variants) {
-    if (variant.sku === syncedSku) continue;
-    update('products', variant.id, { sku: syncedSku, updated_at: timestamp });
-    syncedCount++;
-  }
+  const nextSkus = generateSequentialVariantSkus(parentSku, variants.length, {
+    products: allProducts,
+    excludeIds: variants.map(variant => variant.id),
+  });
+  let reassignedCount = 0;
 
-  return syncedCount;
+  variants.forEach((variant, index) => {
+    const nextSku = nextSkus[index];
+    if (normalizeSku(variant.sku) === nextSku) return;
+    update('products', variant.id, { sku: nextSku, updated_at: timestamp });
+    reassignedCount++;
+  });
+
+  return reassignedCount;
 }
 
-function syncVariantSkusInProductList(products, parentIds = null, timestamp = now()) {
-  const parentIdSet = parentIds ? new Set([...parentIds].map(id => Number(id)).filter(id => Number.isFinite(id) && id > 0)) : null;
-  const byId = new Map((products || []).map(product => [Number(product.id), product]));
-  let syncedCount = 0;
+function reassignVariantSkusInProductList(products, parentIds = null, timestamp = now()) {
+  const productList = Array.isArray(products) ? products : [];
+  const byId = new Map(productList.map(product => [Number(product.id), product]));
+  const targetParentIds = parentIds
+    ? [...parentIds].map(id => Number(id)).filter(id => Number.isFinite(id) && id > 0)
+    : [...new Set(productList.map(product => Number(product?.parent_id)).filter(id => Number.isFinite(id) && id > 0))];
+  let reassignedCount = 0;
 
-  for (const variant of products || []) {
-    const parentId = Number(variant?.parent_id);
-    if (!Number.isFinite(parentId) || parentId <= 0) continue;
-    if (parentIdSet && !parentIdSet.has(parentId)) continue;
-
+  for (const parentId of targetParentIds) {
     const parent = byId.get(parentId);
-    if (!parent) continue;
+    if (!parent || !isPureNumericSku(parent.sku)) continue;
 
-    const syncedSku = normalizeSku(parent.sku);
-    if (variant.sku === syncedSku) continue;
-    variant.sku = syncedSku;
-    variant.updated_at = timestamp;
-    syncedCount++;
+    const variants = productList
+      .filter(variant => variant.active !== 0 && Number(variant.parent_id) === parentId)
+      .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+    if (variants.length === 0) continue;
+
+    const nextSkus = generateSequentialVariantSkus(parent.sku, variants.length, {
+      products: productList,
+      excludeIds: variants.map(variant => variant.id),
+    });
+
+    variants.forEach((variant, index) => {
+      const nextSku = nextSkus[index];
+      if (normalizeSku(variant.sku) === nextSku) return;
+      variant.sku = nextSku;
+      variant.updated_at = timestamp;
+      reassignedCount++;
+    });
   }
 
-  return syncedCount;
+  return reassignedCount;
 }
 
 function normalizeImportKey(value) {
@@ -592,7 +669,7 @@ router.get('/export', (req, res) => {
 
 // ─────────────────────────────────────────────
 //  POST /api/products/import-excel-rows
-//  → Bulk import/upsert Excel rows: validate toàn bộ trước khi ghi, hỗ trợ parent + variant và đồng bộ SKU variant theo parent
+//  → Bulk import/upsert Excel rows: validate toàn bộ trước khi ghi, hỗ trợ parent + variant và đánh SKU variant theo chuỗi tăng dần khi SKU cha là số
 // ─────────────────────────────────────────────
 router.post('/import-excel-rows', (req, res) => {
   let receivedColumns = [];
@@ -773,7 +850,6 @@ router.post('/import-excel-rows', (req, res) => {
       const existing = existingByLegacySku || existingByName || null;
       const currentParent = existing?.parent_id ? byId.get(existing.parent_id) : null;
       const payload = buildExcelImportPayload(row, existing || {}, parent || currentParent);
-      payload.sku = normalizeSku(parent.sku);
       const rowActive = row.active === undefined ? 1 : row.active;
       if (existing) {
         Object.assign(existing, payload, { parent_id: parent.id, active: rowActive, updated_at: timestamp });
@@ -796,7 +872,8 @@ router.post('/import-excel-rows', (req, res) => {
       }
     }
 
-    summary.syncedVariantSkus = syncVariantSkusInProductList(nextProducts, touchedParentIds, timestamp);
+    summary.reassignedVariantSkus = 0;
+    summary.syncedVariantSkus = 0;
 
     replaceTable('products', nextProducts);
     res.json({
@@ -875,13 +952,14 @@ router.post('/', (req, res) => {
     };
 
     if (existing) {
+      const parentSkuChanged = normalizeSku(existing.sku) !== normalizeSku(finalData.sku);
       update('products', existing.id, finalData);
-      const syncedVariants = syncVariantSkusToParent(existing.id, finalData.sku, nowTime);
-      res.json({ ok: true, id: existing.id, message: 'Cập nhật sản phẩm thành công', action: 'updated', syncedVariants });
+      const reassignedVariantSkus = parentSkuChanged ? reassignVariantSkusToParentSequence(existing.id, finalData.sku, nowTime) : 0;
+      res.json({ ok: true, id: existing.id, message: 'Cập nhật sản phẩm thành công', action: 'updated', syncedVariants: reassignedVariantSkus, reassignedVariantSkus });
     } else {
       finalData.created_at = nowTime;
       const id = insert('products', finalData);
-      res.json({ ok: true, id, message: 'Tạo sản phẩm thành công', action: 'created', syncedVariants: 0 });
+      res.json({ ok: true, id, message: 'Tạo sản phẩm thành công', action: 'created', syncedVariants: 0, reassignedVariantSkus: 0 });
     }
   } catch (err) {
     res.status(500).json({ error: 'Lỗi khi lưu sản phẩm', detail: err.message });
@@ -901,7 +979,7 @@ router.put('/:id', (req, res) => {
     const isVariant = product.parent_id != null;
     const parent = isVariant ? getOne('products', p => p.id === product.parent_id && p.active !== 0) : null;
     const requestBody = isVariant
-      ? { ...req.body, sku: normalizeSku(parent?.sku || product.sku) }
+      ? { ...req.body, sku: normalizeSku(product.sku) }
       : req.body;
 
     if (!isVariant && req.body.sku !== undefined && req.body.sku !== null) {
@@ -919,9 +997,10 @@ router.put('/:id', (req, res) => {
       updated_at: nowTime,
     };
 
+    const parentSkuChanged = !isVariant && normalizeSku(product.sku) !== normalizeSku(changes.sku);
     update('products', id, changes);
-    const syncedVariants = isVariant ? 0 : syncVariantSkusToParent(id, changes.sku, nowTime);
-    res.json({ ok: true, message: 'Cập nhật sản phẩm thành công', syncedVariants });
+    const reassignedVariantSkus = parentSkuChanged ? reassignVariantSkusToParentSequence(id, changes.sku, nowTime) : 0;
+    res.json({ ok: true, message: 'Cập nhật sản phẩm thành công', syncedVariants: reassignedVariantSkus, reassignedVariantSkus });
   } catch (err) {
     res.status(500).json({ error: 'Lỗi khi cập nhật sản phẩm', detail: err.message });
   }
@@ -984,18 +1063,20 @@ router.post('/:parentId/variants', (req, res) => {
     const { name } = req.body;
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Tên biến thể không được để trống' });
 
-    const payload = productPayload({ ...req.body, sku: normalizeSku(parent.sku) }, {}, parent);
+    const generatedSku = generateNextVariantSku(parent.sku);
+    const payload = productPayload({ ...req.body, sku: generatedSku }, {}, parent);
+    const nowTime = now();
     const id = insert('products', {
       ...payload,
       parent_id: parentId,
       active: 1,
-      created_at: now(),
-      updated_at: now(),
+      created_at: nowTime,
+      updated_at: nowTime,
     });
 
-    res.json({ ok: true, id, message: 'Tạo biến thể thành công' });
+    res.json({ ok: true, id, sku: payload.sku, message: 'Tạo biến thể thành công' });
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi tạo biến thể', detail: err.message });
+    res.status(err.statusCode || 500).json({ error: 'Lỗi khi tạo biến thể', detail: err.message });
   }
 });
 
@@ -1013,7 +1094,7 @@ router.put('/variants/:id', (req, res) => {
     if (!parent) return res.status(400).json({ error: 'Không tìm thấy sản phẩm cha của biến thể' });
 
     const changes = {
-      ...productPayload({ ...req.body, sku: normalizeSku(parent.sku) }, variant, parent),
+      ...productPayload({ ...req.body, sku: normalizeSku(variant.sku) }, variant, parent),
       updated_at: now(),
     };
 

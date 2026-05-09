@@ -1,4 +1,5 @@
 import { formatCurrency, formatNumber } from './invoiceTemplateRenderer';
+import { getProductDisplayName } from './productSearch';
 
 export const PAYMENT_LABELS = {
   cash: 'Tiền mặt',
@@ -58,6 +59,8 @@ function normalizeStore(store = {}) {
     address: firstDefined(store.address, ''),
     phone: firstDefined(store.phone, ''),
     email: firstDefined(store.email, ''),
+    website: firstDefined(store.website, store.url, ''),
+    invoice_footer_url: firstDefined(store.invoice_footer_url, store.website, store.url, 'www.sapo.vn'),
     tax_code: firstDefined(store.tax_code, store.taxCode, ''),
     bank_account: firstDefined(store.bank_account, store.bankAccount, ''),
     bank_name: firstDefined(store.bank_name, store.bankName, ''),
@@ -108,7 +111,7 @@ export function normalizeInvoicePrintItems(items = []) {
     const discountAmount = toNumber(firstDefined(item.discount_amount, item.line_discount, item.discount_raw), 0);
     const lineTotal = toNumber(firstDefined(item.line_total, item.total, item.amount), quantity * unitPrice - discountAmount);
     const sku = firstDefined(item.product_sku, item.sku, item.code, '');
-    const name = firstDefined(item.product_name, item.name, item.combo_name, `Sản phẩm ${index + 1}`);
+    const name = getProductDisplayName(item) || firstDefined(item.product_name, item.name, item.combo_name, `Sản phẩm ${index + 1}`);
 
     return {
       ...item,
@@ -157,6 +160,8 @@ export function createInvoicePrintData({
   const discountRaw = toNumber(firstDefined(invoice.discount_amount, invoice.discountAmount), 0);
   const deliveryFeeRaw = toNumber(firstDefined(invoice.delivery_fee, invoice.deliveryFee), 0);
   const totalRaw = toNumber(firstDefined(invoice.total, invoice.grand_total, invoice.grandTotal), subtotalRaw + vatAmountRaw - discountRaw + deliveryFeeRaw);
+  const oldDebtRaw = toNumber(firstDefined(invoice.old_debt, invoice.oldDebt, invoice.previous_debt, invoice.customer_old_debt), 0);
+  const totalAmountRaw = toNumber(firstDefined(invoice.total_amount, invoice.totalAmount), totalRaw + oldDebtRaw);
   const paymentMethod = normalizePaymentMethod(firstDefined(invoice.payment_method, invoice.paymentMethod));
   const hasPaidAmount = firstDefined(invoice.paid_amount, invoice.paidAmount, invoice.paid) !== undefined;
   const paidRaw = hasPaidAmount
@@ -168,7 +173,7 @@ export function createInvoicePrintData({
   const remainingRaw = firstDefined(invoice.remaining_amount, invoice.remainingAmount, invoice.remaining) !== undefined
     ? toNumber(firstDefined(invoice.remaining_amount, invoice.remainingAmount, invoice.remaining), 0)
     : Math.max(0, totalRaw - paidRaw);
-  const invoiceCode = firstDefined(invoice.invoice_code, invoice.code, invoice.order_code, invoice.id ? `HD-${invoice.id}` : 'Hóa đơn');
+  const invoiceCode = firstDefined(invoice.order_code, invoice.invoice_code, invoice.code, invoice.id ? `HD-${invoice.id}` : 'Hóa đơn');
   const normalizedCustomer = normalizeCustomer(invoice, customer || invoice.customer || invoice.selectedCustomer || {});
   const normalizedUser = normalizeUser(invoice, user || invoice.user || {});
   const qrUrl = firstDefined(
@@ -181,6 +186,7 @@ export function createInvoicePrintData({
     ...invoice,
     code: invoiceCode,
     invoice_code: invoiceCode,
+    order_code: invoiceCode,
     created_at: formatDateTime(firstDefined(invoice.created_at, invoice.createdAt, invoice.date)),
     created_date: formatDate(firstDefined(invoice.created_at, invoice.createdAt, invoice.date)),
     delivery_date: invoice.delivery_date ? formatDate(invoice.delivery_date) : '',
@@ -195,6 +201,8 @@ export function createInvoicePrintData({
     discount_amount: formatCurrency(discountRaw),
     delivery_fee: formatCurrency(deliveryFeeRaw),
     total: formatCurrency(totalRaw),
+    old_debt: formatCurrency(oldDebtRaw),
+    total_amount: formatCurrency(totalAmountRaw),
     paid: formatCurrency(paidRaw),
     paid_amount: formatCurrency(paidRaw),
     change: formatCurrency(changeRaw),
@@ -214,6 +222,8 @@ export function createInvoicePrintData({
     discount: formatCurrency(discountRaw),
     delivery_fee: formatCurrency(deliveryFeeRaw),
     total: formatCurrency(totalRaw),
+    old_debt: formatCurrency(oldDebtRaw),
+    total_amount: formatCurrency(totalAmountRaw),
     paid: formatCurrency(paidRaw),
     paid_amount: formatCurrency(paidRaw),
     change: formatCurrency(changeRaw),
@@ -225,6 +235,8 @@ export function createInvoicePrintData({
     discount_raw: discountRaw,
     delivery_fee_raw: deliveryFeeRaw,
     total_raw: totalRaw,
+    old_debt_raw: oldDebtRaw,
+    total_amount_raw: totalAmountRaw,
     paid_raw: paidRaw,
     change_raw: changeRaw,
     remaining_raw: remainingRaw,

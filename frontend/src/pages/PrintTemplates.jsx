@@ -39,7 +39,9 @@ const PLACEHOLDER_GROUPS = [
       { token: '{{store.name}}', label: 'Tên cửa hàng' },
       { token: '{{store.address}}', label: 'Địa chỉ' },
       { token: '{{store.phone}}', label: 'Số điện thoại' },
+      { token: '{{store.email}}', label: 'Email cửa hàng' },
       { token: '{{store.tax_code}}', label: 'Mã số thuế' },
+      { token: '{{store.invoice_footer_url}}', label: 'URL chân trang' },
       { token: '{{images.logo}}', label: 'Logo' },
     ],
   },
@@ -47,8 +49,12 @@ const PLACEHOLDER_GROUPS = [
     title: 'Hóa đơn',
     items: [
       { token: '{{invoice.code}}', label: 'Mã hóa đơn' },
-      { token: '{{invoice.created_at}}', label: 'Ngày lập' },
+      { token: '{{invoice.order_code}}', label: 'Mã đơn hàng' },
+      { token: '{{invoice.created_at}}', label: 'Ngày giờ lập' },
+      { token: '{{invoice.created_date}}', label: 'Ngày lập' },
       { token: '{{invoice.cashier}}', label: 'Thu ngân' },
+      { token: '{{invoice.invoice_writer}}', label: 'Người viết hóa đơn' },
+      { token: '{{invoice.receiver_name}}', label: 'Người nhận hàng' },
       { token: '{{items_rows}}', label: 'Dòng sản phẩm' },
       { token: '{{images.qr}}', label: 'QR thanh toán' },
     ],
@@ -58,9 +64,13 @@ const PLACEHOLDER_GROUPS = [
     items: [
       { token: '{{customer.name}}', label: 'Tên khách' },
       { token: '{{customer.phone}}', label: 'SĐT khách' },
+      { token: '{{customer.email}}', label: 'Email khách' },
+      { token: '{{customer.address}}', label: 'Địa chỉ khách' },
       { token: '{{totals.subtotal}}', label: 'Tạm tính' },
       { token: '{{totals.discount}}', label: 'Giảm giá' },
       { token: '{{totals.total}}', label: 'Tổng cộng' },
+      { token: '{{totals.old_debt}}', label: 'Nợ cũ' },
+      { token: '{{totals.total_amount}}', label: 'Thành tiền cuối' },
     ],
   },
   {
@@ -100,7 +110,7 @@ export default function PrintTemplates({ store }) {
   const [templateType, setTemplateType] = useState('sale_invoice');
   const [templates, setTemplates] = useState(() => getFallbackTemplates('sale_invoice'));
   const [selectedId, setSelectedId] = useState('');
-  const [draft, setDraft] = useState(() => getDefaultTemplate('sale_invoice', '80mm'));
+  const [draft, setDraft] = useState(() => getDefaultTemplate('sale_invoice', 'A4'));
   const [editorTab, setEditorTab] = useState('visual');
   const [isVisualEditing, setIsVisualEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -141,7 +151,7 @@ export default function PrintTemplates({ store }) {
       const nextTemplates = apiTemplates.length > 0 ? apiTemplates : getFallbackTemplates(type);
       setTemplates(nextTemplates);
       setLoadedFromFallback(apiTemplates.length === 0);
-      const defaultTemplate = nextTemplates.find(template => template.is_default) || nextTemplates[0] || getDefaultTemplate(type, '80mm');
+      const defaultTemplate = nextTemplates.find(template => template.is_default) || nextTemplates[0] || getDefaultTemplate(type, type === 'sale_invoice' ? 'A4' : '80mm');
       setDraft(buildDraftFromTemplate(defaultTemplate, type, defaultTemplate.paper_size));
       setSelectedId(String(defaultTemplate.id || ''));
       if (apiTemplates.length === 0) {
@@ -149,7 +159,7 @@ export default function PrintTemplates({ store }) {
       }
     } catch (err) {
       const fallbackTemplates = getFallbackTemplates(type);
-      const fallback = fallbackTemplates[0] || getDefaultTemplate(type, '80mm');
+      const fallback = fallbackTemplates[0] || getDefaultTemplate(type, type === 'sale_invoice' ? 'A4' : '80mm');
       setTemplates(fallbackTemplates);
       setDraft(buildDraftFromTemplate(fallback, type, fallback.paper_size));
       setSelectedId(String(fallback.id || ''));
@@ -195,7 +205,7 @@ export default function PrintTemplates({ store }) {
   const handleTypeChange = (type) => {
     setTemplateType(type);
     setSelectedId('');
-    setDraft(getDefaultTemplate(type, draft.paper_size || '80mm'));
+    setDraft(getDefaultTemplate(type, type === 'sale_invoice' ? 'A4' : (draft.paper_size || '80mm')));
     setIsVisualEditing(false);
   };
 
@@ -205,7 +215,7 @@ export default function PrintTemplates({ store }) {
   };
 
   const handleUseDefault = () => {
-    const defaultTemplate = getDefaultTemplate(templateType, draft.paper_size || '80mm');
+    const defaultTemplate = getDefaultTemplate(templateType, templateType === 'sale_invoice' ? 'A4' : (draft.paper_size || '80mm'));
     setDraft(defaultTemplate);
     setSelectedId(String(defaultTemplate.id));
     setIsVisualEditing(true);
@@ -214,7 +224,7 @@ export default function PrintTemplates({ store }) {
   };
 
   const handleNewDraft = () => {
-    const base = getDefaultTemplate(templateType, draft.paper_size || '80mm');
+    const base = getDefaultTemplate(templateType, templateType === 'sale_invoice' ? 'A4' : (draft.paper_size || '80mm'));
     const next = {
       ...base,
       id: '',
@@ -407,7 +417,7 @@ export default function PrintTemplates({ store }) {
       if (!response.ok || data?.ok === false) throw new Error(getErrorMessage(data, 'Không xóa được mẫu in'));
       const remaining = templates.filter(template => String(template.id) !== String(draft.id));
       const nextTemplates = remaining.length > 0 ? remaining : getFallbackTemplates(templateType);
-      const nextDraft = nextTemplates[0] || getDefaultTemplate(templateType, '80mm');
+      const nextDraft = nextTemplates[0] || getDefaultTemplate(templateType, templateType === 'sale_invoice' ? 'A4' : '80mm');
       setTemplates(nextTemplates);
       setDraft(buildDraftFromTemplate(nextDraft, templateType, nextDraft.paper_size));
       setSelectedId(String(nextDraft.id || ''));
@@ -425,7 +435,7 @@ export default function PrintTemplates({ store }) {
       setDraft(buildDraftFromTemplate(selectedTemplate, templateType, selectedTemplate.paper_size));
       setSelectedId(String(selectedTemplate.id || ''));
     } else {
-      const fallback = getDefaultTemplate(templateType, draft.paper_size || '80mm');
+      const fallback = getDefaultTemplate(templateType, templateType === 'sale_invoice' ? 'A4' : (draft.paper_size || '80mm'));
       setDraft(fallback);
       setSelectedId(String(fallback.id));
     }
@@ -434,7 +444,7 @@ export default function PrintTemplates({ store }) {
   };
 
   const restoreInitialDefault = () => {
-    const defaultTemplate = getDefaultTemplate(templateType, draft.paper_size || '80mm');
+    const defaultTemplate = getDefaultTemplate(templateType, templateType === 'sale_invoice' ? 'A4' : (draft.paper_size || '80mm'));
     setDraft(prev => ({
       ...prev,
       html: defaultTemplate.html,

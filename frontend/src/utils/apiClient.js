@@ -6,6 +6,7 @@ import {
   prepareForAuthenticatedPayload,
   saveAuthSession,
 } from './authStorage';
+import { getProductDisplayName } from './productSearch';
 
 export const AUTH_EXPIRED_EVENT = 'kha-auth:expired';
 
@@ -330,22 +331,28 @@ function normalizePendingOrder(order) {
   const cart = Array.isArray(order?.cart) ? order.cart : [];
   const details = Array.isArray(payload.details) && payload.details.length > 0
     ? payload.details
-    : cart.map(item => ({
+    : cart.map(item => {
+      const productName = getProductDisplayName(item);
+      return {
       type: item.type || item.item_type || 'product',
       item_type: item.item_type || item.type || 'product',
       combo_id: item.combo_id || null,
       product_id: item.product_id || null,
       variant_id: item.variant_id || null,
-      product_name: item.product_name || item.name || '',
+      parent_id: item.parent_id || null,
+      parent_name: item.parent_name || '',
+      variant_name: item.variant_name || '',
+      product_name: productName || item.product_name || item.name || '',
       product_sku: item.product_sku || item.sku || '',
-      name: item.name || item.product_name || '',
+      name: productName || item.name || item.product_name || '',
       sku: item.sku || item.product_sku || '',
       quantity: Number(item.quantity) || 1,
       unit_price: Number(item.unit_price) || 0,
       discount_amount: Number(item.discount_amount) || 0,
       discount_percent: Number(item.discount_percent) || 0,
       line_total: Number(item.line_total) || 0,
-    }));
+    };
+    });
 
   if (!Array.isArray(details) || details.length === 0) return null;
 

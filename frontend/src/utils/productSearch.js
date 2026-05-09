@@ -15,6 +15,77 @@ export function compactSearchText(value) {
   return normalizeSearchText(value).replace(/\s+/g, '');
 }
 
+function firstNonEmpty(...values) {
+  const found = values.find(value => value !== undefined && value !== null && String(value).trim() !== '');
+  return found === undefined ? '' : String(found).trim();
+}
+
+function normalizedName(value) {
+  return normalizeSearchText(value).replace(/\s+/g, ' ');
+}
+
+export function buildVariantDisplayName(item = {}, parent = null) {
+  const parentName = firstNonEmpty(
+    parent?.name,
+    item?.parent_name,
+    item?.parentName,
+    item?.parent?.name,
+    item?.product_parent_name,
+  );
+  const currentName = firstNonEmpty(
+    item?.display_name,
+    item?.displayName,
+    item?.product_name,
+    item?.productName,
+    item?.name,
+    item?.variant_name,
+    item?.variantName,
+  );
+  const variantName = firstNonEmpty(
+    item?.variant_name,
+    item?.variantName,
+    item?.variant?.name,
+    item?.name,
+    currentName,
+  );
+
+  if (!parentName) return currentName || variantName;
+  if (!variantName) return currentName || parentName;
+
+  const parentKey = normalizedName(parentName);
+  const currentKey = normalizedName(currentName);
+  const variantKey = normalizedName(variantName);
+
+  if (currentName && parentKey && currentKey.includes(parentKey)) {
+    if (!variantKey || currentKey.includes(variantKey) || variantKey.includes(parentKey)) return currentName;
+  }
+  if (variantKey && parentKey && variantKey.includes(parentKey)) return variantName;
+
+  return `${parentName} - ${variantName}`;
+}
+
+export function getProductDisplayName(item = {}, parent = null) {
+  const type = String(item?.type || item?.item_type || item?.product_type || '').trim().toLowerCase();
+  if (type === 'combo' || item?.combo_id || item?.is_combo || item?.isCombo) {
+    return firstNonEmpty(item?.product_name, item?.name, item?.combo_name, 'Combo');
+  }
+
+  const isVariant = Boolean(
+    parent
+    || item?.is_variant
+    || item?.parent_id
+    || item?._parentId
+    || item?.variant_id
+    || item?.parent_name
+    || item?.parent?.name
+    || item?.variant_name
+    || item?.variant?.name
+  );
+
+  if (isVariant) return buildVariantDisplayName(item, parent);
+  return firstNonEmpty(item?.display_name, item?.displayName, item?.product_name, item?.productName, item?.name, item?.combo_name, item?.sku, 'Sản phẩm');
+}
+
 export function parseKeywordList(value) {
   if (Array.isArray(value)) return value.map(v => String(v || '').trim()).filter(Boolean);
   return String(value || '')

@@ -21,7 +21,7 @@ Manifest là JSON object có các trường tối thiểu:
 
 | Trường | Bắt buộc | Mô tả |
 |---|---:|---|
-| `version` | Có | Phiên bản SemVer hợp lệ, ví dụ `1.1.2`. |
+| `version` | Có | Phiên bản SemVer hợp lệ, ví dụ `1.1.3`. |
 | `url` | Có | URL HTTPS tới installer GitHub Release asset. Test nội bộ vẫn có thể dùng file URL hoặc đường dẫn local tuyệt đối. |
 | `sha256` | Có | SHA256 hex 64 ký tự của installer. |
 | `releaseNotes` | Có | Ghi chú phát hành dạng chuỗi hoặc mảng chuỗi. |
@@ -36,10 +36,10 @@ Ví dụ production qua GitHub Release:
 
 ```json
 {
-  "version": "1.1.2",
-  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.1.2/BanHangOffline-Setup-v1.1.2.exe",
+  "version": "1.1.3",
+  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.1.3/BanHangOffline-Setup-v1.1.3.exe",
   "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.1.2.",
+  "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.1.3.",
   "releaseDate": "2026-05-09T00:00:00.000Z",
   "platform": "win32",
   "arch": "x64",

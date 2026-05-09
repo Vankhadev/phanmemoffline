@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, now, getSyncVersions } = require('../db/database');
 const { requireAuth, requirePermission, publicSession } = require('../middleware/auth');
+const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
 
 const PULL_TABLES = [
   'store_info',
@@ -140,6 +141,7 @@ function createPendingOrderFromSync(payload, req) {
   });
 
   for (const detail of details) {
+    const displayFields = resolveInvoiceDetailDisplayFields(detail, id => getOne('products', product => Number(product.id) === Number(id)));
     insert('invoice_details', {
       account_id: req.accountId,
       invoice_id: invoiceId,
@@ -147,11 +149,11 @@ function createPendingOrderFromSync(payload, req) {
       item_type: detail.item_type || detail.type || (detail.combo_id ? 'combo' : 'product'),
       combo_id: detail.combo_id || null,
       product_id: detail.product_id || null,
-      variant_id: detail.variant_id || null,
-      product_name: detail.product_name || detail.name || '',
-      product_sku: detail.product_sku || detail.sku || '',
-      name: detail.name || detail.product_name || '',
-      sku: detail.sku || detail.product_sku || '',
+      variant_id: displayFields.variant_id || detail.variant_id || null,
+      product_name: displayFields.product_name,
+      product_sku: displayFields.product_sku,
+      name: displayFields.name,
+      sku: displayFields.sku,
       quantity: Number(detail.quantity) || 1,
       unit_price: Number(detail.unit_price) || 0,
       import_price: Number(detail.import_price) || 0,

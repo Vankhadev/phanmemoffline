@@ -338,7 +338,7 @@ export default function Payroll() {
           <div className="text-xl font-bold text-purple-600">{formatVND(totals.total_bonus)}</div>
         </div>
         <div className="card border-t-4 border-emerald-500">
-          <div className="text-xs text-gray-500 mb-1">TỔNG THỰC NHẬN</div>
+          <div className="text-xs text-gray-500 mb-1">TỔNG LƯƠNG</div>
           <div className="text-xl font-bold text-emerald-600">{formatVND(totals.total_net_salary)}</div>
         </div>
       </div>

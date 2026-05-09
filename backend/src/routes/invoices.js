@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, remove, upsertDailyStats, today, now, getNextSeq, normalizePaymentMethod, getActiveAccountId } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
+const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
 
 // ─────────────────────────────────────────────
 // Helper: tạo mã đơn tự động HD000001
@@ -85,8 +86,9 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
   const comboLine = isComboDetail(detail);
   const product_id = comboLine ? null : (detail.product_id || null);
   const combo_id = comboLine ? (detail.combo_id || null) : null;
-  const product_name = detail.product_name || detail.name || '';
-  const product_sku = detail.product_sku || detail.sku || '';
+  const displayFields = resolveInvoiceDetailDisplayFields(detail, id => getOne('products', p => Number(p.id) === Number(id)));
+  const product_name = displayFields.product_name;
+  const product_sku = displayFields.product_sku;
   const quantity = +detail.quantity || 1;
   const unit_price = +detail.unit_price || 0;
   const discount_amount = detail.discount_amount || 0;
@@ -103,11 +105,11 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
     item_type: comboLine ? 'combo' : (detail.item_type || detail.type || 'product'),
     combo_id,
     product_id,
-    variant_id: comboLine ? null : (detail.variant_id || null),
+    variant_id: comboLine ? null : (displayFields.variant_id || detail.variant_id || null),
     product_name,
     product_sku,
-    name: detail.name || product_name,
-    sku: detail.sku || product_sku,
+    name: displayFields.name || product_name,
+    sku: displayFields.sku || product_sku,
     quantity,
     unit_price,
     import_price,
@@ -154,7 +156,8 @@ function parseInvoiceDate(value) {
 }
 
 function formatDetailName(detail = {}) {
-  return detail.product_name || detail.name || detail.combo_name || detail.sku || detail.product_sku || 'Sản phẩm';
+  const displayFields = resolveInvoiceDetailDisplayFields(detail, id => getOne('products', product => Number(product.id) === Number(id)));
+  return displayFields.product_name || detail.product_name || detail.name || detail.combo_name || detail.sku || detail.product_sku || 'Sản phẩm';
 }
 
 function buildItemsSummary(details = []) {
@@ -297,7 +300,11 @@ router.get('/:id', (req, res) => {
   try {
     const inv = getOne('invoices', i => i.id === +req.params.id);
     if (!inv) return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
-    const details = getAll('invoice_details', d => d.invoice_id === inv.id);
+    const details = getAll('invoice_details', d => d.invoice_id === inv.id)
+      .map(detail => ({
+        ...detail,
+        ...resolveInvoiceDetailDisplayFields(detail, id => getOne('products', product => Number(product.id) === Number(id))),
+      }));
     const customer = getOne('customers', c => c.id === inv.customer_id);
     res.json({ ...inv, customer_name: customer?.name || '', details });
   } catch (err) {

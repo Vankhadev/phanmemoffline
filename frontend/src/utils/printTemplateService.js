@@ -89,7 +89,7 @@ function buildDefaultTemplateUrl(apiBase, type, paperSize) {
   return `${base}/print-templates/default${query ? `?${query}` : ''}`;
 }
 
-export function getLocalFallbackPrintTemplate(type = 'sale_invoice', paperSize = '80mm') {
+export function getLocalFallbackPrintTemplate(type = 'sale_invoice', paperSize = 'A4') {
   return withSource(normalizeTemplateRecord(getDefaultTemplate(type, paperSize), type, paperSize), 'fallback');
 }
 
@@ -101,13 +101,14 @@ export async function getDefaultPrintTemplate({
   apiBase = '',
   type = 'sale_invoice',
   paperSize = '',
-  fallbackPaperSize = '80mm',
+  fallbackPaperSize = '',
   timeoutMs = 6000,
   allowCache = true,
 } = {}) {
   const normalizedType = String(type || 'sale_invoice').trim() || 'sale_invoice';
   const normalizedPaperSize = String(paperSize || '').trim();
-  const fallbackSize = normalizedPaperSize || String(fallbackPaperSize || '80mm').trim() || '80mm';
+  const defaultFallbackSize = normalizedType === 'sale_invoice' ? 'A4' : '80mm';
+  const fallbackSize = normalizedPaperSize || String(fallbackPaperSize || defaultFallbackSize).trim() || defaultFallbackSize;
   const url = buildDefaultTemplateUrl(apiBase, normalizedType, normalizedPaperSize);
 
   if (url) {
@@ -115,6 +116,9 @@ export async function getDefaultPrintTemplate({
       const data = await fetchJsonWithTimeout(url, timeoutMs);
       const record = data?.template || data;
       const template = normalizeTemplateRecord(record, normalizedType, fallbackSize);
+      if (normalizedPaperSize && String(template.paper_size || '') !== normalizedPaperSize) {
+        throw new Error(`API returned ${template.paper_size || 'unknown'} instead of requested ${normalizedPaperSize}`);
+      }
       cacheTemplate(template, normalizedType, normalizedPaperSize);
       return withSource(template, 'api');
     } catch (_) {
@@ -124,7 +128,7 @@ export async function getDefaultPrintTemplate({
 
   if (allowCache) {
     const cached = getCachedTemplate(normalizedType, normalizedPaperSize);
-    if (cached) return cached;
+    if (cached && (!normalizedPaperSize || String(cached.paper_size || '') === normalizedPaperSize)) return cached;
   }
 
   return getLocalFallbackPrintTemplate(normalizedType, fallbackSize);

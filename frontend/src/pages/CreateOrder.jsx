@@ -4,13 +4,39 @@ import { API } from '../App';
 import {
   Search, Plus, X, ShoppingCart, Trash2, ChevronDown, ChevronRight, Barcode, Filter, Layers, UserPlus, Users, Package, Settings2
 } from 'lucide-react';
-import { buildCategoriesById, filterProductTree, normalizeSearchText } from '../utils/productSearch';
+import { buildCategoriesById, filterProductTree, normalizeSearchText, getProductDisplayName } from '../utils/productSearch';
+import InvoicePrintPreviewModal from '../components/InvoicePrintPreviewModal';
 import { getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
-import { printInvoice, writePrintWindowMessage } from '../utils/printInvoice';
 
 const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
 const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
+const PRINT_TYPE_OPTIONS = {
+  sale_invoice: {
+    type: 'sale_invoice',
+    label: 'In hóa đơn',
+    title: 'Hóa đơn bán hàng',
+    description: 'Phiếu bán hàng chính thức, có đầy đủ thông tin thanh toán và tổng kết tiền.',
+    paperSize: 'A4',
+  },
+  temporary_bill: {
+    type: 'temporary_bill',
+    label: 'In tạm tính',
+    title: 'Phiếu tạm tính',
+    description: 'Phiếu tạm tính để khách kiểm tra sản phẩm, số lượng và tổng tiền trước khi xác nhận in.',
+    paperSize: 'A4',
+  },
+};
+const createEmptyPrintPreviewState = () => ({
+  open: false,
+  type: '',
+  title: '',
+  subtitle: '',
+  data: null,
+  template: null,
+  loading: false,
+  error: '',
+});
 const COMBO_REFRESH_STALE_MS = 30 * 1000;
 
 // Tạo 5 số ngẫu nhiên từ 1-9
@@ -137,6 +163,8 @@ export default function CreateOrder({ user, store }) {
   const [splitLine, setSplitLine] = useState(false);
   const [creating, setCreating] = useState(false);
   const [lastInvoice, setLastInvoice] = useState(null);
+  const [printChoiceOpen, setPrintChoiceOpen] = useState(false);
+  const [printPreview, setPrintPreview] = useState(() => createEmptyPrintPreviewState());
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
   const [showProductPanel, setShowProductPanel] = useState(false);
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -430,6 +458,12 @@ export default function CreateOrder({ user, store }) {
     const qty = variantQty[v.id] || 1;
     if (qty <= 0) return;
     const unit_price = getPrice(v);
+    const displayName = getProductDisplayName({
+      ...v,
+      is_variant: true,
+      parent_id: showVariantPicker?.id || v.parent_id || v._parentId || null,
+      parent_name: showVariantPicker?.name || v.parent_name || v.parent?.name || '',
+    }, showVariantPicker);
     setCart(prev => {
       const existing = prev.find(c => c.product_id === v.id && c.unit_price === unit_price && !splitLine);
       if (existing) {
@@ -443,8 +477,16 @@ export default function CreateOrder({ user, store }) {
           : c);
       } else {
         return [...prev, {
-          id: Date.now() + Math.random(), product_id: v.id,
-          product_name: v.name, product_sku: v.sku,
+          id: Date.now() + Math.random(),
+          product_id: v.id,
+          variant_id: v.id,
+          parent_id: showVariantPicker?.id || v.parent_id || v._parentId || null,
+          parent_name: showVariantPicker?.name || v.parent_name || v.parent?.name || '',
+          variant_name: v.name,
+          product_name: displayName,
+          product_sku: v.sku,
+          name: displayName,
+          sku: v.sku,
           quantity: qty, unit_price, discount_amount: 0, discount_percent: 0,
           line_total: qty * unit_price, max_stock: v.stock,
         }];
@@ -499,6 +541,9 @@ export default function CreateOrder({ user, store }) {
   const addProduct = (product) => {
     if (product.stock <= 0) return;
     const unit_price = getPrice(product);
+    const isVariant = Boolean(product.is_variant || product.parent_id || product._parentId || product.parent_name || product.parent?.name);
+    const parentId = product.parent_id || product._parentId || product.parent?.id || null;
+    const displayName = getProductDisplayName(product);
     setCart(prev => {
       const existing = prev.find(c => c.product_id === product.id && c.unit_price === unit_price && !splitLine);
       if (existing) {
@@ -514,8 +559,14 @@ export default function CreateOrder({ user, store }) {
         return [...prev, {
           id: Date.now() + Math.random(),
           product_id: product.id,
-          product_name: product.name,
+          variant_id: isVariant ? product.id : null,
+          parent_id: isVariant ? parentId : null,
+          parent_name: isVariant ? (product.parent_name || product.parent?.name || '') : '',
+          variant_name: isVariant ? product.name : '',
+          product_name: displayName,
           product_sku: product.sku,
+          name: displayName,
+          sku: product.sku,
           quantity: 1,
           unit_price,
           discount_amount: 0,
@@ -831,6 +882,8 @@ export default function CreateOrder({ user, store }) {
 
   const resetForm = () => {
     setLastInvoice(null);
+    setPrintChoiceOpen(false);
+    setPrintPreview(createEmptyPrintPreviewState());
     setEditingInvoiceId(null);
     setCart([]);
     setProductSearch('');
@@ -852,43 +905,69 @@ export default function CreateOrder({ user, store }) {
     setReceiverName('');
   };
 
-  const handlePrint = async () => {
+  const handlePrint = () => {
+    if (!lastInvoice) {
+      alert('Không có dữ liệu hóa đơn để in.');
+      return;
+    }
+    setPrintChoiceOpen(true);
+  };
+
+  const closePrintPreview = () => {
+    setPrintPreview(createEmptyPrintPreviewState());
+  };
+
+  const handleSelectPrintType = async (type) => {
     if (!lastInvoice) {
       alert('Không có dữ liệu hóa đơn để in.');
       return;
     }
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup và thử lại.');
-      return;
-    }
+    const option = PRINT_TYPE_OPTIONS[type] || PRINT_TYPE_OPTIONS.sale_invoice;
+    const invoiceSnapshot = lastInvoice;
+    const previewTitle = `${option.title} ${invoiceSnapshot.invoice_code || ''}`.trim();
+
+    setPrintChoiceOpen(false);
+    setPrintPreview({
+      ...createEmptyPrintPreviewState(),
+      open: true,
+      type: option.type,
+      title: previewTitle,
+      subtitle: option.description,
+      loading: true,
+    });
 
     try {
-      writePrintWindowMessage(printWindow, { title: 'Đang chuẩn bị in hóa đơn', message: 'Đang tải mẫu in mặc định và dữ liệu hóa đơn...' });
       const template = await getDefaultPrintTemplate({
         apiBase: API,
-        type: 'sale_invoice',
-        paperSize: store?.invoice_width ? `${store.invoice_width}mm` : '',
-        fallbackPaperSize: store?.invoice_width ? `${store.invoice_width}mm` : '80mm',
+        type: option.type,
+        paperSize: option.paperSize,
+        fallbackPaperSize: option.paperSize,
       });
       const printData = createInvoicePrintData({
         store,
-        invoice: lastInvoice,
-        customer: lastInvoice.selectedCustomer,
-        user: { id: user?.id, name: lastInvoice.invoice_writer || user?.name || '' },
-        items: lastInvoice.cart,
+        invoice: invoiceSnapshot,
+        customer: invoiceSnapshot.selectedCustomer,
+        user: { id: user?.id, name: invoiceSnapshot.invoice_writer || user?.name || '' },
+        items: invoiceSnapshot.cart,
+        type: option.type,
       });
-      printInvoice({
+      setPrintPreview({
+        open: true,
+        type: option.type,
+        title: previewTitle,
+        subtitle: `${option.description} Kiểm tra đầy đủ thông tin đơn hàng, sản phẩm và tổng tiền trước khi bấm In.`,
         data: printData,
         template,
-        title: `Hóa đơn ${lastInvoice.invoice_code || ''}`.trim(),
-        targetWindow: printWindow,
+        loading: false,
+        error: '',
       });
-      resetForm();
     } catch (err) {
-      writePrintWindowMessage(printWindow, { title: 'Không thể in hóa đơn', message: err.message || 'Không thể render hóa đơn. Vui lòng thử lại.', tone: 'error' });
-      alert(err.message || 'Không thể in hóa đơn.');
+      setPrintPreview(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Không thể dựng bản xem trước phiếu in. Vui lòng thử lại.',
+      }));
     }
   };
 
@@ -1243,7 +1322,7 @@ export default function CreateOrder({ user, store }) {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (variant.stock > 0) {
-                                      addProduct(variant);
+                                      addProduct({ ...variant, is_variant: true, parent_id: parent.id, parent_name: parent.name, parent });
                                       setProductSearch('');
                                     }
                                   }}
@@ -1254,7 +1333,7 @@ export default function CreateOrder({ user, store }) {
                                       <div className={`flex-1 min-w-0 ${variant.stock <= 0 ? 'text-red-500' : 'text-blue-600'}`}>
                                         <div className="text-xs font-medium truncate flex items-center gap-2">
                                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold shrink-0">Variant</span>
-                                          <span className="truncate">{variant.name}</span>
+                                          <span className="truncate">{getProductDisplayName(variant, parent)}</span>
                                         </div>
                                         <div className="text-[10px] text-gray-400 truncate">{getCategoryName(variant) || getCategoryName(parent)} · {getSupplierName(variant.supplier_id || parent.supplier_id)}</div>
                                       </div>
@@ -1337,7 +1416,7 @@ export default function CreateOrder({ user, store }) {
                                 </button>
                               )}
                               {isCombo && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-bold">Combo</span>}
-                              <span>{item.product_name}</span>
+                              <span>{getProductDisplayName(item)}</span>
                             </div>
                             <div className="text-[10px] text-gray-400">{item.product_sku}</div>
                             {isCombo && (
@@ -1541,7 +1620,7 @@ export default function CreateOrder({ user, store }) {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (variant.stock > 0) {
-                                      addProduct(variant);
+                                      addProduct({ ...variant, is_variant: true, parent_id: parent.id, parent_name: parent.name, parent });
                                       setShowProductPanel(false);
                                       setProductSearch('');
                                     }
@@ -1553,7 +1632,7 @@ export default function CreateOrder({ user, store }) {
                                       <div className={`flex-1 min-w-0 ${variant.stock <= 0 ? 'text-red-500' : 'text-blue-600'}`}>
                                         <div className="text-xs font-medium truncate flex items-center gap-2">
                                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold shrink-0">Variant</span>
-                                          <span className="truncate">{variant.name}</span>
+                                          <span className="truncate">{getProductDisplayName(variant, parent)}</span>
                                         </div>
                                         <div className="text-[10px] text-gray-400 truncate">{getCategoryName(variant) || getCategoryName(parent)} · {getSupplierName(variant.supplier_id || parent.supplier_id)}</div>
                                       </div>
@@ -1672,7 +1751,7 @@ export default function CreateOrder({ user, store }) {
                 <button
                   onClick={handlePrint}
                   className="w-full mt-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2">
-                  In hóa đơn
+                  In
                 </button>
               )}
             </div>
@@ -1773,7 +1852,7 @@ export default function CreateOrder({ user, store }) {
                       <tr key={item.id || idx} className="border-b last:border-b-0">
                         <td className="py-2 px-3 text-center text-gray-500">{idx + 1}</td>
                         <td className="py-2 px-3">
-                          <div className="font-medium text-gray-800">{item.product_name}</div>
+                          <div className="font-medium text-gray-800">{getProductDisplayName(item)}</div>
                           <div className="text-xs text-gray-400">{item.product_sku || '—'}</div>
                         </td>
                         <td className="py-2 px-3 text-center">{item.quantity}</td>
@@ -1796,12 +1875,64 @@ export default function CreateOrder({ user, store }) {
                 onClick={handlePrint}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold"
               >
-                In hóa đơn
+                In
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {printChoiceOpen && lastInvoice && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden">
+            <div className="px-5 py-4 border-b bg-blue-50 flex items-center justify-between">
+              <div>
+                <div className="text-lg font-bold text-blue-800">Chọn loại phiếu cần in</div>
+                <div className="text-xs text-blue-600">Bấm một lựa chọn để mở bản xem trước, chưa gọi in trình duyệt ở bước này.</div>
+              </div>
+              <button onClick={() => setPrintChoiceOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            <div className="p-5 grid grid-cols-1 gap-3">
+              {Object.values(PRINT_TYPE_OPTIONS).map(option => (
+                <button
+                  key={option.type}
+                  type="button"
+                  onClick={() => handleSelectPrintType(option.type)}
+                  className="text-left rounded-xl border border-gray-200 hover:border-blue-400 hover:bg-blue-50 p-4 transition shadow-sm"
+                >
+                  <div className="font-bold text-gray-900">{option.label}</div>
+                  <div className="text-sm text-gray-500 mt-1">{option.description}</div>
+                  <div className="text-xs text-blue-600 font-medium mt-2">Mở màn hình xem trước trước khi in</div>
+                </button>
+              ))}
+            </div>
+            <div className="px-5 py-4 border-t bg-gray-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setPrintChoiceOpen(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium"
+              >
+                Hủy in
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <InvoicePrintPreviewModal
+        open={printPreview.open}
+        data={printPreview.data}
+        template={printPreview.template}
+        title={printPreview.title}
+        subtitle={printPreview.subtitle}
+        loading={printPreview.loading}
+        error={printPreview.error}
+        onBack={() => {
+          closePrintPreview();
+          if (lastInvoice) setPrintChoiceOpen(true);
+        }}
+        onClose={closePrintPreview}
+      />
 
       {/* ===== VARIANT PICKER MODAL ===== */}
       {
@@ -1819,7 +1950,7 @@ export default function CreateOrder({ user, store }) {
                 {(showVariantPicker.variants || []).map(v => (
                   <div key={v.id} className={`flex items-center gap-3 border rounded-lg p-3 hover:border-blue-400 bg-white ${v.stock <= 0 ? 'opacity-50' : ''}`}>
                     <div className="flex-1 min-w-0">
-                      <div className={`font-medium text-sm truncate ${v.stock <= 0 ? 'text-red-500' : 'text-gray-800'}`}>{v.name}</div>
+                      <div className={`font-medium text-sm truncate ${v.stock <= 0 ? 'text-red-500' : 'text-gray-800'}`}>{getProductDisplayName(v, showVariantPicker)}</div>
                       {v.stock <= 0 ? (
                         <div className="text-xs text-red-500 font-bold">Hết hàng</div>
                       ) : (

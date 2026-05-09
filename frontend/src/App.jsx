@@ -15,6 +15,7 @@ import KhoHang from './pages/KhoHang';
 import Nhaphang from './pages/nhaphang';
 import Reports from './pages/Reports';
 import CustomerOrderReport from './pages/CustomerOrderReport';
+import ProductReport from './pages/ProductReport';
 import CashBook from './pages/CashBook';
 import Payroll from './pages/Payroll';
 import PrintTemplates from './pages/PrintTemplates';
@@ -44,6 +45,22 @@ const ROUTE_ALIASES = {
 const HOME_ROUTE = '/';
 const LOGIN_REGISTER_ROUTE = '/dang-ky';
 
+function normalizeRoutePath(route, fallback = HOME_ROUTE) {
+  const rawRoute = String(route || fallback).trim() || fallback;
+  const [pathOnly] = rawRoute.split(/[?#]/);
+  const requested = ROUTE_ALIASES[pathOnly] || pathOnly;
+  const safeRoute = requested.startsWith('/') ? requested : `/${requested}`;
+  return ROUTE_ALIASES[safeRoute] || safeRoute;
+}
+
+function getCurrentHashRoute() {
+  if (typeof window === 'undefined') return HOME_ROUTE;
+  const rawHash = String(window.location.hash || '').trim();
+  if (!rawHash || rawHash === '#') return HOME_ROUTE;
+  const routeFromHash = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
+  return normalizeRoutePath(routeFromHash || HOME_ROUTE);
+}
+
 const ROUTE_PERMISSIONS = {
   [HOME_ROUTE]: [],
   '/pos': ['invoices.manage'],
@@ -59,14 +76,24 @@ const ROUTE_PERMISSIONS = {
   '/bang-luong-nhan-vien': ['payrolls.read'],
   '/bao-cao-thu-e': ['stats.read'],
   '/bao-cao-theo-don-hang': ['invoices.read'],
+  '/bao-cao-theo-san-pham': ['stats.read'],
   '/cai-dat': ['settings.read', 'store.read', 'users.read'],
   '/mau-in': ['print_templates.read'],
 };
 
+function isKnownAppRoute(route) {
+  return Object.prototype.hasOwnProperty.call(ROUTE_PERMISSIONS, route);
+}
+
 function normalizeDefaultRoute(route, user, permissions) {
-  const requested = ROUTE_ALIASES[String(route || '').trim()] || String(route || HOME_ROUTE).trim() || HOME_ROUTE;
-  const safeRoute = requested.startsWith('/') ? requested : `/${requested}`;
+  const safeRoute = normalizeRoutePath(route);
   return canAccessRoute(safeRoute, user, permissions) ? safeRoute : firstAccessibleRoute(user, permissions);
+}
+
+function getRestoredSessionRoute(defaultRoute, user, permissions) {
+  const currentRoute = getCurrentHashRoute();
+  if (isKnownAppRoute(currentRoute) && canAccessRoute(currentRoute, user, permissions)) return currentRoute;
+  return normalizeDefaultRoute(defaultRoute, user, permissions);
 }
 
 function isAdminUser(user) {
@@ -82,7 +109,7 @@ function hasAnyPermission(user, permissions, required = []) {
 }
 
 function canAccessRoute(route, user, permissions) {
-  if (!user) return false;
+  if (!user || !isKnownAppRoute(route)) return false;
   const required = ROUTE_PERMISSIONS[route] || [];
   return hasAnyPermission(user, permissions, required);
 }
@@ -224,8 +251,9 @@ function AppLayout({
         items: [
           { to: '/thong-ke', label: 'Thống kê' },
           { to: '/so-quy', label: 'Sổ quỹ' },
-          { to: '/bao-cao-thu-e', label: 'Báo cáo danh thu' },
+          { to: '/bao-cao-thu-e', label: 'Báo cáo doanh thu' },
           { to: '/bao-cao-theo-don-hang', label: 'Báo cáo theo đơn hàng' },
+          { to: '/bao-cao-theo-san-pham', label: 'Báo cáo sản phẩm' },
           { to: '/bang-luong-nhan-vien', label: 'Bảng lương nhân viên' },
           { to: '/cai-dat', label: 'Cài đặt' },
           { to: '/mau-in', label: 'Mẫu in' },
@@ -265,7 +293,7 @@ function AppLayout({
             {sidebarOpen && (
               <div>
                 <div className="text-xs text-gray-400 font-bold">{store.name || account?.name || 'Bán hàng offline'}</div>
-                <div className="text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.1.2'}</div>
+                <div className="text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.1.3'}</div>
               </div>
             )}
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-400 hover:text-white text-lg">☰</button>
@@ -358,14 +386,15 @@ function AppLayout({
             <Route path="/danh-sach-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/danh-sach-don-hang"><OrderList store={store} /></ProtectedRoute>} />
             <Route path="/kho-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/kho-hang"><KhoHang /></ProtectedRoute>} />
             <Route path="/nha-cung-cap" element={<ProtectedRoute user={user} permissions={permissions} path="/nha-cung-cap"><NhaCungCap /></ProtectedRoute>} />
-            <Route path="/nhap-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/nhap-hang"><Nhaphang /></ProtectedRoute>} />
-            <Route path="/san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/san-pham"><Products /></ProtectedRoute>} />
+            <Route path="/nhap-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/nhap-hang"><Nhaphang store={store} /></ProtectedRoute>} />
+            <Route path="/san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/san-pham"><Products store={store} /></ProtectedRoute>} />
             <Route path="/khach-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/khach-hang"><Customers /></ProtectedRoute>} />
             <Route path="/thong-ke" element={<ProtectedRoute user={user} permissions={permissions} path="/thong-ke"><Stats /></ProtectedRoute>} />
             <Route path="/so-quy" element={<ProtectedRoute user={user} permissions={permissions} path="/so-quy"><CashBook /></ProtectedRoute>} />
             <Route path="/bang-luong-nhan-vien" element={<ProtectedRoute user={user} permissions={permissions} path="/bang-luong-nhan-vien"><Payroll /></ProtectedRoute>} />
             <Route path="/bao-cao-thu-e" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-thu-e"><Reports /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><CustomerOrderReport /></ProtectedRoute>} />
+            <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ProductReport /></ProtectedRoute>} />
             <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><Settings store={store} /></ProtectedRoute>} />
             <Route path="/mau-in" element={<ProtectedRoute user={user} permissions={permissions} path="/mau-in"><PrintTemplates store={store} /></ProtectedRoute>} />
             <Route path={LOGIN_REGISTER_ROUTE} element={<Navigate to={firstAccessibleRoute(user, permissions)} replace />} />
@@ -452,8 +481,11 @@ export default function App() {
     }
 
     const defaultRoute = normalizeDefaultRoute(sessionState.bootstrap?.defaultRoute || payload.defaultRoute, sessionState.user, sessionState.permissions);
-    if (redirect) setRedirectPath(defaultRoute);
-    return { ...sessionState, defaultRoute, identityChanged };
+    const redirectRoute = persistMode === 'snapshot'
+      ? getRestoredSessionRoute(defaultRoute, sessionState.user, sessionState.permissions)
+      : defaultRoute;
+    if (redirect) setRedirectPath(redirectRoute);
+    return { ...sessionState, defaultRoute, redirectRoute, identityChanged };
   }, []);
 
   useEffect(() => {

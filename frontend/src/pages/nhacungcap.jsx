@@ -4,6 +4,70 @@ import { Plus, Edit2, Trash2, Search, Loader, FileDown, Upload, X, HelpCircle } 
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
 
+const hasPaymentValue = (value) => value !== undefined && value !== null && String(value).trim() !== '';
+
+const getFirstPaymentValue = (...values) => values.find(hasPaymentValue);
+
+const toPaymentNumber = (value, fallback = 0) => {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? Math.max(0, numberValue) : fallback;
+};
+
+const normalizePaymentStatus = (status) => {
+  const value = String(status || '').trim().toLowerCase();
+  if (['paid', 'da_thanh_toan', 'đã thanh toán', 'da thanh toan'].includes(value)) return 'paid';
+  if (['unpaid', 'chua_thanh_toan', 'chưa thanh toán', 'chua thanh toan'].includes(value)) return 'unpaid';
+  return '';
+};
+
+const getSupplierIdKey = (value) => (hasPaymentValue(value) ? String(value).trim() : '');
+
+const formatPaymentMoney = (value) => `${toPaymentNumber(value, 0).toLocaleString('vi-VN')}đ`;
+
+const getImportPaymentAmounts = (imp = {}) => {
+  const total = toPaymentNumber(imp.total, 0);
+  const status = normalizePaymentStatus(imp.payment_status) || 'unpaid';
+  const paid = status === 'paid' ? total : Math.min(total, toPaymentNumber(imp.paid_amount, 0));
+  const remaining = status === 'paid'
+    ? 0
+    : (hasPaymentValue(imp.remaining_amount)
+      ? Math.min(total, toPaymentNumber(imp.remaining_amount, Math.max(0, total - paid)))
+      : Math.max(0, total - paid));
+
+  return { total, paid_amount: paid, remaining_amount: remaining };
+};
+
+const getDirectSupplierPaymentSummary = (supplier = {}) => {
+  const status = normalizePaymentStatus(supplier.payment_status);
+  const totalValue = getFirstPaymentValue(supplier.total, supplier.total_amount, supplier.import_total, supplier.total_import);
+  const paidValue = getFirstPaymentValue(supplier.total_paid, supplier.paid_amount, supplier.paid);
+  const remainingValue = getFirstPaymentValue(supplier.total_remaining, supplier.remaining_amount, supplier.remaining, supplier.debt, supplier.balance);
+  const hasData = Boolean(status) || hasPaymentValue(totalValue) || hasPaymentValue(paidValue) || hasPaymentValue(remainingValue);
+  if (!hasData) return null;
+
+  const total = toPaymentNumber(totalValue, 0);
+  let paid = toPaymentNumber(paidValue, status === 'paid' && total > 0 ? total : 0);
+  let remaining = hasPaymentValue(remainingValue)
+    ? toPaymentNumber(remainingValue, 0)
+    : (total > 0 ? Math.max(0, total - paid) : 0);
+
+  if (status === 'paid') {
+    remaining = 0;
+    if (total > 0) paid = total;
+  }
+
+  const paymentStatus = status || (remaining > 0 ? 'unpaid' : 'paid');
+
+  return {
+    source: 'supplier',
+    payment_status: paymentStatus,
+    total_amount: total,
+    paid_amount: paid,
+    remaining_amount: remaining,
+    import_count: null,
+  };
+};
+
 export default function NhaCungCap() {
   const [suppliers, setSuppliers] = useState([]);
   const [search, setSearch] = useState('');
@@ -13,6 +77,9 @@ export default function NhaCungCap() {
   const [saving, setSaving] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [paymentBySupplier, setPaymentBySupplier] = useState({});
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentLoaded, setPaymentLoaded] = useState(false);
   const fileInputRef = useRef(null);
   const nameInputRef = useRef(null);
   const [form, setForm] = useState({
@@ -26,6 +93,7 @@ export default function NhaCungCap() {
 
   useEffect(() => {
     fetchSuppliers();
+    fetchSupplierPaymentSummaries();
   }, []);
 
   useEffect(() => {
@@ -48,6 +116,54 @@ export default function NhaCungCap() {
       console.error('Lỗi tải nhà cung cấp:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSupplierPaymentSummaries = async () => {
+    setPaymentLoading(true);
+    try {
+      const res = await fetch(`${API}/imports`);
+      if (!res.ok) throw new Error('Không thể tải lịch sử nhập hàng để tổng hợp thanh toán');
+      const data = await res.json();
+      const summaries = {};
+
+      (Array.isArray(data) ? data : []).forEach(imp => {
+        const importStatus = String(imp.status || '').trim().toLowerCase();
+        if (imp.deleted === true || ['cancelled', 'canceled', 'da_huy'].includes(importStatus)) return;
+
+        const partnerKey = getSupplierIdKey(getFirstPaymentValue(imp.partner_id, imp.partnerId, imp.supplier_id));
+        if (!partnerKey) return;
+
+        const amounts = getImportPaymentAmounts(imp);
+        if (!summaries[partnerKey]) {
+          summaries[partnerKey] = {
+            source: 'imports',
+            payment_status: 'unpaid',
+            total_amount: 0,
+            paid_amount: 0,
+            remaining_amount: 0,
+            import_count: 0,
+          };
+        }
+
+        summaries[partnerKey].total_amount += amounts.total;
+        summaries[partnerKey].paid_amount += amounts.paid_amount;
+        summaries[partnerKey].remaining_amount += amounts.remaining_amount;
+        summaries[partnerKey].import_count += 1;
+      });
+
+      Object.values(summaries).forEach(summary => {
+        summary.payment_status = summary.remaining_amount > 0 ? 'unpaid' : 'paid';
+      });
+
+      setPaymentBySupplier(summaries);
+      setPaymentLoaded(true);
+    } catch (err) {
+      console.error('Lỗi tải tổng hợp thanh toán nhà cung cấp:', err);
+      setPaymentBySupplier({});
+      setPaymentLoaded(false);
+    } finally {
+      setPaymentLoading(false);
     }
   };
 
@@ -283,6 +399,58 @@ export default function NhaCungCap() {
     (p.tax_code || '').includes(search)
   );
 
+  const getSupplierPaymentSummary = (supplier) => {
+    const partnerKey = getSupplierIdKey(supplier?.id);
+    if (partnerKey && paymentBySupplier[partnerKey]) return paymentBySupplier[partnerKey];
+
+    const directSummary = getDirectSupplierPaymentSummary(supplier);
+    if (directSummary) return directSummary;
+
+    if (paymentLoading) {
+      return { payment_status: 'loading', label: 'Đang tải...', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
+    }
+
+    if (paymentLoaded) {
+      return { payment_status: 'none', label: 'Chưa có phiếu', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: 0 };
+    }
+
+    return { payment_status: 'unknown', label: 'Chưa có dữ liệu', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
+  };
+
+  const getSupplierPaymentLabel = (summary) => {
+    if (summary.label) return summary.label;
+    return summary.payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán';
+  };
+
+  const getSupplierPaymentBadgeClass = (status) => {
+    if (status === 'paid') return 'bg-green-100 text-green-700 border-green-200';
+    if (status === 'unpaid') return 'bg-orange-100 text-orange-700 border-orange-200';
+    return 'bg-gray-100 text-gray-600 border-gray-200';
+  };
+
+  const renderSupplierPayment = (supplier) => {
+    const summary = getSupplierPaymentSummary(supplier);
+    const hasMoneyData = ['imports', 'supplier'].includes(summary.source);
+
+    return (
+      <div className="space-y-1">
+        <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-medium ${getSupplierPaymentBadgeClass(summary.payment_status)}`}>
+          {getSupplierPaymentLabel(summary)}
+        </span>
+        {hasMoneyData && (
+          <div className="text-[11px] text-gray-500 leading-4">
+            {summary.import_count ? <div>{summary.import_count} phiếu nhập</div> : null}
+            {summary.remaining_amount > 0 ? (
+              <div>Còn {formatPaymentMoney(summary.remaining_amount)}</div>
+            ) : summary.total_amount > 0 ? (
+              <div>Đã trả {formatPaymentMoney(summary.paid_amount)}</div>
+            ) : null}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -337,6 +505,7 @@ export default function NhaCungCap() {
               <th className="p-2 text-left w-32">MST</th>
               <th className="p-2 text-left w-40">Email</th>
               <th className="p-2 text-left w-24">Loại HĐ</th>
+              <th className="p-2 text-left w-24">Thanh toán</th>
               <th className="p-2 text-left w-64">Địa chỉ</th>
               <th className="p-2 text-center w-24">Hành động</th>
             </tr>
@@ -344,14 +513,14 @@ export default function NhaCungCap() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="text-center text-gray-400 py-10 flex items-center justify-center gap-2">
+                <td colSpan={8} className="text-center text-gray-400 py-10 flex items-center justify-center gap-2">
                   <Loader size={16} className="animate-spin" /> Đang tải...
                 </td>
               </tr>
             )}
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center text-gray-400 py-10">
+                <td colSpan={8} className="text-center text-gray-400 py-10">
                   {search ? 'Không tìm thấy nhà cung cấp' : 'Chưa có nhà cung cấp nào'}
                 </td>
               </tr>
@@ -367,6 +536,7 @@ export default function NhaCungCap() {
                     {p.invoice_type === 'electronic' ? 'Có HĐĐT' : 'Không HĐĐT'}
                   </span>
                 </td>
+                <td className="p-2">{renderSupplierPayment(p)}</td>
                 <td className="p-2 text-gray-500 text-xs">{p.address || '—'}</td>
                 <td className="p-2 text-center">
                   <button onClick={() => openEdit(p)} className="text-blue-600 hover:text-blue-800 text-xs mr-2 flex items-center gap-1 inline-flex">
