@@ -4,6 +4,7 @@ const net = require('net');
 const { createUpdateManager } = require('./updater');
 
 const BACKEND_PORT = Number(process.env.PORT || 3001);
+const WINDOW_FOCUS_CHANNEL = 'kha:window:ensure-input-focus';
 let mainWindow = null;
 let backendServer = null;
 let updateManager = null;
@@ -43,6 +44,44 @@ async function startBackend() {
   await waitForPort(BACKEND_PORT);
 }
 
+function sanitizeFocusDetails(details = {}) {
+  const control = details && typeof details === 'object' ? details.control || {} : {};
+  return {
+    reason: String(details?.reason || 'renderer-input-focus').slice(0, 80),
+    tagName: String(control.tagName || '').slice(0, 32),
+    type: String(control.type || '').slice(0, 32),
+    id: String(control.id || '').slice(0, 80),
+    name: String(control.name || '').slice(0, 80),
+    placeholder: String(control.placeholder || '').slice(0, 160),
+    ariaLabel: String(control.ariaLabel || '').slice(0, 160),
+  };
+}
+
+function ensureMainWindowInputFocus(details = {}) {
+  const focusDetails = sanitizeFocusDetails(details);
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false, reason: 'window-not-ready', details: focusDetails };
+  }
+
+  try {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    if (!mainWindow.isFocused()) mainWindow.focus();
+    if (mainWindow.webContents && !mainWindow.webContents.isDestroyed() && typeof mainWindow.webContents.focus === 'function') {
+      mainWindow.webContents.focus();
+    }
+    return { ok: true, focused: mainWindow.isFocused(), details: focusDetails };
+  } catch (err) {
+    console.warn('[KHA Electron] Cannot ensure input focus:', err.message, focusDetails);
+    return { ok: false, reason: 'focus-failed', error: err.message, details: focusDetails };
+  }
+}
+
+function registerWindowFocusIpc() {
+  if (ipcMain.listenerCount(WINDOW_FOCUS_CHANNEL) > 0) return;
+  ipcMain.handle(WINDOW_FOCUS_CHANNEL, (_event, details) => ensureMainWindowInputFocus(details));
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -70,6 +109,7 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  registerWindowFocusIpc();
   updateManager = createUpdateManager({ app, getMainWindow: () => mainWindow });
   updateManager.registerIpc(ipcMain);
 

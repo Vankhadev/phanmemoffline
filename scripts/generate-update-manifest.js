@@ -11,6 +11,39 @@ const MANIFEST_PATH = path.join(RELEASE_DIR, 'update-manifest.json');
 const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const DEFAULT_GITHUB_OWNER = 'Vankhadev';
 const DEFAULT_GITHUB_REPO = 'phanmemoffline';
+const SENSITIVE_QUERY_KEY_PATTERN = /^(token|access_token|auth|authorization|signature|x-amz-signature|x-amz-credential|x-amz-security-token)$/i;
+const SENSITIVE_TEXT_PATTERNS = [
+  /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]+\b/g,
+  /\bgithub_pat_[A-Za-z0-9_]+\b/g,
+  /\b(Bearer|token)\s+[A-Za-z0-9._~+/=-]{8,}/gi,
+  /([?&](?:token|access_token|auth|authorization|signature|X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token)=)[^&\s]+/gi,
+];
+
+function redactSensitiveText(value) {
+  let text = String(value || '');
+  for (const pattern of SENSITIVE_TEXT_PATTERNS) {
+    text = text.replace(pattern, (match, prefix) => {
+      if (typeof prefix !== 'string') return '[redacted]';
+      if (/^(Bearer|token)$/i.test(prefix)) return `${prefix} [redacted]`;
+      return `${prefix}[redacted]`;
+    });
+  }
+  return text;
+}
+
+function sanitizeUrlForLog(value) {
+  try {
+    const parsed = new URL(value);
+    if (parsed.username) parsed.username = '[redacted]';
+    if (parsed.password) parsed.password = '[redacted]';
+    for (const key of Array.from(parsed.searchParams.keys())) {
+      if (SENSITIVE_QUERY_KEY_PATTERN.test(key)) parsed.searchParams.set(key, '[redacted]');
+    }
+    return redactSensitiveText(parsed.toString());
+  } catch (_) {
+    return redactSensitiveText(value);
+  }
+}
 
 function fail(message) {
   console.error(`[generate-update-manifest] ${message}`);
@@ -117,7 +150,7 @@ async function main() {
   console.log('[generate-update-manifest] Đã tạo manifest GitHub Release:');
   console.log(`  Version: ${manifest.version}`);
   console.log(`  Installer: ${installerPath}`);
-  console.log(`  URL: ${manifest.url}`);
+  console.log(`  URL: ${sanitizeUrlForLog(manifest.url)}`);
   console.log(`  SHA256: ${manifest.sha256}`);
   console.log(`  Size: ${manifest.size}`);
   console.log(`  Manifest: ${MANIFEST_PATH}`);

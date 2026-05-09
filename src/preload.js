@@ -1,12 +1,16 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const UPDATE_STATUS_CHANNEL = 'kha:update:status';
+const WINDOW_FOCUS_CHANNEL = 'kha:window:ensure-input-focus';
 
 contextBridge.exposeInMainWorld('khaDesktop', {
   platform: process.platform,
   isElectron: true,
   apiBase: 'http://localhost:3001/api',
   getAppInfo: () => ipcRenderer.invoke('kha:app:get-info'),
+  window: {
+    ensureInputFocus: (details = {}) => ipcRenderer.invoke(WINDOW_FOCUS_CHANNEL, details),
+  },
   updates: {
     getState: () => ipcRenderer.invoke('kha:update:get-state'),
     check: (options = {}) => ipcRenderer.invoke('kha:update:check', {

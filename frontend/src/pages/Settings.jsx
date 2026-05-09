@@ -40,10 +40,18 @@ function getUpdateErrorMessage(error) {
     MANIFEST_URL_MISSING: 'Chưa xác định được URL cập nhật. Mặc định ứng dụng dùng GitHub Releases latest.yml.',
     CONFIG_INVALID: 'File cấu hình cập nhật không hợp lệ.',
     URL_INVALID: 'URL cập nhật hoặc installer không hợp lệ.',
-    DEV_UPDATER_DISABLED: 'Auto-update bị tắt khi chạy development/unpacked. Hãy test trên bản đã cài hoặc bật KHA_ENABLE_ELECTRON_UPDATER=1 có chủ đích.',
+    DEV_UPDATER_DISABLED: 'Auto-update bị tắt khi chạy development/unpacked. Hãy test trên bản đã cài bằng NSIS hoặc bật KHA_ENABLE_ELECTRON_UPDATER=1 có chủ đích.',
     WINDOW_NOT_READY: 'Chỉ kiểm tra cập nhật sau khi cửa sổ chính đã sẵn sàng.',
     ELECTRON_UPDATER_ERROR: 'electron-updater báo lỗi trong quá trình kiểm tra/tải cập nhật.',
     CHECK_FAILED: 'Kiểm tra cập nhật thất bại.',
+    UPDATE_GITHUB_ATOM_FEED_NOT_AVAILABLE: 'Endpoint GitHub releases.atom không phù hợp hoặc không khả dụng. Bản mới sẽ đọc trực tiếp latest.yml public thay vì phụ thuộc Atom feed.',
+    UPDATE_REPOSITORY_NOT_ACCESSIBLE: 'Không truy cập được GitHub Releases/latest. Repo có thể private, owner/repo sai, URL feed sai hoặc chưa có release latest public.',
+    UPDATE_FEED_UNAUTHORIZED_OR_PRIVATE: 'GitHub Release/feed yêu cầu xác thực, token sai/thiếu quyền hoặc repo đang private. Client Electron không được nhúng token nên không thể tự cập nhật từ asset private.',
+    UPDATE_FEED_METADATA_NOT_FOUND: 'Không tìm thấy latest.yml trong GitHub Release latest hoặc release latest không public.',
+    UPDATE_ASSET_NOT_ACCESSIBLE_OR_PRIVATE: 'Không tải được installer/blockmap. Asset có thể thiếu, tên không khớp latest.yml hoặc repo private trả 404.',
+    UPDATE_RELEASE_NOT_PUBLISHED: 'Chưa có production release đã publish để electron-updater chọn làm latest.',
+    UPDATE_FEED_RATE_LIMITED: 'GitHub đang giới hạn truy cập feed cập nhật, vui lòng thử lại sau.',
+    UPDATE_NETWORK_ERROR: 'Không kết nối được tới GitHub Releases. Vui lòng kiểm tra Internet, DNS, proxy/firewall.',
     NETWORK_ERROR: 'Không thể kết nối tới máy chủ cập nhật. Vui lòng kiểm tra mạng.',
     NETWORK_TIMEOUT: 'Kết nối tới máy chủ cập nhật quá thời gian chờ.',
     MANIFEST_HTTP_ERROR: 'Máy chủ không trả metadata cập nhật hợp lệ.',
@@ -71,6 +79,11 @@ function getUpdateErrorMessage(error) {
 function getManifestSourceLabel(updateState) {
   if (!updateState) return 'Chưa nạp cấu hình cập nhật';
   if (updateState.updateEngine === 'electron-updater') {
+    if (updateState.feedProvider === 'generic') {
+      return updateState.feedSource === 'package.build.publish.generic'
+        ? 'GitHub Release latest.yml trực tiếp (package.json build.publish generic)'
+        : 'GitHub Release latest.yml trực tiếp';
+    }
     return updateState.feedSource === 'package.build.publish'
       ? 'GitHub Releases/electron-updater (package.json build.publish)'
       : 'GitHub Releases/electron-updater';
@@ -78,6 +91,16 @@ function getManifestSourceLabel(updateState) {
   if (updateState.manifestUrlDefault) return 'GitHub Release mặc định';
   if (updateState.manifestUrlConfigured) return `Override nội bộ: ${updateState.manifestSource || 'env/config file'}`;
   return updateState.manifestSource || 'GitHub Release mặc định';
+}
+
+function formatUpdateErrorDetails(details) {
+  if (!details) return '';
+  if (typeof details === 'string') return details;
+  try {
+    return JSON.stringify(details, null, 2);
+  } catch (_) {
+    return String(details);
+  }
 }
 
 export default function Settings({ store }) {
@@ -364,7 +387,7 @@ export default function Settings({ store }) {
   };
 
   const desktopAvailable = Boolean(window.khaDesktop?.isElectron && window.khaDesktop?.updates);
-  const currentVersion = appInfo?.version || updateState?.currentVersion || '1.1.3';
+  const currentVersion = appInfo?.version || updateState?.currentVersion || '1.1.5';
   const updateInfo = updateState?.updateInfo || null;
   const progress = updateState?.progress || null;
   const progressPercent = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
@@ -374,6 +397,7 @@ export default function Settings({ store }) {
   const manifestUrl = updateState?.manifestUrl || updateState?.defaultManifestUrl || '';
   const manifestSourceLabel = getManifestSourceLabel(updateState);
   const updateLogPath = updateState?.updateLogPath || '';
+  const runtimeDiagnostics = updateState?.runtimeDiagnostics || null;
 
   return (
     <div className="max-w-5xl">
@@ -616,7 +640,7 @@ export default function Settings({ store }) {
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
                 <h2 className="font-bold flex items-center gap-2"><Settings2 size={18} /> Cập nhật ứng dụng</h2>
-                <p className="text-sm text-gray-500 mt-1">Kiểm tra GitHub Releases latest.yml, tải bản cập nhật bằng electron-updater và chỉ cài khi người dùng xác nhận.</p>
+                <p className="text-sm text-gray-500 mt-1">Nếu feed GitHub Release truy cập công khai được, ứng dụng tự kiểm tra, tự tải gói cập nhật và chỉ cài/restart khi người dùng chọn “Cập nhật ngay”.</p>
               </div>
               <span className={`px-3 py-1 rounded-full text-xs font-semibold ${updateState?.status === 'error' ? 'bg-red-100 text-red-700' : hasUpdate ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
                 {getUpdateStatusLabel(updateState?.status)}
@@ -649,6 +673,17 @@ export default function Settings({ store }) {
               </div>
             )}
 
+            {runtimeDiagnostics && (
+              <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
+                <div className="font-semibold text-gray-700">Chẩn đoán runtime updater</div>
+                <div className="mt-1 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                  <div>Đã đóng gói: {runtimeDiagnostics.isPackaged ? 'Có' : 'Không'}</div>
+                  <div>app-update.yml: {runtimeDiagnostics.appUpdateYmlExists ? 'Có' : 'Không thấy'}</div>
+                  <div className="break-all md:col-span-2">Đường dẫn app-update.yml: {runtimeDiagnostics.appUpdateYmlPath || 'Không xác định'}</div>
+                </div>
+              </div>
+            )}
+
             {!desktopAvailable && (
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 Tính năng cập nhật chỉ hoạt động trong ứng dụng Electron đã cài trên Windows. Khi chạy frontend web độc lập, API cập nhật sẽ không khả dụng.
@@ -663,7 +698,7 @@ export default function Settings({ store }) {
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 <div className="font-semibold">Không thể hoàn tất thao tác cập nhật</div>
                 <div>{getUpdateErrorMessage(updateError)}</div>
-                {updateError.details && <pre className="mt-2 whitespace-pre-wrap text-xs bg-white/70 rounded p-2">{String(updateError.details)}</pre>}
+                {updateError.details && <pre className="mt-2 whitespace-pre-wrap text-xs bg-white/70 rounded p-2">{formatUpdateErrorDetails(updateError.details)}</pre>}
               </div>
             )}
 
@@ -735,10 +770,12 @@ export default function Settings({ store }) {
           <div className="card bg-blue-50 border-blue-100 text-sm text-blue-800">
             <h3 className="font-bold mb-2">Cấu hình update feed</h3>
             <ul className="list-disc pl-5 space-y-1">
-              <li>Mặc định app dùng electron-updater đọc GitHub Releases latest.yml: {updateState?.defaultManifestUrl || 'https://github.com/Vankhadev/phanmemoffline/releases/latest/download/latest.yml'}.</li>
+              <li>Mặc định app cấu hình electron-updater provider generic để đọc trực tiếp latest.yml: {updateState?.defaultManifestUrl || 'https://github.com/Vankhadev/phanmemoffline/releases/latest/download/latest.yml'}.</li>
+              <li>Cách này tránh phụ thuộc endpoint releases.atom của GitHub; latest.yml vẫn phải là asset public trong GitHub Release latest.</li>
+              <li>Khi feed và asset public, khách hàng không cần tự tải installer; app tự kiểm tra/tải gói cập nhật và chỉ cài đặt sau khi người dùng bấm “Cập nhật ngay”.</li>
               <li>Bản development/unpacked không auto-update trừ khi bật KHA_ENABLE_ELECTRON_UPDATER=1 có chủ đích để test.</li>
               <li>GitHub Release production cần có installer .exe, .exe.blockmap và latest.yml do electron-builder tạo.</li>
-              <li>Ứng dụng có thể tự tải cập nhật, nhưng chỉ gọi cài đặt/restart sau khi người dùng chọn “Cập nhật ngay”.</li>
+              <li>Nếu repo GitHub hoặc release asset đang private, client không có token sẽ nhận 401/403/404 và không thể hiện dialog cập nhật; khi đó cần chuyển feed public hoặc người dùng phải tải/cài installer thủ công từ nguồn được cấp quyền.</li>
               <li>Trước khi cài đặt, ứng dụng backup phanmienoffline.db.json trong userData/backups và không xóa userData.</li>
             </ul>
           </div>

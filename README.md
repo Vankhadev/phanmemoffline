@@ -1,5 +1,7 @@
 # Bán hàng offline - by Van kha mmo
-## Phiên bản ứng dụng xem trong `package.json`
+## Phiên bản hiện tại: 1.1.5
+
+Phiên bản ứng dụng được đồng bộ trong `package.json`, `package-lock.json`, `frontend/package.json` và `backend/package.json`.
 
 ---
 
@@ -51,15 +53,15 @@ File .exe sẽ nằm trong thư mục `release/`
 
 ### Phát hành bản cập nhật qua GitHub Release
 
-Ứng dụng hỗ trợ update feed JSON cho bộ cài Windows hiện tại. Mặc định app đọc manifest public tại `https://github.com/Vankhadev/phanmemoffline/releases/latest/download/update-manifest.json`.
+Ứng dụng Windows production dùng `electron-updater` với provider generic để đọc trực tiếp metadata public tại `https://github.com/Vankhadev/phanmemoffline/releases/latest/download/latest.yml`. Cách này tránh phụ thuộc endpoint `releases.atom` của GitHub. File `release/update-manifest.json` vẫn được tạo/upload như manifest legacy, nhưng không phải feed chính của luồng auto-update hiện tại.
 
-Sau khi build installer, tạo manifest bằng:
+Sau khi build installer, tạo manifest legacy bằng:
 
 ```bash
 npm run generate:update-manifest
 ```
 
-GitHub Actions workflow `.github/workflows/release-windows.yml` sẽ build Windows installer khi push tag `v*.*.*`, tạo `release/update-manifest.json`, rồi upload installer/blockmap/manifest lên GitHub Release. Xem hướng dẫn chi tiết tại `UPDATE-RELEASE.md` và manifest mẫu tại `release/update-manifest.example.json`.
+GitHub Actions workflow `.github/workflows/release-windows.yml` sẽ build Windows installer khi push tag `v*.*.*` như `v1.1.5`, tạo `release/latest.yml` và `release/update-manifest.json`, upload installer/blockmap/metadata lên GitHub Release, rồi kiểm tra các URL update có truy cập ẩn danh được hay không. Nếu repo/release asset đang private và URL trả 401/403/404, client Electron không có token sẽ không thể hiện hộp thoại cập nhật. Xem hướng dẫn chi tiết tại `UPDATE-RELEASE.md` và manifest mẫu tại `release/update-manifest.example.json`.
 
 ---
 
@@ -119,5 +121,5 @@ phanmienoffline/
 ## ⚠️ Lưu ý
 
 - Bản Electron lưu database runtime trong userData với tên `phanmienoffline.db.json`; installer không bundle hoặc xóa file database runtime
-- Khi cập nhật, app xác minh SHA256 installer và backup database vào `userData/backups` trước khi mở bộ cài
+- Khi cập nhật, `electron-updater` xác minh metadata/checksum từ `latest.yml`; app backup database vào `userData/backups` trước khi gọi cài đặt
 - Để thêm icon .exe: tạo thư mục `build/` và đặt file `icon.ico` vào đó

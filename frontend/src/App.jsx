@@ -293,7 +293,7 @@ function AppLayout({
             {sidebarOpen && (
               <div>
                 <div className="text-xs text-gray-400 font-bold">{store.name || account?.name || 'Bán hàng offline'}</div>
-                <div className="text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.1.3'}</div>
+                <div className="text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.1.5'}</div>
               </div>
             )}
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-400 hover:text-white text-lg">☰</button>

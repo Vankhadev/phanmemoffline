@@ -67,18 +67,52 @@ jobs:
         shell: pwsh
         run: |
           $version = '${{ steps.version.outputs.version }}'
+          $tag = '${{ steps.version.outputs.tag }}'
           $installer = "release/BanHangOffline-Setup-v$version.exe"
           $blockmap = "$installer.blockmap"
           $latest = 'release/latest.yml'
           $manifest = 'release/update-manifest.json'
-          foreach ($file in @($installer, $blockmap, $latest, $manifest)) {
+          $appUpdate = 'release/win-unpacked/resources/app-update.yml'
+          foreach ($file in @($installer, $blockmap, $latest, $manifest, $appUpdate)) {
             if (-not (Test-Path $file)) {
               throw "Missing release artifact: $file"
             }
           }
+
+          $latestContent = Get-Content $latest -Raw
+          if ($latestContent -notmatch "(?m)^version:\s*$([regex]::Escape($version))\s*$") {
+            throw "latest.yml does not contain expected version $version"
+          }
+          if ($latestContent -notmatch "BanHangOffline-Setup-v$([regex]::Escape($version))\.exe") {
+            throw "latest.yml does not reference installer for version $version"
+          }
+          if ($latestContent -notmatch "(?m)^sha512:\s*\S+") {
+            throw "latest.yml is missing sha512"
+          }
+
+          $manifestJson = Get-Content $manifest -Raw | ConvertFrom-Json
+          if ([string]$manifestJson.version -ne $version) {
+            throw "update-manifest.json version '$($manifestJson.version)' does not match package version '$version'"
+          }
+          if ([string]$manifestJson.url -notmatch "/releases/download/$([regex]::Escape($tag))/BanHangOffline-Setup-v$([regex]::Escape($version))\.exe$") {
+            throw "update-manifest.json URL does not point to release tag $tag and installer version $version"
+          }
+
+          $appUpdateContent = Get-Content $appUpdate -Raw
+          if ($appUpdateContent -notmatch "(?m)^provider:\s*generic\s*$") {
+            throw "app-update.yml must use provider generic to avoid GitHub releases.atom checks"
+          }
+          if ($appUpdateContent -notmatch "https://github\.com/Vankhadev/phanmemoffline/releases/latest/download/") {
+            throw "app-update.yml does not point to the public latest.yml base URL"
+          }
+          if ($appUpdateContent -match "releases\.atom") {
+            throw "app-update.yml must not reference releases.atom"
+          }
+
           Get-FileHash $installer -Algorithm SHA256 | Format-List
           Get-Content $latest
           Get-Content $manifest
+          Get-Content $appUpdate
 
       - name: Publish GitHub Release assets
         uses: softprops/action-gh-release@v2
@@ -94,3 +128,27 @@ jobs:
             release/update-manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify anonymous updater access
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $tag = '${{ steps.version.outputs.tag }}'
+          $urls = @(
+            "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/latest.yml",
+            "https://github.com/Vankhadev/phanmemoffline/releases/download/$tag/latest.yml",
+            "https://github.com/Vankhadev/phanmemoffline/releases/download/$tag/BanHangOffline-Setup-v$version.exe",
+            "https://github.com/Vankhadev/phanmemoffline/releases/download/$tag/BanHangOffline-Setup-v$version.exe.blockmap"
+          )
+
+          foreach ($url in $urls) {
+            Write-Host "Checking anonymous access: $url"
+            try {
+              $response = Invoke-WebRequest -Uri $url -UseBasicParsing -MaximumRedirection 5 -Headers @{ 'User-Agent' = 'kha-electron-updater-public-check' } -TimeoutSec 30
+              if ([int]$response.StatusCode -lt 200 -or [int]$response.StatusCode -ge 300) {
+                throw "HTTP $($response.StatusCode)"
+              }
+            } catch {
+              throw "Release asset is not anonymously accessible: $url. electron-updater clients do not have a GitHub token, so private repos/assets or missing assets will return 401/403/404 and no update dialog will appear. Make the repo/release/feed public or publish updater assets to a public channel. Original error: $($_.Exception.Message)"
+            }
+          }

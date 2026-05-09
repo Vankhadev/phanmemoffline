@@ -18,7 +18,17 @@ const CHANNELS = Object.freeze({
 const DB_FILE_NAME = 'phanmienoffline.db.json';
 const DEFAULT_GITHUB_OWNER = 'Vankhadev';
 const DEFAULT_GITHUB_REPO = 'phanmemoffline';
-const SENSITIVE_LOG_KEY_PATTERN = /(token|secret|password|authorization|cookie|api[-_]?key)/i;
+const DEFAULT_UPDATE_CHANNEL = 'latest';
+const DEFAULT_GITHUB_RELEASE_DOWNLOAD_BASE = `https://github.com/${DEFAULT_GITHUB_OWNER}/${DEFAULT_GITHUB_REPO}/releases/latest/download/`;
+const SENSITIVE_LOG_KEY_PATTERN = /(token|secret|password|authorization|proxy-authorization|cookie|set-cookie|api[-_]?key|x-amz-|signature)/i;
+const SENSITIVE_QUERY_KEY_PATTERN = /^(token|access_token|auth|authorization|signature|x-amz-signature|x-amz-credential|x-amz-security-token)$/i;
+const SENSITIVE_TEXT_PATTERNS = [
+  /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]+\b/g,
+  /\bgithub_pat_[A-Za-z0-9_]+\b/g,
+  /\b(Bearer|token)\s+[A-Za-z0-9._~+/=-]{8,}/gi,
+  /(["']?(?:authorization|proxy-authorization|cookie|set-cookie)["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;}]+)/gi,
+  /([?&](?:token|access_token|auth|authorization|signature|X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token)=)[^&\s]+/gi,
+];
 const STARTUP_CHECK_DELAY_MS = 3500;
 
 function createPublicError(code, message, details) {
@@ -35,11 +45,11 @@ function success(payload = {}) {
 function failure(error, state) {
   return {
     ok: false,
-    error: {
+    error: sanitizeForPublic({
       code: error?.code || 'UNKNOWN_ERROR',
       message: error?.message || 'Đã xảy ra lỗi không xác định.',
       ...(error?.details !== undefined ? { details: error.details } : {}),
-    },
+    }),
     ...(state ? { state } : {}),
   };
 }
@@ -167,6 +177,51 @@ function cleanRepoPart(value, fallback) {
   return cleaned || fallback;
 }
 
+function normalizeChannel(value) {
+  const channel = String(value || DEFAULT_UPDATE_CHANNEL)
+    .trim()
+    .replace(/\.yml$/i, '');
+  return channel || DEFAULT_UPDATE_CHANNEL;
+}
+
+function getChannelFileName(channel) {
+  return `${normalizeChannel(channel)}.yml`;
+}
+
+function ensureTrailingSlash(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return text.endsWith('/') ? text : `${text}/`;
+}
+
+function buildGitHubLatestDownloadBaseUrl(owner, repo) {
+  return ensureTrailingSlash(`https://github.com/${owner}/${repo}/releases/latest/download/`);
+}
+
+function joinUrl(baseUrl, fileName) {
+  const base = ensureTrailingSlash(baseUrl);
+  try {
+    return new URL(fileName, base).toString();
+  } catch (_) {
+    return `${base}${String(fileName || '').replace(/^\/+/, '')}`;
+  }
+}
+
+function deriveBaseUrlFromFeedUrl(feedUrl) {
+  const text = String(feedUrl || '').trim();
+  if (!text) return '';
+  try {
+    const parsed = new URL(text);
+    const lastSlashIndex = parsed.pathname.lastIndexOf('/');
+    parsed.pathname = lastSlashIndex >= 0 ? parsed.pathname.slice(0, lastSlashIndex + 1) : '/';
+    parsed.search = '';
+    parsed.hash = '';
+    return ensureTrailingSlash(parsed.toString());
+  } catch (_) {
+    return ensureTrailingSlash(text.replace(/[^/\\]+(?:\?.*)?$/, ''));
+  }
+}
+
 function getPublishCandidates(packageConfig) {
   const candidates = [];
   const rootPublish = packageConfig?.build?.publish;
@@ -182,7 +237,9 @@ function getPublishCandidates(packageConfig) {
 
 function resolveElectronUpdaterFeed() {
   const packageConfig = getPackageConfig();
-  const githubPublish = getPublishCandidates(packageConfig).find(item => String(item?.provider || '').toLowerCase() === 'github') || {};
+  const publishCandidates = getPublishCandidates(packageConfig);
+  const githubPublish = publishCandidates.find(item => String(item?.provider || '').toLowerCase() === 'github') || {};
+  const genericPublish = publishCandidates.find(item => String(item?.provider || '').toLowerCase() === 'generic') || {};
   const legacyConfig = packageConfig.khaUpdate && typeof packageConfig.khaUpdate === 'object' ? packageConfig.khaUpdate : {};
   const repositoryOverride = String(process.env.KHA_UPDATE_REPOSITORY || process.env.KHA_ELECTRON_UPDATE_REPOSITORY || '').trim();
   const [ownerFromRepository, repoFromRepository] = repositoryOverride.includes('/') ? repositoryOverride.split('/', 2) : [];
@@ -203,33 +260,80 @@ function resolveElectronUpdaterFeed() {
       || legacyConfig.repo,
     DEFAULT_GITHUB_REPO,
   );
-  const provider = String(githubPublish.provider || legacyConfig.provider || 'github').trim().toLowerCase();
-  const releaseType = String(githubPublish.releaseType || 'release').trim();
-  const channel = String(process.env.KHA_UPDATE_CHANNEL || githubPublish.channel || '').trim();
-  const feedUrl = `https://github.com/${owner}/${repo}/releases/latest/download/${channel || 'latest'}.yml`;
+  const releaseType = String(githubPublish.releaseType || legacyConfig.releaseType || 'release').trim();
+  const channel = normalizeChannel(process.env.KHA_UPDATE_CHANNEL || genericPublish.channel || githubPublish.channel || legacyConfig.channel || DEFAULT_UPDATE_CHANNEL);
+  const channelFile = getChannelFileName(channel);
+  const feedUrlOverride = String(
+    process.env.KHA_UPDATE_LATEST_YML_URL
+      || process.env.KHA_UPDATE_FEED_URL
+      || legacyConfig.latestYmlUrl
+      || legacyConfig.feedUrl
+      || '',
+  ).trim();
+  const feedBaseUrlOverride = String(
+    process.env.KHA_UPDATE_LATEST_YML_BASE_URL
+      || process.env.KHA_UPDATE_FEED_BASE_URL
+      || genericPublish.url
+      || legacyConfig.latestYmlBaseUrl
+      || legacyConfig.feedBaseUrl
+      || '',
+  ).trim();
+
+  const defaultFeedBaseUrl = buildGitHubLatestDownloadBaseUrl(owner, repo) || DEFAULT_GITHUB_RELEASE_DOWNLOAD_BASE;
+  const feedBaseUrl = ensureTrailingSlash(feedUrlOverride ? deriveBaseUrlFromFeedUrl(feedUrlOverride) : (feedBaseUrlOverride || defaultFeedBaseUrl));
+  const feedUrl = feedUrlOverride || joinUrl(feedBaseUrl, channelFile);
+  const source = feedUrlOverride
+    ? (process.env.KHA_UPDATE_LATEST_YML_URL || process.env.KHA_UPDATE_FEED_URL ? 'env:latest-yml-url' : 'package.khaUpdate.latestYmlUrl')
+    : feedBaseUrlOverride
+      ? (genericPublish.provider ? 'package.build.publish.generic' : 'package/env latest-yml base url')
+      : (githubPublish.provider ? 'package.build.publish.github-derived' : 'package.khaUpdate/default-github-latest-yml');
 
   return {
-    provider,
+    provider: 'generic',
+    upstreamProvider: githubPublish.provider ? 'github' : String(genericPublish.provider || legacyConfig.provider || 'github').trim().toLowerCase(),
     owner,
     repo,
     releaseType,
     channel,
+    channelFile,
+    feedBaseUrl,
     feedUrl,
-    source: githubPublish.provider ? 'package.build.publish' : 'package.khaUpdate/default',
-    configured: Boolean(githubPublish.provider || legacyConfig.provider),
+    source,
+    configured: Boolean(feedUrlOverride || feedBaseUrlOverride || githubPublish.provider || genericPublish.provider || legacyConfig.provider),
+    usesAtomFeed: false,
   };
+}
+
+function redactSensitiveText(value) {
+  let text = String(value || '');
+  for (const pattern of SENSITIVE_TEXT_PATTERNS) {
+    text = text.replace(pattern, (match, prefix) => {
+      if (typeof prefix !== 'string') return '[redacted]';
+      if (prefix.startsWith('?')) return `${prefix}[redacted]`;
+      if (prefix.includes('=')) return `${prefix}[redacted]`;
+      if (/^(Bearer|token)$/i.test(prefix)) return `${prefix} [redacted]`;
+      return `${prefix}[redacted]`;
+    });
+  }
+  return text;
 }
 
 function sanitizeUrlForLog(value) {
   try {
     const parsed = new URL(value);
-    for (const key of parsed.searchParams.keys()) {
-      if (SENSITIVE_LOG_KEY_PATTERN.test(key)) parsed.searchParams.set(key, '[redacted]');
+    if (parsed.username) parsed.username = '[redacted]';
+    if (parsed.password) parsed.password = '[redacted]';
+    for (const key of Array.from(parsed.searchParams.keys())) {
+      if (SENSITIVE_QUERY_KEY_PATTERN.test(key) || SENSITIVE_LOG_KEY_PATTERN.test(key)) parsed.searchParams.set(key, '[redacted]');
     }
-    return parsed.toString();
+    return redactSensitiveText(parsed.toString());
   } catch (_) {
-    return value;
+    return redactSensitiveText(value);
   }
+}
+
+function sanitizeForPublic(value) {
+  return sanitizeForLog(value);
 }
 
 function sanitizeForLog(value, key = '') {
@@ -238,7 +342,8 @@ function sanitizeForLog(value, key = '') {
     return {
       name: value.name,
       code: value.code,
-      message: value.message,
+      statusCode: value.statusCode,
+      message: sanitizeForLog(value.message, 'message'),
       details: sanitizeForLog(value.details, 'details'),
     };
   }
@@ -334,7 +439,7 @@ function normalizeUpdateInfo(updateInfo) {
     size,
     mandatory: false,
     installerType: 'nsis',
-    provider: 'github',
+    provider: 'generic-github-latest-yml',
     updater: 'electron-updater',
   };
 }
@@ -393,6 +498,113 @@ function isDevUpdaterForced() {
     || isTruthy(process.env.ELECTRON_ENABLE_UPDATER);
 }
 
+function getHttpStatusCode(err) {
+  const candidates = [
+    err?.statusCode,
+    err?.status,
+    err?.response?.statusCode,
+    err?.response?.status,
+    err?.cause?.statusCode,
+    err?.cause?.status,
+  ];
+
+  for (const value of candidates) {
+    const statusCode = Number(value);
+    if (Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599) return statusCode;
+  }
+
+  const message = String(err?.message || err || '');
+  const match = /\b(401|403|404|429|500|502|503|504)\b/.exec(message);
+  return match ? Number(match[1]) : 0;
+}
+
+function getUpdateRuntimeDiagnostics(app) {
+  const resourcesPath = String(process.resourcesPath || '').trim();
+  const appUpdateYmlPath = resourcesPath ? path.join(resourcesPath, 'app-update.yml') : '';
+  return {
+    isPackaged: Boolean(app.isPackaged),
+    defaultApp: Boolean(process.defaultApp),
+    execPath: process.execPath,
+    resourcesPath,
+    appUpdateYmlPath,
+    appUpdateYmlExists: appUpdateYmlPath ? fs.existsSync(appUpdateYmlPath) : false,
+    portableExecutableDir: process.env.PORTABLE_EXECUTABLE_DIR ? '[set]' : '',
+    portableExecutableFile: process.env.PORTABLE_EXECUTABLE_FILE ? '[set]' : '',
+  };
+}
+
+function classifyUpdaterError(err, context = {}) {
+  const updaterCode = String(err?.code || '').trim();
+  const rawMessage = String(err?.message || err || 'electron-updater báo lỗi không xác định.').trim();
+  const originalMessage = sanitizeForLog(rawMessage || 'electron-updater báo lỗi không xác định.');
+  const lowerMessage = rawMessage.toLowerCase();
+  const httpStatusCode = getHttpStatusCode(err);
+  const phase = String(context.phase || 'unknown');
+  let code = updaterCode || context.fallbackCode || 'ELECTRON_UPDATER_ERROR';
+  let message = originalMessage || 'electron-updater báo lỗi không xác định.';
+  let hint = '';
+
+  if (httpStatusCode === 429 || /rate limit|too many requests|secondary rate/.test(lowerMessage)) {
+    code = 'UPDATE_FEED_RATE_LIMITED';
+    message = 'GitHub đang giới hạn tần suất truy cập metadata hoặc asset cập nhật.';
+    hint = 'Thử lại sau, kiểm tra mạng/proxy. Không hard-code token vào app khách chỉ để né rate limit; nếu cần hãy dùng kênh update public ổn định.';
+  } else if (/releases\.atom/.test(lowerMessage)) {
+    code = 'UPDATE_GITHUB_ATOM_FEED_NOT_AVAILABLE';
+    message = 'Endpoint GitHub releases.atom không khả dụng hoặc không phù hợp cho repo/update feed này. Ứng dụng cần đọc trực tiếp latest.yml public thay vì phụ thuộc Atom feed.';
+    hint = 'Bản mới đã cấu hình generic latest.yml. Nếu lỗi này vẫn xuất hiện, máy đang chạy bản cũ hoặc app-update.yml/provider vẫn là github thay vì generic.';
+  } else if (httpStatusCode === 401 || httpStatusCode === 403 || /unauthorized|forbidden|bad credentials|requires authentication/.test(lowerMessage)) {
+    code = 'UPDATE_FEED_UNAUTHORIZED_OR_PRIVATE';
+    message = 'Không có quyền truy cập GitHub Release cập nhật. Repo/release có thể private, token sai/thiếu quyền, hoặc asset/feed yêu cầu xác thực.';
+    hint = 'Máy khách Electron không được nhúng GitHub token. Hãy dùng release/feed public hoặc kênh update public riêng; nếu publish bằng CI, kiểm tra token chỉ nằm trong GitHub Actions secrets.';
+  } else if (httpStatusCode === 404 || updaterCode === 'ERR_UPDATER_LATEST_VERSION_NOT_FOUND' || /not found|unable to find latest version|cannot find .*latest\.yml|cannot find latest\.yml|channel .* update info/.test(lowerMessage)) {
+    if (phase === 'download') {
+      code = 'UPDATE_ASSET_NOT_ACCESSIBLE_OR_PRIVATE';
+      message = 'Không tải được installer/blockmap từ GitHub Release. Asset có thể thiếu, tên file không khớp latest.yml, repo private trả 404, hoặc URL asset sai.';
+      hint = 'Kiểm tra asset installer, .blockmap và latest.yml trong release latest; thử mở URL tải bằng trình duyệt ẩn danh không đăng nhập GitHub.';
+    } else if (updaterCode === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND' || /latest\.yml|channel .* update info/.test(lowerMessage)) {
+      code = 'UPDATE_FEED_METADATA_NOT_FOUND';
+      message = 'Không tìm thấy latest.yml trong GitHub Release latest. electron-updater cần asset latest.yml public để phát hiện bản mới.';
+      hint = 'Kiểm tra release latest có asset latest.yml, version/path/sha512 hợp lệ, release không phải draft/prerelease ngoài kênh production và URL /releases/latest/download/latest.yml trả 200 khi mở ẩn danh.';
+    } else {
+      code = 'UPDATE_REPOSITORY_NOT_ACCESSIBLE';
+      message = 'Không truy cập được GitHub Release latest của repo cập nhật. Repo có thể private, owner/repo sai, URL feed sai, hoặc chưa có production release public/latest.';
+      hint = 'Mở releases/latest và latest.yml bằng trình duyệt ẩn danh. Nếu trả 404, client Electron không thể tự cập nhật từ feed đó.';
+    }
+  } else if (updaterCode === 'ERR_UPDATER_ASSET_NOT_FOUND') {
+    code = 'UPDATE_ASSET_NOT_ACCESSIBLE_OR_PRIVATE';
+    message = 'latest.yml trỏ tới asset không tồn tại trong GitHub Release hoặc tên asset không khớp.';
+    hint = 'Upload lại installer .exe và .exe.blockmap đúng tên trong latest.yml, hoặc build lại release bằng electron-builder.';
+  } else if (updaterCode === 'ERR_UPDATER_NO_PUBLISHED_VERSIONS' || /no published versions/.test(lowerMessage)) {
+    code = 'UPDATE_RELEASE_NOT_PUBLISHED';
+    message = 'GitHub chưa có production release đã publish để chọn làm latest.';
+    hint = 'Đảm bảo release không ở draft, không bị đánh dấu prerelease nếu app không bật allowPrerelease, và make_latest=true khi publish.';
+  } else if (/net::|enotfound|econnreset|econnrefused|etimedout|network|timeout|timed out|certificate|tls/.test(lowerMessage)) {
+    code = 'UPDATE_NETWORK_ERROR';
+    message = 'Không kết nối được tới GitHub Releases để kiểm tra hoặc tải cập nhật.';
+    hint = 'Kiểm tra Internet, DNS, proxy/firewall, chứng chỉ TLS và thử mở URL latest.yml ngoài trình duyệt.';
+  } else if (!updaterCode && context.fallbackCode) {
+    code = context.fallbackCode;
+  }
+
+  return {
+    code,
+    message,
+    details: sanitizeForLog({
+      phase,
+      updaterCode,
+      httpStatusCode: httpStatusCode || undefined,
+      originalMessage,
+      feedUrl: context.feedUrl,
+      feedBaseUrl: context.feedBaseUrl,
+      owner: context.owner,
+      repo: context.repo,
+      releaseType: context.releaseType,
+      usesAtomFeed: Boolean(context.usesAtomFeed),
+      hint,
+    }),
+  };
+}
+
 function createUpdateManager({ app, getMainWindow }) {
   const logger = createUpdateLogger(app);
   const feed = resolveElectronUpdaterFeed();
@@ -412,15 +624,18 @@ function createUpdateManager({ app, getMainWindow }) {
     currentVersion: app.getVersion(),
     updateEngine: 'electron-updater',
     feedProvider: feed.provider,
+    feedUpstreamProvider: feed.upstreamProvider,
     feedOwner: feed.owner,
     feedRepo: feed.repo,
+    feedBaseUrl: feed.feedBaseUrl,
     feedUrl: feed.feedUrl,
     feedSource: feed.source,
+    feedUsesAtomFeed: feed.usesAtomFeed,
     manifestUrl: feed.feedUrl,
     manifestSource: feed.source,
     manifestUrlConfigured: feed.configured,
-    manifestUrlDefault: true,
-    defaultManifestUrl: feed.feedUrl,
+    manifestUrlDefault: !feed.configured,
+    defaultManifestUrl: joinUrl(buildGitHubLatestDownloadBaseUrl(feed.owner, feed.repo), getChannelFileName(feed.channel)),
     updateLogPath: logger.logPath,
     status: 'idle',
     updateAvailable: false,
@@ -440,28 +655,46 @@ function createUpdateManager({ app, getMainWindow }) {
       currentVersion: state.currentVersion,
       updateEngine: state.updateEngine,
       feedProvider: state.feedProvider,
+      feedUpstreamProvider: state.feedUpstreamProvider,
       feedOwner: state.feedOwner,
       feedRepo: state.feedRepo,
-      feedUrl: state.feedUrl,
+      feedBaseUrl: sanitizeForPublic(state.feedBaseUrl),
+      feedUrl: sanitizeForPublic(state.feedUrl),
       feedSource: state.feedSource,
-      manifestUrl: state.manifestUrl,
+      feedUsesAtomFeed: state.feedUsesAtomFeed,
+      manifestUrl: sanitizeForPublic(state.manifestUrl),
       manifestSource: state.manifestSource,
       manifestUrlConfigured: state.manifestUrlConfigured,
       manifestUrlDefault: state.manifestUrlDefault,
-      defaultManifestUrl: state.defaultManifestUrl,
+      defaultManifestUrl: sanitizeForPublic(state.defaultManifestUrl),
       updateLogPath: state.updateLogPath,
       status: state.status,
       updateAvailable: state.updateAvailable,
-      updateInfo: state.updateInfo,
+      updateInfo: sanitizeForPublic(state.updateInfo),
       progress: state.progress,
-      downloadedFile: state.downloadedFile,
+      downloadedFile: sanitizeForPublic(state.downloadedFile),
       downloadedSha256: state.downloadedSha256,
       downloadedSha512: state.downloadedSha512,
-      backupPath: state.backupPath,
+      backupPath: sanitizeForPublic(state.backupPath),
       lastCheckedAt: state.lastCheckedAt,
-      lastError: state.lastError,
+      lastError: sanitizeForPublic(state.lastError),
       devUpdateForced: state.devUpdateForced,
+      runtimeDiagnostics: sanitizeForPublic(getUpdateRuntimeDiagnostics(app)),
     };
+  }
+
+  function setClassifiedError(err, context = {}) {
+    const classified = classifyUpdaterError(err, {
+      feedUrl: state.feedUrl,
+      feedBaseUrl: state.feedBaseUrl,
+      owner: feed.owner,
+      repo: feed.repo,
+      releaseType: feed.releaseType,
+      usesAtomFeed: feed.usesAtomFeed,
+      ...context,
+    });
+    state.lastError = classified;
+    return classified;
   }
 
   function emit(type, payload = {}, { silent = false } = {}) {
@@ -505,22 +738,26 @@ function createUpdateManager({ app, getMainWindow }) {
       debug: message => logger.debug('electron-updater: debug', { message }),
     };
     autoUpdater.setFeedURL({
-      provider: 'github',
-      owner: feed.owner,
-      repo: feed.repo,
-      releaseType: feed.releaseType,
-      ...(feed.channel ? { channel: feed.channel } : {}),
+      provider: 'generic',
+      url: feed.feedBaseUrl,
+      ...(feed.channel && feed.channel !== DEFAULT_UPDATE_CHANNEL ? { channel: feed.channel } : {}),
     });
 
-    logger.info('Đã cấu hình electron-updater cho GitHub Releases', {
+    logger.info('Đã cấu hình electron-updater đọc trực tiếp GitHub Release latest.yml, không phụ thuộc releases.atom', {
+      provider: feed.provider,
+      upstreamProvider: feed.upstreamProvider,
       owner: feed.owner,
       repo: feed.repo,
+      feedBaseUrl: feed.feedBaseUrl,
       feedUrl: feed.feedUrl,
+      channel: feed.channel,
+      channelFile: feed.channelFile,
       appVersion: state.currentVersion,
       isPackaged: app.isPackaged,
       devUpdateForced: state.devUpdateForced,
       autoDownload: autoUpdater.autoDownload,
       autoInstallOnAppQuit: autoUpdater.autoInstallOnAppQuit,
+      runtimeDiagnostics: getUpdateRuntimeDiagnostics(app),
     });
   }
 
@@ -574,7 +811,7 @@ function createUpdateManager({ app, getMainWindow }) {
     } catch (err) {
       installInProgress = false;
       state.status = 'error';
-      state.lastError = { code: err.code || 'INSTALL_FAILED', message: err.message, details: err.details };
+      state.lastError = sanitizeForPublic({ code: err.code || 'INSTALL_FAILED', message: err.message, details: err.details });
       logger.error('Cài đặt cập nhật thất bại, ứng dụng tiếp tục chạy', err);
       emit('error', { error: state.lastError }, { silent: false });
       return failure(err, getPublicState());
@@ -757,12 +994,16 @@ function createUpdateManager({ app, getMainWindow }) {
         return;
       }
 
+      const previousStatus = state.status;
       state.status = 'error';
-      state.lastError = {
-        code: err?.code || 'ELECTRON_UPDATER_ERROR',
-        message: err?.message || 'electron-updater báo lỗi không xác định.',
-      };
-      logger.error('electron-updater báo lỗi, ứng dụng tiếp tục chạy', err);
+      state.lastError = setClassifiedError(err, {
+        phase: previousStatus === 'downloading' || currentDownloadPromise ? 'download' : 'check',
+        fallbackCode: 'ELECTRON_UPDATER_ERROR',
+      });
+      logger.error('electron-updater báo lỗi, ứng dụng tiếp tục chạy', {
+        classified: state.lastError,
+        error: err,
+      });
       emit('error', { error: state.lastError }, { silent: activeCheckOptions.silent || currentDownloadSilent });
     });
   }
@@ -811,7 +1052,7 @@ function createUpdateManager({ app, getMainWindow }) {
       });
       if (!silent) {
         state.status = 'error';
-        state.lastError = { code: err.code, message: err.message };
+        state.lastError = sanitizeForPublic({ code: err.code, message: err.message });
         emit('error', { error: state.lastError }, { silent: false });
         return failure(err, getPublicState());
       }
@@ -894,10 +1135,13 @@ function createUpdateManager({ app, getMainWindow }) {
         return response;
       } catch (err) {
         state.status = 'error';
-        state.lastError = { code: err.code || 'CHECK_FAILED', message: err.message, details: err.details };
-        logger.error('Kiểm tra cập nhật thất bại, ứng dụng tiếp tục chạy', err);
+        state.lastError = setClassifiedError(err, { phase: 'check', fallbackCode: 'CHECK_FAILED' });
+        logger.error('Kiểm tra cập nhật thất bại, ứng dụng tiếp tục chạy', {
+          classified: state.lastError,
+          error: err,
+        });
         if (!silent) emit('error', { error: state.lastError }, { silent: false });
-        return failure(err, getPublicState());
+        return failure(state.lastError, getPublicState());
       } finally {
         currentCheckPromise = null;
         activeCheckOptions = { silent: true, source: 'idle', autoDownload: false };
@@ -1003,10 +1247,13 @@ function createUpdateManager({ app, getMainWindow }) {
       }
 
       state.status = 'error';
-      state.lastError = { code: err.code || 'DOWNLOAD_FAILED', message: err.message, details: err.details };
-      logger.error('Tải cập nhật thất bại, ứng dụng tiếp tục chạy', err);
+      state.lastError = setClassifiedError(err, { phase: 'download', fallbackCode: 'DOWNLOAD_FAILED' });
+      logger.error('Tải cập nhật thất bại, ứng dụng tiếp tục chạy', {
+        classified: state.lastError,
+        error: err,
+      });
       emit('error', { error: state.lastError }, { silent });
-      return failure(err, getPublicState());
+      return failure(state.lastError, getPublicState());
     } finally {
       if (currentDownloadToken && typeof currentDownloadToken.dispose === 'function') currentDownloadToken.dispose();
       currentDownloadToken = null;
@@ -1067,8 +1314,11 @@ function createUpdateManager({ app, getMainWindow }) {
     setTimeout(() => {
       checkForUpdates({ silent: true, source: 'startup', autoDownload: true }).catch(err => {
         state.status = 'error';
-        state.lastError = { code: err.code || 'STARTUP_CHECK_FAILED', message: err.message };
-        logger.error('Startup update check lỗi ngoài luồng xử lý chính', err);
+        state.lastError = setClassifiedError(err, { phase: 'startup-check', fallbackCode: 'STARTUP_CHECK_FAILED' });
+        logger.error('Startup update check lỗi ngoài luồng xử lý chính', {
+          classified: state.lastError,
+          error: err,
+        });
       });
     }, delayMs);
   }
