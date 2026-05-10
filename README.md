@@ -1,5 +1,5 @@
 # Bán hàng offline - by Van kha mmo
-## Phiên bản hiện tại: 1.1.7
+## Phiên bản hiện tại: 1.1.8
 
 Phiên bản ứng dụng được đồng bộ trong `package.json`, `package-lock.json`, `frontend/package.json` và `backend/package.json`.
 
@@ -61,7 +61,7 @@ Sau khi build installer, tạo manifest legacy bằng:
 npm run generate:update-manifest
 ```
 
-GitHub Actions workflow `.github/workflows/release-windows.yml` sẽ build Windows installer khi push tag `v*.*.*` như `v1.1.7`, tạo `release/latest.yml` và `release/update-manifest.json`, upload installer/blockmap/metadata lên GitHub Release, rồi kiểm tra các URL update có truy cập ẩn danh được hay không. Nếu repo/release asset đang private và URL trả 401/403/404, client Electron không có token sẽ không thể hiện hộp thoại cập nhật. Xem hướng dẫn chi tiết tại `UPDATE-RELEASE.md` và manifest mẫu tại `release/update-manifest.example.json`.
+GitHub Actions workflow `.github/workflows/release-windows.yml` sẽ build Windows installer khi push tag `v*.*.*` như `v1.1.8`, tạo `release/latest.yml` và `release/update-manifest.json`, upload installer/blockmap/metadata lên GitHub Release, rồi kiểm tra các URL update có truy cập ẩn danh được hay không. Nếu repo/release asset đang private và URL trả 401/403/404, client Electron không có token sẽ không thể hiện hộp thoại cập nhật. Xem hướng dẫn chi tiết tại `UPDATE-RELEASE.md` và manifest mẫu tại `release/update-manifest.example.json`.
 
 ---
 

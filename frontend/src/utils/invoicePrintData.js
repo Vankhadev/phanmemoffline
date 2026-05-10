@@ -60,7 +60,7 @@ function normalizeStore(store = {}) {
     phone: firstDefined(store.phone, ''),
     email: firstDefined(store.email, ''),
     website: firstDefined(store.website, store.url, ''),
-    invoice_footer_url: firstDefined(store.invoice_footer_url, store.website, store.url, 'www.sapo.vn'),
+    invoice_footer_url: firstDefined(store.invoice_footer_url, store.website, store.url, ''),
     tax_code: firstDefined(store.tax_code, store.taxCode, ''),
     bank_account: firstDefined(store.bank_account, store.bankAccount, ''),
     bank_name: firstDefined(store.bank_name, store.bankName, ''),

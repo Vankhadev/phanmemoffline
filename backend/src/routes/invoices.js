@@ -116,7 +116,13 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
     discount_amount,
     discount_percent: detail.discount_percent || 0,
     line_total: +detail.line_total || (quantity * unit_price - discount_amount),
-    created_at: now(),
+    sapo_line_item_id: detail.sapo_line_item_id || '',
+    sapo_order_id: detail.sapo_order_id || '',
+    sapo_product_id: detail.sapo_product_id || '',
+    sapo_variant_id: detail.sapo_variant_id || '',
+    sapo_sku: detail.sapo_sku || detail.product_sku || detail.sku || '',
+    sapo_barcode: detail.sapo_barcode || '',
+    created_at: detail.created_at || now(),
   };
 }
 
@@ -344,6 +350,12 @@ router.post('/', (req, res) => {
       }
     }
 
+    const sapoInvoiceMetadata = ['sapo_order_id', 'sapo_order_number', 'sapo_customer_id', 'sapo_status', 'sapo_payment_status', 'sapo_fulfillment_status', 'sapo_updated_at', 'sapo_last_synced_at', 'sync_source']
+      .reduce((acc, field) => {
+        if (Object.prototype.hasOwnProperty.call(req.body, field)) acc[field] = req.body[field] || '';
+        return acc;
+      }, {});
+
     const invoice_code = genInvoiceCode();
     const invoice_id = insert('invoices', {
       invoice_code,
@@ -365,6 +377,7 @@ router.post('/', (req, res) => {
       receiver_name: receiver_name || '',
       delivery_date: delivery_date || null,
       status: req.body.status || 'pending',
+      ...sapoInvoiceMetadata,
       created_at: now(),
     });
 
@@ -409,6 +422,12 @@ router.put('/:id', requireAdmin, (req, res) => {
       details,
     } = req.body;
 
+    const sapoInvoiceMetadata = ['sapo_order_id', 'sapo_order_number', 'sapo_customer_id', 'sapo_status', 'sapo_payment_status', 'sapo_fulfillment_status', 'sapo_updated_at', 'sapo_last_synced_at', 'sync_source']
+      .reduce((acc, field) => {
+        if (Object.prototype.hasOwnProperty.call(req.body, field)) acc[field] = req.body[field] || '';
+        return acc;
+      }, {});
+
     // Cập nhật thông tin đơn hàng
     update('invoices', inv.id, {
       ...(customer_id !== undefined && { customer_id: customer_id || null }),
@@ -428,6 +447,7 @@ router.put('/:id', requireAdmin, (req, res) => {
       ...(invoice_writer !== undefined && { invoice_writer }),
       ...(receiver_name !== undefined && { receiver_name }),
       ...(req.body.created_at && { created_at: req.body.created_at }),
+      ...sapoInvoiceMetadata,
     });
 
     // Cập nhật chi tiết sản phẩm (nếu có thay đổi)

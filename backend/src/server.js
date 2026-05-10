@@ -31,6 +31,7 @@ const botRoutes       = require('./routes/bot');
 const customerTypesRoutes = require('./routes/customerTypes');
 const productCategoriesRoutes = require('./routes/productCategories');
 const printTemplatesRoutes = require('./routes/printTemplates');
+const sapoSyncRoutes = require('./routes/sapoSync');
 
 // ============================================================
 //  EXPRESS APP
@@ -68,6 +69,8 @@ function buildHealthPayload() {
 
 app.use(cors());
 app.use('/api/products/import-excel-rows', express.json({ limit: '25mb' }));
+app.use('/api/sapo/import/customers', express.json({ limit: '25mb' }));
+app.use('/api/sapo/customers/import', express.json({ limit: '25mb' }));
 app.use(express.json());
 
 app.use((err, req, res, next) => {
@@ -75,7 +78,7 @@ app.use((err, req, res, next) => {
   const isJsonBodyError = err.type === 'entity.too.large' || err.type === 'entity.parse.failed' || err instanceof SyntaxError;
   if (!isJsonBodyError) return next(err);
 
-  const isImportRequest = req.path === '/api/products/import-excel-rows';
+  const isImportRequest = req.path === '/api/products/import-excel-rows' || req.path.startsWith('/api/sapo/import/customers') || req.path.startsWith('/api/sapo/customers/import');
   const status = err.type === 'entity.too.large' ? 413 : 400;
   if (isImportRequest) console.warn('[KHA IMPORT EXCEL] JSON body error:', err.message);
   res.status(status).json({
@@ -103,6 +106,14 @@ app.use((err, req, res, next) => {
       'Default category id',
       'Supplier id',
       'Hoạt động',
+      'Tên khách hàng',
+      'Số điện thoại',
+      'Email',
+      'Mã khách hàng',
+      'Địa chỉ',
+      'Ghi chú',
+      'Nhóm khách',
+      'Mã số thuế',
     ] : undefined,
     receivedColumns: [],
     summary: isImportRequest ? { totalRows: 0, validRows: 0, createdParents: 0, updatedParents: 0, createdVariants: 0, updatedVariants: 0, errors: 1 } : undefined,
@@ -132,6 +143,7 @@ app.use('/api/bot',            requireAuth, requireAnyPermission(['bot.read', 'b
 app.use('/api/customer-types', requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customerTypesRoutes);
 app.use('/api/product-categories', requireAuth, requireAnyPermission(['products.read', 'products.manage']), productCategoriesRoutes);
 app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
+app.use('/api/sapo', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), sapoSyncRoutes);
 
 // ----- Dashboard -----
 app.get('/api/dashboard', requireAuth, requirePermission('stats.read'), (req, res) => {

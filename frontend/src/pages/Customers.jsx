@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API } from '../App';
-import { Users, FileDown, Plus, X, Edit2, Trash2, Loader, Tag, HelpCircle } from 'lucide-react';
+import { Users, FileDown, Plus, X, Edit2, Trash2, Loader, Tag, HelpCircle, UploadCloud } from 'lucide-react';
 import HelpModal from '../components/HelpModal';
 
 export default function Customers() {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
   const [customerTypes, setCustomerTypes] = useState([]);
   const [search, setSearch] = useState('');
@@ -172,6 +174,10 @@ export default function Customers() {
         <div className="flex items-center gap-2">
           <button onClick={() => setShowHelp(true)} className="px-3 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-lg text-xs font-medium flex items-center gap-1">
             <HelpCircle size={13} /> Hướng dẫn
+          </button>
+          <button onClick={() => navigate('/dong-bo-san-pham?tab=customers&import=1')}
+            className="px-3 py-2 border border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-medium flex items-center gap-1">
+            <UploadCloud size={13} /> Import Excel/Sapo
           </button>
           <button onClick={() => setShowTypeManager(true)}
             className="px-3 py-2 border border-purple-300 text-purple-600 hover:bg-purple-50 rounded-lg text-xs font-medium flex items-center gap-1">

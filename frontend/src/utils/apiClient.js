@@ -139,7 +139,24 @@ export async function readApiJson(response) {
 }
 
 export function getApiErrorMessage(data, fallback = 'Yêu cầu API thất bại.') {
+  if (typeof data === 'string') return data || fallback;
+  if (Array.isArray(data?.errors) && data.errors.length > 0) {
+    const first = data.errors.find(Boolean);
+    if (typeof first === 'string') return first;
+    if (first?.message) return first.message;
+  }
   return data?.message || data?.error || data?.detail || fallback;
+}
+
+function getNetworkErrorMessage(err, fallback = 'Yêu cầu API thất bại.') {
+  const message = String(err?.message || '').trim();
+  if (/failed to fetch|networkerror|load failed|fetch/i.test(message)) {
+    return 'Không thể kết nối backend. Vui lòng kiểm tra server/offline app đang chạy và thử lại.';
+  }
+  if (/aborted|timeout/i.test(message)) {
+    return 'Kết nối backend quá thời gian chờ. Vui lòng thử lại.';
+  }
+  return message || fallback;
 }
 
 function getFetchUrl(input) {
@@ -261,19 +278,144 @@ export async function apiFetch(input, init = {}) {
 }
 
 export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu API thất bại.') {
-  const response = await apiFetch(input, init);
+  const { allowOkFalse = false, ...fetchInit } = init || {};
+  let response;
+  try {
+    response = await apiFetch(input, fetchInit);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    const message = getNetworkErrorMessage(err, fallbackMessage);
+    throw new ApiError(message, {
+      status: 0,
+      data: { ok: false, message, error: message, originalError: err?.message || '' },
+    });
+  }
+
   const data = await readApiJson(response);
 
-  if (!response.ok || data?.ok === false) {
-    throw new ApiError(getApiErrorMessage(data, fallbackMessage), {
+  if (!response.ok || (data?.ok === false && !allowOkFalse)) {
+    const message = getApiErrorMessage(data, fallbackMessage);
+    throw new ApiError(message, {
       status: response.status,
-      data,
+      data: { ...data, message, error: data?.error || message },
       response,
     });
   }
 
   return data;
 }
+
+export const sapoApi = {
+  getSettings() {
+    return apiJson('/sapo/settings', {}, 'Không thể tải cấu hình Sapo.');
+  },
+
+  saveSettings(payload = {}) {
+    return apiJson('/sapo/settings', {
+      method: 'PUT',
+      body: payload,
+    }, 'Không thể lưu cấu hình Sapo.');
+  },
+
+  validate(payload = {}) {
+    return apiJson('/sapo/validate', {
+      method: 'POST',
+      body: payload,
+    }, 'Không thể kiểm tra kết nối Sapo.');
+  },
+
+  analyze(payload = {}) {
+    return apiJson('/sapo/analyze', {
+      method: 'POST',
+      body: payload,
+      allowOkFalse: true,
+    }, 'Không thể phân tích dữ liệu Sapo.');
+  },
+
+  analyzeAll(payload = {}) {
+    return this.analyze(payload);
+  },
+
+  previewProducts(payload = {}) {
+    return apiJson('/sapo/preview/products', {
+      method: 'POST',
+      body: payload,
+    }, 'Không thể xem trước sản phẩm Sapo.');
+  },
+
+  syncProducts(payload = {}) {
+    return apiJson('/sapo/sync/products', {
+      method: 'POST',
+      body: payload,
+    }, 'Không thể đồng bộ sản phẩm Sapo.');
+  },
+
+  previewCustomers(payload = {}) {
+    return apiJson('/sapo/preview/customers', {
+      method: 'POST',
+      body: payload,
+    }, 'Không thể xem trước khách hàng Sapo.');
+  },
+
+  syncCustomers(payload = {}) {
+    return apiJson('/sapo/sync/customers', {
+      method: 'POST',
+      body: payload,
+    }, 'Không thể đồng bộ khách hàng Sapo.');
+  },
+
+  previewInvoices(payload = {}) {
+    return apiJson('/sapo/preview/invoices', {
+      method: 'POST',
+      body: payload,
+    }, 'Không thể xem trước hóa đơn Sapo.');
+  },
+
+  syncInvoices(payload = {}) {
+    return apiJson('/sapo/sync/invoices', {
+      method: 'POST',
+      body: payload,
+    }, 'Không thể đồng bộ hóa đơn Sapo.');
+  },
+
+  syncAll(payload = {}) {
+    return apiJson('/sapo/sync', {
+      method: 'POST',
+      body: payload,
+    }, 'Không thể đồng bộ dữ liệu Sapo.');
+  },
+
+  importCustomersPreview(payload = {}) {
+    return apiJson('/sapo/import/customers/preview', {
+      method: 'POST',
+      body: payload,
+      allowOkFalse: true,
+    }, 'Không thể preview import khách hàng từ Excel.');
+  },
+
+  importCustomersCommit(payload = {}) {
+    return apiJson('/sapo/import/customers/commit', {
+      method: 'POST',
+      body: payload,
+      allowOkFalse: true,
+    }, 'Không thể import khách hàng từ Excel.');
+  },
+
+  getRuns({ limit = 20 } = {}) {
+    return apiJson(`/sapo/runs?limit=${encodeURIComponent(limit)}`, {}, 'Không thể tải lịch sử đồng bộ Sapo.');
+  },
+
+  async getRunDetail(id, { limit = 100 } = {}) {
+    const data = await this.getRuns({ limit });
+    const runs = Array.isArray(data.runs) ? data.runs : (Array.isArray(data.items) ? data.items : []);
+    const run = runs.find(item => String(item.id) === String(id)) || null;
+    return { ok: true, resource: 'runs', run, item: run, items: run ? [run] : [], results: run ? [run] : [] };
+  },
+
+  placeholders() {
+    return apiJson('/sapo/placeholders', {}, 'Không thể tải thông tin placeholder đồng bộ Sapo.');
+  },
+};
 
 export const authApi = {
   bootstrapStatus() {

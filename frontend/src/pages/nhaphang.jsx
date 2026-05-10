@@ -626,35 +626,16 @@ const Nhaphang = ({ store }) => {
 
   const categoriesById = useMemo(() => buildCategoriesById(categories), [categories]);
   const selectedSupplierId = getSupplierRecordId(selectedSupplier);
-  const supplierProductScope = useMemo(
-    () => buildSupplierProductScope(selectedSupplier, allProducts, categoriesById, { importHistory: orderHistory }),
-    [allProducts, categoriesById, orderHistory, selectedSupplier]
-  );
-  const supplierFilterOptions = useMemo(() => ({
-    productTree: allProducts,
-    categoriesById,
-    supplierScope: supplierProductScope,
-  }), [allProducts, categoriesById, supplierProductScope]);
-  const supplierFilteredProductTree = useMemo(
-    () => filterProductTreeBySupplier(allProducts, selectedSupplier, supplierFilterOptions),
-    [allProducts, selectedSupplier, supplierFilterOptions]
-  );
-
   const getScopedProductSearchResults = useCallback((query = '') => {
     const trimmedQuery = query.trim();
-    const sourceTree = selectedSupplier ? supplierFilteredProductTree : allProducts;
-    const localResults = searchFlatProducts(sourceTree, trimmedQuery, {
+    const localResults = searchFlatProducts(allProducts, trimmedQuery, {
       categoriesById,
       includeParents: true,
       includeVariants: true,
     }).filter(product => productMatchesImportSearchQuery(product, trimmedQuery));
 
-    const scopedResults = selectedSupplier
-      ? filterFlatProductsBySupplier(localResults, selectedSupplier, supplierFilterOptions)
-      : localResults;
-
-    return scopedResults.slice(0, PRODUCT_SEARCH_LIMIT);
-  }, [allProducts, categoriesById, selectedSupplier, supplierFilteredProductTree, supplierFilterOptions]);
+    return localResults.slice(0, PRODUCT_SEARCH_LIMIT);
+  }, [allProducts, categoriesById]);
 
   // Fetch suppliers/products/categories from API
   useEffect(() => {
@@ -743,7 +724,7 @@ const Nhaphang = ({ store }) => {
       try {
         const localResults = getScopedProductSearchResults(trimmedQuery);
 
-        if (localResults.length > 0 || allProducts.length > 0 || selectedSupplier) {
+        if (localResults.length > 0 || allProducts.length > 0) {
           setFilteredProducts(localResults);
         } else {
           const response = await fetch(`${API}/products/search?q=${encodeURIComponent(trimmedQuery)}&limit=${PRODUCT_SEARCH_LIMIT}`);
@@ -757,10 +738,7 @@ const Nhaphang = ({ store }) => {
           const response = await fetch(`${API}/products?search=${encodeURIComponent(trimmedQuery)}`);
           const results = await response.json();
           const matchedResults = (results || []).filter(product => productMatchesImportSearchQuery(product, trimmedQuery));
-          const scopedResults = selectedSupplier
-            ? filterFlatProductsBySupplier(matchedResults, selectedSupplier, supplierFilterOptions)
-            : matchedResults;
-          setFilteredProducts(scopedResults.slice(0, PRODUCT_SEARCH_LIMIT));
+          setFilteredProducts(matchedResults.slice(0, PRODUCT_SEARCH_LIMIT));
         } catch (_) {
           setFilteredProducts([]);
         }
@@ -774,7 +752,7 @@ const Nhaphang = ({ store }) => {
         clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [searchQuery, showSearchResults, getScopedProductSearchResults, allProducts.length, selectedSupplier, supplierFilterOptions]);
+  }, [searchQuery, showSearchResults, getScopedProductSearchResults, allProducts.length]);
 
   // Filter suppliers when search query changes
   useEffect(() => {
@@ -893,10 +871,18 @@ const Nhaphang = ({ store }) => {
   }, [getScopedProductSearchResults]);
 
   const handleStartAddProduct = () => {
+    if (!selectedSupplier) {
+      showSupplierRequiredHint();
+      return;
+    }
     openProductSearch(null);
   };
 
   const handleEditProductRow = (index) => {
+    if (!selectedSupplier) {
+      showSupplierRequiredHint();
+      return;
+    }
     openProductSearch(index);
   };
 
@@ -941,7 +927,6 @@ const Nhaphang = ({ store }) => {
 
     return {
       ...mappedProduct,
-      stt: isEditingExistingRow ? editingProductIndex + 1 : products.length + 1,
       soLuongNhap: quantity,
       chietKhau: discount,
       giaNhap: importPrice,
@@ -952,12 +937,6 @@ const Nhaphang = ({ store }) => {
 
   // Handle product selection from search
   const handleSelectProduct = async (product) => {
-    if (selectedSupplier && !isImportProductAllowedForSupplier(product, selectedSupplier, supplierFilterOptions, product?.parent || null)) {
-      setError('Sản phẩm này không thuộc nhóm hàng của nhà cung cấp đã chọn.');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-
     try {
       setLoading(true);
       let fullProduct = product;
@@ -967,24 +946,12 @@ const Nhaphang = ({ store }) => {
       }
 
       const mappedProduct = mapProductForImport(product, fullProduct, allProducts);
-      if (selectedSupplier && !isImportProductAllowedForSupplier(mappedProduct, selectedSupplier, supplierFilterOptions)) {
-        setError('Sản phẩm này không thuộc nhóm hàng của nhà cung cấp đã chọn.');
-        setTimeout(() => setError(null), 3000);
-        return;
-      }
-
       setSelectedProduct(buildSelectedProductDraft(mappedProduct));
       setShowSearchResults(false);
       setSearchQuery('');
       setError(null);
     } catch (err) {
       const mappedProduct = mapProductForImport(product, product, allProducts);
-      if (selectedSupplier && !isImportProductAllowedForSupplier(mappedProduct, selectedSupplier, supplierFilterOptions)) {
-        setError('Sản phẩm này không thuộc nhóm hàng của nhà cung cấp đã chọn.');
-        setTimeout(() => setError(null), 3000);
-        return;
-      }
-
       setSelectedProduct(buildSelectedProductDraft(mappedProduct));
       setShowSearchResults(false);
       setSearchQuery('');
@@ -1046,12 +1013,6 @@ const Nhaphang = ({ store }) => {
       return;
     }
 
-    if (!isImportProductAllowedForSupplier(selectedProduct, selectedSupplier, supplierFilterOptions)) {
-      setError('Sản phẩm này không thuộc nhóm hàng của nhà cung cấp đã chọn.');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-
     const productErrors = validateProduct(selectedProduct);
     if (productErrors.length > 0) {
       setError(productErrors.join(', '));
@@ -1076,54 +1037,30 @@ const Nhaphang = ({ store }) => {
     const isEditingExistingRow = editingProductIndex !== null && products[editingProductIndex];
     const duplicateIndex = products.findIndex((product, index) => getImportRowKey(product) === rowKey && (!isEditingExistingRow || index !== editingProductIndex));
 
+    if (isEditingExistingRow && duplicateIndex >= 0) {
+      const duplicateName = products[duplicateIndex]?.tenSP || normalizedProduct.tenSP || normalizedProduct.maSP;
+      setSuccess(null);
+      setError(`Sản phẩm ${duplicateName} đã có ở dòng #${duplicateIndex + 1}. Vui lòng sửa số lượng ở dòng đó hoặc chọn sản phẩm khác.`);
+      setTimeout(() => setError(null), 4000);
+      return;
+    }
+
     setPaymentStatus('unpaid');
     if (isEditingExistingRow) {
-      if (duplicateIndex >= 0) {
-        const sourceName = products[editingProductIndex]?.tenSP || normalizedProduct.tenSP || normalizedProduct.maSP;
-        const targetName = products[duplicateIndex]?.tenSP || normalizedProduct.tenSP || normalizedProduct.maSP;
-        setProducts(prev => prev
-          .reduce((acc, product, index) => {
-            if (index === editingProductIndex) return acc;
-            if (index === duplicateIndex) {
-              const nextQuantity = (Number(product.soLuongNhap) || 0) + quantityToAdd;
-              const nextPrice = Math.max(0, getFirstFiniteNumber(product.giaNhap, product.import_price, normalizedProduct.giaNhap));
-              const mergedDiscount = Math.min(100, Math.max(0, Number(product.chietKhau) || 0));
-              acc.push({
-                ...product,
-                soLuongNhap: nextQuantity,
-                giaNhap: nextPrice,
-                import_price: nextPrice,
-                chietKhau: mergedDiscount,
-                thanhTien: calculateThanhTien(nextPrice, nextQuantity, mergedDiscount)
-              });
-              return acc;
-            }
-            acc.push(product);
-            return acc;
-          }, [])
-          .map((product, index) => ({ ...product, stt: index + 1 }))
-        );
-        setSuccess(`Đã gộp dòng ${sourceName} vào dòng ${targetName}.`);
-        setTimeout(() => setSuccess(null), 3000);
-      } else {
-        setProducts(prev => prev.map((product, index) => (
-          index === editingProductIndex
-            ? { ...normalizedProduct, stt: index + 1 }
-            : { ...product, stt: index + 1 }
-        )));
-        setSuccess('Đã cập nhật sản phẩm cho dòng đang chọn.');
-        setTimeout(() => setSuccess(null), 3000);
-      }
+      setProducts(prev => prev.map((product, index) => (
+        index === editingProductIndex ? normalizedProduct : product
+      )));
+      setSuccess('Đã cập nhật sản phẩm cho dòng đang chọn.');
+      setTimeout(() => setSuccess(null), 3000);
     } else if (duplicateIndex >= 0) {
       const duplicateName = products[duplicateIndex]?.tenSP || normalizedProduct.tenSP || normalizedProduct.maSP;
       setProducts(prev => prev.map((product, index) => {
-        if (index !== duplicateIndex) return { ...product, stt: index + 1 };
+        if (index !== duplicateIndex) return product;
         const nextQuantity = (Number(product.soLuongNhap) || 0) + quantityToAdd;
         const nextPrice = Math.max(0, getFirstFiniteNumber(product.giaNhap, product.import_price, normalizedProduct.giaNhap));
         const mergedDiscount = Math.min(100, Math.max(0, Number(product.chietKhau) || 0));
         return {
           ...product,
-          stt: index + 1,
           soLuongNhap: nextQuantity,
           giaNhap: nextPrice,
           import_price: nextPrice,
@@ -1134,7 +1071,7 @@ const Nhaphang = ({ store }) => {
       setSuccess(`Đã gộp thêm ${quantityToAdd} vào dòng ${duplicateName}.`);
       setTimeout(() => setSuccess(null), 3000);
     } else {
-      setProducts(prev => [...prev, { ...normalizedProduct, stt: prev.length + 1 }]);
+      setProducts(prev => [...prev, normalizedProduct]);
       setSuccess(null);
     }
 
@@ -1145,7 +1082,7 @@ const Nhaphang = ({ store }) => {
   // Update product in list
   const handleUpdateProduct = (index, field, value) => {
     setProducts(prev => prev.map((item, itemIndex) => {
-      if (itemIndex !== index) return { ...item, stt: itemIndex + 1 };
+      if (itemIndex !== index) return item;
 
       const product = { ...item };
       const numericValue = Number(value);
@@ -1163,17 +1100,13 @@ const Nhaphang = ({ store }) => {
       const nextDiscount = Math.min(100, Math.max(0, Number(product.chietKhau) || 0));
       product.chietKhau = nextDiscount;
       product.thanhTien = calculateThanhTien(nextPrice, nextQuantity, nextDiscount);
-      product.stt = itemIndex + 1;
       return product;
     }));
   };
 
   // Remove product from list
   const handleRemoveProduct = (index) => {
-    const updatedProducts = products.filter((_, i) => i !== index);
-    // Re-number STT
-    const renumbered = updatedProducts.map((p, i) => ({ ...p, stt: i + 1 }));
-    setProducts(renumbered);
+    setProducts(prev => prev.filter((_, i) => i !== index));
     if (editingProductIndex === index) resetProductSearchState();
     if (editingProductIndex !== null && editingProductIndex > index) setEditingProductIndex(editingProductIndex - 1);
   };
@@ -1511,10 +1444,9 @@ const Nhaphang = ({ store }) => {
       const fullOrder = response.ok ? mapImportToOrder(await response.json()) : order;
       setCurrentOrder(fullOrder);
       setIsEditingOrder(edit);
-      setProducts((fullOrder.chiTiet || []).map((item, index) => {
+      setProducts((fullOrder.chiTiet || []).map((item) => {
         const row = {
           ...item,
-          stt: index + 1,
           soLuongNhap: item.soLuong,
           chietKhau: item.chietKhau || 0,
           thanhTien: item.thanhTien,
@@ -1978,7 +1910,7 @@ const Nhaphang = ({ store }) => {
                     <button
                       type="button"
                       onClick={handleStartAddProduct}
-                      disabled={saving}
+                      disabled={saving || !selectedSupplier}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -1997,13 +1929,17 @@ const Nhaphang = ({ store }) => {
                         setError(null);
                       }}
                       onFocus={() => {
+                        if (!selectedSupplier) {
+                          showSupplierRequiredHint();
+                          return;
+                        }
                         setFilteredProducts(getScopedProductSearchResults(searchQuery));
                         setShowSearchResults(true);
                       }}
-                      placeholder={selectedSupplier ? 'Tìm theo tên sản phẩm trong phạm vi nhà cung cấp...' : 'Tìm sản phẩm hoặc để trống để xem tất cả...'}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 bg-white rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      aria-disabled={saving}
-                      disabled={saving}
+                      placeholder={selectedSupplier ? 'Tìm sản phẩm theo tên/mã hoặc để trống để xem tất cả...' : 'Chọn nhà cung cấp trước khi thêm sản phẩm...'}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 bg-white rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                      aria-disabled={saving || !selectedSupplier}
+                      disabled={saving || !selectedSupplier}
                     />
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
 
@@ -2055,17 +1991,17 @@ const Nhaphang = ({ store }) => {
                           })
                         ) : (
                           <div className="p-3 text-sm text-gray-500 text-center">
-                            {selectedSupplier ? 'Không có sản phẩm thuộc nhà cung cấp này' : 'Không tìm thấy sản phẩm'}
+                            {searchQuery.trim() ? 'Không có sản phẩm phù hợp' : 'Chưa có sản phẩm trong hệ thống'}
                           </div>
                         )}
                       </div>
                     )}
                   </div>
                   {!selectedSupplier && (
-                    <p className="mt-2 text-xs text-amber-600">Chưa chọn nhà cung cấp: ô tìm kiếm có thể hiển thị toàn bộ sản phẩm hiện có; cần chọn nhà cung cấp trước khi lưu phiếu.</p>
+                    <p className="mt-2 text-xs text-amber-600">Chọn nhà cung cấp trước để thêm nhiều sản phẩm vào phiếu nhập.</p>
                   )}
                   {selectedSupplier && (
-                    <p className="mt-2 text-xs text-gray-500">Đang lọc sản phẩm theo nhà cung cấp và nhóm hàng phù hợp: {selectedSupplier.tenNCC}. Query trống sẽ hiển thị toàn bộ sản phẩm trong phạm vi này.</p>
+                    <p className="mt-2 text-xs text-gray-500">Đã chọn nhà cung cấp: {selectedSupplier.tenNCC}. Mỗi sản phẩm mới sẽ được thêm vào cuối danh sách theo đúng thứ tự chọn.</p>
                   )}
                 </div>
               </div>
@@ -2200,7 +2136,7 @@ const Nhaphang = ({ store }) => {
                   <button
                     type="button"
                     onClick={handleStartAddProduct}
-                    disabled={saving}
+                    disabled={saving || !selectedSupplier}
                     className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
@@ -2214,12 +2150,11 @@ const Nhaphang = ({ store }) => {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-12">STT</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">Ảnh</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tên sản phẩm</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">Đơn vị</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">Số lượng</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Giá nhập</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Đơn giá</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">Chiết khấu</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Thành tiền</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">Thao tác</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">Xóa</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -2227,7 +2162,7 @@ const Nhaphang = ({ store }) => {
                         const displayPrice = Math.max(0, getFirstFiniteNumber(product.giaNhap, product.import_price, product.retail_price));
                         return (
                           <tr key={`${getImportRowKey(product) || 'row'}-${index}`} className={`hover:bg-gray-50 ${editingProductIndex === index ? 'bg-blue-50' : ''}`}>
-                            <td className="px-4 py-3 text-sm text-gray-600">{product.stt}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
                             <td className="px-4 py-3">
                               <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center overflow-hidden border border-gray-200">
                                 {product.hinhAnh ? (
@@ -2248,7 +2183,6 @@ const Nhaphang = ({ store }) => {
                                 Đổi sản phẩm
                               </button>
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{product.donVi}</td>
                             <td className="px-4 py-3">
                               <input
                                 type="number"
@@ -2288,26 +2222,15 @@ const Nhaphang = ({ store }) => {
                               {product.thanhTien.toLocaleString('vi-VN')}đ
                             </td>
                             <td className="px-4 py-3 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditProductRow(index)}
-                                  disabled={saving}
-                                  className="text-blue-600 hover:text-blue-800 disabled:text-blue-300 transition-colors p-1"
-                                  title="Đổi sản phẩm"
-                                >
-                                  <Search className="w-4 h-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveProduct(index)}
-                                  disabled={saving}
-                                  className="text-gray-400 hover:text-red-600 disabled:text-gray-300 transition-colors p-1"
-                                  title="Xóa dòng"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveProduct(index)}
+                                disabled={saving}
+                                className="text-gray-400 hover:text-red-600 disabled:text-gray-300 transition-colors p-1"
+                                title="Xóa dòng"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
                             </td>
                           </tr>
                         );
@@ -2318,7 +2241,7 @@ const Nhaphang = ({ store }) => {
                         <td colSpan="4" className="px-4 py-3 text-right text-sm text-gray-600">
                           Tổng ({totalStats.quantity} sản phẩm)
                         </td>
-                        <td colSpan="3" className="px-4 py-3 text-right text-sm text-gray-600">
+                        <td colSpan="2" className="px-4 py-3 text-right text-sm text-gray-600">
                           Chiết khấu: <span className="font-medium">{totalStats.discountValue.toLocaleString('vi-VN')}đ</span>
                         </td>
                         <td className="px-4 py-3 text-right">

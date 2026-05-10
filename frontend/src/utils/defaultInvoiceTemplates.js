@@ -70,12 +70,6 @@ h1 { margin: 10px 0; text-align: center; font-size: 18px; }
 
 const sapoA4InvoiceHtml = `
 <div class="print-template sapo-a4-html sale-invoice">
-  <div class="sapo-a4-topbar">
-    <div>{invoice_created_at}</div>
-    <div>Chi tiết đơn hàng {order_code} | SAPO</div>
-    <div></div>
-  </div>
-
   <div class="sapo-a4-brand-row">
     <div>
       <div class="sapo-a4-store-name">{store_name}</div>
@@ -145,15 +139,12 @@ const sapoA4InvoiceHtml = `
   </div>
 
   <div class="sapo-a4-print-footer">
-    <span>www.sapo.vn</span>
     <span>1/1</span>
   </div>
 </div>`.trim();
 
 const sapoA4LegacyCss = `
 .sapo-a4-html { min-height: 277mm; display: flex; flex-direction: column; color: #111; font-family: Arial, Roboto, Helvetica, sans-serif; font-size: 12px; line-height: 1.32; }
-.sapo-a4-html .sapo-a4-topbar { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px; align-items: center; font-size: 11px; margin-bottom: 11mm; }
-.sapo-a4-html .sapo-a4-topbar > div:nth-child(2) { text-align: center; font-weight: 600; }
 .sapo-a4-html .sapo-a4-brand-row { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(42mm, 0.7fr) minmax(48mm, 0.85fr); gap: 10mm; align-items: start; border-bottom: 1.5px solid #111; padding-bottom: 5mm; margin-bottom: 5mm; }
 .sapo-a4-html .sapo-a4-store-name { font-size: 19px; font-weight: 700; line-height: 1.2; margin-bottom: 2mm; }
 .sapo-a4-html .sapo-a4-store-meta { font-size: 11px; color: #333; }
@@ -173,7 +164,7 @@ const sapoA4LegacyCss = `
 .sapo-a4-html .sapo-a4-signature-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(44mm, 0.72fr) minmax(44mm, 0.72fr); gap: 8mm; align-items: start; margin-top: auto; padding-top: 11mm; break-inside: avoid; page-break-inside: avoid; }
 .sapo-a4-html .sapo-a4-signature { min-height: 31mm; text-align: center; }
 .sapo-a4-html .sapo-a4-signature span { display: block; margin-top: 1mm; font-size: 10px; color: #4b5563; }
-.sapo-a4-html .sapo-a4-print-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #d1d5db; display: flex; justify-content: space-between; font-size: 10px; color: #374151; }
+.sapo-a4-html .sapo-a4-print-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #d1d5db; display: flex; justify-content: flex-end; font-size: 10px; color: #374151; }
 @media print { .sapo-a4-html tr, .sapo-a4-html .sapo-a4-totals, .sapo-a4-html .sapo-a4-signature-section { break-inside: avoid; page-break-inside: avoid; } }
 `.trim();
 

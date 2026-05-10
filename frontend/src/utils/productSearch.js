@@ -133,20 +133,98 @@ export function buildProductSearchFields(item, parent = null, categoriesById = {
   ].filter(Boolean).join(' ');
 }
 
-export function scoreProductMatch(item, query, parent = null, categoriesById = {}) {
+function prepareSearchQuery(query) {
   const normalizedQuery = normalizeSearchText(query);
+  return {
+    normalizedQuery,
+    queryCompact: normalizedQuery.replace(/\s+/g, ''),
+    tokens: normalizedQuery.split(/\s+/).filter(Boolean),
+  };
+}
+
+function createSearchContext(categoriesById = {}) {
+  return {
+    categoriesById,
+    categoryFieldCache: new WeakMap(),
+    productDataCache: new WeakMap(),
+  };
+}
+
+function getCachedCategoryFields(category, context) {
+  if (!category || typeof category !== 'object') return [];
+  if (!context?.categoryFieldCache) return categoryFields(category);
+  const cached = context.categoryFieldCache.get(category);
+  if (cached) return cached;
+  const fields = categoryFields(category);
+  context.categoryFieldCache.set(category, fields);
+  return fields;
+}
+
+function getProductSearchCacheKey(item, parent) {
+  const parentKey = parent ? (parent.id ?? parent.sku ?? parent.name ?? 'parent') : 'root';
+  return [
+    parentKey,
+    item?.default_category_id ?? '',
+    parent?.default_category_id ?? '',
+    item?.category ?? '',
+    parent?.category ?? '',
+  ].join('|');
+}
+
+function buildProductSearchData(item = {}, parent = null, context = createSearchContext()) {
+  const categoriesById = context.categoriesById || {};
+  const canCache = item && typeof item === 'object' && context.productDataCache;
+  const cacheKey = getProductSearchCacheKey(item, parent);
+
+  if (canCache) {
+    const itemCache = context.productDataCache.get(item);
+    const cached = itemCache?.get(cacheKey);
+    if (cached) return cached;
+  }
+
+  const category = findCategoryForProduct(item, categoriesById) || findCategoryForProduct(parent, categoriesById);
+  const parentCategory = findCategoryForProduct(parent, categoriesById);
+  const categoryFieldsText = getCachedCategoryFields(category, context).join(' ');
+  const fields = [
+    parent?.name,
+    parent?.sku,
+    parent?.category,
+    parent?.unit,
+    ...getCachedCategoryFields(parentCategory, context),
+    item?.name,
+    item?.sku,
+    item?.category,
+    item?.unit,
+    item?.color,
+    item?.size,
+    item?.attributes,
+    ...getCachedCategoryFields(category, context),
+  ].filter(Boolean).join(' ');
+  const haystack = normalizeSearchText(fields);
+  const categoryText = normalizeSearchText(categoryFieldsText);
+  const data = {
+    haystack,
+    haystackCompact: haystack.replace(/\s+/g, ''),
+    name: normalizeSearchText(item?.name),
+    sku: normalizeSearchText(item?.sku),
+    categoryText,
+    categoryCompact: categoryText.replace(/\s+/g, ''),
+  };
+
+  if (canCache) {
+    const itemCache = context.productDataCache.get(item) || new Map();
+    itemCache.set(cacheKey, data);
+    context.productDataCache.set(item, itemCache);
+  }
+
+  return data;
+}
+
+function scorePreparedProductMatch(item, preparedQuery, parent = null, context = createSearchContext()) {
+  const { normalizedQuery, queryCompact, tokens } = preparedQuery;
   if (!normalizedQuery) return { matched: true, score: 1, reason: 'empty' };
 
-  const queryCompact = normalizedQuery.replace(/\s+/g, '');
-  const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
-  const fields = buildProductSearchFields(item, parent, categoriesById);
-  const haystack = normalizeSearchText(fields);
-  const haystackCompact = compactSearchText(fields);
-  const name = normalizeSearchText(item?.name);
-  const sku = normalizeSearchText(item?.sku);
-  const category = findCategoryForProduct(item, categoriesById) || findCategoryForProduct(parent, categoriesById);
-  const categoryText = normalizeSearchText(categoryFields(category).join(' '));
-  const categoryCompact = compactSearchText(categoryFields(category).join(' '));
+  const { haystack, haystackCompact, name, sku, categoryText, categoryCompact } = buildProductSearchData(item, parent, context);
 
   let score = 0;
   if (name === normalizedQuery || sku === normalizedQuery) score += 1000;
@@ -179,6 +257,11 @@ export function scoreProductMatch(item, query, parent = null, categoriesById = {
   };
 }
 
+export function scoreProductMatch(item, query, parent = null, categoriesById = {}) {
+  const context = createSearchContext(categoriesById);
+  return scorePreparedProductMatch(item, prepareSearchQuery(query), parent, context);
+}
+
 export function buildCategoriesById(categories = []) {
   return (categories || []).reduce((acc, category) => {
     if (category?.id !== undefined && category?.id !== null) acc[Number(category.id)] = category;
@@ -187,36 +270,51 @@ export function buildCategoriesById(categories = []) {
 }
 
 export function filterProductTree(products = [], query = '', options = {}) {
-  const categoriesById = options.categoriesById || buildCategoriesById(options.categories || []);
-  const normalizedQuery = normalizeSearchText(query);
-  if (!normalizedQuery) {
-    return (products || []).map(p => ({
-      ...p,
-      _matchesParentSearch: true,
-      _matchedVariantIds: (p.variants || []).map(v => v.id),
-      _searchScore: 1,
-    }));
-  }
+  const productList = products || [];
+  const preparedQuery = prepareSearchQuery(query);
+  const { normalizedQuery } = preparedQuery;
+  if (!normalizedQuery) return productList;
 
-  return (products || [])
-    .map(parent => {
-      const parentScore = scoreProductMatch(parent, normalizedQuery, null, categoriesById);
-      const matchedVariantScores = (parent.variants || [])
-        .map(variant => ({ variant, result: scoreProductMatch(variant, normalizedQuery, parent, categoriesById) }))
-        .filter(({ result }) => result.matched);
-      const matchedVariantIds = parentScore.matched && options.includeAllVariantsOnParentMatch !== false
-        ? (parent.variants || []).map(v => v.id)
-        : matchedVariantScores.map(({ variant }) => variant.id);
-      const maxVariantScore = matchedVariantScores.reduce((max, item) => Math.max(max, item.result.score), 0);
-      return {
+  const categoriesById = options.categoriesById || buildCategoriesById(options.categories || []);
+  const context = createSearchContext(categoriesById);
+  const includeAllVariantsOnParentMatch = options.includeAllVariantsOnParentMatch !== false;
+  const filteredParents = [];
+
+  for (const parent of productList) {
+    const parentScore = scorePreparedProductMatch(parent, preparedQuery, null, context);
+    const variants = parent.variants || [];
+    const matchedVariantIds = [];
+    const matchedVariantIdSet = new Set();
+    const variantSearchScores = new Map();
+    let maxVariantScore = 0;
+
+    for (const variant of variants) {
+      const result = scorePreparedProductMatch(variant, preparedQuery, parent, context);
+      if (result.matched) {
+        matchedVariantIds.push(variant.id);
+        matchedVariantIdSet.add(variant.id);
+        variantSearchScores.set(variant.id, result.score);
+        if (result.score > maxVariantScore) maxVariantScore = result.score;
+      }
+    }
+
+    const visibleMatchedVariantIds = parentScore.matched && includeAllVariantsOnParentMatch
+      ? variants.map(v => v.id)
+      : matchedVariantIds;
+
+    if (parentScore.matched || visibleMatchedVariantIds.length > 0) {
+      filteredParents.push({
         ...parent,
         _matchesParentSearch: parentScore.matched,
-        _matchedVariantIds: matchedVariantIds,
+        _matchedVariantIds: visibleMatchedVariantIds,
+        _matchedVariantIdSet: parentScore.matched && includeAllVariantsOnParentMatch ? new Set(visibleMatchedVariantIds) : matchedVariantIdSet,
+        _variantSearchScores: variantSearchScores,
         _searchScore: Math.max(parentScore.score, maxVariantScore),
-      };
-    })
-    .filter(parent => parent._matchesParentSearch || parent._matchedVariantIds.length > 0)
-    .sort((a, b) => (b._searchScore || 0) - (a._searchScore || 0) || String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
+      });
+    }
+  }
+
+  return filteredParents.sort((a, b) => (b._searchScore || 0) - (a._searchScore || 0) || String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
 }
 
 export function flattenProductTree(products = [], options = {}) {
@@ -243,19 +341,39 @@ export function flattenProductTree(products = [], options = {}) {
 }
 
 export function searchFlatProducts(products = [], query = '', options = {}) {
-  const tree = filterProductTree(products, query, options);
+  const preparedQuery = prepareSearchQuery(query);
+  const { normalizedQuery } = preparedQuery;
+  const tree = filterProductTree(products, normalizedQuery, options);
   const includeParents = options.includeParents !== false;
   const includeVariants = options.includeVariants !== false;
+  const limit = Number(options.limit || 0);
+  const canStopEarly = limit > 0 && !normalizedQuery && options.skipSortForEmptyQuery === true;
   const rows = [];
+
+  const pushRow = (row) => {
+    if (canStopEarly && rows.length >= limit) return false;
+    rows.push(row);
+    return !(canStopEarly && rows.length >= limit);
+  };
+
   for (const parent of tree) {
-    if (includeParents) rows.push({ ...parent, is_variant: false, parent: null });
+    const parentSearchScore = parent._searchScore || (normalizedQuery ? 0 : 1);
+    if (includeParents) {
+      const shouldContinue = pushRow({ ...parent, is_variant: false, parent: null, _searchScore: parentSearchScore });
+      if (!shouldContinue) break;
+    }
+
     const variants = parent.variants || [];
-    const visibleVariants = !normalizeSearchText(query) || parent._matchesParentSearch
+    const visibleVariants = !normalizedQuery || parent._matchesParentSearch
       ? variants
-      : variants.filter(v => parent._matchedVariantIds?.includes(v.id));
+      : variants.filter(v => parent._matchedVariantIdSet?.has(v.id) || parent._matchedVariantIds?.includes(v.id));
+
     if (includeVariants) {
       for (const variant of visibleVariants) {
-        rows.push({
+        const variantSearchScore = normalizedQuery
+          ? Math.max(parentSearchScore, parent._variantSearchScores?.get(variant.id) || 0)
+          : parentSearchScore;
+        const shouldContinue = pushRow({
           ...variant,
           is_variant: true,
           parent_id: parent.id,
@@ -265,10 +383,16 @@ export function searchFlatProducts(products = [], query = '', options = {}) {
           default_category_id: variant.default_category_id || parent.default_category_id || null,
           default_category: variant.default_category || parent.default_category || null,
           category: variant.category || parent.category || '',
-          _searchScore: Math.max(parent._searchScore || 0, scoreProductMatch(variant, query, parent, options.categoriesById || {}).score),
+          _searchScore: variantSearchScore,
         });
+        if (!shouldContinue) break;
       }
+      if (canStopEarly && rows.length >= limit) break;
     }
   }
-  return rows.sort((a, b) => (b._searchScore || 0) - (a._searchScore || 0) || String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
+
+  const sortedRows = canStopEarly
+    ? rows
+    : rows.sort((a, b) => (b._searchScore || 0) - (a._searchScore || 0) || String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
+  return limit > 0 ? sortedRows.slice(0, limit) : sortedRows;
 }

@@ -429,8 +429,8 @@ export function createSampleInvoiceData(type = 'sale_invoice', overrides = {}) {
       address: '123 Đường Hoa Mai, Quận 1, TP.HCM',
       phone: '0901 234 567',
       email: 'shop@example.local',
-      website: 'www.sapo.vn',
-      invoice_footer_url: 'www.sapo.vn',
+      website: '',
+      invoice_footer_url: '',
       tax_code: '0312345678',
       bank_account: '0123456789',
       bank_name: 'Ngân hàng Demo',
@@ -685,7 +685,7 @@ function getOrderCode(data = {}) {
 }
 
 function getFooterUrl(data = {}) {
-  return textOrDash(firstPresent(data.store?.invoice_footer_url, data.store?.website, data.store?.url, 'www.sapo.vn'));
+  return String(firstPresent(data.store?.invoice_footer_url, data.store?.website, data.store?.url, '') || '').trim();
 }
 
 function getInvoiceDateText(data = {}) {
@@ -881,11 +881,6 @@ function renderSapoA4Header(data = {}) {
 
   return `
     <header class="sapo-a4-header">
-      <div class="sapo-a4-topbar">
-        <div>${escapeHtml(headerDate)}</div>
-        <div>Chi tiết đơn hàng ${escapeHtml(orderCode)} | SAPO</div>
-        <div></div>
-      </div>
       <div class="sapo-a4-brand-row">
         <div class="sapo-a4-store-block">
           <div class="sapo-a4-store-name">${escapeHtml(storeName)}</div>
@@ -950,9 +945,6 @@ function renderSapoA4TemplateCss(config = {}, paper = {}) {
   return `
 .sapo-a4-invoice { width: 100%; min-height: ${getPrintableMinHeightMm(paper)}mm; display: flex; flex-direction: column; color: #111; font-family: ${fontFamily}; font-size: ${baseFontSize}px; line-height: 1.32; }
 .sapo-a4-header { break-inside: avoid; page-break-inside: avoid; }
-.sapo-a4-topbar { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px; align-items: center; font-size: 11px; color: #111; margin-bottom: 11mm; }
-.sapo-a4-topbar > div:nth-child(2) { text-align: center; font-weight: 600; }
-.sapo-a4-topbar > div:last-child { text-align: right; }
 .sapo-a4-brand-row { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(42mm, 0.7fr) minmax(48mm, 0.85fr); gap: 10mm; align-items: start; border-bottom: 1.5px solid #111; padding-bottom: 5mm; margin-bottom: 5mm; }
 .sapo-a4-store-name { font-size: 19px; font-weight: 700; line-height: 1.2; margin-bottom: 2mm; }
 .sapo-a4-store-meta { font-size: 11px; line-height: 1.35; color: #333; }
@@ -982,7 +974,7 @@ function renderSapoA4TemplateCss(config = {}, paper = {}) {
 .sapo-a4-signature strong { display: block; font-size: 12px; }
 .sapo-a4-signature span { display: block; margin-top: 1mm; font-size: 10px; color: #4b5563; }
 .sapo-a4-signature-line { margin-top: 22mm; border-top: 1px solid #111; padding-top: 1.2mm; min-height: 6mm; }
-.sapo-a4-print-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #d1d5db; display: flex; justify-content: space-between; gap: 8px; font-size: 10px; color: #374151; break-inside: avoid; page-break-inside: avoid; }
+.sapo-a4-print-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #d1d5db; display: flex; justify-content: flex-end; gap: 8px; font-size: 10px; color: #374151; break-inside: avoid; page-break-inside: avoid; }
 @media print {
   .sapo-a4-invoice .visual-items-table thead { display: table-header-group; }
   .sapo-a4-invoice .visual-items-table tfoot { display: table-footer-group; }

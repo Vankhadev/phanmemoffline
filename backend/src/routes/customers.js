@@ -16,8 +16,16 @@ router.get('/', (req, res) => {
   res.json(result);
 });
 
+function pickCustomerMetadata(body = {}) {
+  const fields = ['sapo_customer_id', 'customer_code', 'sapo_updated_at', 'sapo_last_synced_at', 'sync_source'];
+  return fields.reduce((acc, field) => {
+    if (Object.prototype.hasOwnProperty.call(body, field)) acc[field] = body[field] || '';
+    return acc;
+  }, {});
+}
+
 router.post('/', (req, res) => {
-  const { name, phone, email, tax_code, customer_type, invoice_type } = req.body;
+  const { name, phone, email, tax_code, customer_type, invoice_type, address, note } = req.body;
   if (!name) return res.status(400).json({ error: 'Thiếu tên khách hàng' });
   // Lưu customer_type dưới dạng tên (string)
   const types = getAll('customer_types', t => t.active !== 0);
@@ -27,13 +35,21 @@ router.post('/', (req, res) => {
     name, phone: phone || '', email: email || '',
     tax_code: tax_code || '', customer_type: typeName,
     invoice_type: invoice_type || 'non_electronic', // 'electronic' | 'non_electronic'
+    address: address || '',
+    note: note || '',
+    sapo_customer_id: '',
+    customer_code: req.body.customer_code || '',
+    sapo_updated_at: '',
+    sapo_last_synced_at: '',
+    sync_source: '',
+    ...pickCustomerMetadata(req.body),
     created_at: now(),
   });
   res.json({ id, ok: true });
 });
 
 router.put('/:id', (req, res) => {
-  const { name, phone, email, tax_code, customer_type, invoice_type } = req.body;
+  const { name, phone, email, tax_code, customer_type, invoice_type, address, note } = req.body;
   if (!name) return res.status(400).json({ error: 'Thiếu tên khách hàng' });
   const types = getAll('customer_types', t => t.active !== 0);
   const ct = types.find(t => String(t.id) === String(customer_type));
@@ -41,7 +57,10 @@ router.put('/:id', (req, res) => {
   update('customers', +req.params.id, {
     name, phone: phone || '', email: email || '',
     tax_code: tax_code || '', customer_type: typeName,
-    invoice_type: invoice_type || undefined
+    invoice_type: invoice_type || undefined,
+    ...(address !== undefined && { address: address || '' }),
+    ...(note !== undefined && { note: note || '' }),
+    ...pickCustomerMetadata(req.body),
   });
   res.json({ ok: true });
 });

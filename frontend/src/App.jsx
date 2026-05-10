@@ -19,6 +19,7 @@ import ProductReport from './pages/ProductReport';
 import CashBook from './pages/CashBook';
 import Payroll from './pages/Payroll';
 import PrintTemplates from './pages/PrintTemplates';
+import SapoProductSync from './pages/SapoProductSync';
 import { ClipboardList, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   API_BASE,
@@ -79,6 +80,7 @@ const ROUTE_PERMISSIONS = {
   '/bao-cao-theo-san-pham': ['stats.read'],
   '/cai-dat': ['settings.read', 'store.read', 'users.read'],
   '/mau-in': ['print_templates.read'],
+  '/dong-bo-san-pham': ['products.manage'],
 };
 
 function isKnownAppRoute(route) {
@@ -257,6 +259,7 @@ function AppLayout({
           { to: '/bang-luong-nhan-vien', label: 'Bảng lương nhân viên' },
           { to: '/cai-dat', label: 'Cài đặt' },
           { to: '/mau-in', label: 'Mẫu in' },
+          { to: '/dong-bo-san-pham', label: 'Đồng bộ Sapo' },
         ],
       },
     ];
@@ -293,7 +296,7 @@ function AppLayout({
             {sidebarOpen && (
               <div>
                 <div className="text-xs text-gray-400 font-bold">{store.name || account?.name || 'Bán hàng offline'}</div>
-                <div className="text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.1.7'}</div>
+                <div className="text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.1.8'}</div>
               </div>
             )}
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-400 hover:text-white text-lg">☰</button>
@@ -397,6 +400,7 @@ function AppLayout({
             <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ProductReport /></ProtectedRoute>} />
             <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><Settings store={store} /></ProtectedRoute>} />
             <Route path="/mau-in" element={<ProtectedRoute user={user} permissions={permissions} path="/mau-in"><PrintTemplates store={store} /></ProtectedRoute>} />
+            <Route path="/dong-bo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/dong-bo-san-pham"><SapoProductSync /></ProtectedRoute>} />
             <Route path={LOGIN_REGISTER_ROUTE} element={<Navigate to={firstAccessibleRoute(user, permissions)} replace />} />
             {Object.entries(ROUTE_ALIASES).map(([from, to]) => (
               <Route key={from} path={from} element={<Navigate to={canAccess(to) ? to : firstAccessibleRoute(user, permissions)} replace />} />

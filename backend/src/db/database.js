@@ -50,6 +50,8 @@ const SCHEMA = {
   cash_book: [],
   payrolls: [],
   print_templates: [],
+  sapo_settings: [],
+  sapo_sync_runs: [],
 };
 
 const INITIAL_NEXT_ID = {
@@ -59,7 +61,7 @@ const INITIAL_NEXT_ID = {
   combos: 1, combo_items: 1, daily_stats: 1,
   return_logs: 1, return_details: 1,
   bot_settings: 1, bot_alerts: 1, customer_types: 1, counters: 1,
-  cash_book: 1, payrolls: 1, print_templates: 1,
+  cash_book: 1, payrolls: 1, print_templates: 1, sapo_settings: 1, sapo_sync_runs: 1,
 };
 
 const DEFAULT_ACCOUNT_SLUG = 'default';
@@ -68,6 +70,7 @@ const ACCOUNT_SCOPED_TABLES = new Set([
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
   'daily_stats', 'return_logs', 'return_details', 'bot_settings', 'bot_alerts',
   'customer_types', 'counters', 'cash_book', 'payrolls', 'print_templates',
+  'sapo_settings', 'sapo_sync_runs',
   'sync_metadata', 'audit_logs',
 ]);
 
@@ -201,9 +204,10 @@ function loadDB() {
       return;
     }
 
+    const needsSapoMigration = !Array.isArray(parsed.sapo_settings) || !Array.isArray(parsed.sapo_sync_runs);
     replaceDB(parsed);
     recalculateNextIds();
-    if (needsMigrationBackup()) backupDB('pre-auth-sync-migration');
+    if (needsMigrationBackup() || needsSapoMigration) backupDB(needsSapoMigration ? 'pre-sapo-sync-migration' : 'pre-auth-sync-migration');
     migrateDB();
     recalculateNextIds();
     console.log('[KHA] DB loaded from', DB_PATH);
@@ -683,6 +687,100 @@ function hasOwn(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj || {}, key);
 }
 
+function ensureField(row, field, valueFactory) {
+  if (!row || typeof row !== 'object' || hasOwn(row, field)) return false;
+  row[field] = typeof valueFactory === 'function' ? valueFactory(row) : valueFactory;
+  return true;
+}
+
+function ensureSapoMetadataSchema() {
+  let changed = false;
+
+  const productDefaults = {
+    barcode: '',
+    image_url: '',
+    description: '',
+    option1: '',
+    option2: '',
+    option3: '',
+    sapo_product_id: '',
+    sapo_variant_id: '',
+    sapo_parent_product_id: '',
+    sapo_status: '',
+    sapo_updated_at: '',
+    sapo_last_synced_at: '',
+    sync_source: '',
+  };
+  for (const product of db.products || []) {
+    for (const [field, defaultValue] of Object.entries(productDefaults)) {
+      if (ensureField(product, field, defaultValue)) changed = true;
+    }
+  }
+
+  const customerDefaults = {
+    sapo_customer_id: '',
+    customer_code: '',
+    address: '',
+    sapo_updated_at: '',
+    sapo_last_synced_at: '',
+    sync_source: '',
+  };
+  for (const customer of db.customers || []) {
+    for (const [field, defaultValue] of Object.entries(customerDefaults)) {
+      if (ensureField(customer, field, defaultValue)) changed = true;
+    }
+  }
+
+  const invoiceDefaults = {
+    sapo_order_id: '',
+    sapo_order_number: '',
+    sapo_customer_id: '',
+    sapo_status: '',
+    sapo_payment_status: '',
+    sapo_fulfillment_status: '',
+    sapo_updated_at: '',
+    sapo_last_synced_at: '',
+    sync_source: '',
+  };
+  for (const invoice of db.invoices || []) {
+    for (const [field, defaultValue] of Object.entries(invoiceDefaults)) {
+      if (ensureField(invoice, field, defaultValue)) changed = true;
+    }
+  }
+
+  const invoiceDetailDefaults = {
+    sapo_line_item_id: '',
+    sapo_order_id: '',
+    sapo_product_id: '',
+    sapo_variant_id: '',
+    sapo_sku: '',
+    sapo_barcode: '',
+  };
+  for (const detail of db.invoice_details || []) {
+    for (const [field, defaultValue] of Object.entries(invoiceDetailDefaults)) {
+      if (ensureField(detail, field, defaultValue)) changed = true;
+    }
+  }
+
+  const runDefaults = {
+    resource: '',
+    resources: () => [],
+    mode: '',
+    phase: '',
+    progress_json: '{}',
+    summary_json: row => JSON.stringify(row.summary || {}),
+    warnings_json: row => JSON.stringify(row.warnings || []),
+    errors_json: row => JSON.stringify(row.errors || []),
+  };
+  for (const run of db.sapo_sync_runs || []) {
+    for (const [field, defaultValue] of Object.entries(runDefaults)) {
+      if (ensureField(run, field, defaultValue)) changed = true;
+    }
+  }
+
+  return changed;
+}
+
 function normalizeRoleValue(role) {
   const value = String(role || '').trim().toLowerCase();
   return value === 'admin' ? 'admin' : 'user';
@@ -922,6 +1020,7 @@ function normalizeDBData() {
   }
 
   if (ensureAuthAndSyncSchema()) changed = true;
+  if (ensureSapoMetadataSchema()) changed = true;
 
   for (const category of db.product_categories) {
     if (!category.name) { category.name = 'Danh mục'; changed = true; }
@@ -1177,6 +1276,7 @@ function migrateDB() {
   }
 
   if (ensureAuthAndSyncSchema()) migrated = true;
+  if (ensureSapoMetadataSchema()) migrated = true;
 
   if (migrated) {
     saveDB();
@@ -1502,6 +1602,7 @@ function seedData() {
   ensureBaseData();
   seedDefaultPrintTemplates();
   ensureAuthAndSyncSchema();
+  ensureSapoMetadataSchema();
   console.log('[KHA] Base data inserted');
 }
 

@@ -72,14 +72,26 @@ function buildProductsTree() {
   const categoriesById = getCategoriesById();
   const all = getAll('products', p => p.active !== 0)
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
-  const parents = all.filter(p => !p.parent_id);
+  const variantsByParentId = new Map();
+  const parents = [];
+
+  for (const product of all) {
+    if (!product.parent_id) {
+      parents.push(product);
+      continue;
+    }
+
+    const parentId = Number(product.parent_id);
+    if (!variantsByParentId.has(parentId)) variantsByParentId.set(parentId, []);
+    variantsByParentId.get(parentId).push(product);
+  }
+
   return parents.map(parent => {
     const enrichedParent = enrichProduct(parent, null, categoriesById);
+    const variants = variantsByParentId.get(Number(parent.id)) || [];
     return {
       ...enrichedParent,
-      variants: all
-        .filter(v => v.parent_id === parent.id)
-        .map(v => ({ ...enrichProduct(v, enrichedParent, categoriesById), is_variant: true })),
+      variants: variants.map(v => ({ ...enrichProduct(v, enrichedParent, categoriesById), is_variant: true })),
     };
   });
 }
@@ -93,8 +105,7 @@ function productPayload(body, existing = {}, parent = null) {
     categoryText,
     parent?.default_category_id || null,
   );
-
-  return {
+  const payload = {
     sku: body.sku !== undefined && body.sku !== null ? String(body.sku).trim() : (existing.sku || ''),
     name: body.name !== undefined && body.name !== null ? String(body.name).trim() : (existing.name || ''),
     import_price: body.import_price !== null && body.import_price !== undefined ? parseFloat(body.import_price) || 0 : (existing.import_price || 0),
@@ -109,6 +120,18 @@ function productPayload(body, existing = {}, parent = null) {
       ? (body.supplier_id && body.supplier_id !== '' ? parseInt(body.supplier_id) : null)
       : (existing.supplier_id !== undefined ? existing.supplier_id : (parent?.supplier_id || null)),
   };
+
+  const optionalFields = [
+    'barcode', 'image_url', 'description', 'option1', 'option2', 'option3',
+    'sapo_product_id', 'sapo_variant_id', 'sapo_parent_product_id', 'sapo_status',
+    'sapo_updated_at', 'sapo_last_synced_at', 'sync_source',
+  ];
+  for (const field of optionalFields) {
+    if (Object.prototype.hasOwnProperty.call(body, field)) payload[field] = body[field] || '';
+    else if (Object.prototype.hasOwnProperty.call(existing, field)) payload[field] = existing[field];
+    else if (parent && ['sapo_product_id', 'sapo_parent_product_id', 'sapo_status', 'sync_source'].includes(field) && Object.prototype.hasOwnProperty.call(parent, field)) payload[field] = parent[field] || '';
+  }
+  return payload;
 }
 
 const IMPORT_EXPECTED_COLUMNS = Object.freeze([

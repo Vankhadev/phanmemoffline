@@ -3,9 +3,11 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary'
 import { installAuthenticatedFetch } from './utils/apiClient'
+import { installElectronInputFocusGuard } from './utils/electronFocusGuard'
 import './index.css'
 
 installAuthenticatedFetch()
+installElectronInputFocusGuard()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
