@@ -33,11 +33,18 @@ function readEnvApiBase() {
   }
 }
 
-export function getApiBase() {
-  if (typeof window !== 'undefined') {
-    const electronApiBase = window.electronAPI?.apiBase || window.khaDesktop?.apiBase;
-    if (electronApiBase) return stripTrailingSlash(electronApiBase);
+function readElectronApiBase() {
+  try {
+    if (typeof window === 'undefined') return '';
+    return window.khaDesktop?.apiBase || window.electronAPI?.apiBase || '';
+  } catch (_) {
+    return '';
   }
+}
+
+export function getApiBase() {
+  const electronApiBase = readElectronApiBase();
+  if (electronApiBase) return stripTrailingSlash(electronApiBase);
 
   const envApiBase = readEnvApiBase();
   if (envApiBase) return stripTrailingSlash(envApiBase);
@@ -48,6 +55,10 @@ export function getApiBase() {
 export const API_BASE = getApiBase();
 export const API = API_BASE;
 
+function getCurrentApiBase() {
+  return stripTrailingSlash(getApiBase() || API_BASE || '/api');
+}
+
 function isAbsoluteUrl(value) {
   return /^[a-z][a-z\d+.-]*:/i.test(value) || String(value || '').startsWith('//');
 }
@@ -55,11 +66,13 @@ function isAbsoluteUrl(value) {
 export function resolveApiUrl(input) {
   if (input instanceof URL) return input.toString();
   const value = String(input || '');
-  if (!value) return API_BASE;
+  const base = getCurrentApiBase();
+  if (!value) return base;
   if (isAbsoluteUrl(value)) return value;
-  if (value.startsWith('/api/')) return value;
+  if (value.startsWith('/api/')) {
+    return isAbsoluteUrl(base) ? `${base}${value.slice('/api'.length)}` : value;
+  }
 
-  const base = stripTrailingSlash(API_BASE);
   const path = value.startsWith('/') ? value : `/${value}`;
   return `${base}${path}`;
 }
@@ -160,15 +173,16 @@ function isPublicAuthEndpoint(url) {
 }
 
 function isApiRequestUrl(url) {
+  const apiBase = getCurrentApiBase();
   const parsedUrl = normalizeUrlForMatch(url);
-  const parsedBase = normalizeUrlForMatch(API_BASE);
+  const parsedBase = normalizeUrlForMatch(apiBase);
   if (!parsedUrl) return false;
 
-  if (parsedBase && isAbsoluteUrl(API_BASE)) {
+  if (parsedBase && isAbsoluteUrl(apiBase)) {
     return parsedUrl.origin === parsedBase.origin && parsedUrl.pathname.startsWith(parsedBase.pathname.replace(/\/$/, ''));
   }
 
-  const basePath = String(API_BASE || '/api').startsWith('/') ? String(API_BASE || '/api') : '/api';
+  const basePath = String(apiBase || '/api').startsWith('/') ? String(apiBase || '/api') : '/api';
   const normalizedBasePath = basePath.replace(/\/$/, '');
   return parsedUrl.pathname === normalizedBasePath || parsedUrl.pathname.startsWith(`${normalizedBasePath}/`);
 }

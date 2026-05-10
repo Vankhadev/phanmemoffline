@@ -1,47 +1,233 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const net = require('net');
+const http = require('http');
+const { spawn } = require('child_process');
+const { randomUUID } = require('crypto');
 const { createUpdateManager } = require('./updater');
 
-const BACKEND_PORT = Number(process.env.PORT || 3001);
+const DEFAULT_BACKEND_PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || 3001);
+const BACKEND_HOST = String(process.env.KHA_BACKEND_HOST || '127.0.0.1').trim() || '127.0.0.1';
+const BACKEND_API_BASE_CHANNEL = 'kha:backend:get-api-base';
+const BACKEND_INFO_CHANNEL = 'kha:backend:get-info';
 const WINDOW_FOCUS_CHANNEL = 'kha:window:ensure-input-focus';
-let mainWindow = null;
-let backendServer = null;
-let updateManager = null;
 
-function waitForPort(port, host = '127.0.0.1', timeoutMs = 15000) {
-  const startedAt = Date.now();
+let mainWindow = null;
+let backendProcess = null;
+let backendPort = null;
+let backendApiBase = '';
+let backendHealth = null;
+let updateManager = null;
+let backendIpcRegistered = false;
+const backendInstanceId = randomUUID();
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function normalizeStartPort(value) {
+  const port = Number(value);
+  return Number.isInteger(port) && port > 0 && port < 65536 ? port : 3001;
+}
+
+function isPortAvailable(port, host = BACKEND_HOST) {
+  return new Promise(resolve => {
+    const server = net.createServer();
+    let settled = false;
+
+    const finish = (available) => {
+      if (settled) return;
+      settled = true;
+      server.removeAllListeners();
+      if (server.listening) {
+        server.close(() => resolve(available));
+      } else {
+        resolve(available);
+      }
+    };
+
+    server.once('error', () => finish(false));
+
+    try {
+      server.listen({ port, host, exclusive: true }, () => finish(true));
+    } catch (_) {
+      finish(false);
+    }
+  });
+}
+
+async function findAvailablePort(startPort = DEFAULT_BACKEND_PORT, host = BACKEND_HOST, maxAttempts = 80) {
+  const firstPort = normalizeStartPort(startPort);
+  for (let offset = 0; offset < maxAttempts; offset += 1) {
+    const candidate = firstPort + offset;
+    if (candidate > 65535) break;
+    if (await isPortAvailable(candidate, host)) return candidate;
+  }
+  throw new Error(`Cannot find an available backend port from ${firstPort} on ${host}`);
+}
+
+function requestJson(url, timeoutMs = 1000) {
   return new Promise((resolve, reject) => {
-    const check = () => {
-      const socket = net.connect(port, host, () => {
-        socket.end();
-        resolve();
-      });
-      socket.on('error', () => {
-        socket.destroy();
-        if (Date.now() - startedAt > timeoutMs) {
-          reject(new Error(`Backend did not start on ${host}:${port}`));
-        } else {
-          setTimeout(check, 250);
+    const req = http.get(url, { timeout: timeoutMs }, (res) => {
+      let raw = '';
+      res.setEncoding('utf8');
+      res.on('data', chunk => { raw += chunk; });
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`HTTP ${res.statusCode}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(raw || '{}'));
+        } catch (err) {
+          reject(new Error(`Invalid JSON from ${url}: ${err.message}`));
         }
       });
-    };
-    check();
+    });
+
+    req.on('timeout', () => req.destroy(new Error(`Timeout after ${timeoutMs}ms`)));
+    req.on('error', reject);
   });
+}
+
+async function waitForBackendHealth({ apiBase, expectedInstanceId, expectedPid, timeoutMs = 15000 }) {
+  const healthUrl = `${apiBase}/health`;
+  const startedAt = Date.now();
+  let lastError = null;
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    if (backendProcess && backendProcess.exitCode !== null) {
+      throw new Error(`Backend process exited before becoming healthy (code=${backendProcess.exitCode}, signal=${backendProcess.signalCode || 'none'})`);
+    }
+
+    try {
+      const health = await requestJson(healthUrl, 1000);
+      const sameService = health?.ok === true && health.service === 'phanmienoffline-backend';
+      const sameInstance = !expectedInstanceId || health.instanceId === expectedInstanceId;
+      const samePid = !expectedPid || Number(health.pid) === Number(expectedPid);
+      if (sameService && sameInstance && samePid) return health;
+      lastError = new Error(`Unexpected backend health response at ${healthUrl}`);
+    } catch (err) {
+      lastError = err;
+    }
+
+    await sleep(250);
+  }
+
+  throw new Error(`Backend did not become healthy at ${healthUrl}: ${lastError?.message || 'timeout'}`);
+}
+
+function getBackendEntryPath() {
+  return path.join(__dirname, '..', 'backend', 'src', 'server.js');
+}
+
+function getBackendCwd() {
+  return app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
+}
+
+function pipeBackendLog(stream, logger) {
+  stream?.on('data', chunk => {
+    const text = String(chunk || '').trimEnd();
+    if (text) logger(`[KHA Backend] ${text}`);
+  });
+}
+
+function stopBackend() {
+  if (!backendProcess) return;
+  const child = backendProcess;
+  backendProcess = null;
+  backendHealth = null;
+  try {
+    if (!child.killed) child.kill();
+  } catch (err) {
+    console.warn('[KHA Electron] Cannot stop backend process:', err.message);
+  }
 }
 
 async function startBackend() {
   const userData = app.getPath('userData');
   const dbPath = path.join(userData, 'phanmienoffline.db.json');
+  const port = await findAvailablePort(DEFAULT_BACKEND_PORT, BACKEND_HOST);
+  const apiBase = `http://${BACKEND_HOST}:${port}/api`;
+  const backendEntry = getBackendEntryPath();
 
-  process.env.PORT = String(BACKEND_PORT);
-  process.env.KHA_DB_PATH = dbPath;
-  process.env.ELECTRON_USER_DATA = userData;
-  delete process.env.KHA_DB_SEED_PATH;
+  const env = {
+    ...process.env,
+    PORT: String(port),
+    KHA_BACKEND_PORT: String(port),
+    KHA_BACKEND_HOST: BACKEND_HOST,
+    KHA_DB_PATH: dbPath,
+    ELECTRON_USER_DATA: userData,
+    KHA_BACKEND_INSTANCE_ID: backendInstanceId,
+    KHA_BACKEND_PARENT_PID: String(process.pid),
+    ELECTRON_RUN_AS_NODE: '1',
+  };
+  delete env.KHA_DB_SEED_PATH;
 
-  const serverModule = require(path.join(__dirname, '..', 'backend', 'src', 'server.js'));
-  backendServer = serverModule && serverModule.server ? serverModule.server : null;
-  await waitForPort(BACKEND_PORT);
+  backendPort = port;
+  backendApiBase = apiBase;
+  backendHealth = null;
+
+  const child = spawn(process.execPath, [backendEntry], {
+    cwd: getBackendCwd(),
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+
+  backendProcess = child;
+  pipeBackendLog(child.stdout, message => console.log(message));
+  pipeBackendLog(child.stderr, message => console.error(message));
+
+  child.once('error', err => {
+    console.error('[KHA Electron] Backend process error:', err);
+  });
+
+  child.once('exit', (code, signal) => {
+    if (backendProcess === child) {
+      backendProcess = null;
+      backendHealth = null;
+    }
+    if (!app.isQuitting) {
+      console.warn(`[KHA Electron] Backend process exited (code=${code}, signal=${signal || 'none'})`);
+    }
+  });
+
+  try {
+    backendHealth = await Promise.race([
+      waitForBackendHealth({ apiBase, expectedInstanceId: backendInstanceId, expectedPid: child.pid }),
+      new Promise((_, reject) => child.once('error', reject)),
+    ]);
+    console.log(`[KHA Electron] Backend ready at ${backendApiBase} (pid=${child.pid})`);
+  } catch (err) {
+    stopBackend();
+    backendPort = null;
+    backendApiBase = '';
+    throw err;
+  }
+}
+
+function getBackendInfo() {
+  return {
+    apiBase: backendApiBase,
+    host: BACKEND_HOST,
+    port: backendPort,
+    pid: backendProcess?.pid || null,
+    instanceId: backendInstanceId,
+    health: backendHealth,
+    running: Boolean(backendProcess && backendApiBase),
+  };
+}
+
+function registerBackendIpc() {
+  if (backendIpcRegistered) return;
+  backendIpcRegistered = true;
+
+  ipcMain.on(BACKEND_API_BASE_CHANNEL, (event) => {
+    event.returnValue = backendApiBase || '';
+  });
+  ipcMain.handle(BACKEND_API_BASE_CHANNEL, () => backendApiBase || '');
+  ipcMain.handle(BACKEND_INFO_CHANNEL, () => ({ ok: Boolean(backendApiBase), backend: getBackendInfo() }));
 }
 
 function sanitizeFocusDetails(details = {}) {
@@ -109,6 +295,7 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  registerBackendIpc();
   registerWindowFocusIpc();
   updateManager = createUpdateManager({ app, getMainWindow: () => mainWindow });
   updateManager.registerIpc(ipcMain);
@@ -130,5 +317,6 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  if (backendServer && typeof backendServer.close === 'function') backendServer.close();
+  app.isQuitting = true;
+  stopBackend();
 });

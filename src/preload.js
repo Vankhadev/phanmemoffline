@@ -2,11 +2,30 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const UPDATE_STATUS_CHANNEL = 'kha:update:status';
 const WINDOW_FOCUS_CHANNEL = 'kha:window:ensure-input-focus';
+const BACKEND_API_BASE_CHANNEL = 'kha:backend:get-api-base';
+const BACKEND_INFO_CHANNEL = 'kha:backend:get-info';
 
-contextBridge.exposeInMainWorld('khaDesktop', {
+function stripTrailingSlash(value) {
+  return String(value || '').replace(/\/+$/, '');
+}
+
+function readRuntimeApiBase() {
+  try {
+    return stripTrailingSlash(ipcRenderer.sendSync(BACKEND_API_BASE_CHANNEL));
+  } catch (err) {
+    console.warn('[KHA Preload] Cannot read backend API base from main process:', err.message);
+    return '';
+  }
+}
+
+const runtimeApiBase = readRuntimeApiBase();
+
+const desktopApi = {
   platform: process.platform,
   isElectron: true,
-  apiBase: 'http://localhost:3001/api',
+  apiBase: runtimeApiBase,
+  getApiBase: () => ipcRenderer.invoke(BACKEND_API_BASE_CHANNEL).then(stripTrailingSlash),
+  getBackendInfo: () => ipcRenderer.invoke(BACKEND_INFO_CHANNEL),
   getAppInfo: () => ipcRenderer.invoke('kha:app:get-info'),
   window: {
     ensureInputFocus: (details = {}) => ipcRenderer.invoke(WINDOW_FOCUS_CHANNEL, details),
@@ -27,4 +46,12 @@ contextBridge.exposeInMainWorld('khaDesktop', {
       return () => ipcRenderer.removeListener(UPDATE_STATUS_CHANNEL, listener);
     },
   },
+};
+
+contextBridge.exposeInMainWorld('khaDesktop', desktopApi);
+contextBridge.exposeInMainWorld('electronAPI', {
+  isElectron: true,
+  apiBase: runtimeApiBase,
+  getApiBase: desktopApi.getApiBase,
+  getBackendInfo: desktopApi.getBackendInfo,
 });

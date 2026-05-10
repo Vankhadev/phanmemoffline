@@ -5,10 +5,11 @@
 const express = require('express');
 const cors    = require('cors');
 const cron    = require('node-cron');
+const path    = require('path');
 const { version: APP_VERSION } = require('../../package.json');
 
 // --- Load DB & helpers ---
-const { loadDB, upsertDailyStats, today } = require('./db/database');
+const { loadDB, upsertDailyStats, today, db, DB_PATH } = require('./db/database');
 const { requireAuth, requireAnyPermission, requirePermission } = require('./middleware/auth');
 loadDB();
 
@@ -35,7 +36,35 @@ const printTemplatesRoutes = require('./routes/printTemplates');
 //  EXPRESS APP
 // ============================================================
 const app  = express();
-const PORT = Number(process.env.PORT || 3001);
+const PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || 3001);
+const HOST = String(process.env.KHA_BACKEND_HOST || process.env.HOST || '127.0.0.1').trim() || '127.0.0.1';
+const SERVER_STARTED_AT = new Date().toISOString();
+const BACKEND_INSTANCE_ID = String(process.env.KHA_BACKEND_INSTANCE_ID || '').slice(0, 100);
+
+function maskDbPath(filePath) {
+  const normalized = String(filePath || '');
+  const fileName = path.basename(normalized);
+  const parentName = path.basename(path.dirname(normalized));
+  return parentName ? path.join('...', parentName, fileName) : fileName;
+}
+
+function buildHealthPayload() {
+  return {
+    ok: true,
+    service: 'phanmienoffline-backend',
+    version: APP_VERSION,
+    pid: process.pid,
+    parentPid: Number(process.env.KHA_BACKEND_PARENT_PID) || null,
+    instanceId: BACKEND_INSTANCE_ID || null,
+    uptimeSec: Math.round(process.uptime()),
+    startedAt: SERVER_STARTED_AT,
+    host: HOST,
+    port: PORT,
+    dbPath: maskDbPath(DB_PATH),
+    dbFile: path.basename(DB_PATH || ''),
+    node: process.version,
+  };
+}
 
 app.use(cors());
 app.use('/api/products/import-excel-rows', express.json({ limit: '25mb' }));
@@ -78,6 +107,10 @@ app.use((err, req, res, next) => {
     receivedColumns: [],
     summary: isImportRequest ? { totalRows: 0, validRows: 0, createdParents: 0, updatedParents: 0, createdVariants: 0, updatedVariants: 0, errors: 1 } : undefined,
   });
+});
+
+app.get('/api/health', (_req, res) => {
+  res.json(buildHealthPayload());
 });
 
 // ----- Mount routes -----
@@ -158,19 +191,19 @@ cron.schedule('0 2 * * *', () => {
 // ============================================================
 //  START
 // ============================================================
-const { db, DB_PATH } = require('./db/database');
+const displayHost = HOST === '0.0.0.0' ? '127.0.0.1' : HOST;
 console.log(`\n========================================`);
-console.log(`[KHA] Backend:  http://localhost:${PORT}`);
+console.log(`[KHA] Backend:  http://${displayHost}:${PORT}`);
 console.log(`[KHA] Database: ${DB_PATH}`);
 console.log(`[KHA] Version:  ${APP_VERSION}`);
 console.log(`========================================\n`);
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`[KHA] Tables:`, Object.keys(db).map(k => `${k}(${Array.isArray(db[k]) ? db[k].length : 0})`).join(', '));
 });
 
 server.on('error', err => {
-  console.error(`[KHA] Không thể khởi động backend trên port ${PORT}:`, err.message);
+  console.error(`[KHA] Không thể khởi động backend trên ${HOST}:${PORT}:`, err.message);
 });
 
-module.exports = { app, server };
+module.exports = { app, server, buildHealthPayload };
