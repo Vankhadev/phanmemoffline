@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { API } from '../App';
-import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, Printer, HelpCircle, RefreshCw, Receipt, Clock3, Wallet } from 'lucide-react';
+import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, Printer, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud } from 'lucide-react';
 import { getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
 import { printInvoice, writePrintWindowMessage } from '../utils/printInvoice';
 import { getProductDisplayName } from '../utils/productSearch';
+import ExcelImportPanel from '../components/ExcelImportPanel';
 
 const STATUS_LABELS = {
   pending: { text: 'Chờ xác nhận', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500', icon: '⏳' },
@@ -103,6 +104,7 @@ export default function OrderList({ store = {} }) {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [expandedParents, setExpandedParents] = useState({});
   const [showHelp, setShowHelp] = useState(false);
+  const [showExcelImport, setShowExcelImport] = useState(false);
 
   // Load products for picker
   useEffect(() => {
@@ -787,6 +789,12 @@ export default function OrderList({ store = {} }) {
                 <HelpCircle size={15} /> Hướng dẫn
               </button>
               <button
+                onClick={() => setShowExcelImport(s => !s)}
+                className={`px-3.5 py-2 rounded-xl border border-white/15 text-sm font-semibold flex items-center gap-2 ${showExcelImport ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-white/10 hover:bg-white/15'}`}
+              >
+                <UploadCloud size={15} /> Import Excel/CSV
+              </button>
+              <button
                 onClick={() => {
                   setLoading(true);
                   fetchInvoices().finally(() => setLoading(false));
@@ -829,6 +837,19 @@ export default function OrderList({ store = {} }) {
           </div>
         </div>
       </div>
+
+      {showExcelImport && (
+        <ExcelImportPanel
+          dataType="invoices"
+          title="Import hóa đơn/đơn hàng từ Excel/CSV"
+          description="Preview/validate đơn hàng và chi tiết sản phẩm trước khi commit; khách hàng và sản phẩm phải tồn tại, một đơn nhiều dòng được gom theo mã đơn."
+          onCommitted={async () => {
+            setLoading(true);
+            await fetchInvoices().finally(() => setLoading(false));
+          }}
+          onClose={() => setShowExcelImport(false)}
+        />
+      )}
 
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="px-4 pt-4">

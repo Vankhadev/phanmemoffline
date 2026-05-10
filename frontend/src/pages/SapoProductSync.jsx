@@ -9,6 +9,7 @@ import {
   Clock3,
   Database,
   Eye,
+  EyeOff,
   FileSpreadsheet,
   History,
   Info,
@@ -24,9 +25,10 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { sapoApi } from '../utils/apiClient';
+import { excelImportApi, sapoApi } from '../utils/apiClient';
 
 const RESOURCE_KEYS = ['products', 'customers', 'invoices'];
+const EXCEL_IMPORT_TYPES = ['products', 'customers', 'invoices'];
 
 const RESOURCE_META = {
   products: {
@@ -94,27 +96,179 @@ const SUMMARY_CARDS = [
   { key: 'skipped', label: 'Bỏ qua', tone: 'border-gray-200 bg-gray-50 text-gray-700', action: 'skipped' },
 ];
 
-const IMPORT_FIELDS = [
-  { key: 'customer_code', label: 'Mã khách hàng' },
-  { key: 'name', label: 'Tên khách hàng', required: true },
-  { key: 'phone', label: 'Số điện thoại' },
-  { key: 'email', label: 'Email' },
-  { key: 'address', label: 'Địa chỉ' },
-  { key: 'note', label: 'Ghi chú' },
-  { key: 'customer_type', label: 'Loại khách' },
-  { key: 'tax_code', label: 'Mã số thuế' },
-];
-
-const IMPORT_ALIASES = {
-  customer_code: ['customer_code', 'ma khach hang', 'ma kh', 'code', 'customer code', 'mã khách hàng', 'mã kh'],
-  name: ['name', 'ten khach hang', 'ho ten', 'khach hang', 'customer name', 'full name', 'tên khách hàng', 'họ tên', 'khách hàng'],
-  phone: ['phone', 'dien thoai', 'sdt', 'so dien thoai', 'mobile', 'tel', 'điện thoại', 'sđt', 'số điện thoại'],
-  email: ['email', 'mail', 'e-mail'],
-  address: ['address', 'dia chi', 'địa chỉ'],
-  note: ['note', 'ghi chu', 'notes', 'ghi chú'],
-  customer_type: ['customer_type', 'loai khach', 'nhom khach', 'group', 'type', 'loại khách', 'nhóm khách'],
-  tax_code: ['tax_code', 'ma so thue', 'mst', 'tax code', 'tax number', 'mã số thuế'],
+const EXCEL_IMPORT_META = {
+  products: { label: 'Sản phẩm và biến thể', shortLabel: 'Sản phẩm', icon: ShoppingBag },
+  customers: { label: 'Khách hàng', shortLabel: 'Khách hàng', icon: Users },
+  invoices: { label: 'Hóa đơn/đơn hàng', shortLabel: 'Hóa đơn', icon: FileSpreadsheet },
 };
+
+const EXCEL_IMPORT_FIELDS = {
+  products: [
+    { key: 'row_type', label: 'Loại dòng' },
+    { key: 'sku', label: 'Mã sản phẩm / SKU', required: true },
+    { key: 'parent_sku', label: 'Parent SKU' },
+    { key: 'name', label: 'Tên sản phẩm / biến thể', required: true },
+    { key: 'barcode', label: 'Mã vạch' },
+    { key: 'category', label: 'Danh mục' },
+    { key: 'import_price', label: 'Giá nhập' },
+    { key: 'retail_price', label: 'Giá lẻ' },
+    { key: 'wholesale_price', label: 'Giá sỉ' },
+    { key: 'vip_price', label: 'Giá VIP' },
+    { key: 'stock', label: 'Tồn kho' },
+    { key: 'unit', label: 'Đơn vị' },
+    { key: 'option1', label: 'Thuộc tính 1' },
+    { key: 'option2', label: 'Thuộc tính 2' },
+    { key: 'option3', label: 'Thuộc tính 3' },
+    { key: 'active', label: 'Trạng thái' },
+  ],
+  customers: [
+    { key: 'customer_code', label: 'Mã khách hàng' },
+    { key: 'name', label: 'Tên khách hàng', required: true },
+    { key: 'phone', label: 'Số điện thoại' },
+    { key: 'email', label: 'Email' },
+    { key: 'address', label: 'Địa chỉ' },
+    { key: 'note', label: 'Ghi chú' },
+    { key: 'customer_type', label: 'Loại khách' },
+    { key: 'tax_code', label: 'Mã số thuế' },
+  ],
+  invoices: [
+    { key: 'invoice_code', label: 'Mã đơn/hóa đơn', required: true },
+    { key: 'customer_code', label: 'Mã khách hàng' },
+    { key: 'customer_name', label: 'Tên khách hàng' },
+    { key: 'customer_phone', label: 'SĐT khách' },
+    { key: 'customer_email', label: 'Email khách' },
+    { key: 'product_sku', label: 'SKU sản phẩm' },
+    { key: 'product_name', label: 'Tên sản phẩm' },
+    { key: 'quantity', label: 'Số lượng', required: true },
+    { key: 'unit_price', label: 'Đơn giá' },
+    { key: 'line_total', label: 'Thành tiền dòng' },
+    { key: 'total', label: 'Tổng tiền đơn' },
+    { key: 'paid_amount', label: 'Đã thanh toán' },
+    { key: 'payment_status', label: 'Trạng thái thanh toán' },
+    { key: 'payment_method', label: 'Phương thức thanh toán' },
+    { key: 'status', label: 'Trạng thái đơn' },
+    { key: 'created_at', label: 'Thời gian tạo' },
+    { key: 'note', label: 'Ghi chú' },
+  ],
+};
+
+const EXCEL_IMPORT_ALIASES = {
+  products: {
+    row_type: ['loai dong', 'row_type', 'type', 'loại dòng', 'loại'],
+    sku: ['sku', 'ma sku', 'ma san pham', 'ma bien the', 'product code', 'variant code', 'mã sku', 'mã sản phẩm', 'mã biến thể'],
+    parent_sku: ['parent sku', 'parent_sku', 'sku cha', 'ma sku cha', 'ma cha', 'sku parent', 'mã sku cha', 'mã cha'],
+    name: ['name', 'ten san pham', 'ten bien the', 'ten hang', 'product name', 'variant name', 'tên sản phẩm', 'tên biến thể', 'tên hàng'],
+    barcode: ['barcode', 'ma vach', 'mã vạch'],
+    category: ['category', 'danh muc', 'danh muc text', 'nhom hang', 'danh mục', 'nhóm hàng'],
+    import_price: ['import_price', 'gia nhap', 'gia von', 'cost', 'cost price', 'giá nhập', 'giá vốn'],
+    retail_price: ['retail_price', 'gia le', 'gia ban', 'don gia', 'price', 'giá lẻ', 'giá bán', 'đơn giá'],
+    wholesale_price: ['wholesale_price', 'gia si', 'gia buon', 'wholesale price', 'giá sỉ', 'giá buôn'],
+    vip_price: ['vip_price', 'gia vip', 'vip price', 'giá vip'],
+    stock: ['stock', 'ton kho', 'so luong ton', 'so luong', 'quantity', 'qty', 'tồn kho', 'số lượng tồn', 'số lượng'],
+    unit: ['unit', 'don vi', 'dvt', 'đơn vị', 'đvt'],
+    option1: ['option1', 'option 1', 'thuoc tinh 1', 'mau', 'color', 'thuộc tính 1', 'màu'],
+    option2: ['option2', 'option 2', 'thuoc tinh 2', 'size', 'kich co', 'thuộc tính 2', 'kích cỡ'],
+    option3: ['option3', 'option 3', 'thuoc tinh 3', 'chat lieu', 'thuộc tính 3', 'chất liệu'],
+    active: ['active', 'hoat dong', 'trang thai', 'status', 'dang ban', 'hoạt động', 'trạng thái', 'đang bán'],
+  },
+  customers: {
+    customer_code: ['customer_code', 'ma khach hang', 'ma kh', 'code', 'customer code', 'mã khách hàng', 'mã kh'],
+    name: ['name', 'ten khach hang', 'ho ten', 'khach hang', 'customer name', 'full name', 'tên khách hàng', 'họ tên', 'khách hàng'],
+    phone: ['phone', 'dien thoai', 'sdt', 'so dien thoai', 'mobile', 'tel', 'điện thoại', 'sđt', 'số điện thoại'],
+    email: ['email', 'mail', 'e-mail'],
+    address: ['address', 'dia chi', 'địa chỉ'],
+    note: ['note', 'ghi chu', 'notes', 'ghi chú'],
+    customer_type: ['customer_type', 'loai khach', 'nhom khach', 'group', 'type', 'loại khách', 'nhóm khách'],
+    tax_code: ['tax_code', 'ma so thue', 'mst', 'tax code', 'tax number', 'mã số thuế'],
+  },
+  invoices: {
+    invoice_code: ['invoice_code', 'order_code', 'ma don hang', 'ma hoa don', 'code', 'order code', 'mã đơn hàng', 'mã hóa đơn'],
+    customer_code: ['customer_code', 'ma khach hang', 'ma kh', 'mã khách hàng', 'mã kh'],
+    customer_name: ['customer_name', 'ten khach hang', 'khach hang', 'customer', 'tên khách hàng', 'khách hàng'],
+    customer_phone: ['customer_phone', 'sdt', 'so dien thoai', 'phone', 'sđt', 'số điện thoại'],
+    customer_email: ['customer_email', 'email khach hang', 'email khách hàng', 'email'],
+    product_sku: ['product_sku', 'sku', 'ma san pham', 'ma hang', 'variant sku', 'mã sản phẩm', 'mã hàng'],
+    product_name: ['product_name', 'ten san pham', 'san pham', 'item name', 'tên sản phẩm', 'sản phẩm'],
+    quantity: ['quantity', 'qty', 'so luong', 'sl', 'số lượng'],
+    unit_price: ['unit_price', 'don gia', 'gia ban', 'price', 'đơn giá', 'giá bán'],
+    line_total: ['line_total', 'thanh tien dong', 'tong dong', 'line total', 'thành tiền dòng', 'tổng dòng'],
+    total: ['total', 'tong tien', 'tong don', 'tổng tiền', 'tổng đơn'],
+    paid_amount: ['paid_amount', 'da thanh toan', 'paid', 'đã thanh toán'],
+    payment_status: ['payment_status', 'trang thai thanh toan', 'payment status', 'trạng thái thanh toán'],
+    payment_method: ['payment_method', 'phuong thuc thanh toan', 'payment method', 'phương thức thanh toán'],
+    status: ['status', 'trang thai don', 'trang thai', 'trạng thái đơn', 'trạng thái'],
+    created_at: ['created_at', 'thoi gian tao', 'ngay tao', 'ngay ban', 'created at', 'thời gian tạo', 'ngày tạo', 'ngày bán'],
+    note: ['note', 'ghi chu', 'ghi chú'],
+  },
+};
+
+const TOKEN_REDACTION = '[đã ẩn token]';
+const MIN_SAPO_TOKEN_LENGTH = 8;
+const DEFAULT_SAPO_API_VERSION = '2024-04';
+const SAPO_ADMIN_PLACEHOLDER = 'https://ten-shop.mysapogo.com/admin/dashboard hoặc https://ten-shop.mysapogo.com';
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function sanitizeSensitiveText(value, sensitiveValues = []) {
+  let output = String(value === undefined || value === null ? '' : value);
+  if (!output) return '';
+
+  for (const sensitiveValue of sensitiveValues) {
+    const secret = String(sensitiveValue || '').trim();
+    if (secret.length >= 4) output = output.replace(new RegExp(escapeRegExp(secret), 'g'), TOKEN_REDACTION);
+  }
+
+  return output
+    .replace(/((?:access|api)[_\s-]*token|token|x-sapo-access-token|authorization)\s*[:=]\s*(?:bearer\s+)?[^\s,;'"<>]+/gi, `$1: ${TOKEN_REDACTION}`)
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, `Bearer ${TOKEN_REDACTION}`);
+}
+
+function safeMessage(value, sensitiveValues = []) {
+  if (value && typeof value === 'object' && value.message) return sanitizeSensitiveText(value.message, sensitiveValues);
+  return sanitizeSensitiveText(value, sensitiveValues);
+}
+
+function normalizeSapoAdminLinkInput(input) {
+  let value = String(input || '').trim();
+  if (!value) return { ok: false, message: 'Vui lòng nhập Link admin Sapo.' };
+  value = value.replace(/\s+/g, '');
+  if (!/^https?:\/\//i.test(value)) value = `https://${value}`;
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch (_) {
+    return { ok: false, message: 'Link admin Sapo không hợp lệ. Vui lòng nhập URL hoặc domain cửa hàng.' };
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    return { ok: false, message: 'Link admin Sapo phải dùng http hoặc https.' };
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1' || !hostname.includes('.')) {
+    return { ok: false, message: 'Link admin Sapo phải là domain cửa hàng hợp lệ.' };
+  }
+
+  return {
+    ok: true,
+    shop: hostname,
+    baseUrl: `${parsed.protocol}//${parsed.host}`.replace(/\/+$/, ''),
+  };
+}
+
+function normalizeBaseUrlForCompare(value) {
+  const normalized = normalizeSapoAdminLinkInput(value);
+  return normalized.ok ? normalized.baseUrl.toLowerCase() : '';
+}
+
+function isSameBaseUrl(left, right) {
+  const leftUrl = normalizeBaseUrlForCompare(left);
+  const rightUrl = normalizeBaseUrlForCompare(right);
+  return Boolean(leftUrl && rightUrl && leftUrl === rightUrl);
+}
 
 function safeArray(value) {
   if (Array.isArray(value)) return value;
@@ -140,13 +294,34 @@ function formatDateTime(value) {
   return date.toLocaleString('vi-VN');
 }
 
-function getErrorMessage(err, fallback = 'Thao tác thất bại.') {
+function getErrorMessage(err, fallback = 'Thao tác thất bại.', sensitiveValues = []) {
+  let rawMessage = '';
   if (Array.isArray(err?.data?.errors) && err.data.errors.length > 0) {
     const first = err.data.errors.find(Boolean);
-    if (typeof first === 'string') return first;
-    if (first?.message) return first.message;
+    if (typeof first === 'string') rawMessage = first;
+    else if (first?.message) rawMessage = first.message;
   }
-  return err?.data?.message || err?.data?.error || err?.message || fallback;
+  rawMessage = rawMessage || err?.data?.message || err?.data?.error || err?.message || fallback;
+
+  const message = sanitizeSensitiveText(rawMessage, sensitiveValues);
+  const rawStatus = err?.data?.upstream_status ?? err?.data?.upstreamStatus ?? err?.status ?? err?.data?.status ?? err?.data?.statusCode;
+  const status = Number(rawStatus || 0);
+  const code = String(err?.data?.code || err?.code || '').toUpperCase();
+  const sapoRelated = code.startsWith('SAPO_') || /sapo/i.test(message);
+
+  if ((rawStatus !== undefined && status === 0) || /failed to fetch|network|offline|không thể kết nối|quá thời gian chờ|timeout/i.test(message) || code.includes('TIMEOUT')) {
+    return 'Không thể kết nối backend/Sapo hoặc kết nối quá thời gian chờ. Vui lòng kiểm tra mạng, backend và thử lại.';
+  }
+  if ((status === 401 && sapoRelated) || code.includes('AUTH') || code.includes('UNAUTHORIZED') || code.includes('401')) {
+    return 'Access token/API token Sapo không hợp lệ hoặc đã hết hạn. Vui lòng kiểm tra token, link admin Sapo và thử lại.';
+  }
+  if ((status === 403 && sapoRelated) || code.includes('FORBIDDEN') || code.includes('PERMISSION') || code.includes('403')) {
+    return 'Access token/API token Sapo thiếu quyền truy cập resource cần đồng bộ. Vui lòng kiểm tra quyền sản phẩm, khách hàng hoặc hóa đơn.';
+  }
+  if (status === 401) return message || 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (status === 403) return message || 'Tài khoản không có quyền thực hiện thao tác này.';
+  if (/permission|forbidden|không có quyền|thiếu quyền/i.test(message)) return message;
+  return message || fallback;
 }
 
 function normalizeText(value) {
@@ -166,7 +341,7 @@ function buildInitialConfig(settings = {}) {
   return {
     storeUrl: settings.base_url || settings.shop || '',
     accessToken: '',
-    apiVersion: settings.api_version || settings.apiVersion || '2024-04',
+    apiVersion: settings.api_version || settings.apiVersion || DEFAULT_SAPO_API_VERSION,
   };
 }
 
@@ -215,7 +390,7 @@ function getBadgeMeta(action) {
 
 function getSummaryValue(summary = {}, key, resource = '') {
   if (!summary || typeof summary !== 'object') return 0;
-  if (key === 'total') return Number(summary.total ?? summary.count ?? 0) || 0;
+  if (key === 'total') return Number(summary.total ?? summary.count ?? summary.totalRows ?? 0) || 0;
   if (key === 'new') {
     return Number(summary.new ?? summary.create ?? summary.created ?? 0)
       + Number(resource === 'products' ? (summary.createdParents ?? 0) + (summary.createdVariants ?? 0) : 0);
@@ -230,8 +405,8 @@ function getSummaryValue(summary = {}, key, resource = '') {
   }
   if (key === 'conflicts') return Number(summary.conflicts ?? summary.conflict ?? 0) || 0;
   if (key === 'blocked') return Number(summary.blocked ?? 0) || 0;
-  if (key === 'errors') return Number(summary.errors ?? summary.error ?? 0) || 0;
-  if (key === 'skipped') return Number(summary.skipped ?? 0) || 0;
+  if (key === 'errors') return Number(summary.errors ?? summary.error ?? summary.errorRows ?? 0) || 0;
+  if (key === 'skipped') return Number(summary.skipped ?? summary.skippedRows ?? summary.duplicateRows ?? 0) || 0;
   return Number(summary[key] ?? 0) || 0;
 }
 
@@ -244,7 +419,10 @@ function computeSummaryFromItems(items = []) {
       summary.new += 1;
     } else if (action === 'conflict') summary.conflicts += 1;
     else if (action === 'error') summary.errors += 1;
-    else if (summary[action] !== undefined) summary[action] += 1;
+    else if (action === 'duplicate') {
+      summary.duplicate += 1;
+      summary.skipped += 1;
+    } else if (summary[action] !== undefined) summary[action] += 1;
   }
   return summary;
 }
@@ -265,6 +443,9 @@ function itemMatchesFilter(item, filter = {}) {
     item?.invoice_code,
     item?.sapo_order_number,
     item?.customer_name,
+    item?.product_name,
+    item?.parent_sku,
+    item?.row_type,
     item?.key,
     item?.message,
     safeArray(item?.warnings).join(' '),
@@ -330,10 +511,12 @@ function filterProductGroups(groups = [], filter = {}) {
     .filter(Boolean);
 }
 
-function autoMapColumns(columns = []) {
+function autoMapColumns(columns = [], dataType = 'customers') {
   const mapping = {};
-  for (const field of IMPORT_FIELDS) {
-    const aliases = IMPORT_ALIASES[field.key] || [];
+  const fields = EXCEL_IMPORT_FIELDS[dataType] || EXCEL_IMPORT_FIELDS.customers;
+  const aliasesByField = EXCEL_IMPORT_ALIASES[dataType] || EXCEL_IMPORT_ALIASES.customers;
+  for (const field of fields) {
+    const aliases = aliasesByField[field.key] || [];
     const normalizedAliases = aliases.map(normalizeColumn);
     const direct = columns.find(column => normalizedAliases.includes(normalizeColumn(column)));
     if (direct) mapping[field.key] = direct;
@@ -440,7 +623,7 @@ function ProgressBox({ data }) {
   );
 }
 
-function ResultMessages({ warnings = [], errors = [] }) {
+function ResultMessages({ warnings = [], errors = [], sensitiveValues = [] }) {
   const normalizedWarnings = safeArray(warnings);
   const normalizedErrors = safeArray(errors);
   if (normalizedWarnings.length === 0 && normalizedErrors.length === 0) return null;
@@ -450,7 +633,7 @@ function ResultMessages({ warnings = [], errors = [] }) {
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-800">
           <div className="font-semibold mb-1">Cảnh báo</div>
           <ul className="list-disc pl-5 space-y-1 max-h-28 overflow-auto">
-            {normalizedWarnings.slice(0, 20).map((warning, index) => <li key={index}>{warning?.message || String(warning)}</li>)}
+            {normalizedWarnings.slice(0, 20).map((warning, index) => <li key={index}>{safeMessage(warning, sensitiveValues)}</li>)}
           </ul>
         </div>
       )}
@@ -458,7 +641,7 @@ function ResultMessages({ warnings = [], errors = [] }) {
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">
           <div className="font-semibold mb-1">Lỗi</div>
           <ul className="list-disc pl-5 space-y-1 max-h-28 overflow-auto">
-            {normalizedErrors.slice(0, 20).map((error, index) => <li key={index}>{error?.message || String(error)}</li>)}
+            {normalizedErrors.slice(0, 20).map((error, index) => <li key={index}>{safeMessage(error, sensitiveValues)}</li>)}
           </ul>
         </div>
       )}
@@ -489,7 +672,7 @@ function FiltersBar({ filter, onChange, placeholder = 'Tìm kiếm/lọc nhanh..
   );
 }
 
-function ActionModal({ modal, onClose, selectedCount, onSyncAll, onSyncSelected, onSyncCurrent, busy }) {
+function ActionModal({ modal, onClose, selectedCount, onSyncAll, onSyncSelected, onSyncCurrent, busy, sensitiveValues = [] }) {
   if (!modal) return null;
   const item = modal.item || null;
   const action = item ? getAction(item) : modal.action;
@@ -534,7 +717,7 @@ function ActionModal({ modal, onClose, selectedCount, onSyncAll, onSyncSelected,
               ].map(([label, value]) => (
                 <div key={label} className="rounded-xl border bg-gray-50 px-3 py-2">
                   <div className="text-xs text-gray-500">{label}</div>
-                  <div className="font-medium break-words">{String(value)}</div>
+                  <div className="font-medium break-words">{sanitizeSensitiveText(value, sensitiveValues)}</div>
                 </div>
               ))}
             </div>
@@ -547,21 +730,21 @@ function ActionModal({ modal, onClose, selectedCount, onSyncAll, onSyncSelected,
           {(safeArray(item?.conflicts).length > 0 || safeArray(item?.customer_conflicts).length > 0) && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">
               <div className="font-semibold">Conflict local</div>
-              <div className="mt-1">{[...safeArray(item?.conflicts), ...safeArray(item?.customer_conflicts)].join(', ')}</div>
+              <div className="mt-1">{sanitizeSensitiveText([...safeArray(item?.conflicts), ...safeArray(item?.customer_conflicts)].join(', '), sensitiveValues)}</div>
             </div>
           )}
 
-          {item?.message && <div className="rounded-xl border bg-gray-50 p-3">{item.message}</div>}
+          {item?.message && <div className="rounded-xl border bg-gray-50 p-3">{sanitizeSensitiveText(item.message, sensitiveValues)}</div>}
           {warnings.length > 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-800">
               <div className="font-semibold">Cảnh báo</div>
-              <ul className="list-disc pl-5 mt-1 space-y-1">{warnings.map((warning, index) => <li key={index}>{warning?.message || String(warning)}</li>)}</ul>
+              <ul className="list-disc pl-5 mt-1 space-y-1">{warnings.map((warning, index) => <li key={index}>{safeMessage(warning, sensitiveValues)}</li>)}</ul>
             </div>
           )}
           {errors.length > 0 && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">
               <div className="font-semibold">Lỗi dòng</div>
-              <ul className="list-disc pl-5 mt-1 space-y-1">{errors.map((error, index) => <li key={index}>{error?.message || String(error)}</li>)}</ul>
+              <ul className="list-disc pl-5 mt-1 space-y-1">{errors.map((error, index) => <li key={index}>{safeMessage(error, sensitiveValues)}</li>)}</ul>
             </div>
           )}
         </div>
@@ -597,6 +780,8 @@ export default function SapoProductSync() {
   const [modal, setModal] = useState(null);
   const [modalBusy, setModalBusy] = useState('');
   const [enabledResources, setEnabledResources] = useState({ products: true, customers: true, invoices: true });
+  const [showToken, setShowToken] = useState(false);
+  const [rememberConfig, setRememberConfig] = useState(false);
   const [excel, setExcel] = useState({
     fileName: '',
     workbook: null,
@@ -605,6 +790,7 @@ export default function SapoProductSync() {
     rows: [],
     columns: [],
     mapping: {},
+    dataType: 'products',
     previewItems: [],
     previewSummary: null,
     previewErrors: [],
@@ -612,6 +798,8 @@ export default function SapoProductSync() {
     commitResult: null,
     mode: 'upsert',
   });
+  const [excelHistory, setExcelHistory] = useState([]);
+  const [excelHistoryDetail, setExcelHistoryDetail] = useState(null);
 
   const configured = Boolean(settings?.configured);
   const activeResourceState = resourceData[activeTab] || EMPTY_RESOURCE_STATE[activeTab];
@@ -628,8 +816,19 @@ export default function SapoProductSync() {
     import: new Set(selected.import),
   }), [selected]);
 
+  const currentSensitiveValues = useMemo(() => uniqueStrings([config.accessToken]).filter(value => value.length >= 4), [config.accessToken]);
+  const normalizedLinkPreview = useMemo(() => normalizeSapoAdminLinkInput(config.storeUrl), [config.storeUrl]);
+  const typedToken = config.accessToken.trim();
+  const canUseSavedToken = Boolean(settings?.id && settings?.has_token && isSameBaseUrl(normalizedLinkPreview.ok ? normalizedLinkPreview.baseUrl : config.storeUrl, settings?.base_url || settings?.shop));
+  const hasUsableToken = Boolean(typedToken || canUseSavedToken);
+  const activeBusyLabels = useMemo(() => Object.entries(busyMap)
+    .filter(([, value]) => value)
+    .map(([key]) => key), [busyMap]);
+
+  const importFields = EXCEL_IMPORT_FIELDS[excel.dataType] || EXCEL_IMPORT_FIELDS.customers;
+  const importMeta = EXCEL_IMPORT_META[excel.dataType] || EXCEL_IMPORT_META.customers;
   const isBusy = key => Boolean(busyMap[key]);
-  const showStatus = (tone, message) => setStatus({ tone, message });
+  const showStatus = (tone, message) => setStatus({ tone, message: sanitizeSensitiveText(message, currentSensitiveValues) });
   const setOption = (key, value) => setOptions(prev => ({ ...prev, [key]: value }));
   const setFilter = (key, filter) => setResourceFilters(prev => ({ ...prev, [key]: filter }));
 
@@ -638,20 +837,61 @@ export default function SapoProductSync() {
     try {
       return await action();
     } catch (err) {
-      showStatus('error', getErrorMessage(err));
+      showStatus('error', getErrorMessage(err, 'Thao tác thất bại.', currentSensitiveValues));
       return null;
     } finally {
       setBusyMap(prev => ({ ...prev, [key]: false }));
     }
   };
 
-  const buildRequestPayload = () => ({
-    storeUrl: config.storeUrl,
-    shop: config.storeUrl,
-    ...(config.accessToken ? { accessToken: config.accessToken } : {}),
-    apiVersion: config.apiVersion,
-    options,
-  });
+  const validateSapoConfig = ({ requireToken = true } = {}) => {
+    const normalized = normalizeSapoAdminLinkInput(config.storeUrl);
+    if (!normalized.ok) return normalized;
+
+    const accessToken = config.accessToken.trim();
+    const usesSavedToken = !accessToken && Boolean(settings?.id && settings?.has_token && isSameBaseUrl(normalized.baseUrl, settings?.base_url || settings?.shop));
+    if (requireToken && !accessToken && !usesSavedToken) {
+      return { ok: false, message: 'Vui lòng nhập Access token/API token Sapo hoặc dùng đúng link đã có token lưu trong settings.' };
+    }
+    if (accessToken && accessToken.length < MIN_SAPO_TOKEN_LENGTH) {
+      return { ok: false, message: 'Access token/API token Sapo quá ngắn bất thường. Vui lòng kiểm tra và dán lại token đầy đủ.' };
+    }
+    if (accessToken && /[•●*]{4,}|đã\s*ẩn|masked|redact/i.test(accessToken)) {
+      return { ok: false, message: 'Token đang nhập có vẻ là chuỗi đã che/mask. Vui lòng dán token thật do bạn tự lấy từ tài khoản Sapo hợp lệ.' };
+    }
+
+    return {
+      ok: true,
+      shop: normalized.shop,
+      baseUrl: normalized.baseUrl,
+      accessToken,
+      usesSavedToken,
+      apiVersion: String(config.apiVersion || DEFAULT_SAPO_API_VERSION).trim() || DEFAULT_SAPO_API_VERSION,
+    };
+  };
+
+  const normalizeConfigInForm = validated => {
+    if (!validated?.ok) return;
+    setConfig(prev => {
+      if (prev.storeUrl === validated.baseUrl && prev.apiVersion === validated.apiVersion) return prev;
+      return { ...prev, storeUrl: validated.baseUrl, apiVersion: validated.apiVersion };
+    });
+  };
+
+  const buildRequestPayload = () => {
+    const validated = validateSapoConfig();
+    if (!validated.ok) throw new Error(validated.message);
+    normalizeConfigInForm(validated);
+    return {
+      storeUrl: validated.baseUrl,
+      shop: validated.shop,
+      baseUrl: validated.baseUrl,
+      base_url: validated.baseUrl,
+      ...(validated.accessToken ? { accessToken: validated.accessToken } : {}),
+      apiVersion: validated.apiVersion,
+      options,
+    };
+  };
 
   const loadSettings = async () => {
     try {
@@ -660,7 +900,7 @@ export default function SapoProductSync() {
       setConfig(buildInitialConfig(data.settings || {}));
       setOptions({ ...DEFAULT_OPTIONS, ...(data.settings?.options || {}) });
     } catch (err) {
-      showStatus('error', getErrorMessage(err, 'Không tải được cấu hình Sapo.'));
+      showStatus('error', getErrorMessage(err, 'Không tải được cấu hình Sapo.', currentSensitiveValues));
     }
   };
 
@@ -674,9 +914,30 @@ export default function SapoProductSync() {
     }
   };
 
+  const loadExcelHistory = async () => {
+    try {
+      const data = await excelImportApi.history({ limit: 30 });
+      const items = Array.isArray(data.runs) ? data.runs : (Array.isArray(data.items) ? data.items : []);
+      setExcelHistory(items);
+    } catch (_) {
+      // Lịch sử import Excel không bắt buộc cho thao tác chính.
+    }
+  };
+
+  const openExcelHistoryDetail = async run => {
+    if (!run?.id) return;
+    try {
+      const data = await excelImportApi.detail(run.id);
+      setExcelHistoryDetail(data.run || data.item || null);
+    } catch (err) {
+      showStatus('error', getErrorMessage(err, 'Không tải được chi tiết lịch sử import Excel.', currentSensitiveValues));
+    }
+  };
+
   useEffect(() => {
     loadSettings();
     loadRuns();
+    loadExcelHistory();
   }, []);
 
   useEffect(() => {
@@ -698,7 +959,7 @@ export default function SapoProductSync() {
         runId: data?.run_id || data?.runId || null,
       },
     }));
-    if (data?.settings) setSettings(data.settings);
+    if (data?.settings?.id) setSettings(data.settings);
     if (resource === 'products') {
       const groups = normalizeProductGroups(items);
       setExpandedProducts(prev => {
@@ -712,18 +973,42 @@ export default function SapoProductSync() {
     }
   };
 
+  const rememberCurrentConfigIfRequested = async payload => {
+    if (!rememberConfig) return { saved: false, message: '' };
+    try {
+      const saved = await sapoApi.saveSettings(payload);
+      setSettings(saved.settings || null);
+      setConfig(buildInitialConfig(saved.settings || {}));
+      return { saved: true, message: ' Cấu hình đã được lưu trên máy này; token không được hiển thị lại ở frontend.' };
+    } catch (err) {
+      return {
+        saved: false,
+        message: ` Thao tác Sapo đã thành công nhưng không lưu được cấu hình: ${getErrorMessage(err, 'Không lưu được cấu hình Sapo.', currentSensitiveValues)}`,
+      };
+    }
+  };
+
+  const getRememberTone = (baseTone, rememberResult) => (rememberResult?.message && !rememberResult.saved ? 'warning' : baseTone);
+
   const handleSaveSettings = () => runAction('save', async () => {
-    const data = await sapoApi.saveSettings(buildRequestPayload());
+    const payload = buildRequestPayload();
+    const data = await sapoApi.saveSettings(payload);
     setSettings(data.settings || null);
     setConfig(buildInitialConfig(data.settings || {}));
-    showStatus('success', data.message || 'Đã lưu cấu hình Sapo.');
+    setRememberConfig(true);
+    showStatus('success', data.message || 'Đã lưu cấu hình Sapo trên máy này. Token không được hiển thị lại ở frontend.');
     return data;
   });
 
   const handleValidate = () => runAction('validate', async () => {
-    const data = await sapoApi.validate(buildRequestPayload());
-    if (data.settings) setSettings(data.settings);
-    showStatus('success', data.message || 'Kết nối Sapo thành công.');
+    const payload = buildRequestPayload();
+    const data = await sapoApi.validate(payload);
+    if (data.settings?.id && isSameBaseUrl(data.settings.base_url || data.settings.shop, payload.baseUrl)) setSettings(data.settings);
+    const rememberResult = await rememberCurrentConfigIfRequested(payload);
+    showStatus(
+      getRememberTone('success', rememberResult),
+      `${data.message || 'Kết nối Sapo thành công.'}${rememberResult.message || ' Token chỉ đang được giữ trong bộ nhớ màn hình hiện tại.'}`
+    );
     return data;
   });
 
@@ -731,7 +1016,7 @@ export default function SapoProductSync() {
 
   const handleAnalyze = () => runAction('analyze', async () => {
     const resources = selectedResourceList();
-    const data = await sapoApi.analyze({
+    const payload = {
       ...buildRequestPayload(),
       resources,
       query: remoteQuery,
@@ -739,10 +1024,12 @@ export default function SapoProductSync() {
       maxPages,
       allPages: true,
       fetchAll: true,
-    });
+    };
+    const data = await sapoApi.analyze(payload);
     resources.forEach(resource => updateResourceFromResponse(resource, data));
     await loadRuns();
-    showStatus(data.partial ? 'warning' : 'success', `Đã phân tích ${resources.map(resource => RESOURCE_META[resource].shortLabel).join(', ')}. Run #${data.run_id || '—'}`);
+    const rememberResult = await rememberCurrentConfigIfRequested(payload);
+    showStatus(getRememberTone(data.partial ? 'warning' : 'success', rememberResult), `Đã phân tích ${resources.map(resource => RESOURCE_META[resource].shortLabel).join(', ')}. Run #${data.run_id || '—'}.${rememberResult.message || ''}`);
     return data;
   });
 
@@ -755,7 +1042,8 @@ export default function SapoProductSync() {
         : sapoApi.previewInvoices;
     const data = await apiCall(payload);
     updateResourceFromResponse(resource, data);
-    showStatus('success', `Đã tải preview ${formatNumber(extractResourceItems(data, resource).length)} ${RESOURCE_META[resource].shortLabel.toLowerCase()} từ Sapo.`);
+    const rememberResult = await rememberCurrentConfigIfRequested(payload);
+    showStatus(getRememberTone('success', rememberResult), `Đã tải preview ${formatNumber(extractResourceItems(data, resource).length)} ${RESOURCE_META[resource].shortLabel.toLowerCase()} từ Sapo.${rememberResult.message || ''}`);
     return data;
   });
 
@@ -821,7 +1109,8 @@ export default function SapoProductSync() {
       const data = await apiCall(payload);
       updateResourceFromResponse(resource, data);
       await loadRuns();
-      showStatus(data.partial ? 'warning' : 'success', `${data.message || 'Đồng bộ hoàn tất.'}${data.run_id ? ` Run #${data.run_id}.` : ''}`);
+      const rememberResult = await rememberCurrentConfigIfRequested(payload);
+      showStatus(getRememberTone(data.partial ? 'warning' : 'success', rememberResult), `${data.message || 'Đồng bộ hoàn tất.'}${data.run_id ? ` Run #${data.run_id}.` : ''}${rememberResult.message || ''}`);
       return data;
     });
     if (modalKey) setModalBusy('');
@@ -830,7 +1119,7 @@ export default function SapoProductSync() {
 
   const handleSyncAllResources = () => runAction('syncAll', async () => {
     const resources = selectedResourceList();
-    const data = await sapoApi.syncAll({
+    const payload = {
       ...buildRequestPayload(),
       resources,
       query: remoteQuery,
@@ -839,10 +1128,12 @@ export default function SapoProductSync() {
       allPages: true,
       fetchAll: true,
       syncAll: true,
-    });
+    };
+    const data = await sapoApi.syncAll(payload);
     resources.forEach(resource => updateResourceFromResponse(resource, data));
     await loadRuns();
-    showStatus(data.partial ? 'warning' : 'success', `${data.message || 'Đồng bộ Sapo hoàn tất.'}${data.run_id ? ` Run #${data.run_id}.` : ''}`);
+    const rememberResult = await rememberCurrentConfigIfRequested(payload);
+    showStatus(getRememberTone(data.partial ? 'warning' : 'success', rememberResult), `${data.message || 'Đồng bộ Sapo hoàn tất.'}${data.run_id ? ` Run #${data.run_id}.` : ''}${rememberResult.message || ''}`);
     return data;
   });
 
@@ -928,7 +1219,7 @@ export default function SapoProductSync() {
         selectedSheet,
         rows: parsed.rows,
         columns: parsed.columns,
-        mapping: autoMapColumns(parsed.columns),
+        mapping: autoMapColumns(parsed.columns, prev.dataType),
         previewItems: [],
         previewSummary: null,
         previewErrors: [],
@@ -950,7 +1241,22 @@ export default function SapoProductSync() {
       selectedSheet: sheetName,
       rows: parsed.rows,
       columns: parsed.columns,
-      mapping: autoMapColumns(parsed.columns),
+      mapping: autoMapColumns(parsed.columns, prev.dataType),
+      previewItems: [],
+      previewSummary: null,
+      previewErrors: [],
+      previewWarnings: [],
+      commitResult: null,
+    }));
+    setSelected(prev => ({ ...prev, import: [] }));
+  };
+
+  const handleChangeImportType = dataType => {
+    const nextType = EXCEL_IMPORT_TYPES.includes(dataType) ? dataType : 'products';
+    setExcel(prev => ({
+      ...prev,
+      dataType: nextType,
+      mapping: autoMapColumns(prev.columns, nextType),
       previewItems: [],
       previewSummary: null,
       previewErrors: [],
@@ -965,7 +1271,7 @@ export default function SapoProductSync() {
       showStatus('error', 'Vui lòng chọn file Excel có dữ liệu trước khi preview.');
       return null;
     }
-    const data = await sapoApi.importCustomersPreview({ rows: excel.rows, mapping: excel.mapping });
+    const data = await excelImportApi.preview({ rows: excel.rows, mapping: excel.mapping, dataType: excel.dataType, mode: excel.mode, fileName: excel.fileName, sheetName: excel.selectedSheet });
     const items = Array.isArray(data.items) ? data.items : safeArray(data.results);
     setExcel(prev => ({
       ...prev,
@@ -979,7 +1285,7 @@ export default function SapoProductSync() {
       .filter(item => !['error', 'duplicate'].includes(getAction(item)))
       .map(item => `import:${item.line}:${item.rowIndex}`);
     setSelected(prev => ({ ...prev, import: selectable }));
-    showStatus(data.ok === false ? 'warning' : 'success', `Preview import Excel hoàn tất: ${formatNumber(items.length)} dòng, ${formatNumber(safeArray(data.errors).length)} lỗi.`);
+    showStatus(data.ok === false ? 'warning' : 'success', `Preview import Excel ${importMeta.shortLabel.toLowerCase()} hoàn tất: ${formatNumber(items.length)} dòng, ${formatNumber(safeArray(data.errors).length)} lỗi.`);
     return data;
   });
 
@@ -1007,7 +1313,7 @@ export default function SapoProductSync() {
       showStatus('error', 'Không tìm thấy dữ liệu Excel tương ứng với các dòng đã chọn.');
       return null;
     }
-    const data = await sapoApi.importCustomersCommit({ rows: selectedRows, mapping: excel.mapping, mode: excel.mode });
+    const data = await excelImportApi.commit({ rows: selectedRows, mapping: excel.mapping, dataType: excel.dataType, mode: excel.mode, fileName: excel.fileName, sheetName: excel.selectedSheet });
     const items = Array.isArray(data.items) ? data.items : safeArray(data.results);
     setExcel(prev => ({
       ...prev,
@@ -1017,8 +1323,8 @@ export default function SapoProductSync() {
       previewErrors: safeArray(data.errors),
       previewWarnings: safeArray(data.warnings),
     }));
-    await loadRuns();
-    showStatus(data.partial ? 'warning' : 'success', `${data.message || 'Import khách hàng hoàn tất.'}${data.run_id ? ` Run #${data.run_id}.` : ''}`);
+    await loadExcelHistory();
+    showStatus(data.partial ? 'warning' : 'success', `${data.message || `Import ${importMeta.shortLabel.toLowerCase()} hoàn tất.`}${data.run_id ? ` Run #${data.run_id}.` : ''}`);
     return data;
   });
 
@@ -1032,26 +1338,67 @@ export default function SapoProductSync() {
           <span className={`text-xs px-3 py-1 rounded-full font-semibold ${configured ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{configured ? 'Đã cấu hình' : 'Chưa cấu hình'}</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <div>
-            <label className="text-xs font-medium text-gray-600">Link cửa hàng Sapo</label>
-            <input className="input-field w-full mt-1" placeholder="https://ten-shop.mysapo.net" value={config.storeUrl} onChange={event => setConfig(prev => ({ ...prev, storeUrl: event.target.value }))} />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-gray-600">API version</label>
-            <input className="input-field w-full mt-1" placeholder="2024-04" value={config.apiVersion} onChange={event => setConfig(prev => ({ ...prev, apiVersion: event.target.value }))} />
-          </div>
-          <div className="md:col-span-2">
-            <label className="text-xs font-medium text-gray-600 flex items-center gap-1"><KeyRound size={13} /> Access token/API token</label>
+            <label className="text-xs font-medium text-gray-600 flex items-center gap-1"><Link2 size={13} /> Link admin Sapo</label>
             <input
               className="input-field w-full mt-1"
-              type="password"
-              placeholder={settings?.has_token ? `Đang lưu token ${settings.token_preview || 'đã che'}. Để trống nếu không đổi.` : 'Nhập token từ Sapo Admin/App riêng của cửa hàng'}
-              value={config.accessToken}
-              onChange={event => setConfig(prev => ({ ...prev, accessToken: event.target.value }))}
+              placeholder={SAPO_ADMIN_PLACEHOLDER}
+              value={config.storeUrl}
+              autoComplete="off"
+              onBlur={() => {
+                const normalized = normalizeSapoAdminLinkInput(config.storeUrl);
+                if (normalized.ok) setConfig(prev => ({ ...prev, storeUrl: normalized.baseUrl }));
+              }}
+              onChange={event => setConfig(prev => ({ ...prev, storeUrl: event.target.value }))}
             />
-            <div className="text-xs text-gray-500 mt-1">Frontend không hiển thị raw token từ settings; nếu backend trả token đã che thì chỉ dùng placeholder.</div>
+            <div className="text-xs text-gray-500 mt-1">
+              Chấp nhận link admin dashboard, admin root hoặc domain shop; hệ thống sẽ chuẩn hóa về base URL trước khi gọi API.
+            </div>
           </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 flex items-center gap-1"><KeyRound size={13} /> Access token/API token</label>
+            <div className="relative mt-1">
+              <input
+                className="input-field w-full pr-24"
+                type={showToken ? 'text' : 'password'}
+                placeholder={canUseSavedToken ? `Đang có token đã lưu ${settings.token_preview || 'đã che'}. Nhập token mới nếu muốn thay đổi.` : 'Dán access token/API token do bạn tự lấy từ Sapo'}
+                value={config.accessToken}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={event => setConfig(prev => ({ ...prev, accessToken: event.target.value }))}
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken(prev => !prev)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-xs border bg-white hover:bg-gray-50 inline-flex items-center gap-1"
+              >
+                {showToken ? <EyeOff size={13} /> : <Eye size={13} />} {showToken ? 'Ẩn' : 'Hiện'}
+              </button>
+            </div>
+            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 space-y-1">
+              <div className="font-semibold flex items-center gap-1"><AlertTriangle size={14} /> Lưu ý bảo mật token</div>
+              <div>Chỉ dùng token của chính tài khoản/cửa hàng bạn quản lý. Bạn có thể tự lấy token từ trang admin bằng DevTools nếu đã đăng nhập hợp lệ rồi dán vào ô này.</div>
+              <div>Phần mềm không tự động đọc cookie/localStorage/sessionStorage, không tự lấy token thay người dùng và không hiển thị raw token trong lỗi, lịch sử hoặc modal.</div>
+            </div>
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm rounded-xl border bg-white px-3 py-2 w-fit">
+            <input type="checkbox" checked={rememberConfig} onChange={event => setRememberConfig(event.target.checked)} />
+            Ghi nhớ cấu hình trên máy này
+          </label>
+          <div className="text-xs text-gray-500">
+            {rememberConfig
+              ? 'Khi kiểm tra kết nối thành công hoặc bấm Lưu cấu hình, token sẽ được lưu qua endpoint settings backend hiện có.'
+              : 'Khi không chọn ghi nhớ, token chỉ dùng cho request hiện tại trong bộ nhớ màn hình này và không lưu vào localStorage/sessionStorage.'}
+          </div>
+          <div className={`rounded-xl border px-3 py-2 text-xs ${hasUsableToken ? 'border-green-200 bg-green-50 text-green-800' : 'border-gray-200 bg-gray-50 text-gray-600'}`}>
+            {hasUsableToken ? (typedToken ? 'Sẵn sàng dùng token bạn vừa nhập cho request hiện tại.' : 'Sẵn sàng dùng token đã lưu trong settings backend cho đúng link này.') : 'Cần nhập link admin Sapo và access token/API token trước khi kiểm tra kết nối hoặc đồng bộ.'}
+          </div>
+          {activeBusyLabels.length > 0 && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 inline-flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" /> Đang xử lý: {activeBusyLabels.join(', ')}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">
@@ -1100,12 +1447,12 @@ export default function SapoProductSync() {
         <h2 className="font-bold flex items-center gap-2"><Settings2 size={18} /> Thông tin cấu hình</h2>
         <div><span className="text-gray-500">Shop:</span> <span className="font-medium break-all">{settings?.shop || '—'}</span></div>
         <div><span className="text-gray-500">Base URL:</span> <span className="font-medium break-all">{settings?.base_url || '—'}</span></div>
-        <div><span className="text-gray-500">Token:</span> <span className="font-medium">{settings?.has_token ? (settings.token_preview || 'Đã lưu') : 'Chưa lưu'}</span></div>
+        <div><span className="text-gray-500">Token:</span> <span className="font-medium">{settings?.id && settings?.has_token ? (settings.token_preview || 'Đã lưu, đã che') : 'Chưa lưu'}</span></div>
         <div><span className="text-gray-500">Kết nối cuối:</span> {formatDateTime(settings?.last_connected_at)}</div>
         <div><span className="text-gray-500">Preview cuối:</span> {formatDateTime(settings?.last_preview_at)}</div>
         <div><span className="text-gray-500">Sync cuối:</span> {formatDateTime(settings?.last_sync_at)}</div>
         <div className="rounded-lg bg-blue-50 border border-blue-100 text-blue-800 p-3 text-xs">
-          Đồng bộ hỗ trợ sản phẩm/biến thể, khách hàng và hóa đơn. Hóa đơn có dependency sản phẩm/khách hàng sẽ báo blocked/conflict nếu chưa thể import an toàn.
+          Đồng bộ hỗ trợ sản phẩm/biến thể, khách hàng và hóa đơn. Token chỉ được lấy từ ô người dùng dán thủ công hoặc settings backend đã lưu theo lựa chọn ghi nhớ.
         </div>
         <div className="space-y-2">
           <div className="text-xs font-semibold text-gray-500 uppercase">Resource cho analyze/sync tổng</div>
@@ -1163,7 +1510,7 @@ export default function SapoProductSync() {
 
         <SummaryGrid resource="products" summary={resourceData.products.summary} onOpen={card => openSummaryModal('products', card)} />
         <ProgressBox data={resourceData.products.progress} />
-        <ResultMessages warnings={resourceData.products.warnings} errors={resourceData.products.errors} />
+        <ResultMessages warnings={resourceData.products.warnings} errors={resourceData.products.errors} sensitiveValues={currentSensitiveValues} />
 
         <div className="border rounded-xl overflow-hidden">
           <div className="grid grid-cols-[42px_34px_1.5fr_0.8fr_0.55fr_0.75fr_0.9fr] bg-gray-100 text-xs font-semibold text-gray-600 px-3 py-2 gap-2">
@@ -1244,7 +1591,7 @@ export default function SapoProductSync() {
 
         <SummaryGrid resource={resource} summary={resourceData[resource].summary} onOpen={card => openSummaryModal(resource, card)} />
         <ProgressBox data={resourceData[resource].progress} />
-        <ResultMessages warnings={resourceData[resource].warnings} errors={resourceData[resource].errors} />
+        <ResultMessages warnings={resourceData[resource].warnings} errors={resourceData[resource].errors} sensitiveValues={currentSensitiveValues} />
 
         <div className="border rounded-xl overflow-x-auto">
           <table className="w-full text-sm min-w-[900px]">
@@ -1298,17 +1645,24 @@ export default function SapoProductSync() {
   const renderImportWizard = () => {
     const allSelected = filteredImportItems.length > 0 && filteredImportItems.every(item => selectedSet.import.has(`import:${item.line}:${item.rowIndex}`));
     const someSelected = filteredImportItems.some(item => selectedSet.import.has(`import:${item.line}:${item.rowIndex}`));
+    const ImportIcon = importMeta.icon || UploadCloud;
     return (
       <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/40 p-4 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-bold flex items-center gap-2"><UploadCloud size={18} className="text-blue-600" /> Import khách hàng từ Excel</h3>
-            <p className="text-xs text-gray-600 mt-1">Frontend parse file bằng xlsx rồi gửi JSON rows cho backend preview/commit; không upload binary.</p>
+            <h3 className="font-bold flex items-center gap-2"><UploadCloud size={18} className="text-blue-600" /> Import dữ liệu từ Excel</h3>
+            <p className="text-xs text-gray-600 mt-1">Chọn loại dữ liệu, đọc file bằng xlsx ở frontend, preview/validate trên backend rồi chỉ commit dòng hợp lệ; không upload binary.</p>
           </div>
           {excel.fileName && <span className="text-xs px-2 py-1 rounded-full bg-white border">{excel.fileName}</span>}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px_180px] gap-3 items-end">
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_220px_180px] gap-3 items-end">
+          <div>
+            <label className="text-xs text-gray-600 block mb-1">Loại dữ liệu import</label>
+            <select className="input-field w-full text-sm bg-white" value={excel.dataType} onChange={event => handleChangeImportType(event.target.value)}>
+              {EXCEL_IMPORT_TYPES.map(type => <option key={type} value={type}>{EXCEL_IMPORT_META[type].label}</option>)}
+            </select>
+          </div>
           <div>
             <label className="text-xs text-gray-600 block mb-1">Chọn file Excel</label>
             <input type="file" accept=".xlsx,.xls,.csv" className="input-field w-full text-sm bg-white" onChange={handleExcelFile} />
@@ -1322,18 +1676,27 @@ export default function SapoProductSync() {
           <div>
             <label className="text-xs text-gray-600 block mb-1">Mode commit</label>
             <select className="input-field w-full text-sm bg-white" value={excel.mode} onChange={event => setExcel(prev => ({ ...prev, mode: event.target.value }))}>
-              <option value="upsert">Upsert</option>
+              <option value="upsert">Upsert an toàn</option>
               <option value="create_only">Chỉ tạo mới</option>
               <option value="update_only">Chỉ cập nhật</option>
             </select>
           </div>
         </div>
 
+        <div className="rounded-xl border bg-white p-3 text-xs text-gray-700 flex flex-wrap gap-3 items-center">
+          <span className="font-semibold inline-flex items-center gap-1"><ImportIcon size={14} /> {importMeta.label}</span>
+          <span>Sản phẩm/biến thể xử lý trùng SKU an toàn; hóa đơn trùng mã mặc định bỏ qua trừ khi chọn chế độ chỉ cập nhật.</span>
+          <span>Đơn hàng import không tự trừ tồn kho để tránh thay đổi dữ liệu cũ ngoài ý muốn.</span>
+        </div>
+
         {excel.columns.length > 0 && (
           <div className="rounded-xl border bg-white p-3">
-            <div className="font-semibold text-sm mb-2">Mapping cột</div>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="font-semibold text-sm">Mapping cột cho {importMeta.shortLabel.toLowerCase()}</div>
+              <button type="button" className="text-xs px-2 py-1 rounded border hover:bg-gray-50" onClick={() => setExcel(prev => ({ ...prev, mapping: autoMapColumns(prev.columns, prev.dataType) }))}>Tự map lại</button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-              {IMPORT_FIELDS.map(field => (
+              {importFields.map(field => (
                 <label key={field.key} className="text-xs text-gray-600">
                   {field.label}{field.required ? <span className="text-red-500"> *</span> : ''}
                   <select className="input-field w-full mt-1 text-sm" value={excel.mapping[field.key] || ''} onChange={event => setExcel(prev => ({ ...prev, mapping: { ...prev.mapping, [field.key]: event.target.value } }))}>
@@ -1349,44 +1712,55 @@ export default function SapoProductSync() {
         <div className="flex flex-wrap items-center gap-2">
           <BusyButton busy={isBusy('importPreview')} onClick={handleImportPreview} className="btn-primary"><Eye size={15} /> Preview import</BusyButton>
           <BusyButton busy={isBusy('importCommit')} disabled={selected.import.length === 0} onClick={commitSelectedImport} className="btn-success"><PackageCheck size={15} /> Commit dòng đã chọn ({selected.import.length})</BusyButton>
+          <BusyButton busy={isBusy('excelHistory')} onClick={() => runAction('excelHistory', loadExcelHistory)} className="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm"><RefreshCw size={15} /> Lịch sử import</BusyButton>
           <div className="text-xs text-gray-600">Đã đọc {formatNumber(excel.rows.length)} dòng, {formatNumber(excel.columns.length)} cột.</div>
         </div>
 
-        {excel.previewSummary && <SummaryGrid resource="customers" summary={excel.previewSummary} onOpen={() => {}} />}
-        <ResultMessages warnings={excel.previewWarnings} errors={excel.previewErrors} />
-        {excel.commitResult?.run_id && <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-green-800 text-sm">Import đã commit với run #{excel.commitResult.run_id}. Created: {excel.commitResult.summary?.created || 0}, Updated: {excel.commitResult.summary?.updated || 0}, Skipped: {excel.commitResult.summary?.skipped || 0}.</div>}
+        {excel.previewSummary && <SummaryGrid resource={excel.dataType} summary={excel.previewSummary} onOpen={() => {}} />}
+        <ResultMessages warnings={excel.previewWarnings} errors={excel.previewErrors} sensitiveValues={currentSensitiveValues} />
+        {excel.commitResult?.run_id && <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-green-800 text-sm">Import đã commit với run #{excel.commitResult.run_id}. Created: {excel.commitResult.summary?.created || 0}, Updated: {excel.commitResult.summary?.updated || 0}, Skipped: {excel.commitResult.summary?.skippedRows ?? excel.commitResult.summary?.skipped ?? 0}, Errors: {excel.commitResult.summary?.errors || 0}.</div>}
 
         {excel.previewItems.length > 0 && (
           <div className="space-y-3">
-            <FiltersBar filter={resourceFilters.import} onChange={filter => setFilter('import', filter)} placeholder="Lọc dòng import, tên, SĐT, email, lỗi..." actions={['all', 'create', 'update', 'duplicate', 'error', 'skipped']} />
+            <FiltersBar filter={resourceFilters.import} onChange={filter => setFilter('import', filter)} placeholder="Lọc dòng import, mã, SKU, khách hàng, sản phẩm, lỗi..." actions={['all', 'create', 'update', 'duplicate', 'error', 'skipped']} />
             <button onClick={toggleAllImport} className="px-3 py-1.5 border rounded-lg hover:bg-gray-50 inline-flex items-center gap-2 text-sm bg-white">
               <IndeterminateCheckbox readOnly checked={allSelected} indeterminate={!allSelected && someSelected} />
               {allSelected ? 'Bỏ chọn dòng đang lọc' : 'Chọn dòng đang lọc'} ({selected.import.length}/{filteredImportItems.length})
             </button>
             <div className="border rounded-xl overflow-x-auto bg-white">
-              <table className="w-full text-sm min-w-[980px]">
+              <table className="w-full text-sm min-w-[1080px]">
                 <thead className="bg-gray-100 text-xs text-gray-600">
                   <tr>
                     <th className="p-2 text-left w-12">Chọn</th>
                     <th className="p-2 text-left">Dòng</th>
-                    <th className="p-2 text-left">Khách hàng</th>
-                    <th className="p-2 text-left">Liên hệ</th>
-                    <th className="p-2 text-left">Mã/MST/Loại</th>
-                    <th className="p-2 text-left">Lỗi/duplicate</th>
+                    <th className="p-2 text-left">Dữ liệu chính</th>
+                    <th className="p-2 text-left">Mã / SKU</th>
+                    <th className="p-2 text-left">Khách / liên hệ</th>
+                    <th className="p-2 text-left">Số lượng / tổng</th>
+                    <th className="p-2 text-left">Lỗi / cảnh báo</th>
                     <th className="p-2 text-left">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredImportItems.map(item => {
                     const id = `import:${item.line}:${item.rowIndex}`;
+                    const primary = item.invoice_code || item.name || item.product_name || item.customer_name || item.key || '—';
+                    const code = item.sku || item.product_sku || item.customer_code || item.parent_sku || item.key || '—';
+                    const contact = item.customer_name || item.phone || item.email || item.customer_phone || item.customer_email || '—';
+                    const amount = item.quantity !== undefined ? `SL ${item.quantity}` : (item.total !== undefined ? formatVND(item.total) : (item.stock !== undefined ? `Tồn ${item.stock}` : '—'));
+                    const issueText = [
+                      ...safeArray(item.errors).map(error => error?.message || String(error)),
+                      ...safeArray(item.warnings).map(warning => warning?.message || String(warning)),
+                    ].join('; ');
                     return (
                       <tr key={id} className="border-t hover:bg-blue-50">
                         <td className="p-2"><input type="checkbox" checked={selectedSet.import.has(id)} onChange={() => toggleFlatRow('import', id)} /></td>
                         <td className="p-2 font-mono text-xs">{item.line}</td>
-                        <td className="p-2"><div className="font-semibold">{item.name || '—'}</div><div className="text-xs text-gray-500">Local #{item.existing_id || '—'} · {item.match_reason || '—'}</div></td>
-                        <td className="p-2 text-xs"><div>{item.phone || '—'}</div><div className="text-gray-500">{item.email || ''}</div></td>
-                        <td className="p-2 text-xs"><div>{item.customer_code || '—'}</div><div>{item.tax_code || ''}</div><div className="text-gray-500">{item.customer_type || ''}</div></td>
-                        <td className="p-2 text-xs text-red-600 max-w-xs">{safeArray(item.errors).map(error => error?.message || String(error)).join('; ') || '—'}</td>
+                        <td className="p-2"><div className="font-semibold">{primary}</div><div className="text-xs text-gray-500">{item.row_type || EXCEL_IMPORT_META[item.data_type || excel.dataType]?.shortLabel || importMeta.shortLabel} · Local #{item.existing_id || item.local_id || '—'}</div></td>
+                        <td className="p-2 text-xs"><div>{code}</div><div className="text-gray-500">Parent: {item.parent_sku || '—'}</div></td>
+                        <td className="p-2 text-xs"><div>{contact}</div><div className="text-gray-500">{item.email || item.customer_email || ''}</div></td>
+                        <td className="p-2 text-xs font-medium">{amount}</td>
+                        <td className="p-2 text-xs text-red-600 max-w-sm">{issueText || '—'}</td>
                         <td className="p-2"><ActionBadge action={getAction(item)} /></td>
                       </tr>
                     );
@@ -1396,6 +1770,40 @@ export default function SapoProductSync() {
             </div>
           </div>
         )}
+
+        <div className="rounded-xl border bg-white p-3 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-semibold flex items-center gap-2"><History size={16} /> Lịch sử import Excel</div>
+            <span className="text-xs text-gray-500">{formatNumber(excelHistory.length)} lần gần nhất</span>
+          </div>
+          {excelHistory.length === 0 && <div className="text-sm text-gray-400">Chưa có lịch sử import Excel.</div>}
+          {excelHistory.map(run => (
+            <button key={run.id} type="button" onClick={() => openExcelHistoryDetail(run)} className="w-full text-left border rounded-xl px-3 py-2 text-sm hover:bg-gray-50 flex items-start justify-between gap-3">
+              <div>
+                <div className="font-semibold">#{run.id} · {EXCEL_IMPORT_META[run.data_type]?.label || run.data_type || 'Excel'} · {run.file_name || '—'}</div>
+                <div className="text-xs text-gray-500 mt-1">{formatDateTime(run.created_at)} · Sheet {run.sheet_name || '—'} · Mode {run.mode || '—'} · Thành công {run.success_rows ?? run.summary?.successRows ?? 0}, lỗi {run.error_rows ?? run.summary?.errorRows ?? 0}</div>
+                <div className="text-xs text-gray-400 mt-1">Người thực hiện: {run.user_name || run.user_id || '—'}</div>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full font-semibold ${run.status === 'success' ? 'bg-green-100 text-green-700' : run.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{run.status || '—'}</span>
+            </button>
+          ))}
+          {excelHistoryDetail && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold">Chi tiết import #{excelHistoryDetail.id}</div>
+                <button type="button" onClick={() => setExcelHistoryDetail(null)} className="text-gray-500 hover:text-gray-800"><X size={14} /></button>
+              </div>
+              <div>Tổng dòng: {excelHistoryDetail.summary?.totalRows ?? excelHistoryDetail.total_rows ?? 0}; thành công: {excelHistoryDetail.summary?.successRows ?? excelHistoryDetail.success_rows ?? 0}; lỗi: {excelHistoryDetail.summary?.errorRows ?? excelHistoryDetail.error_rows ?? 0}; bỏ qua: {excelHistoryDetail.summary?.skippedRows ?? excelHistoryDetail.skipped_rows ?? 0}.</div>
+              <div className="max-h-40 overflow-auto space-y-1">
+                {safeArray(excelHistoryDetail.details).slice(0, 50).map(detail => (
+                  <div key={detail.id || `${detail.line}-${detail.row_index}`} className="border rounded-lg bg-white px-2 py-1">
+                    Dòng {detail.line}: {detail.action || detail.status || '—'} · {detail.data_key || '—'} · {safeArray(detail.errors).map(error => error?.message || String(error)).join('; ') || 'OK'}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -1422,8 +1830,9 @@ export default function SapoProductSync() {
 
   const renderActiveTab = () => {
     if (activeTab === 'products') return renderProductTable();
-    if (activeTab === 'customers') return <>{renderFlatResourceTable('customers')}{renderImportWizard()}</>;
+    if (activeTab === 'customers') return renderFlatResourceTable('customers');
     if (activeTab === 'invoices') return renderFlatResourceTable('invoices');
+    if (activeTab === 'excel-import') return renderImportWizard();
     if (activeTab === 'history') return renderHistory();
     return null;
   };
@@ -1436,10 +1845,10 @@ export default function SapoProductSync() {
             <Database className="text-blue-600" size={26} /> Đồng bộ dữ liệu Sapo
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Màn hình đồng bộ đa resource cho sản phẩm/biến thể, khách hàng, hóa đơn và import khách hàng Excel vào dữ liệu offline.
+            Màn hình đồng bộ đa resource cho sản phẩm/biến thể, khách hàng, hóa đơn và import Excel đa loại vào dữ liệu offline.
           </p>
         </div>
-        <button onClick={() => { loadSettings(); loadRuns(); }} className="px-3 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 flex items-center gap-1.5">
+        <button onClick={() => { loadSettings(); loadRuns(); loadExcelHistory(); }} className="px-3 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 flex items-center gap-1.5">
           <RefreshCw size={15} /> Làm mới
         </button>
       </div>
@@ -1450,8 +1859,12 @@ export default function SapoProductSync() {
 
       <div className="card space-y-4">
         <div className="flex flex-wrap gap-2 border-b pb-3">
-          {[...RESOURCE_KEYS, 'history'].map(tab => {
-            const meta = tab === 'history' ? { label: 'Lịch sử', icon: History } : RESOURCE_META[tab];
+          {[...RESOURCE_KEYS, 'excel-import', 'history'].map(tab => {
+            const meta = tab === 'history'
+              ? { label: 'Lịch sử', icon: History }
+              : tab === 'excel-import'
+                ? { label: 'Import Excel', icon: UploadCloud }
+                : RESOURCE_META[tab];
             const Icon = meta.icon;
             return (
               <button
@@ -1464,7 +1877,7 @@ export default function SapoProductSync() {
             );
           })}
         </div>
-        {activeTab !== 'history' && (
+        {!['history', 'excel-import'].includes(activeTab) && (
           <div className="rounded-xl border bg-slate-50 p-3 text-xs text-slate-700 flex flex-wrap items-center gap-3">
             <span className="font-semibold">Tab hiện tại:</span>
             <span>{RESOURCE_META[activeTab]?.label}</span>
@@ -1479,6 +1892,7 @@ export default function SapoProductSync() {
         modal={modal}
         selectedCount={selectedCountForModal}
         busy={modalBusy}
+        sensitiveValues={currentSensitiveValues}
         onClose={() => { setModal(null); setModalBusy(''); }}
         onSyncAll={() => modal?.resource && handleSyncResource(modal.resource, 'all', null, 'all')}
         onSyncSelected={() => modal?.resource && handleSyncResource(modal.resource, 'selected', null, 'selected')}

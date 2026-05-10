@@ -294,13 +294,18 @@ function publicSettings(row = getSettingsRow()) {
 }
 
 function normalizeSettingsPayload(body = {}, existing = null) {
-  const shopInput = body.shop || body.storeUrl || body.store_url || body.baseUrl || body.base_url || existing?.base_url || '';
+  const shopInput = body.storeUrl || body.store_url || body.baseUrl || body.base_url || body.shop || existing?.base_url || '';
   const normalizedShop = normalizeShopInput(shopInput);
   if (!normalizedShop.ok) throw createAppError(normalizedShop.message, 400, 'SAPO_INVALID_SHOP');
 
   const clearToken = normalizeBoolean(body.clearToken || body.clear_token, false);
   const incomingToken = toSafeString(body.accessToken || body.access_token || body.token, 2000);
-  const accessToken = clearToken ? '' : (incomingToken || existing?.access_token || '');
+  const canReuseExistingToken = Boolean(
+    existing?.access_token
+    && existing?.base_url
+    && stripTrailingSlash(existing.base_url).toLowerCase() === stripTrailingSlash(normalizedShop.baseUrl).toLowerCase()
+  );
+  const accessToken = clearToken ? '' : (incomingToken || (canReuseExistingToken ? existing.access_token : ''));
   if (!accessToken) {
     throw createAppError('Vui lòng nhập access token/API token Sapo. Token không được hard-code trong ứng dụng.', 400, 'SAPO_MISSING_TOKEN');
   }
@@ -362,7 +367,7 @@ function resolveEffectiveSettings(body = {}) {
 function getSapoHeaders(settings) {
   return {
     Accept: 'application/json',
-    'User-Agent': 'phanmienoffline-sapo-sync/1.1.8',
+    'User-Agent': 'phanmienoffline-sapo-sync/1.1.9',
     'X-Sapo-Access-Token': settings.access_token,
   };
 }
@@ -393,11 +398,20 @@ function extractRowsFromSapoResponse(data, resourceName) {
 function normalizeSapoUpstreamError(err, resourceName) {
   const resource = normalizeResourceName(resourceName);
   const config = SAPO_RESOURCES[resource] || SAPO_RESOURCES.products;
-  const statusCode = err?.statusCode >= 400 && err?.statusCode < 500 ? err.statusCode : 502;
-  const code = err?.code === 'SAPO_TIMEOUT' ? 'SAPO_TIMEOUT' : (err?.code || 'SAPO_UPSTREAM_ERROR');
+  const upstreamStatusCode = Number(err?.statusCode || err?.status || 0) || null;
+  const statusCode = upstreamStatusCode === 401 || upstreamStatusCode === 403
+    ? 400
+    : (upstreamStatusCode >= 400 && upstreamStatusCode < 500 ? upstreamStatusCode : 502);
+  const upstreamCode = err?.code === 'SAPO_TIMEOUT' ? 'SAPO_TIMEOUT' : (err?.code || 'SAPO_UPSTREAM_ERROR');
+  const code = upstreamStatusCode === 401
+    ? 'SAPO_UPSTREAM_UNAUTHORIZED'
+    : upstreamStatusCode === 403
+      ? 'SAPO_UPSTREAM_FORBIDDEN'
+      : upstreamCode;
   const message = err?.message || 'Không kết nối được Sapo.';
   const wrapped = createAppError(`Không thể tải ${config.label} từ Sapo: ${message}`, statusCode, code);
   wrapped.upstream = true;
+  wrapped.upstreamStatus = upstreamStatusCode;
   wrapped.resource = resource;
   wrapped.data = err?.data;
   return wrapped;

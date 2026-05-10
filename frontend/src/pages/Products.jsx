@@ -3,6 +3,7 @@ import { API } from '../App';
 import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown, Printer } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ProductLabelPrintModal from '../components/ProductLabelPrintModal';
+import ExcelImportPanel from '../components/ExcelImportPanel';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
 import { ensureFocusableElement } from '../utils/electronFocusGuard';
 
@@ -418,6 +419,7 @@ export default function Products({ store }) {
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const excelInputRef = useRef(null);
+  const [showExcelImport, setShowExcelImport] = useState(false);
   const productsFetchAbortRef = useRef(null);
   const productsFetchRequestIdRef = useRef(0);
   const [combos, setCombos] = useState([]);
@@ -1522,9 +1524,9 @@ export default function Products({ store }) {
               }`}>
             <Layers size={16} /> Combo ({combos.length})
           </button>
-          <button onClick={() => excelInputRef.current.click()}
-            className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 border border-green-300 bg-white text-green-700 hover:bg-green-50 transition">
-            <Upload size={16} /> Nhập Excel
+          <button onClick={() => setShowExcelImport(s => !s)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 border transition ${showExcelImport ? 'bg-green-600 text-white border-green-600' : 'border-green-300 bg-white text-green-700 hover:bg-green-50'}`}>
+            <Upload size={16} /> Import Excel/CSV
           </button>
           <input ref={excelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportExcel} />
           <button onClick={handleExportExcel}
@@ -1542,6 +1544,20 @@ export default function Products({ store }) {
           </button>
         </div>
       </div>
+
+      {showExcelImport && (
+        <div className="mb-6">
+          <ExcelImportPanel
+            dataType="products"
+            title="Import sản phẩm và biến thể từ Excel/CSV"
+            description="Preview/validate sản phẩm cha và biến thể bằng backend trước khi commit; hỗ trợ mapping cột, dòng lỗi/cảnh báo và refresh danh sách sau import."
+            onCommitted={async () => {
+              await Promise.all([fetchProducts(), fetchCategories(), fetchSuppliers()]);
+            }}
+            onClose={() => setShowExcelImport(false)}
+          />
+        </div>
+      )}
 
       {/* ===== CATEGORY SECTION ===== */}
       {showCategorySection && (

@@ -305,6 +305,56 @@ export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu AP
   return data;
 }
 
+export const excelImportApi = {
+  preview(payload = {}) {
+    return apiJson('/excel-imports/preview', {
+      method: 'POST',
+      body: payload,
+      allowOkFalse: true,
+    }, 'Không thể preview import Excel.');
+  },
+
+  commit(payload = {}) {
+    return apiJson('/excel-imports/commit', {
+      method: 'POST',
+      body: payload,
+      allowOkFalse: true,
+    }, 'Không thể commit import Excel.');
+  },
+
+  previewResource(dataType, payload = {}) {
+    return this.preview({ ...payload, dataType });
+  },
+
+  commitResource(dataType, payload = {}) {
+    return this.commit({ ...payload, dataType });
+  },
+
+  previewProducts(payload = {}) {
+    return this.previewResource('products', payload);
+  },
+
+  commitProducts(payload = {}) {
+    return this.commitResource('products', payload);
+  },
+
+  previewInvoices(payload = {}) {
+    return this.previewResource('invoices', payload);
+  },
+
+  commitInvoices(payload = {}) {
+    return this.commitResource('invoices', payload);
+  },
+
+  history({ limit = 50 } = {}) {
+    return apiJson(`/excel-imports/history?limit=${encodeURIComponent(limit)}`, {}, 'Không thể tải lịch sử import Excel.');
+  },
+
+  detail(id) {
+    return apiJson(`/excel-imports/history/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết import Excel.');
+  },
+};
+
 export const sapoApi = {
   getSettings() {
     return apiJson('/sapo/settings', {}, 'Không thể tải cấu hình Sapo.');
@@ -314,6 +364,7 @@ export const sapoApi = {
     return apiJson('/sapo/settings', {
       method: 'PUT',
       body: payload,
+      handleUnauthorized: false,
     }, 'Không thể lưu cấu hình Sapo.');
   },
 
@@ -321,6 +372,7 @@ export const sapoApi = {
     return apiJson('/sapo/validate', {
       method: 'POST',
       body: payload,
+      handleUnauthorized: false,
     }, 'Không thể kiểm tra kết nối Sapo.');
   },
 
@@ -328,6 +380,7 @@ export const sapoApi = {
     return apiJson('/sapo/analyze', {
       method: 'POST',
       body: payload,
+      handleUnauthorized: false,
       allowOkFalse: true,
     }, 'Không thể phân tích dữ liệu Sapo.');
   },
@@ -340,6 +393,7 @@ export const sapoApi = {
     return apiJson('/sapo/preview/products', {
       method: 'POST',
       body: payload,
+      handleUnauthorized: false,
     }, 'Không thể xem trước sản phẩm Sapo.');
   },
 
@@ -347,6 +401,7 @@ export const sapoApi = {
     return apiJson('/sapo/sync/products', {
       method: 'POST',
       body: payload,
+      handleUnauthorized: false,
     }, 'Không thể đồng bộ sản phẩm Sapo.');
   },
 
@@ -354,6 +409,7 @@ export const sapoApi = {
     return apiJson('/sapo/preview/customers', {
       method: 'POST',
       body: payload,
+      handleUnauthorized: false,
     }, 'Không thể xem trước khách hàng Sapo.');
   },
 
@@ -361,6 +417,7 @@ export const sapoApi = {
     return apiJson('/sapo/sync/customers', {
       method: 'POST',
       body: payload,
+      handleUnauthorized: false,
     }, 'Không thể đồng bộ khách hàng Sapo.');
   },
 
@@ -368,6 +425,7 @@ export const sapoApi = {
     return apiJson('/sapo/preview/invoices', {
       method: 'POST',
       body: payload,
+      handleUnauthorized: false,
     }, 'Không thể xem trước hóa đơn Sapo.');
   },
 
@@ -375,6 +433,7 @@ export const sapoApi = {
     return apiJson('/sapo/sync/invoices', {
       method: 'POST',
       body: payload,
+      handleUnauthorized: false,
     }, 'Không thể đồng bộ hóa đơn Sapo.');
   },
 
@@ -382,6 +441,7 @@ export const sapoApi = {
     return apiJson('/sapo/sync', {
       method: 'POST',
       body: payload,
+      handleUnauthorized: false,
     }, 'Không thể đồng bộ dữ liệu Sapo.');
   },
 
@@ -414,6 +474,66 @@ export const sapoApi = {
 
   placeholders() {
     return apiJson('/sapo/placeholders', {}, 'Không thể tải thông tin placeholder đồng bộ Sapo.');
+  },
+};
+
+export const customersApi = {
+  list() {
+    return apiJson('/customers', {}, 'Không thể tải danh sách khách hàng.');
+  },
+
+  create(payload = {}) {
+    return apiJson('/customers', {
+      method: 'POST',
+      body: payload,
+    }, 'Không thể thêm khách hàng.');
+  },
+
+  update(id, payload = {}) {
+    return apiJson(`/customers/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: payload,
+    }, 'Không thể cập nhật khách hàng.');
+  },
+
+  remove(id) {
+    return apiJson(`/customers/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }, 'Không thể xóa khách hàng.');
+  },
+
+  bulkRemove(ids = []) {
+    return apiJson('/customers/bulk', {
+      method: 'DELETE',
+      body: { ids },
+      allowOkFalse: true,
+    }, 'Không thể xóa hàng loạt khách hàng.');
+  },
+};
+
+export const customerTypesApi = {
+  list() {
+    return apiJson('/customer-types', {}, 'Không thể tải loại khách hàng.');
+  },
+
+  create(payload = {}) {
+    return apiJson('/customer-types', {
+      method: 'POST',
+      body: payload,
+    }, 'Không thể thêm loại khách hàng.');
+  },
+
+  update(id, payload = {}) {
+    return apiJson(`/customer-types/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: payload,
+    }, 'Không thể cập nhật loại khách hàng.');
+  },
+
+  remove(id) {
+    return apiJson(`/customer-types/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }, 'Không thể xóa loại khách hàng.');
   },
 };
 

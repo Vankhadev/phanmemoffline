@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API } from '../App';
 import { Users, FileDown, Plus, X, Edit2, Trash2, Loader, Tag, HelpCircle, UploadCloud } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
+import { customerTypesApi, customersApi, getApiErrorMessage } from '../utils/apiClient';
 
 export default function Customers() {
   const navigate = useNavigate();
@@ -18,6 +20,8 @@ export default function Customers() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
   const [showHelp, setShowHelp] = useState(false);
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const customerNameInputRef = useRef(null);
   const typeNameInputRef = useRef(null);
 
@@ -49,8 +53,15 @@ export default function Customers() {
     return () => window.clearTimeout(timer);
   }, [showTypeForm]);
 
-  const fetchCustomers = () => fetch(`${API}/customers`).then(r => r.json()).then(setCustomers).catch(() => {});
-  const fetchCustomerTypes = () => fetch(`${API}/customer-types`).then(r => r.json()).then(setCustomerTypes).catch(() => {});
+  const getErrorMessage = (err, fallback = 'Thao tác thất bại.') => getApiErrorMessage(err?.data || err, err?.message || fallback);
+
+  const fetchCustomers = () => customersApi.list().then(data => setCustomers(Array.isArray(data) ? data : [])).catch(err => {
+    console.error('Không thể tải danh sách khách hàng:', err);
+    alert(getErrorMessage(err, 'Không thể tải danh sách khách hàng.'));
+  });
+  const fetchCustomerTypes = () => customerTypesApi.list().then(data => setCustomerTypes(Array.isArray(data) ? data : [])).catch(err => {
+    console.error('Không thể tải loại khách hàng:', err);
+  });
 
   const getTypeLabel = (typeId) => {
     if (!typeId) return 'Khách lẻ';
@@ -80,18 +91,32 @@ export default function Customers() {
 
   const handleSubmit = async () => {
     if (!form.name) return;
-    const method = editing ? 'PUT' : 'POST';
-    const url = editing ? `${API}/customers/${editing.id}` : `${API}/customers`;
-    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-    const data = await res.json();
-    if (data.ok) { setShowForm(false); fetchCustomers(); }
+    try {
+      const data = editing
+        ? await customersApi.update(editing.id, form)
+        : await customersApi.create(form);
+      if (data.ok) {
+        setShowForm(false);
+        await fetchCustomers();
+        alert(editing ? '✅ Đã cập nhật khách hàng!' : '✅ Đã thêm khách hàng!');
+      }
+    } catch (err) {
+      alert(getErrorMessage(err, editing ? 'Không thể cập nhật khách hàng.' : 'Không thể thêm khách hàng.'));
+    }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Xóa khách hàng này?')) return;
-    const res = await fetch(`${API}/customers/${id}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (data.ok) fetchCustomers();
+    if (!confirm('Xóa khách hàng này? Dữ liệu đơn hàng liên quan sẽ được giữ nguyên.')) return;
+    try {
+      const data = await customersApi.remove(id);
+      if (data.ok) {
+        setSelectedCustomerIds(prev => prev.filter(selectedId => Number(selectedId) !== Number(id)));
+        await fetchCustomers();
+        alert(data.message || '✅ Đã xóa khách hàng!');
+      }
+    } catch (err) {
+      alert(getErrorMessage(err, 'Không thể xóa khách hàng.'));
+    }
   };
 
   // Customer types CRUD
@@ -99,23 +124,150 @@ export default function Customers() {
   const openTypeEdit = (t) => { setEditingType(t); setTypeForm({ name: t.name, color: t.color || '#3b82f6' }); setShowTypeForm(true); };
   const handleTypeSubmit = async () => {
     if (!typeForm.name) return;
-    const method = editingType ? 'PUT' : 'POST';
-    const url = editingType ? `${API}/customer-types/${editingType.id}` : `${API}/customer-types`;
-    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(typeForm) });
-    const data = await res.json();
-    if (data.ok) { setShowTypeForm(false); fetchCustomerTypes(); }
+    try {
+      const data = editingType
+        ? await customerTypesApi.update(editingType.id, typeForm)
+        : await customerTypesApi.create(typeForm);
+      if (data.ok) { setShowTypeForm(false); fetchCustomerTypes(); }
+    } catch (err) {
+      alert(getErrorMessage(err, editingType ? 'Không thể cập nhật loại khách hàng.' : 'Không thể thêm loại khách hàng.'));
+    }
   };
   const handleTypeDelete = async (id) => {
     if (!confirm('Xóa loại khách này?')) return;
-    await fetch(`${API}/customer-types/${id}`, { method: 'DELETE' });
-    fetchCustomerTypes();
+    try {
+      await customerTypesApi.remove(id);
+      fetchCustomerTypes();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Không thể xóa loại khách hàng.'));
+    }
   };
 
   const COLOR_PRESETS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-  const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone || '').includes(search)
-  );
+  const filtered = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return customers;
+    return customers.filter(c =>
+      (c.name || '').toLowerCase().includes(keyword) ||
+      (c.phone || '').includes(keyword) ||
+      (c.email || '').toLowerCase().includes(keyword) ||
+      (c.customer_code || '').toLowerCase().includes(keyword) ||
+      (c.tax_code || '').toLowerCase().includes(keyword)
+    );
+  }, [customers, search]);
+
+  const visibleCustomerIds = useMemo(() => filtered.map(c => c.id).filter(id => id !== undefined && id !== null), [filtered]);
+  const selectedIdSet = useMemo(() => new Set(selectedCustomerIds.map(id => String(id))), [selectedCustomerIds]);
+  const selectedVisibleCount = visibleCustomerIds.filter(id => selectedIdSet.has(String(id))).length;
+  const allVisibleSelected = visibleCustomerIds.length > 0 && selectedVisibleCount === visibleCustomerIds.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
+
+  useEffect(() => {
+    const validIds = new Set(customers.map(c => String(c.id)));
+    setSelectedCustomerIds(prev => prev.filter(id => validIds.has(String(id))));
+  }, [customers]);
+
+  const toggleSelectCustomer = (id) => {
+    if (id === undefined || id === null) return;
+    setSelectedCustomerIds(prev => {
+      const idText = String(id);
+      return prev.some(selectedId => String(selectedId) === idText)
+        ? prev.filter(selectedId => String(selectedId) !== idText)
+        : [...prev, id];
+    });
+  };
+
+  const toggleSelectAllVisible = () => {
+    const visibleIdTexts = new Set(visibleCustomerIds.map(id => String(id)));
+    setSelectedCustomerIds(prev => {
+      const withoutVisible = prev.filter(id => !visibleIdTexts.has(String(id)));
+      return allVisibleSelected ? withoutVisible : [...withoutVisible, ...visibleCustomerIds];
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedCustomerIds.length === 0 || isBulkDeleting) return;
+    const selectedNames = customers
+      .filter(c => selectedIdSet.has(String(c.id)))
+      .slice(0, 5)
+      .map(c => `• ${c.name || `#${c.id}`}`)
+      .join('\n');
+    const moreText = selectedCustomerIds.length > 5 ? `\n... và ${selectedCustomerIds.length - 5} khách hàng khác` : '';
+    if (!confirm(`Xóa ${selectedCustomerIds.length} khách hàng đã chọn?\n\n${selectedNames}${moreText}\n\nDữ liệu đơn hàng liên quan sẽ được giữ nguyên.`)) return;
+
+    setIsBulkDeleting(true);
+    try {
+      const data = await customersApi.bulkRemove(selectedCustomerIds);
+      const deletedCount = Number(data.deleted_count || 0);
+      const skippedCount = Number(data.invalid_count || 0) + Number(data.duplicate_count || 0) + Number(data.not_found_count || 0) + Number(data.already_deleted_count || 0);
+      setSelectedCustomerIds([]);
+      await fetchCustomers();
+      alert(`✅ Đã xóa ${deletedCount} khách hàng.${skippedCount > 0 ? `\nĐã bỏ qua ${skippedCount} mục không cần xóa/không hợp lệ.` : ''}`);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Không thể xóa hàng loạt khách hàng.'));
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const formatExcelDateTime = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString('vi-VN');
+  };
+
+  const getExportTimestamp = () => {
+    const now = new Date();
+    const pad = value => String(value).padStart(2, '0');
+    return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+  };
+
+  const exportCustomersList = () => {
+    if (filtered.length === 0) {
+      alert('Không có khách hàng để xuất Excel.');
+      return;
+    }
+
+    const rows = filtered.map((customer, index) => ({
+      'STT': index + 1,
+      'Mã khách hàng': customer.customer_code || customer.sapo_customer_id || customer.id || '',
+      'Tên khách hàng': customer.name || '',
+      'Số điện thoại': customer.phone || '',
+      'Email': customer.email || '',
+      'Mã số thuế': customer.tax_code || '',
+      'Địa chỉ': customer.address || '',
+      'Nhóm/Loại': getTypeLabel(customer.customer_type),
+      'Ghi chú': customer.note || '',
+      'Ngày tạo': formatExcelDateTime(customer.created_at),
+      'Ngày cập nhật': formatExcelDateTime(customer.updated_at || customer.sapo_updated_at || customer.sapo_last_synced_at),
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 6 },
+      { wch: 18 },
+      { wch: 28 },
+      { wch: 16 },
+      { wch: 28 },
+      { wch: 16 },
+      { wch: 36 },
+      { wch: 16 },
+      { wch: 34 },
+      { wch: 22 },
+      { wch: 22 },
+    ];
+    ws['!autofilter'] = {
+      ref: XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: Math.max(rows.length, 1), c: 10 },
+      }),
+    };
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Khách hàng');
+    XLSX.writeFile(wb, `danh_sach_khach_hang_${getExportTimestamp()}.xlsx`);
+  };
 
   // ===== Xuất Excel báo cáo khách hàng =====
   const exportCustomersReport = async () => {
@@ -206,11 +358,43 @@ export default function Customers() {
         </div>
       </div>
 
-      <input className="input-field mb-4" placeholder="🔍 Tìm khách hàng..." value={search} onChange={e => setSearch(e.target.value)} />
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <input className="input-field md:flex-1" placeholder="🔍 Tìm khách hàng theo tên, SĐT, email, mã KH, MST..." value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={exportCustomersList} disabled={filtered.length === 0} className="px-4 py-2 border border-orange-300 text-orange-600 hover:bg-orange-50 rounded-lg text-sm font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+            <FileDown size={16} /> Xuất Excel
+          </button>
+          {selectedCustomerIds.length > 0 && (
+            <button onClick={handleBulkDelete} disabled={isBulkDeleting} className="px-4 py-2 border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+              {isBulkDeleting ? <Loader size={16} className="animate-spin" /> : <Trash2 size={16} />}
+              Xóa đã chọn ({selectedCustomerIds.length})
+            </button>
+          )}
+        </div>
+      </div>
+
+      {selectedCustomerIds.length > 0 && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <span>Đã chọn <strong>{selectedCustomerIds.length}</strong> khách hàng. Checkbox chọn tất cả áp dụng cho <strong>{filtered.length}</strong> khách hàng đang hiển thị.</span>
+          <button type="button" onClick={() => setSelectedCustomerIds([])} className="text-xs font-medium text-amber-700 underline hover:text-amber-900 self-start sm:self-auto">Bỏ chọn tất cả</button>
+        </div>
+      )}
+
       <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[980px] text-sm">
           <thead>
             <tr className="bg-gray-100 text-gray-600">
+              <th className="p-2 text-center w-10">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                  checked={allVisibleSelected}
+                  ref={el => { if (el) el.indeterminate = someVisibleSelected; }}
+                  onChange={toggleSelectAllVisible}
+                  disabled={visibleCustomerIds.length === 0 || isBulkDeleting}
+                  title={allVisibleSelected ? 'Bỏ chọn tất cả khách hàng đang hiển thị' : 'Chọn tất cả khách hàng đang hiển thị'}
+                />
+              </th>
               <th className="p-2 text-left">Tên khách hàng</th>
               <th className="p-2 text-left">SĐT</th>
               <th className="p-2 text-left">Email</th>
@@ -220,27 +404,43 @@ export default function Customers() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(c => (
-              <tr key={c.id} className="border-b hover:bg-gray-50">
-                <td className="p-2 font-medium">{c.name}</td>
-                <td className="p-2">{c.phone || '—'}</td>
-                <td className="p-2 text-gray-600">{c.email || '—'}</td>
-                <td className="p-2 font-mono text-xs">{c.tax_code || '—'}</td>
-                <td className="p-2">
-                  <span className="px-2 py-0.5 rounded text-xs font-medium" style={getTypeColor(c.customer_type)}>
-                    {getTypeLabel(c.customer_type)}
-                  </span>
-                </td>
-                <td className="p-2 text-center">
-                  <button onClick={() => openEdit(c)} className="text-blue-600 hover:text-blue-800 text-xs mr-2 flex items-center gap-1 inline-flex">
-                    <Edit2 size={12} /> Sửa
-                  </button>
-                  <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:text-red-700 text-xs flex items-center gap-1 inline-flex">
-                    <Trash2 size={12} /> Xóa
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {filtered.map(c => {
+              const isSelected = selectedIdSet.has(String(c.id));
+              return (
+                <tr key={c.id} className={`border-b hover:bg-gray-50 ${isSelected ? 'bg-blue-50/70' : ''}`}>
+                  <td className="p-2 text-center">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                      checked={isSelected}
+                      onChange={() => toggleSelectCustomer(c.id)}
+                      disabled={isBulkDeleting}
+                      aria-label={`Chọn khách hàng ${c.name || c.id}`}
+                    />
+                  </td>
+                  <td className="p-2 font-medium">
+                    <div>{c.name}</div>
+                    {(c.customer_code || c.sapo_customer_id) && <div className="text-[11px] text-gray-400 font-normal">Mã: {c.customer_code || c.sapo_customer_id}</div>}
+                  </td>
+                  <td className="p-2">{c.phone || '—'}</td>
+                  <td className="p-2 text-gray-600">{c.email || '—'}</td>
+                  <td className="p-2 font-mono text-xs">{c.tax_code || '—'}</td>
+                  <td className="p-2">
+                    <span className="px-2 py-0.5 rounded text-xs font-medium" style={getTypeColor(c.customer_type)}>
+                      {getTypeLabel(c.customer_type)}
+                    </span>
+                  </td>
+                  <td className="p-2 text-center">
+                    <button onClick={() => openEdit(c)} disabled={isBulkDeleting} className="text-blue-600 hover:text-blue-800 text-xs mr-2 flex items-center gap-1 inline-flex disabled:opacity-50">
+                      <Edit2 size={12} /> Sửa
+                    </button>
+                    <button onClick={() => handleDelete(c.id)} disabled={isBulkDeleting} className="text-red-500 hover:text-red-700 text-xs flex items-center gap-1 inline-flex disabled:opacity-50">
+                      <Trash2 size={12} /> Xóa
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> Đang tải...</div>}

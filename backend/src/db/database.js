@@ -52,6 +52,8 @@ const SCHEMA = {
   print_templates: [],
   sapo_settings: [],
   sapo_sync_runs: [],
+  excel_import_runs: [],
+  excel_import_details: [],
 };
 
 const INITIAL_NEXT_ID = {
@@ -62,6 +64,7 @@ const INITIAL_NEXT_ID = {
   return_logs: 1, return_details: 1,
   bot_settings: 1, bot_alerts: 1, customer_types: 1, counters: 1,
   cash_book: 1, payrolls: 1, print_templates: 1, sapo_settings: 1, sapo_sync_runs: 1,
+  excel_import_runs: 1, excel_import_details: 1,
 };
 
 const DEFAULT_ACCOUNT_SLUG = 'default';
@@ -70,7 +73,7 @@ const ACCOUNT_SCOPED_TABLES = new Set([
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
   'daily_stats', 'return_logs', 'return_details', 'bot_settings', 'bot_alerts',
   'customer_types', 'counters', 'cash_book', 'payrolls', 'print_templates',
-  'sapo_settings', 'sapo_sync_runs',
+  'sapo_settings', 'sapo_sync_runs', 'excel_import_runs', 'excel_import_details',
   'sync_metadata', 'audit_logs',
 ]);
 
@@ -131,6 +134,7 @@ const SYNC_TRACKED_TABLES = [
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
   'daily_stats', 'return_logs', 'return_details', 'bot_settings', 'bot_alerts',
   'customer_types', 'cash_book', 'payrolls', 'print_templates',
+  'excel_import_runs', 'excel_import_details',
 ];
 
 const db = JSON.parse(JSON.stringify(SCHEMA));

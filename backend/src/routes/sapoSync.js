@@ -24,6 +24,7 @@ function sendError(res, err, fallbackMessage = 'Thao tác Sapo thất bại.') {
     error: message,
     message,
     code: err?.code || (safeStatus >= 500 ? 'SAPO_INTERNAL_ERROR' : 'SAPO_REQUEST_ERROR'),
+    upstream_status: err?.upstreamStatus || err?.upstream_status || null,
     detail: err?.detail || (safeStatus >= 500 ? fallbackMessage : message),
   });
 }
