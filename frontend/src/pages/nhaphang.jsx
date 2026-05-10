@@ -1731,11 +1731,11 @@ const Nhaphang = ({ store }) => {
   const isPaymentButtonDisabled = saving || !editingImportKey || paymentSummary.payment_status === 'paid' || hasUnsavedPaymentAffectingChanges;
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-full w-full min-w-0 bg-gray-100">
       {/* Header - SAPO style */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-3 sm:h-16 sm:flex-nowrap sm:py-0">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
                 <Package className="w-5 h-5 text-white" />
@@ -1780,9 +1780,9 @@ const Nhaphang = ({ store }) => {
         )}
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px]">
           {/* Left Column - Input Form */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="min-w-0 space-y-6">
             {/* Supplier & Product Search Card */}
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
               <div className="p-4 border-b border-gray-200">
@@ -2127,8 +2127,8 @@ const Nhaphang = ({ store }) => {
 
             {/* Product List Table */}
             {products.length > 0 && (
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-                <div className="p-4 border-b border-gray-200 flex items-center justify-between gap-3">
+              <div className="min-w-0 overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div className="p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
                     <FileText className="w-4 h-4" />
                     Danh sách sản phẩm
@@ -2143,8 +2143,8 @@ const Nhaphang = ({ store }) => {
                     Thêm sản phẩm
                   </button>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="w-full max-w-full overflow-x-auto">
+                  <table className="w-full min-w-[900px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-12">STT</th>
@@ -2319,8 +2319,8 @@ const Nhaphang = ({ store }) => {
 
             {/* Order History */}
             {orderHistory.length > 0 && (
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-                <div className="p-4 border-b border-gray-200 flex items-center justify-between gap-3">
+              <div className="min-w-0 overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div className="p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
                     <FileText className="w-4 h-4" />
                     Lịch sử đơn nhập hàng
@@ -2328,14 +2328,14 @@ const Nhaphang = ({ store }) => {
                   <button
                     onClick={handleDeleteSelectedOrders}
                     disabled={saving || selectedHistoryIds.length === 0}
-                    className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed"
+                    className="inline-flex shrink-0 items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed"
                   >
                     <Trash2 className="w-4 h-4" />
                     Xóa đã chọn ({selectedHistoryIds.length})
                   </button>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="w-full max-w-full overflow-x-auto">
+                  <table className="w-full min-w-[1080px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase w-10">
@@ -2353,6 +2353,7 @@ const Nhaphang = ({ store }) => {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Sản phẩm</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Số lượng</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Tổng tiền</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Nhà cung cấp</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Thanh toán</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Trạng thái</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Thao tác</th>
@@ -2375,10 +2376,13 @@ const Nhaphang = ({ store }) => {
                           <td className="px-4 py-3 text-sm text-gray-600">
                             {new Date(order.ngayLap).toLocaleDateString('vi-VN')}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
+                          <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                             {order.soSanPham || order.chiTiet?.length || 0} sản phẩm
                           </td>
-                          <td className="px-4 py-3 text-sm font-semibold text-green-600 text-right">
+                          <td className="px-4 py-3 text-sm text-gray-600 text-center whitespace-nowrap">
+                            {(order.tongSoLuong || 0).toLocaleString('vi-VN')}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-semibold text-green-600 text-right whitespace-nowrap">
                             {order.tongTien.toLocaleString('vi-VN')}đ
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -2452,8 +2456,8 @@ const Nhaphang = ({ store }) => {
           </div>
 
           {/* Right Column - Summary Card */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm sticky top-20">
+          <div className="min-w-0">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm lg:sticky lg:top-20">
               <div className="p-4 border-b border-gray-200">
                 <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -282,6 +282,9 @@ router.get('/reports/customer-orders', (req, res) => {
 router.get('/', (req, res) => {
   try {
     const { status, delivery, from, to } = req.query;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 0, 0), 1000);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const includeMeta = String(req.query.meta || '').trim() === '1';
     let rows = getAll('invoices').map(inv => ({
       ...inv,
       customer_name: getOne('customers', c => c.id === inv.customer_id)?.name || '',
@@ -292,8 +295,11 @@ router.get('/', (req, res) => {
     if (delivery === 'done') rows = rows.filter(r => !!r.delivery_date);
     if (from) rows = rows.filter(r => r.created_at && r.created_at >= from);
     if (to) rows = rows.filter(r => r.created_at && r.created_at.slice(0, 10) <= to);
-    rows.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    res.json(rows);
+    rows.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    const total = rows.length;
+    const pagedRows = limit > 0 ? rows.slice(offset, offset + limit) : rows;
+    if (includeMeta) return res.json({ ok: true, items: pagedRows, total, limit: limit || total, offset });
+    res.json(pagedRows);
   } catch (err) {
     res.status(500).json({ error: 'Lỗi khi lấy danh sách: ' + err.message });
   }

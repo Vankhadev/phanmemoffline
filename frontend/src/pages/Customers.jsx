@@ -324,12 +324,13 @@ export default function Customers() {
           <Users className="text-blue-600" size={24} /> Quản lý Khách hàng
         </h1>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowHelp(true)} className="px-3 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-lg text-xs font-medium flex items-center gap-1">
-            <HelpCircle size={13} /> Hướng dẫn
-          </button>
           <button onClick={() => navigate('/dong-bo-san-pham?tab=customers&import=1')}
             className="px-3 py-2 border border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-medium flex items-center gap-1">
-            <UploadCloud size={13} /> Import Excel/Sapo
+            <UploadCloud size={13} /> Nhập Excel
+          </button>
+          <button onClick={() => navigate('/dong-bo-san-pham?tab=customers&import=1')}
+            className="px-3 py-2 border border-yellow-300 text-yellow-600 hover:bg-blue-50 rounded-lg text-xs font-medium flex items-center gap-1">
+            <UploadCloud size={13} /> Xuất Excel
           </button>
           <button onClick={() => setShowTypeManager(true)}
             className="px-3 py-2 border border-purple-300 text-purple-600 hover:bg-purple-50 rounded-lg text-xs font-medium flex items-center gap-1">
@@ -359,11 +360,8 @@ export default function Customers() {
       </div>
 
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <input className="input-field md:flex-1" placeholder="🔍 Tìm khách hàng theo tên, SĐT, email, mã KH, MST..." value={search} onChange={e => setSearch(e.target.value)} />
+        <input className="input-field md:flex-1" placeholder=" Tìm khách hàng theo tên, SĐT, email, mã KH, MST..." value={search} onChange={e => setSearch(e.target.value)} />
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={exportCustomersList} disabled={filtered.length === 0} className="px-4 py-2 border border-orange-300 text-orange-600 hover:bg-orange-50 rounded-lg text-sm font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
-            <FileDown size={16} /> Xuất Excel
-          </button>
           {selectedCustomerIds.length > 0 && (
             <button onClick={handleBulkDelete} disabled={isBulkDeleting} className="px-4 py-2 border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
               {isBulkDeleting ? <Loader size={16} className="animate-spin" /> : <Trash2 size={16} />}

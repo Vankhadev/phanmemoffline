@@ -6,8 +6,8 @@ const { spawn } = require('child_process');
 const { randomUUID } = require('crypto');
 const { createUpdateManager } = require('./updater');
 
-const DEFAULT_BACKEND_PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || 3001);
-const BACKEND_HOST = String(process.env.KHA_BACKEND_HOST || '127.0.0.1').trim() || '127.0.0.1';
+const DEFAULT_BACKEND_PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || process.env.PHANMEM_PORT || 3001);
+const BACKEND_HOST = String(process.env.KHA_BACKEND_HOST || process.env.PHANMEM_HOST || process.env.HOST || '127.0.0.1').trim() || '127.0.0.1';
 const BACKEND_API_BASE_CHANNEL = 'kha:backend:get-api-base';
 const BACKEND_INFO_CHANNEL = 'kha:backend:get-info';
 const WINDOW_FOCUS_CHANNEL = 'kha:window:ensure-input-focus';
@@ -28,6 +28,11 @@ function sleep(ms) {
 function normalizeStartPort(value) {
   const port = Number(value);
   return Number.isInteger(port) && port > 0 && port < 65536 ? port : 3001;
+}
+
+function getBackendClientHost(host = BACKEND_HOST) {
+  const value = String(host || '').trim();
+  return value === '0.0.0.0' || value === '::' ? '127.0.0.1' : (value || '127.0.0.1');
 }
 
 function isPortAvailable(port, host = BACKEND_HOST) {
@@ -148,7 +153,7 @@ async function startBackend() {
   const userData = app.getPath('userData');
   const dbPath = path.join(userData, 'phanmienoffline.db.json');
   const port = await findAvailablePort(DEFAULT_BACKEND_PORT, BACKEND_HOST);
-  const apiBase = `http://${BACKEND_HOST}:${port}/api`;
+  const apiBase = `http://${getBackendClientHost(BACKEND_HOST)}:${port}/api`;
   const backendEntry = getBackendEntryPath();
 
   const env = {
@@ -156,6 +161,8 @@ async function startBackend() {
     PORT: String(port),
     KHA_BACKEND_PORT: String(port),
     KHA_BACKEND_HOST: BACKEND_HOST,
+    PHANMEM_HOST: BACKEND_HOST,
+    PHANMEM_PORT: String(port),
     KHA_DB_PATH: dbPath,
     ELECTRON_USER_DATA: userData,
     KHA_BACKEND_INSTANCE_ID: backendInstanceId,

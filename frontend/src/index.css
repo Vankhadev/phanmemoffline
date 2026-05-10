@@ -4,7 +4,13 @@
 
 @layer base {
   * { box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+  html, body, #root { min-height: 100%; }
+  body {
+    min-width: 320px;
+    overflow-x: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 @layer components {
@@ -13,4 +19,25 @@
   .btn-danger    { @apply bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded font-medium transition; }
   .input-field   { @apply border border-gray-300 rounded px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500; }
   .card          { @apply bg-white rounded-lg shadow p-4; }
+
+  .app-main-scroll {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+  }
+
+  .app-main-scroll > * {
+    min-width: 0;
+  }
+
+  .app-main-scroll table {
+    min-width: max-content;
+  }
+
+  @media (max-width: 767px) {
+    .app-main-scroll input,
+    .app-main-scroll select,
+    .app-main-scroll textarea {
+      font-size: 16px;
+    }
+  }
 }

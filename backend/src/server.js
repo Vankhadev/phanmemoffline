@@ -9,7 +9,7 @@ const path    = require('path');
 const { version: APP_VERSION } = require('../../package.json');
 
 // --- Load DB & helpers ---
-const { loadDB, upsertDailyStats, today, db, DB_PATH } = require('./db/database');
+const { loadDB, upsertDailyStats, today, now, db, DB_PATH } = require('./db/database');
 const { requireAuth, requireAnyPermission, requirePermission } = require('./middleware/auth');
 loadDB();
 
@@ -38,8 +38,13 @@ const excelImportsRoutes = require('./routes/excelImports');
 //  EXPRESS APP
 // ============================================================
 const app  = express();
-const PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || 3001);
-const HOST = String(process.env.KHA_BACKEND_HOST || process.env.HOST || '127.0.0.1').trim() || '127.0.0.1';
+const PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || process.env.PHANMEM_PORT || 3001);
+const HOST = String(
+  process.env.KHA_BACKEND_HOST ||
+  process.env.PHANMEM_HOST ||
+  process.env.HOST ||
+  '127.0.0.1'
+).trim() || '127.0.0.1';
 const SERVER_STARTED_AT = new Date().toISOString();
 const BACKEND_INSTANCE_ID = String(process.env.KHA_BACKEND_INSTANCE_ID || '').slice(0, 100);
 
@@ -149,23 +154,54 @@ app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read'
 app.use('/api/sapo', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), sapoSyncRoutes);
 
 // ----- Dashboard -----
-app.get('/api/dashboard', requireAuth, requirePermission('stats.read'), (req, res) => {
+function buildDashboardPayload() {
   const { getAll, getOne } = require('./db/database');
-  const recentInvoices = getAll('invoices')
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  const todayKey = today();
+  const invoices = getAll('invoices');
+  const activeProducts = getAll('products', p => p.active !== 0);
+  const todayInvoices = invoices.filter(inv => String(inv.created_at || '').startsWith(todayKey) && inv.status !== 'cancelled');
+  const completedTodayInvoices = todayInvoices.filter(inv => inv.status === 'completed');
+
+  const recentInvoices = invoices
+    .slice()
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
     .slice(0, 10)
     .map(inv => ({
       invoice_code: inv.invoice_code,
       total:        inv.total,
+      status:       inv.status || '',
       created_at:   inv.created_at,
       customer_name: getOne('customers', c => c.id === inv.customer_id)?.name || '',
       user_name:    getOne('users',     u => u.id === inv.user_id)?.name     || '',
     }));
-  const lowStock = getAll('products', p => (p.active !== 0) && (p.stock || 0) < 10)
+  const lowStock = activeProducts
+    .filter(p => (p.stock || 0) < 10)
     .sort((a, b) => (a.stock || 0) - (b.stock || 0))
     .slice(0, 10)
-    .map(p => ({ name: p.name, stock: p.stock }));
-  res.json({ recentInvoices, lowStock });
+    .map(p => ({ id: p.id, sku: p.sku || '', name: p.name, stock: p.stock || 0 }));
+
+  return {
+    ok: true,
+    summary: {
+      todayRevenue: completedTodayInvoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0),
+      todayOrders: todayInvoices.length,
+      paidOrders: completedTodayInvoices.length,
+      totalProducts: activeProducts.length,
+      outOfStock: activeProducts.filter(p => (Number(p.stock) || 0) === 0).length,
+      lowStock: activeProducts.filter(p => (Number(p.stock) || 0) > 0 && (Number(p.stock) || 0) < 10).length,
+    },
+    recentInvoices,
+    lowStock,
+    serverTime: now(),
+  };
+}
+
+app.get('/api/dashboard/summary', requireAuth, requirePermission('stats.read'), (_req, res) => {
+  res.json(buildDashboardPayload());
+});
+
+app.get('/api/dashboard', requireAuth, requirePermission('stats.read'), (_req, res) => {
+  res.json(buildDashboardPayload());
 });
 
 // ============================================================
@@ -206,9 +242,12 @@ cron.schedule('0 2 * * *', () => {
 // ============================================================
 //  START
 // ============================================================
-const displayHost = HOST === '0.0.0.0' ? '127.0.0.1' : HOST;
+const displayHost = HOST === '0.0.0.0' || HOST === '::' ? '127.0.0.1' : HOST;
 console.log(`\n========================================`);
 console.log(`[KHA] Backend:  http://${displayHost}:${PORT}`);
+if (HOST === '0.0.0.0' || HOST === '::') {
+  console.log(`[KHA] LAN:      http://<IP-may-chu>:${PORT}`);
+}
 console.log(`[KHA] Database: ${DB_PATH}`);
 console.log(`[KHA] Version:  ${APP_VERSION}`);
 console.log(`========================================\n`);

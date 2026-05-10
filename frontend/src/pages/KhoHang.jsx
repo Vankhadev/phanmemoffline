@@ -9,6 +9,7 @@ import {
   findCategoryForProduct,
   normalizeSearchText,
 } from '../utils/productSearch';
+import { SYNC_UPDATED_EVENT } from '../utils/apiClient';
 
 function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
@@ -68,32 +69,43 @@ export default function KhoHang() {
 
   useEffect(() => { fetchProducts(); fetchCategories(); }, []);
 
-  // ── Auto refresh mỗi 30 giây ──
+  // ── Refresh khi có đơn mới hoặc sync từ thiết bị khác ──
   useEffect(() => {
-    const interval = setInterval(() => { fetchProducts(true); }, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // ── Refresh khi có đơn mới được tạo ──
-  useEffect(() => {
-    const onOrderCreated = () => fetchProducts();
+    const onOrderCreated = () => fetchProducts(true);
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      const syncData = event.detail?.data || {};
+      if (changedTables.some(table => ['products', 'import_logs', 'import_details', 'invoices', 'invoice_details'].includes(table))) {
+        fetchProducts(true);
+      }
+      if (Array.isArray(syncData.product_categories) && changedTables.includes('product_categories')) {
+        setCategories(syncData.product_categories);
+      }
+    };
     window.addEventListener('kha-order-created', onOrderCreated);
-    return () => window.removeEventListener('kha-order-created', onOrderCreated);
-  }, []);
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    return () => {
+      window.removeEventListener('kha-order-created', onOrderCreated);
+      window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    };
+  }, [products]);
+
+  const applyProducts = (data, isAutoRefresh = false) => {
+    const nextProducts = Array.isArray(data) ? data : [];
+    if (isAutoRefresh) {
+      const changes = detectChanges(products, nextProducts);
+      if (changes.length > 0) {
+        setAlertMsg(`🔔 Cập nhật kho: ${changes.slice(0, 5).join(', ')}${changes.length > 5 ? '…' : ''}`);
+        setTimeout(() => setAlertMsg(''), 5000);
+      }
+    }
+    setProducts(nextProducts);
+  };
 
   const fetchProducts = (isAutoRefresh = false) => {
     fetch(`${API}/products/all/with-variants`)
       .then(r => r.json())
-      .then(data => {
-        if (isAutoRefresh) {
-          const changes = detectChanges(products, data);
-          if (changes.length > 0) {
-            setAlertMsg(`🔔 Cập nhật kho: ${changes.join(', ')}`);
-            setTimeout(() => setAlertMsg(''), 5000);
-          }
-        }
-        setProducts(Array.isArray(data) ? data : []);
-      })
+      .then(data => applyProducts(data, isAutoRefresh))
       .catch(() => { });
   };
 

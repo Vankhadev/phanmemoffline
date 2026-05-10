@@ -6,6 +6,7 @@ import { createInvoicePrintData } from '../utils/invoicePrintData';
 import { printInvoice, writePrintWindowMessage } from '../utils/printInvoice';
 import { getProductDisplayName } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
+import { SYNC_UPDATED_EVENT } from '../utils/apiClient';
 
 const STATUS_LABELS = {
   pending: { text: 'Chờ xác nhận', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500', icon: '⏳' },
@@ -149,24 +150,35 @@ export default function OrderList({ store = {} }) {
       }
     };
     checkAndLoad();
-    const interval = setInterval(checkAndLoad, 10000);
 
     // ── Lắng nghe sự kiện tạo đơn thành công từ CreateOrder ──
     const onOrderCreated = (e) => {
       const inv = e.detail;
-      const merged = dedupeOrdersByInvoiceCode([
+      setAllOrders(prev => dedupeOrdersByInvoiceCode([
         { ...inv, _isOffline: !inv.invoice_code?.startsWith('HD') },
-        ...allOrders.filter(o => o.invoice_code !== inv.invoice_code),
-      ]);
-      setAllOrders(merged);
+        ...prev.filter(o => o.invoice_code !== inv.invoice_code),
+      ]));
       setInvoices(prev => {
         if (prev.find(i => i.invoice_code === inv.invoice_code)) return prev;
         return [{ ...inv, _isOffline: false }, ...prev];
       });
     };
-    window.addEventListener('kha-order-created', onOrderCreated);
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      const syncData = event.detail?.data || {};
+      if (changedTables.includes('invoices') || changedTables.includes('invoice_details')) {
+        fetchInvoices();
+      }
+      if (Array.isArray(syncData.customers) && changedTables.includes('customers')) setCustomers(syncData.customers);
+    };
 
-    return () => { clearInterval(interval); window.removeEventListener('kha-order-created', onOrderCreated); };
+    window.addEventListener('kha-order-created', onOrderCreated);
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+
+    return () => {
+      window.removeEventListener('kha-order-created', onOrderCreated);
+      window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    };
   }, []);
 
   const fetchInvoices = () => {
@@ -762,7 +774,7 @@ export default function OrderList({ store = {} }) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-900 px-5 py-5 text-white">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -851,7 +863,7 @@ export default function OrderList({ store = {} }) {
         />
       )}
 
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="px-4 pt-4">
           <div className="flex flex-wrap gap-2">
             {statusTabs.map(tab => {
@@ -912,7 +924,7 @@ export default function OrderList({ store = {} }) {
           </div>
         </div>
 
-        <div className="overflow-x-auto border-t border-gray-100">
+        <div className="w-full max-w-full overflow-x-auto border-t border-gray-100">
           <table className="w-full min-w-[1120px] text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
@@ -1075,24 +1087,25 @@ export default function OrderList({ store = {} }) {
 
       {/* ===== MODAL XEM CHI TIẾT ===== */}
       {showView && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-[700px] max-h-[90vh] overflow-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 overflow-y-auto p-3 sm:items-center sm:p-4">
+          <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-3xl max-h-[90vh] overflow-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold">Chi tiết đơn hàng <span className="font-mono text-blue-600">{displayOrderCode(showView.invoice_code)}</span></h2>
               <button onClick={() => setShowView(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
 
             {/* Thông tin chung */}
-            <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-sm">
               <div><span className="text-gray-500">Khách hàng:</span> <b>{showView.customer_name || 'Khách lẻ'}</b></div>
               <div><span className="text-gray-500">Ngày tạo:</span> <b>{formatDate(showView.created_at)}</b></div>
               <div><span className="text-gray-500">Thanh toán:</span> <b>{formatPaymentMethod(showView.payment_method)}</b></div>
               <div><span className="text-gray-500">Trạng thái:</span> <b>{STATUS_LABELS[showView.status]?.text}</b></div>
-              {showView.note && <div className="col-span-2"><span className="text-gray-500">Ghi chú:</span> {showView.note}</div>}
+              {showView.note && <div className="sm:col-span-2"><span className="text-gray-500">Ghi chú:</span> {showView.note}</div>}
             </div>
 
             {/* Bảng sản phẩm */}
-            <table className="w-full text-sm border mb-4">
+            <div className="w-full max-w-full overflow-x-auto mb-4">
+              <table className="w-full min-w-[560px] text-sm border">
               <thead>
                 <tr className="bg-gray-100 text-gray-600 text-xs">
                   <th className="border p-2 text-center w-8">STT</th>
@@ -1113,7 +1126,8 @@ export default function OrderList({ store = {} }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
 
             {/* Tổng kết */}
             <div className="border-t pt-3 space-y-1 text-sm">
@@ -1137,8 +1151,8 @@ export default function OrderList({ store = {} }) {
 
       {/* ===== MODAL SỬA ĐƠN ===== */}
       {showEdit && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-[820px] max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 overflow-y-auto p-3 sm:items-center sm:p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b bg-gray-50 rounded-t-xl">
               <div>
@@ -1150,7 +1164,7 @@ export default function OrderList({ store = {} }) {
 
             <div className="flex-1 overflow-auto p-5 space-y-4">
               {/* Thông tin chung */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Khách hàng</label>
                   <select className="input-field w-full text-sm" value={editForm.customer_id || ''}
@@ -1205,7 +1219,7 @@ export default function OrderList({ store = {} }) {
                   </button>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full min-w-[760px] text-sm">
                     <thead>
                       <tr className="bg-gray-50 text-gray-500 text-xs border-b">
                         <th className="py-2 px-3 text-center w-8">STT</th>
@@ -1267,7 +1281,7 @@ export default function OrderList({ store = {} }) {
 
               {/* Tổng hợp tiền */}
               <div className="border rounded-lg p-4 bg-gray-50">
-                <div className="grid grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 text-sm">
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">VAT (%)</label>
                     <input type="number" min="0" max="100"
@@ -1314,7 +1328,7 @@ export default function OrderList({ store = {} }) {
             </div>
 
             {/* Footer */}
-            <div className="px-5 py-4 border-t bg-gray-50 rounded-b-xl flex gap-2">
+            <div className="px-5 py-4 border-t bg-gray-50 rounded-b-xl flex flex-col gap-2 sm:flex-row">
               <button onClick={() => setShowEdit(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">
                 Hủy
               </button>
@@ -1351,8 +1365,8 @@ export default function OrderList({ store = {} }) {
 
       {/* ===== MODAL CHỌN SẢN PHẨM THÊM VÀO ĐƠN ===== */}
       {showProductPicker && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl shadow-2xl w-[640px] max-h-[75vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-[60] overflow-y-auto p-3 sm:items-center sm:p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-gray-50 rounded-t-xl">
               <h3 className="font-bold text-gray-800">Thêm sản phẩm vào đơn</h3>
               <button onClick={() => { setShowProductPicker(false); setEditProductSearch(''); }} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
@@ -1476,8 +1490,8 @@ export default function OrderList({ store = {} }) {
 
       {/* Help Modal */}
       {showHelp && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-[600px] max-h-[90vh] overflow-auto">
+        <div className="fixed inset-0 bg-black/40 flex items-start justify-center z-50 overflow-y-auto p-3 sm:items-center sm:p-4">
+          <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <HelpCircle size={20} className="text-blue-600" />

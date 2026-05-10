@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { API } from '../App';
-import { DollarSign, Receipt, ShoppingBag, Package, AlertCircle, TrendingUp, Calendar, FileText, HelpCircle } from 'lucide-react';
+import { SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { BarChart3, ShoppingCart, ShoppingBag, Layers, AlertCircle, TrendingUp, Calendar, FileText, HelpCircle, Store, Package} from 'lucide-react';
 import HelpModal from '../components/HelpModal';
 
 export default function Home({ user, store }) {
@@ -18,53 +19,43 @@ export default function Home({ user, store }) {
 
   useEffect(() => {
     fetchStats();
-    // Lắng nghe sự kiện tạo đơn thành công
+    // Lắng nghe sự kiện tạo đơn thành công hoặc sync từ thiết bị khác
     const onOrderCreated = () => {
       fetchStats();
     };
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      if (changedTables.some(table => ['invoices', 'invoice_details', 'products', 'daily_stats'].includes(table))) fetchStats(false);
+    };
     window.addEventListener('kha-order-created', onOrderCreated);
-    return () => window.removeEventListener('kha-order-created', onOrderCreated);
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    return () => {
+      window.removeEventListener('kha-order-created', onOrderCreated);
+      window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    };
   }, []);
 
-  const fetchStats = async () => {
-    setLoading(true);
+  const fetchStats = async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
-      // Lấy thống kê từ dashboard API
-      const res = await fetch(`${API}/dashboard`);
+      // Endpoint summary nhẹ: không tải toàn bộ cây sản phẩm chỉ để đếm.
+      const res = await fetch(`${API}/dashboard/summary`);
       if (!res.ok) throw new Error('Failed to fetch stats');
       const data = await res.json();
-
-      // Lấy thông tin sản phẩm
-      const productsRes = await fetch(`${API}/products/all/with-variants`);
-      const products = await productsRes.json();
-
-      // Tính toán
-      const today = new Date().toISOString().slice(0, 10);
-      const todayInvoices = data.recentInvoices?.filter(inv =>
-        inv.created_at?.startsWith(today)
-      ) || [];
-
-      const todayRevenue = todayInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
-      const todayOrders = todayInvoices.length;
-      const paidOrders = todayInvoices.filter(inv => inv.status === 'completed').length;
-
-      // Tính sản phẩm tồn kho
-      const totalProducts = products.length;
-      const outOfStock = products.filter(p => (p.stock || 0) === 0).length;
-      const lowStock = products.filter(p => (p.stock || 0) < 10 && (p.stock || 0) > 0).length;
+      const summary = data.summary || data;
 
       setStats({
-        todayRevenue,
-        todayOrders,
-        paidOrders,
-        totalProducts,
-        outOfStock,
-        lowStock,
+        todayRevenue: Number(summary.todayRevenue) || 0,
+        todayOrders: Number(summary.todayOrders) || 0,
+        paidOrders: Number(summary.paidOrders) || 0,
+        totalProducts: Number(summary.totalProducts) || 0,
+        outOfStock: Number(summary.outOfStock) || 0,
+        lowStock: Number(summary.lowStock) || 0,
       });
     } catch (err) {
       console.error('Error fetching stats:', err);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
@@ -76,7 +67,7 @@ export default function Home({ user, store }) {
     {
       title: 'Doanh thu hôm nay',
       value: formatVND(stats.todayRevenue),
-      icon: DollarSign,
+      icon: BarChart3,
       color: 'bg-blue-500',
       textColor: 'text-blue-600',
       bgColor: 'bg-blue-50',
@@ -85,7 +76,7 @@ export default function Home({ user, store }) {
       title: 'Đơn hàng hôm nay',
       value: stats.todayOrders,
       sub: `${stats.paidOrders} đã thanh toán`,
-      icon: Receipt,
+      icon: ShoppingCart,
       color: 'bg-green-500',
       textColor: 'text-green-600',
       bgColor: 'bg-green-50',
@@ -104,9 +95,9 @@ export default function Home({ user, store }) {
       value: stats.outOfStock + stats.lowStock,
       sub: `${stats.lowStock} sắp hết`,
       icon: AlertCircle,
-      color: 'bg-orange-500',
-      textColor: 'text-orange-600',
-      bgColor: 'bg-orange-50',
+      color: 'bg-red-500',
+      textColor: 'text-red-600',
+      bgColor: 'bg-red-50',
     },
   ];
 
@@ -183,7 +174,7 @@ export default function Home({ user, store }) {
             className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-purple-100 hover:border-purple-500 hover:bg-purple-50 transition group"
           >
             <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center group-hover:bg-purple-500 transition">
-              <Package size={24} className="text-purple-600 group-hover:text-white" />
+              <Layers size={24} className="text-purple-600 group-hover:text-white" />
             </div>
             <span className="text-sm font-medium text-gray-700 group-hover:text-purple-600">Quản lý sản phẩm</span>
           </Link>
@@ -192,7 +183,7 @@ export default function Home({ user, store }) {
             className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-green-100 hover:border-green-500 hover:bg-green-50 transition group"
           >
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-500 transition">
-              <Receipt size={24} className="text-green-600 group-hover:text-white" />
+              <ShoppingCart size={24} className="text-green-600 group-hover:text-white" />
             </div>
             <span className="text-sm font-medium text-gray-700 group-hover:text-green-600">Đơn hàng</span>
           </Link>
@@ -206,13 +197,40 @@ export default function Home({ user, store }) {
             <span className="text-sm font-medium text-gray-700 group-hover:text-orange-600">Thống kê</span>
           </Link>
           <Link
-            to="/bao-cao-thu-e"
+            to="/bao-cao-theo-don-hang"
             className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-red-100 hover:border-red-500 hover:bg-red-50 transition group"
           >
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center group-hover:bg-red-500 transition">
               <FileText size={24} className="text-red-600 group-hover:text-white" />
             </div>
-            <span className="text-sm font-medium text-gray-700 group-hover:text-red-600">Báo cáo thuế</span>
+            <span className="text-sm font-medium text-gray-700 group-hover:text-red-600">Báo cáo đơn hàng</span>
+          </Link>
+          <Link
+            to="/kho-hang"
+            className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-blue-100 hover:border-blue-500 hover:bg-blue-50 transition group"
+          >
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-500 transition">
+              <Package size={24} className="text-blue-600 group-hover:text-white" />
+            </div>
+            <span className="text-sm font-medium text-gray-700 group-hover:text-blue-600">Kho hàng</span>
+          </Link>
+          <Link
+            to="/nha-cung-cap"
+            className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-pink-100 hover:border-pink-500 hover:bg-pink-50 transition group"
+          >
+            <div className="w-12 h-12 bg-pink-100 rounded-full flex items-center justify-center group-hover:bg-pink-500 transition">
+              <Store  size={24} className="text-pink-600 group-hover:text-white" />
+            </div>
+            <span className="text-sm font-medium text-gray-700 group-hover:text-pink-600">Nhà Cung Cấp</span>
+          </Link>
+          <Link
+            to="/bao-cao-theo-san-pham"
+            className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-yellow-100 hover:border-yellow-500 hover:bg-yellow-50 transition group"
+          >
+            <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center group-hover:bg-yellow-500 transition">
+              <Store  size={24} className="text-yellow-600 group-hover:text-white" />
+            </div>
+            <span className="text-sm font-medium text-gray-700 group-hover:text-yellow-600">Báo cáo sản</span>
           </Link>
         </div>
       </div>

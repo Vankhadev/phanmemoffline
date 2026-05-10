@@ -9,6 +9,7 @@ import {
 import { getProductDisplayName } from './productSearch';
 
 export const AUTH_EXPIRED_EVENT = 'kha-auth:expired';
+export const SYNC_UPDATED_EVENT = 'kha-sync:updated';
 
 export class ApiError extends Error {
   constructor(message, options = {}) {
@@ -33,6 +34,14 @@ function readEnvApiBase() {
   }
 }
 
+function readEnvValue(name, fallback = '') {
+  try {
+    return import.meta?.env?.[name] || fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 function readElectronApiBase() {
   try {
     if (typeof window === 'undefined') return '';
@@ -42,12 +51,36 @@ function readElectronApiBase() {
   }
 }
 
+function isLoopbackHost(hostname) {
+  const value = String(hostname || '').trim().toLowerCase();
+  return value === 'localhost' || value === '127.0.0.1' || value === '::1' || value === '[::1]';
+}
+
+function getBrowserLanApiBase() {
+  if (typeof window === 'undefined' || !window.location) return '';
+  const protocol = window.location.protocol || '';
+  if (protocol !== 'http:') return '';
+
+  const configuredHost = readEnvValue('VITE_BACKEND_HOST') || readEnvValue('VITE_API_HOST');
+  const configuredPort = readEnvValue('VITE_BACKEND_PORT') || readEnvValue('VITE_API_PORT') || '3001';
+  const currentHost = String(window.location.hostname || '').trim();
+  if (!configuredHost && isLoopbackHost(currentHost)) return '';
+
+  const host = String(configuredHost || currentHost || '127.0.0.1').trim();
+  const port = String(configuredPort || '').trim();
+  if (!host) return '';
+  return stripTrailingSlash(`http://${host}${port ? `:${port}` : ''}/api`);
+}
+
 export function getApiBase() {
   const electronApiBase = readElectronApiBase();
   if (electronApiBase) return stripTrailingSlash(electronApiBase);
 
   const envApiBase = readEnvApiBase();
   if (envApiBase) return stripTrailingSlash(envApiBase);
+
+  const browserLanApiBase = getBrowserLanApiBase();
+  if (browserLanApiBase) return browserLanApiBase;
 
   return '/api';
 }

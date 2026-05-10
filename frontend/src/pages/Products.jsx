@@ -1526,7 +1526,7 @@ export default function Products({ store }) {
           </button>
           <button onClick={() => setShowExcelImport(s => !s)}
             className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 border transition ${showExcelImport ? 'bg-green-600 text-white border-green-600' : 'border-green-300 bg-white text-green-700 hover:bg-green-50'}`}>
-            <Upload size={16} /> Import Excel/CSV
+            <Upload size={16} /> Nhập Excel
           </button>
           <input ref={excelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportExcel} />
           <button onClick={handleExportExcel}
