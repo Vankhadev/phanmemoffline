@@ -2317,142 +2317,6 @@ const Nhaphang = ({ store }) => {
               </div>
             </div>
 
-            {/* Order History */}
-            {orderHistory.length > 0 && (
-              <div className="min-w-0 overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm">
-                <div className="p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Lịch sử đơn nhập hàng
-                  </h2>
-                  <button
-                    onClick={handleDeleteSelectedOrders}
-                    disabled={saving || selectedHistoryIds.length === 0}
-                    className="inline-flex shrink-0 items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Xóa đã chọn ({selectedHistoryIds.length})
-                  </button>
-                </div>
-                <div className="w-full max-w-full overflow-x-auto">
-                  <table className="w-full min-w-[1080px]">
-                    <thead className="bg-gray-50 border-b border-gray-200">
-                      <tr>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase w-10">
-                          <input
-                            type="checkbox"
-                            checked={isAllHistorySelected}
-                            onChange={handleToggleAllHistory}
-                            disabled={saving || orderHistory.length === 0}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-14">STT</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Mã đơn</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Ngày lập</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Sản phẩm</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Số lượng</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Tổng tiền</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Nhà cung cấp</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Thanh toán</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Trạng thái</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {orderHistory.map((order, index) => (
-                        <tr key={order.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-center">
-                            <input
-                              type="checkbox"
-                              checked={selectedHistoryIds.includes(String(order.maDonHang || order.id))}
-                              onChange={() => handleToggleHistoryRow(order)}
-                              disabled={saving}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{order.maDonHang}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
-                            {new Date(order.ngayLap).toLocaleDateString('vi-VN')}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                            {order.soSanPham || order.chiTiet?.length || 0} sản phẩm
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-600 text-center whitespace-nowrap">
-                            {(order.tongSoLuong || 0).toLocaleString('vi-VN')}
-                          </td>
-                          <td className="px-4 py-3 text-sm font-semibold text-green-600 text-right whitespace-nowrap">
-                            {order.tongTien.toLocaleString('vi-VN')}đ
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex px-2.5 py-1 rounded-full border text-xs font-medium ${getPaymentBadgeClass(order.payment_status)}`}>
-                              {getPaymentLabel(order.payment_status)}
-                            </span>
-                            {Number(order.remaining_amount || 0) > 0 && (
-                              <div className="mt-1 text-[11px] text-gray-500">
-                                Còn {Number(order.remaining_amount || 0).toLocaleString('vi-VN')}đ
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                              order.trangThai === 'da_nhap'
-                                ? 'bg-green-100 text-green-700'
-                                : order.trangThai === 'cho_nhap'
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : order.trangThai === 'da_huy'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-gray-100 text-gray-700'
-                            }`}>
-                              {order.trangThai === 'da_nhap' ? 'Đã nhập' :
-                               order.trangThai === 'cho_nhap' ? 'Chờ nhập' :
-                               order.trangThai === 'da_huy' ? 'Đã hủy' : order.trangThai}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <div className="flex justify-center gap-2">
-                              {order.trangThai !== 'da_huy' && (
-                                <>
-                                  <button
-                                    onClick={() => handleLoadOrder(order, true)}
-                                    disabled={saving}
-                                    className="text-emerald-600 hover:text-emerald-800 text-sm font-medium disabled:text-emerald-300"
-                                  >
-                                    Sửa
-                                  </button>
-                                  <button
-                                    onClick={() => handleCancelOrder(order)}
-                                    disabled={saving}
-                                    className="text-orange-600 hover:text-orange-800 text-sm font-medium disabled:text-orange-300"
-                                  >
-                                    Hủy
-                                  </button>
-                                </>
-                              )}
-                              <button
-                                onClick={() => handleDeleteOrder(order)}
-                                disabled={saving}
-                                className="text-red-600 hover:text-red-800 text-sm font-medium disabled:text-red-300"
-                              >
-                                Xóa
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {orderHistory.length > 0 && (
-                  <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
-                    <p className="text-xs text-gray-500">
-                      Lưu ý: Khi hủy phiếu đã nhập kho, backend sẽ tự động rollback tồn kho đúng một lần; phiếu lưu tạm chưa nhập kho sẽ không đổi tồn kho.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Right Column - Summary Card */}
@@ -2568,6 +2432,148 @@ const Nhaphang = ({ store }) => {
             </div>
           </div>
         </div>
+
+        {/* Order History */}
+        {orderHistory.length > 0 && (
+          <div className="mt-6 min-w-0 overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Lịch sử đơn nhập hàng
+              </h2>
+              <button
+                onClick={handleDeleteSelectedOrders}
+                disabled={saving || selectedHistoryIds.length === 0}
+                className="inline-flex shrink-0 items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed"
+              >
+                <Trash2 className="w-4 h-4" />
+                Xóa đã chọn ({selectedHistoryIds.length})
+              </button>
+            </div>
+            <div className="w-full max-w-full overflow-x-auto">
+              <table className="w-full min-w-[1280px] text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="w-12 px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                      <input
+                        type="checkbox"
+                        checked={isAllHistorySelected}
+                        onChange={handleToggleAllHistory}
+                        disabled={saving || orderHistory.length === 0}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
+                    <th className="w-16 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">STT</th>
+                    <th className="min-w-[120px] px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Mã đơn</th>
+                    <th className="min-w-[110px] px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Ngày lập</th>
+                    <th className="min-w-[110px] px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Sản phẩm</th>
+                    <th className="min-w-[90px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Số lượng</th>
+                    <th className="min-w-[130px] px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Tổng tiền</th>
+                    <th className="min-w-[180px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Nhà cung cấp</th>
+                    <th className="min-w-[150px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Thanh toán</th>
+                    <th className="min-w-[120px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Trạng thái</th>
+                    <th className="min-w-[120px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {orderHistory.map((order, index) => (
+                    <tr key={order.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedHistoryIds.includes(String(order.maDonHang || order.id))}
+                          onChange={() => handleToggleHistoryRow(order)}
+                          disabled={saving}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{order.maDonHang}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {new Date(order.ngayLap).toLocaleDateString('vi-VN')}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                        {order.soSanPham || order.chiTiet?.length || 0} sản phẩm
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 text-center whitespace-nowrap">
+                        {(order.tongSoLuong || 0).toLocaleString('vi-VN')}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-green-600 text-right whitespace-nowrap">
+                        {order.tongTien.toLocaleString('vi-VN')}đ
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 text-center">
+                        <div className="max-w-[180px] truncate" title={order.nhaCungCap?.tenNCC || order.nhaCungCap?.name || '—'}>
+                          {order.nhaCungCap?.tenNCC || order.nhaCungCap?.name || '—'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex px-2.5 py-1 rounded-full border text-xs font-medium ${getPaymentBadgeClass(order.payment_status)}`}>
+                          {getPaymentLabel(order.payment_status)}
+                        </span>
+                        {Number(order.remaining_amount || 0) > 0 && (
+                          <div className="mt-1 text-[11px] text-gray-500">
+                            Còn {Number(order.remaining_amount || 0).toLocaleString('vi-VN')}đ
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
+                          order.trangThai === 'da_nhap'
+                            ? 'bg-green-100 text-green-700'
+                            : order.trangThai === 'cho_nhap'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : order.trangThai === 'da_huy'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {order.trangThai === 'da_nhap' ? 'Đã nhập' :
+                           order.trangThai === 'cho_nhap' ? 'Chờ nhập' :
+                           order.trangThai === 'da_huy' ? 'Đã hủy' : order.trangThai}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex justify-center gap-2 whitespace-nowrap">
+                          {order.trangThai !== 'da_huy' && (
+                            <>
+                              <button
+                                onClick={() => handleLoadOrder(order, true)}
+                                disabled={saving}
+                                className="text-emerald-600 hover:text-emerald-800 text-sm font-medium disabled:text-emerald-300"
+                              >
+                                Sửa
+                              </button>
+                              <button
+                                onClick={() => handleCancelOrder(order)}
+                                disabled={saving}
+                                className="text-orange-600 hover:text-orange-800 text-sm font-medium disabled:text-orange-300"
+                              >
+                                Hủy
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={() => handleDeleteOrder(order)}
+                            disabled={saving}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium disabled:text-red-300"
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {orderHistory.length > 0 && (
+              <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+                <p className="text-xs text-gray-500">
+                  Lưu ý: Khi hủy phiếu đã nhập kho, backend sẽ tự động rollback tồn kho đúng một lần; phiếu lưu tạm chưa nhập kho sẽ không đổi tồn kho.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <ProductLabelPrintModal

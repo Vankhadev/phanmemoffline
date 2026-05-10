@@ -3,6 +3,11 @@
 
 Phiên bản ứng dụng được đồng bộ trong `package.json`, `package-lock.json`, `frontend/package.json` và `backend/package.json`.
 
+### Ghi chú bản vá 1.1.10
+
+- Sửa bố cục bảng lịch sử đơn nhập hàng để card dùng đủ chiều rộng trang nhập hàng, giữ cuộn ngang ổn định và căn khớp header/body sau khi bổ sung cột Nhà cung cấp.
+- Đảm bảo các cột chọn dòng, STT, mã đơn, ngày lập, sản phẩm, số lượng, tổng tiền, nhà cung cấp, thanh toán, trạng thái và thao tác hiển thị nhất quán trên màn hình hẹp.
+
 ---
 
 ## 🚀 Cách 1: Chạy Development (cần Node.js)
