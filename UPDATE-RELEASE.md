@@ -33,12 +33,12 @@ Mỗi release production cho Windows cần có các asset do `electron-builder` 
 Ví dụ `latest.yml` do `electron-builder` tạo:
 
 ```yaml
-version: 1.1.5
+version: 1.1.6
 files:
-  - url: BanHangOffline-Setup-v1.1.5.exe
+  - url: BanHangOffline-Setup-v1.1.6.exe
     sha512: BASE64_SHA512
     size: 76845764
-path: BanHangOffline-Setup-v1.1.5.exe
+path: BanHangOffline-Setup-v1.1.6.exe
 sha512: BASE64_SHA512
 releaseDate: '2026-05-09T13:52:51.450Z'
 ```
@@ -129,7 +129,7 @@ Không đưa token GitHub vào source. Workflow chỉ dùng `secrets.GITHUB_TOKE
 5. Tạo tag khớp version root package:
 
 ```cmd
-git tag v1.1.5
+git tag v1.1.6
 git push origin main --tags
 ```
 
@@ -162,10 +162,10 @@ npm run build:installer
 npm run generate:update-manifest
 ```
 
-Sau đó tạo release/tag `v1.1.5` và upload các asset sau bằng GitHub UI hoặc GitHub CLI đã đăng nhập sẵn:
+Sau đó tạo release/tag `v1.1.6` và upload các asset sau bằng GitHub UI hoặc GitHub CLI đã đăng nhập sẵn:
 
 ```cmd
-gh release create v1.1.5 release/BanHangOffline-Setup-v1.1.5.exe release/BanHangOffline-Setup-v1.1.5.exe.blockmap release/latest.yml release/update-manifest.json --title "BanHangOffline v1.1.5" --generate-notes --latest
+gh release create v1.1.6 release/BanHangOffline-Setup-v1.1.6.exe release/BanHangOffline-Setup-v1.1.6.exe.blockmap release/latest.yml release/update-manifest.json --title "BanHangOffline v1.1.6" --generate-notes --latest
 ```
 
 Lưu ý:
