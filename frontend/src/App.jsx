@@ -394,7 +394,7 @@ function AppLayout({
             {sidebarOpen ? (
               <div className="min-w-0">
                 <div className="truncate text-xs font-bold text-gray-300">{storeDisplayName}</div>
-                <div className="truncate text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.1.10'}</div>
+                <div className="truncate text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.2.1'}</div>
               </div>
             ) : (
               <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white md:flex">

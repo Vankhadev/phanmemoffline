@@ -1,9 +1,9 @@
 # Bán hàng offline - by Van kha mmo
-## Phiên bản hiện tại: 1.1.10
+## Phiên bản hiện tại: 1.2.1
 
 Phiên bản ứng dụng được đồng bộ trong `package.json`, `package-lock.json`, `frontend/package.json` và `backend/package.json`.
 
-### Ghi chú bản vá 1.1.10
+### Ghi chú bản vá 1.2.1
 
 - Sửa bố cục bảng lịch sử đơn nhập hàng để card dùng đủ chiều rộng trang nhập hàng, giữ cuộn ngang ổn định và căn khớp header/body sau khi bổ sung cột Nhà cung cấp.
 - Đảm bảo các cột chọn dòng, STT, mã đơn, ngày lập, sản phẩm, số lượng, tổng tiền, nhà cung cấp, thanh toán, trạng thái và thao tác hiển thị nhất quán trên màn hình hẹp.
@@ -66,7 +66,7 @@ Sau khi build installer, tạo manifest legacy bằng:
 npm run generate:update-manifest
 ```
 
-GitHub Actions workflow `.github/workflows/release-windows.yml` sẽ build Windows installer khi push tag `v*.*.*` như `v1.1.10`, tạo `release/latest.yml` và `release/update-manifest.json`, upload installer/blockmap/metadata lên GitHub Release, rồi kiểm tra các URL update có truy cập ẩn danh được hay không. Nếu repo/release asset đang private và URL trả 401/403/404, client Electron không có token sẽ không thể hiện hộp thoại cập nhật. Xem hướng dẫn chi tiết tại `UPDATE-RELEASE.md` và manifest mẫu tại `release/update-manifest.example.json`.
+GitHub Actions workflow `.github/workflows/release-windows.yml` sẽ build Windows installer khi push tag `v*.*.*` như `v1.2.1`, tạo `release/latest.yml` và `release/update-manifest.json`, upload installer/blockmap/metadata lên GitHub Release, rồi kiểm tra các URL update có truy cập ẩn danh được hay không. Nếu repo/release asset đang private và URL trả 401/403/404, client Electron không có token sẽ không thể hiện hộp thoại cập nhật. Xem hướng dẫn chi tiết tại `UPDATE-RELEASE.md` và manifest mẫu tại `release/update-manifest.example.json`.
 
 ---
 

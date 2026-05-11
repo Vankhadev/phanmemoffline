@@ -367,7 +367,7 @@ function resolveEffectiveSettings(body = {}) {
 function getSapoHeaders(settings) {
   return {
     Accept: 'application/json',
-    'User-Agent': 'phanmienoffline-sapo-sync/1.1.10',
+    'User-Agent': 'phanmienoffline-sapo-sync/1.2.1',
     'X-Sapo-Access-Token': settings.access_token,
   };
 }
