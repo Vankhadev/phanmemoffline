@@ -367,7 +367,7 @@ function resolveEffectiveSettings(body = {}) {
 function getSapoHeaders(settings) {
   return {
     Accept: 'application/json',
-    'User-Agent': 'phanmienoffline-sapo-sync/1.2.2',
+    'User-Agent': 'phanmienoffline-sapo-sync/1.2.3',
     'X-Sapo-Access-Token': settings.access_token,
   };
 }
@@ -1064,7 +1064,14 @@ function syncMappedProducts(mappedProducts, options = {}) {
       results.push(productResult);
       if (!parent || parentAction === 'skipped') continue;
 
-      if (mapped.variants.length <= 1) {
+      const shouldCreateVariantRows = mapped.variants.length > 1
+        || (mapped.variants.length === 1 && (
+          String(mapped.variants[0]?.sapo_variant_id || '') !== String(mapped.sapo_variant_id || '')
+          || normalizeSkuKey(mapped.variants[0]?.sku) !== normalizeSkuKey(parent.sku)
+          || normalizeSearchText(mapped.variants[0]?.name) !== normalizeSearchText(parent.name)
+        ));
+
+      if (!shouldCreateVariantRows) {
         if (mapped.variants.length === 1) {
           parent.sapo_variant_id = mapped.variants[0].sapo_variant_id || parent.sapo_variant_id || '';
           parent.option1 = mapped.variants[0].option1 || parent.option1 || '';

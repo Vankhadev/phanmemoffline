@@ -12,8 +12,13 @@ function toOptionalNumber(value) {
 }
 
 function toNumber(value, fallback = 0) {
-  const n = Number(value);
+  const n = Number(String(value ?? '').replace(',', '.'));
   return Number.isFinite(n) ? n : fallback;
+}
+
+function toQuantity(value, fallback = 1) {
+  const n = toNumber(value, fallback);
+  return Math.max(0.1, Math.round((n + Number.EPSILON) * 10) / 10);
 }
 
 function normalizeComboItem(item = {}, combo_id) {
@@ -38,7 +43,7 @@ function normalizeComboItem(item = {}, combo_id) {
     product_name: productName || displayName,
     variant_name: variantName,
     sku: String(item.sku || '').trim(),
-    quantity: Math.max(1, parseInt(item.quantity, 10) || 1),
+    quantity: toQuantity(item.quantity, 1),
     unit_price: Math.max(0, toNumber(item.unit_price, 0)),
     retail_price: Math.max(0, toNumber(item.retail_price, item.unit_price || 0)),
     wholesale_price: Math.max(0, toNumber(item.wholesale_price, 0)),

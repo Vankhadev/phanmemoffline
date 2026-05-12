@@ -1,8 +1,8 @@
-version: 1.2.2
+version: 1.2.3
 files:
-  - url: BanHangOffline-Setup-v1.2.2.exe
-    sha512: L+dqr0v0eSe8mXyHV/tbFd1hvXJQLP3LgwR/E0rSD98rtPLiDKwm/cVKmGb2sYi6WWjp461RlCeKNUJOdSR7MQ==
-    size: 77163423
-path: BanHangOffline-Setup-v1.2.2.exe
-sha512: L+dqr0v0eSe8mXyHV/tbFd1hvXJQLP3LgwR/E0rSD98rtPLiDKwm/cVKmGb2sYi6WWjp461RlCeKNUJOdSR7MQ==
-releaseDate: '2026-05-12T10:33:04.925Z'
+  - url: BanHangOffline-Setup-v1.2.3.exe
+    sha512: e45qcplhigcOI/jW+DQurotRoKVpMGNb/oi2zK+Vu0FYLJG/BFn20MAG/Zg7w5GfW8VKwfd8FeUmw3x+tPzBxA==
+    size: 77189922
+path: BanHangOffline-Setup-v1.2.3.exe
+sha512: e45qcplhigcOI/jW+DQurotRoKVpMGNb/oi2zK+Vu0FYLJG/BFn20MAG/Zg7w5GfW8VKwfd8FeUmw3x+tPzBxA==
+releaseDate: '2026-05-12T15:29:21.747Z'

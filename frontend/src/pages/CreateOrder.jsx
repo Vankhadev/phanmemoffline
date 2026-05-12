@@ -4,7 +4,7 @@ import { API } from '../App';
 import {
   Search, Plus, X, ShoppingCart, Trash2, ChevronDown, ChevronRight, Barcode, Filter, Layers, UserPlus, Users, Package, Settings2
 } from 'lucide-react';
-import { buildCategoriesById, filterProductTree, normalizeSearchText, getProductDisplayName } from '../utils/productSearch';
+import { buildCategoriesById, filterProductTree, normalizeSearchText, getProductDisplayName, getProductVariants, getVariantIdentity } from '../utils/productSearch';
 import InvoicePrintPreviewModal from '../components/InvoicePrintPreviewModal';
 import { getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
@@ -70,6 +70,27 @@ function buildVietQRUrl(store, amount, invoiceCode) {
 }
 function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
+}
+
+const QUANTITY_STEP = 0.1;
+const MIN_QUANTITY = 0.1;
+
+function parseDecimalQuantity(value, fallback = MIN_QUANTITY) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const number = Number(String(value).trim().replace(',', '.'));
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function normalizeDecimalQuantity(value, fallback = MIN_QUANTITY) {
+  const quantity = parseDecimalQuantity(value, fallback);
+  if (!Number.isFinite(quantity)) return fallback;
+  return Math.max(MIN_QUANTITY, Math.round((quantity + Number.EPSILON) * 10) / 10);
+}
+
+function clampDecimalQuantity(value, max = Infinity, fallback = 1) {
+  const quantity = normalizeDecimalQuantity(value, fallback);
+  const upper = Number.isFinite(Number(max)) ? Number(max) : Infinity;
+  return Math.min(upper, quantity);
 }
 
 function getComboPriceValue(combo, currentPriceType = 'retail') {
@@ -382,7 +403,38 @@ export default function CreateOrder({ user, store }) {
   );
   const visibleFilteredProducts = productResultFilter === 'combo' ? [] : filteredProducts;
   const visibleFilteredCombos = productResultFilter === 'combo' ? filteredCombos : [];
-  const productResultCount = filteredProducts.length;
+  const selectableProductRows = useMemo(() => {
+    const normalizedQuery = normalizeSearchText(productSearch);
+    return (visibleFilteredProducts || []).flatMap(parent => {
+      const variants = getProductVariants(parent);
+      if (variants.length === 0) {
+        return [{ ...parent, is_variant: false, _isVariantOption: false, _rowKey: `product-${parent.id || parent.sku || parent.name}` }];
+      }
+
+      const visibleVariants = !normalizedQuery || parent._matchesParentSearch
+        ? variants
+        : variants.filter((variant, index) => {
+          const variantId = getVariantIdentity(variant, index);
+          return parent._matchedVariantIdSet?.has(variantId) || parent._matchedVariantIds?.includes(variantId);
+        });
+
+      return visibleVariants.map((variant, index) => ({
+        ...variant,
+        is_variant: true,
+        _isVariantOption: true,
+        _rowKey: `variant-${parent.id || 'parent'}-${getVariantIdentity(variant, index)}`,
+        parent_id: variant.parent_id || variant._parentId || parent.id || null,
+        parent_name: variant.parent_name || parent.name || '',
+        parent_sku: variant.parent_sku || parent.sku || '',
+        parent,
+        default_category_id: variant.default_category_id || parent.default_category_id || null,
+        default_category: variant.default_category || parent.default_category || null,
+        category: variant.category || parent.category || '',
+        supplier_id: variant.supplier_id || parent.supplier_id || null,
+      }));
+    });
+  }, [visibleFilteredProducts, productSearch]);
+  const productResultCount = selectableProductRows.length;
   const comboResultCount = filteredCombos.length;
   const allResultCount = productResultCount;
   const isComboResultMode = productResultFilter === 'combo';
@@ -445,18 +497,10 @@ export default function CreateOrder({ user, store }) {
     return null;
   };
 
-  // Mở modal biến thể
-  const openVariantPicker = (product) => {
-    const initQty = {};
-    (product.variants || []).forEach(v => { initQty[v.id] = 1; });
-    setVariantQty(initQty);
-    setShowVariantPicker(product);
-  };
-
   // Thêm biến thể với số lượng
   const addVariantItem = (v) => {
     if (v.stock <= 0) return;
-    const qty = variantQty[v.id] || 1;
+    const qty = clampDecimalQuantity(variantQty[v.id], v.stock, 1);
     if (qty <= 0) return;
     const unit_price = getPrice(v);
     const displayName = getProductDisplayName({
@@ -468,7 +512,7 @@ export default function CreateOrder({ user, store }) {
     setCart(prev => {
       const existing = prev.find(c => c.product_id === v.id && c.unit_price === unit_price && !splitLine);
       if (existing) {
-        const newQty = existing.quantity + qty;
+        const newQty = normalizeDecimalQuantity(existing.quantity + qty, 1);
         if (newQty > v.stock) {
           alert(`Không đủ hàng!`);
           return prev;
@@ -511,7 +555,7 @@ export default function CreateOrder({ user, store }) {
     setCart(prev => {
       const existing = prev.find(c => c.type === 'combo' && Number(c.combo_id) === Number(combo.id) && c.unit_price === unit_price && !splitLine);
       if (existing) {
-        const newQty = existing.quantity + 1;
+        const newQty = normalizeDecimalQuantity(existing.quantity + 1, 1);
         return prev.map(c => c.id === existing.id
           ? { ...c, quantity: newQty, line_total: newQty * c.unit_price - (c.discount_amount || 0) }
           : c);
@@ -548,7 +592,7 @@ export default function CreateOrder({ user, store }) {
     setCart(prev => {
       const existing = prev.find(c => c.product_id === product.id && c.unit_price === unit_price && !splitLine);
       if (existing) {
-        const newQty = existing.quantity + 1;
+        const newQty = normalizeDecimalQuantity(existing.quantity + 1, 1);
         if (newQty > product.stock) {
           alert(`Không đủ hàng! "${product.name}" chỉ còn ${product.stock}.`);
           return prev;
@@ -587,7 +631,7 @@ export default function CreateOrder({ user, store }) {
           alert(`Số lượng vượt quá tồn kho! Tối đa: ${item.max_stock || 0}`);
           return item;
         }
-        const newQty = Math.max(1, value || 1);
+        const newQty = normalizeDecimalQuantity(value, 1);
         return { ...item, quantity: newQty, line_total: newQty * item.unit_price - (item.discount_amount || 0) };
       }
       const updated = { ...item, [field]: value };
@@ -1283,101 +1327,51 @@ export default function CreateOrder({ user, store }) {
                       </div>
                     </div>
                   ))}
-                  {(() => {
-                    const filteredParents = visibleFilteredProducts;
+                  {selectableProductRows.map(item => {
+                    const isVariant = Boolean(item._isVariantOption || item.is_variant);
+                    const parent = item.parent || null;
+                    const displayName = isVariant ? getProductDisplayName(item, parent) : getProductDisplayName(item);
+                    const categoryName = isVariant ? (getCategoryName(item) || getCategoryName(parent)) : getCategoryName(item);
+                    const supplierName = isVariant ? getSupplierName(item.supplier_id || parent?.supplier_id) : getSupplierName(item.supplier_id);
 
-                    return filteredParents.map(parent => {
-                      const hasVariants = (parent.variants || []).length > 0;
-                      const isExpanded = expandedParents[parent.id] || false;
-
-                      return (
-                        <div key={parent.id}>
-                          {/* Parent Product Row */}
-                          <div
-                            className={`border rounded-lg p-3 cursor-pointer hover:border-green-500 hover:shadow-sm ${parent.stock <= 0 ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
-                            onClick={() => {
-                              if (hasVariants) {
-                                setExpandedParents(prev => ({ ...prev, [parent.id]: !prev[parent.id] }));
-                              } else if (parent.stock > 0) {
-                                addProduct(parent);
-                                setProductSearch('');
-                              }
-                            }}
-                          >
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                {hasVariants && (
-                                  <span className="text-gray-400 shrink-0">
-                                    {isExpanded ? '⬇' : '⮕'}
-                                  </span>
-                                )}
-                                <div className={`flex-1 min-w-0 ${parent.stock <= 0 ? 'text-red-500' : 'text-gray-800'}`}>
-                                  <div className="text-xs font-medium truncate flex items-center gap-2">
-                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-bold shrink-0">Sản phẩm</span>
-                                    <span className="truncate">{parent.name}</span>
-                                  </div>
-                                  <div className="text-[10px] text-gray-400 truncate">{getCategoryName(parent)} · {getSupplierName(parent.supplier_id)}</div>
-                                </div>
+                    return (
+                      <div
+                        key={`search-${item._rowKey}`}
+                        className={`border rounded-lg p-3 cursor-pointer ${isVariant ? 'hover:border-blue-500' : 'hover:border-green-500'} hover:shadow-sm ${item.stock <= 0 ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
+                        onClick={() => {
+                          if (item.stock > 0) {
+                            addProduct(item);
+                            setProductSearch('');
+                          }
+                        }}
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {isVariant && <span className="text-gray-300 shrink-0">⊙</span>}
+                            <div className={`flex-1 min-w-0 ${item.stock <= 0 ? 'text-red-500' : isVariant ? 'text-blue-600' : 'text-gray-800'}`}>
+                              <div className="text-xs font-medium truncate flex items-center gap-2">
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${isVariant ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{isVariant ? 'Variant' : 'Sản phẩm'}</span>
+                                <span className="truncate">{displayName}</span>
                               </div>
-                              <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
-                                <div className="text-[10px] text-gray-400">{parent.sku || '—'}</div>
-                                {parent.stock <= 0 ? (
-                                  <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
-                                ) : (
-                                  <div className={`text-[10px] ${parent.stock <= 3 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>Còn: {parent.stock}</div>
-                                )}
-                                <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(parent))}</div>
-                              </div>
+                              {isVariant && parent?.name && <div className="text-[10px] text-blue-500 truncate">Thuộc: {parent.name}</div>}
+                              <div className="text-[10px] text-gray-400 truncate">{categoryName} · {supplierName}</div>
                             </div>
                           </div>
-
-                          {/* Variants - shown when expanded */}
-                          {hasVariants && isExpanded && (
-                            <div className="ml-4 border-l-2 border-green-200 mt-1 pl-2 space-y-1">
-                              {parent.variants.map(variant => (
-                                <div
-                                  key={variant.id}
-                                  className={`border rounded-lg p-2 cursor-pointer hover:border-blue-500 hover:shadow-sm ${variant.stock <= 0 ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (variant.stock > 0) {
-                                      addProduct({ ...variant, is_variant: true, parent_id: parent.id, parent_name: parent.name, parent });
-                                      setProductSearch('');
-                                    }
-                                  }}
-                                >
-                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                      <span className="text-gray-300 shrink-0">⊙</span>
-                                      <div className={`flex-1 min-w-0 ${variant.stock <= 0 ? 'text-red-500' : 'text-blue-600'}`}>
-                                        <div className="text-xs font-medium truncate flex items-center gap-2">
-                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold shrink-0">Variant</span>
-                                          <span className="truncate">{getProductDisplayName(variant, parent)}</span>
-                                        </div>
-                                        <div className="text-[10px] text-gray-400 truncate">{getCategoryName(variant) || getCategoryName(parent)} · {getSupplierName(variant.supplier_id || parent.supplier_id)}</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
-                                      <div className="text-[10px] text-gray-400">{variant.sku || '—'}</div>
-                                      {variant.stock <= 0 ? (
-                                        <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
-                                      ) : (
-                                        <div className={`text-[10px] ${variant.stock <= 3 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>Còn: {variant.stock}</div>
-                                      )}
-                                      <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(variant))}</div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
+                            <div className="text-[10px] text-gray-400">SKU: {item.sku || '—'}</div>
+                            {item.stock <= 0 ? (
+                              <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
+                            ) : (
+                              <div className={`text-[10px] ${item.stock <= 3 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>Còn: {item.stock}</div>
+                            )}
+                            <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(item))}</div>
+                          </div>
                         </div>
-                      );
-                    });
-                  })()}
+                      </div>
+                    );
+                  })}
                   {(() => {
-                    const filteredParents = visibleFilteredProducts;
-                    return filteredParents.length === 0 && visibleFilteredCombos.length === 0 && !resultLoading && (
+                    return selectableProductRows.length === 0 && visibleFilteredCombos.length === 0 && !resultLoading && (
                       <div className="text-center text-gray-400 py-6 text-sm">
                         {emptyProductResultMessage}
                       </div>
@@ -1446,10 +1440,10 @@ export default function CreateOrder({ user, store }) {
                             )}
                           </td>
                           <td className="py-2 px-3 text-center">
-                            <input type="number" min="1" max={isCombo ? undefined : item.max_stock}
+                            <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal" max={isCombo ? undefined : item.max_stock}
                               value={item.quantity}
                               disabled={!isCombo && item.max_stock <= 0}
-                              onChange={e => updateCartItem(item.id, 'quantity', +e.target.value)}
+                              onChange={e => updateCartItem(item.id, 'quantity', e.target.value)}
                               className={`w-14 text-center border rounded px-1 py-1 text-sm ${!isCombo && item.max_stock <= 0 ? 'bg-red-100 text-red-400 border-red-200' : ''}`} />
                           </td>
                           <td className="py-2 px-3 text-right">
@@ -1580,103 +1574,52 @@ export default function CreateOrder({ user, store }) {
                       </div>
                     </div>
                   ))}
-                  {(() => {
-                    const filteredParents = visibleFilteredProducts;
+                  {selectableProductRows.map(item => {
+                    const isVariant = Boolean(item._isVariantOption || item.is_variant);
+                    const parent = item.parent || null;
+                    const displayName = isVariant ? getProductDisplayName(item, parent) : getProductDisplayName(item);
+                    const categoryName = isVariant ? (getCategoryName(item) || getCategoryName(parent)) : getCategoryName(item);
+                    const supplierName = isVariant ? getSupplierName(item.supplier_id || parent?.supplier_id) : getSupplierName(item.supplier_id);
 
-                    return filteredParents.map(parent => {
-                      const hasVariants = (parent.variants || []).length > 0;
-                      const isExpanded = expandedParents[parent.id] || false;
-
-                      return (
-                        <div key={parent.id}>
-                          {/* Parent Product Row */}
-                          <div
-                            className={`border rounded-lg p-3 cursor-pointer hover:border-green-500 hover:shadow-sm ${parent.stock <= 0 ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
-                            onClick={() => {
-                              if (hasVariants) {
-                                setExpandedParents(prev => ({ ...prev, [parent.id]: !prev[parent.id] }));
-                              } else if (parent.stock > 0) {
-                                addProduct(parent);
-                                setShowProductPanel(false);
-                                setProductSearch('');
-                              }
-                            }}
-                          >
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                {hasVariants && (
-                                  <span className="text-gray-400 shrink-0">
-                                    {isExpanded ? '▼' : '▶'}
-                                  </span>
-                                )}
-                                <div className={`flex-1 min-w-0 ${parent.stock <= 0 ? 'text-red-500' : 'text-gray-800'}`}>
-                                  <div className="text-xs font-medium truncate flex items-center gap-2">
-                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-bold shrink-0">Sản phẩm</span>
-                                    <span className="truncate">{parent.name}</span>
-                                  </div>
-                                  <div className="text-[10px] text-gray-400 truncate">{getCategoryName(parent)} · {getSupplierName(parent.supplier_id)}</div>
-                                </div>
+                    return (
+                      <div
+                        key={`panel-${item._rowKey}`}
+                        className={`border rounded-lg p-3 cursor-pointer ${isVariant ? 'hover:border-blue-500' : 'hover:border-green-500'} hover:shadow-sm ${item.stock <= 0 ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
+                        onClick={() => {
+                          if (item.stock > 0) {
+                            addProduct(item);
+                            setShowProductPanel(false);
+                            setProductSearch('');
+                          }
+                        }}
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {isVariant && <span className="text-gray-300 shrink-0">⊙</span>}
+                            <div className={`flex-1 min-w-0 ${item.stock <= 0 ? 'text-red-500' : isVariant ? 'text-blue-600' : 'text-gray-800'}`}>
+                              <div className="text-xs font-medium truncate flex items-center gap-2">
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${isVariant ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{isVariant ? 'Variant' : 'Sản phẩm'}</span>
+                                <span className="truncate">{displayName}</span>
                               </div>
-                              <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
-                                <div className="text-[10px] text-gray-400">{parent.sku || '—'}</div>
-                                {parent.stock <= 0 ? (
-                                  <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
-                                ) : (
-                                  <div className={`text-[10px] ${parent.stock <= 3 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>Còn: {parent.stock}</div>
-                                )}
-                                <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(parent))}</div>
-                              </div>
+                              {isVariant && parent?.name && <div className="text-[10px] text-blue-500 truncate">Thuộc: {parent.name}</div>}
+                              <div className="text-[10px] text-gray-400 truncate">{categoryName} · {supplierName}</div>
                             </div>
                           </div>
-
-                          {/* Variants - shown when expanded */}
-                          {hasVariants && isExpanded && (
-                            <div className="ml-4 border-l-2 border-green-200 mt-1 pl-2 space-y-1">
-                              {parent.variants.map(variant => (
-                                <div
-                                  key={variant.id}
-                                  className={`border rounded-lg p-2 cursor-pointer hover:border-blue-500 hover:shadow-sm ${variant.stock <= 0 ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (variant.stock > 0) {
-                                      addProduct({ ...variant, is_variant: true, parent_id: parent.id, parent_name: parent.name, parent });
-                                      setShowProductPanel(false);
-                                      setProductSearch('');
-                                    }
-                                  }}
-                                >
-                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                      <span className="text-gray-300 shrink-0">⊙</span>
-                                      <div className={`flex-1 min-w-0 ${variant.stock <= 0 ? 'text-red-500' : 'text-blue-600'}`}>
-                                        <div className="text-xs font-medium truncate flex items-center gap-2">
-                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold shrink-0">Variant</span>
-                                          <span className="truncate">{getProductDisplayName(variant, parent)}</span>
-                                        </div>
-                                        <div className="text-[10px] text-gray-400 truncate">{getCategoryName(variant) || getCategoryName(parent)} · {getSupplierName(variant.supplier_id || parent.supplier_id)}</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
-                                      <div className="text-[10px] text-gray-400">{variant.sku || '—'}</div>
-                                      {variant.stock <= 0 ? (
-                                        <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
-                                      ) : (
-                                        <div className={`text-[10px] ${variant.stock <= 3 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>Còn: {variant.stock}</div>
-                                      )}
-                                      <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(variant))}</div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
+                            <div className="text-[10px] text-gray-400">SKU: {item.sku || '—'}</div>
+                            {item.stock <= 0 ? (
+                              <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
+                            ) : (
+                              <div className={`text-[10px] ${item.stock <= 3 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>Còn: {item.stock}</div>
+                            )}
+                            <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(item))}</div>
+                          </div>
                         </div>
-                      );
-                    });
-                  })()}
+                      </div>
+                    );
+                  })}
                   {(() => {
-                    const filteredParents = visibleFilteredProducts;
-                    return filteredParents.length === 0 && visibleFilteredCombos.length === 0 && !resultLoading && (
+                    return selectableProductRows.length === 0 && visibleFilteredCombos.length === 0 && !resultLoading && (
                       <div className="text-center text-gray-400 py-6 text-sm">
                         {emptyProductResultMessage}
                       </div>
@@ -1978,9 +1921,9 @@ export default function CreateOrder({ user, store }) {
                       <div className="text-sm font-bold text-blue-600 mt-0.5">{formatVND(getPrice(v))}</div>
                     </div>
                     <div className="flex items-center gap-2 sm:shrink-0">
-                      <input type="number" min="1" max={v.stock}
+                      <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal" max={v.stock}
                         value={variantQty[v.id] || 1}
-                        onChange={e => setVariantQty(q => ({ ...q, [v.id]: Math.max(1, Math.min(v.stock, +e.target.value)) }))}
+                        onChange={e => setVariantQty(q => ({ ...q, [v.id]: clampDecimalQuantity(e.target.value, v.stock, 1) }))}
                         className="w-16 text-center border rounded px-2 py-1.5 text-sm font-medium" />
                       <button
                         onClick={() => { addVariantItem(v); setShowVariantPicker(null); }}

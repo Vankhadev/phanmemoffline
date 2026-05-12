@@ -15,6 +15,27 @@ const PAYMENT_METHODS = [
 ];
 const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
 
+const QUANTITY_STEP = 0.1;
+const MIN_QUANTITY = 0.1;
+
+function parseDecimalQuantity(value, fallback = MIN_QUANTITY) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const number = Number(String(value).trim().replace(',', '.'));
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function normalizeDecimalQuantity(value, fallback = MIN_QUANTITY) {
+  const quantity = parseDecimalQuantity(value, fallback);
+  if (!Number.isFinite(quantity)) return fallback;
+  return Math.max(MIN_QUANTITY, Math.round((quantity + Number.EPSILON) * 10) / 10);
+}
+
+function clampDecimalQuantity(value, max = Infinity, fallback = 1) {
+  const quantity = normalizeDecimalQuantity(value, fallback);
+  const upper = Number.isFinite(Number(max)) ? Number(max) : Infinity;
+  return Math.min(upper, quantity);
+}
+
 const BANK_MAP = {
   'Vietcombank': 'VCB',
   'VietinBank': 'CTG',
@@ -126,7 +147,7 @@ export default function POS({ user, store }) {
   // Thêm biến thể với số lượng
   const addVariantWithQty = (v) => {
     if (v.stock <= 0) return;
-    const qty = variantQty[v.id] || 1;
+    const qty = clampDecimalQuantity(variantQty[v.id], v.stock, 1);
     if (qty <= 0) return;
     if (qty > v.stock) {
       alert(`Không đủ hàng! "${v.name}" chỉ còn ${v.stock} sản phẩm.`);
@@ -146,7 +167,7 @@ export default function POS({ user, store }) {
         return;
       }
       setCart(cart.map(c => c.product_id === v.id && c.unit_price === unit_price
-        ? { ...c, quantity: c.quantity + qty, line_total: (c.quantity + qty) * c.unit_price - c.discount_amount }
+        ? { ...c, quantity: normalizeDecimalQuantity(c.quantity + qty, 1), line_total: normalizeDecimalQuantity(c.quantity + qty, 1) * c.unit_price - c.discount_amount }
         : c));
     } else {
       setCart([...cart, {
@@ -192,12 +213,12 @@ export default function POS({ user, store }) {
     const existing = cart.find(c => c.product_id === product.id && c.unit_price === unit_price);
     if (existing) {
       // Kiểm tra không vượt quá tồn kho
-      if (existing.quantity + 1 > product.stock) {
+      if (normalizeDecimalQuantity(existing.quantity + 1, 1) > product.stock) {
         alert(`Không đủ hàng! "${product.name}" chỉ còn ${product.stock} sản phẩm.`);
         return;
       }
       setCart(cart.map(c => c.product_id === product.id && c.unit_price === unit_price
-        ? { ...c, quantity: c.quantity + 1, line_total: (c.quantity + 1) * c.unit_price - c.discount_amount }
+        ? { ...c, quantity: normalizeDecimalQuantity(c.quantity + 1, 1), line_total: normalizeDecimalQuantity(c.quantity + 1, 1) * c.unit_price - c.discount_amount }
         : c));
     } else {
       setCart([...cart, {
@@ -219,8 +240,8 @@ export default function POS({ user, store }) {
     setCart(cart.map(item => {
       if (item.id !== id) return item;
       const updated = { ...item, [field]: value };
-      if (field === 'quantity' && value > item.max_stock) {
-        updated.quantity = item.max_stock;
+      if (field === 'quantity') {
+        updated.quantity = clampDecimalQuantity(value, item.max_stock, 1);
       }
       updated.line_total = updated.quantity * updated.unit_price - updated.discount_amount;
       return updated;
@@ -407,11 +428,6 @@ export default function POS({ user, store }) {
           >
             ❓ Hướng dẫn
           </button>
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${serverOnline ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-600'
-            }`}>
-            <span className={`w-2 h-2 rounded-full ${serverOnline ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
-            {serverOnline ? '🟢 Online' : '🔴 Offline'}
-          </div>
         </div>
 
         {/* Search - ĐẦU TIÊN */}
@@ -491,9 +507,9 @@ export default function POS({ user, store }) {
                   {/* Thêm số lượng + nút */}
                   {p.stock > 0 && (
                     <div className="flex items-center gap-1 mt-2">
-                      <input type="number" min="1" max={p.stock}
+                      <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal" max={p.stock}
                         value={mainQty[p.id] || 1}
-                        onChange={e => setMainQty({ ...mainQty, [p.id]: Math.min(p.stock, Math.max(1, +e.target.value)) })}
+                        onChange={e => setMainQty({ ...mainQty, [p.id]: clampDecimalQuantity(e.target.value, p.stock, 1) })}
                         onClick={e => e.stopPropagation()}
                         className="w-14 border rounded px-2 py-1 text-xs text-center" />
                       <button onClick={e => {
@@ -561,9 +577,9 @@ export default function POS({ user, store }) {
                       {v.stock > 0 && (
                         <div className="mt-2 flex items-center gap-1">
                           <label className="text-xs text-gray-500">SL:</label>
-                          <input type="number" min="1" max={v.stock}
+                          <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal" max={v.stock}
                             value={qty}
-                            onChange={e => setVariantQty({ ...variantQty, [v.id]: Math.min(v.stock, Math.max(1, +e.target.value)) })}
+                            onChange={e => setVariantQty({ ...variantQty, [v.id]: clampDecimalQuantity(e.target.value, v.stock, 1) })}
                             className={`w-16 border rounded px-2 py-1 text-xs text-center ${overStock ? 'border-red-500 bg-red-50' : ''}`}
                           />
                           {overStock && <span className="text-xs text-red-500">max {v.stock}</span>}
@@ -583,7 +599,7 @@ export default function POS({ user, store }) {
                   onClick={() => {
                     showVariantPicker.variants.forEach(v => {
                       if (v.stock <= 0) return;
-                      const qty = variantQty[v.id] || 1;
+                      const qty = clampDecimalQuantity(variantQty[v.id], v.stock, 1);
                       if (qty <= 0) return;
                       const unit_price = v[`${priceType}_price`] || v.retail_price;
                       const displayName = getProductDisplayName({
@@ -596,7 +612,7 @@ export default function POS({ user, store }) {
                       if (existing) {
                         if (existing.quantity + qty > v.stock) return;
                         setCart(prev => prev.map(c => c.product_id === v.id && c.unit_price === unit_price
-                          ? { ...c, quantity: c.quantity + qty, line_total: (c.quantity + qty) * c.unit_price - c.discount_amount }
+                          ? { ...c, quantity: normalizeDecimalQuantity(c.quantity + qty, 1), line_total: normalizeDecimalQuantity(c.quantity + qty, 1) * c.unit_price - c.discount_amount }
                           : c));
                       } else {
                         setCart(prev => [...prev, {
@@ -664,8 +680,8 @@ export default function POS({ user, store }) {
                       <div className="text-[10px] text-gray-400">{formatVND(item.unit_price)} × {item.quantity}</div>
                     </td>
                     <td className="py-1.5 px-2 text-center">
-                      <input type="number" min="1" value={item.quantity}
-                        onChange={e => updateCartItem(item.id, 'quantity', Math.max(1, +e.target.value))}
+                      <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal" value={item.quantity}
+                        onChange={e => updateCartItem(item.id, 'quantity', e.target.value)}
                         className={`w-10 text-center border rounded px-1 py-0.5 text-xs ${item.quantity > item.max_stock ? 'border-red-500 bg-red-100' : ''}`} />
                     </td>
                     <td className="py-1.5 px-2 text-right text-red-500">
@@ -1032,12 +1048,11 @@ export default function POS({ user, store }) {
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">📡 Chế độ Offline</h3>
+                <h3 className="font-bold text-gray-800 mb-2">📡 Đồng bộ khi mất kết nối</h3>
                 <p>Nếu server không kết nối được:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>Đơn hàng sẽ được lưu vào localStorage</li>
-                  <li>Hiển thị cảnh báo "🔴 Offline"</li>
-                  <li>Khi server online lại, đơn sẽ tự động đồng bộ</li>
+                  <li>Khi server kết nối lại, đơn sẽ tự động đồng bộ</li>
                 </ul>
               </div>
 

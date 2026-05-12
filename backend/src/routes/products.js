@@ -60,8 +60,13 @@ function enrichProduct(product, parent = null, categoriesById = getCategoriesByI
   };
 }
 
+function hasParentId(value) {
+  const id = Number(value);
+  return Number.isFinite(id) && id > 0;
+}
+
 function activeParents() {
-  return getAll('products', p => p.active !== 0 && !p.parent_id);
+  return getAll('products', p => p.active !== 0 && !hasParentId(p.parent_id));
 }
 
 function activeVariants(parentId) {
@@ -72,6 +77,34 @@ function hasActiveVariants(parentId) {
   return activeVariants(parentId).length > 0;
 }
 
+function getArrayField(product, field) {
+  return Array.isArray(product?.[field]) ? product[field] : [];
+}
+
+function getInlineVariants(product) {
+  return [
+    ...getArrayField(product, 'variants'),
+    ...getArrayField(product, 'children'),
+    ...getArrayField(product, 'child_products'),
+    ...getArrayField(product, 'childProducts'),
+    ...getArrayField(product, 'variant_items'),
+    ...getArrayField(product, 'variantItems'),
+  ];
+}
+
+function dedupeVariants(variants = []) {
+  const seen = new Set();
+  const result = [];
+  for (const variant of variants) {
+    if (!variant || typeof variant !== 'object') continue;
+    const key = String(variant.id ?? variant.sku ?? variant.sapo_variant_id ?? variant.variant_id ?? result.length);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(variant);
+  }
+  return result;
+}
+
 function buildProductsTree() {
   const categoriesById = getCategoriesById();
   const all = getAll('products', p => p.active !== 0)
@@ -80,7 +113,7 @@ function buildProductsTree() {
   const parents = [];
 
   for (const product of all) {
-    if (!product.parent_id) {
+    if (!hasParentId(product.parent_id)) {
       parents.push(product);
       continue;
     }
@@ -92,10 +125,23 @@ function buildProductsTree() {
 
   return parents.map(parent => {
     const enrichedParent = enrichProduct(parent, null, categoriesById);
-    const variants = variantsByParentId.get(Number(parent.id)) || [];
+    const variants = dedupeVariants([
+      ...(variantsByParentId.get(Number(parent.id)) || []),
+      ...getInlineVariants(parent),
+    ]);
+    const enrichedVariants = variants.map(v => ({
+      ...enrichProduct(v, enrichedParent, categoriesById),
+      parent_id: v.parent_id || parent.id,
+      parent_name: v.parent_name || parent.name,
+      parent_sku: v.parent_sku || parent.sku,
+      is_variant: true,
+    }));
     return {
       ...enrichedParent,
-      variants: variants.map(v => ({ ...enrichProduct(v, enrichedParent, categoriesById), is_variant: true })),
+      variants: enrichedVariants,
+      children: enrichedVariants,
+      child_products: enrichedVariants,
+      variant_count: enrichedVariants.length,
     };
   });
 }

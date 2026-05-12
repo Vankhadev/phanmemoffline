@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate, } from 'react-router-dom';
-import PwaInstallPrompt from './components/PwaInstallPrompt';
 import Home from './pages/Home';
 import POS from './pages/POS';
 import CreateOrder from './pages/CreateOrder';
@@ -438,7 +437,7 @@ function AppLayout({
             {sidebarOpen ? (
               <div className="min-w-0">
                 <div className="truncate text-xs font-bold text-gray-300">{storeDisplayName}</div>
-                <div className="truncate text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.2.2'}</div>
+                <div className="truncate text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.2.3'}</div>
               </div>
             ) : (
               <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white md:flex">
@@ -894,7 +893,6 @@ function DesktopApp() {
 
   return (
     <HashRouter>
-      <PwaInstallPrompt />
       {!authState.user ? (
         <Routes>
           <Route path={LOGIN_REGISTER_ROUTE} element={<Register onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} />} />

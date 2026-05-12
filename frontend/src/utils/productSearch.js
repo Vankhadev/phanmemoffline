@@ -15,7 +15,7 @@ export function compactSearchText(value) {
   return normalizeSearchText(value).replace(/\s+/g, '');
 }
 
-function firstNonEmpty(...values) {
+export function firstNonEmpty(...values) {
   const found = values.find(value => value !== undefined && value !== null && String(value).trim() !== '');
   return found === undefined ? '' : String(found).trim();
 }
@@ -105,12 +105,151 @@ export function categoryFields(category) {
   ].filter(Boolean);
 }
 
+export function getVariantIdentity(item = {}, fallbackIndex = 0) {
+  return String(firstNonEmpty(
+    item?.id,
+    item?.variant_id,
+    item?.variantId,
+    item?.sapo_variant_id,
+    item?.sku,
+    item?.barcode,
+    `${item?.parent_id || item?._parentId || 'variant'}-${fallbackIndex}`,
+  ));
+}
+
+export function getProductVariants(product = {}) {
+  const candidates = [
+    product?.variants,
+    product?.children,
+    product?.child_products,
+    product?.childProducts,
+    product?.variant_items,
+    product?.variantItems,
+    product?.variant_products,
+    product?.variantProducts,
+    product?.items,
+  ];
+  const seen = new Set();
+  const variants = [];
+
+  for (const candidate of candidates) {
+    if (!Array.isArray(candidate)) continue;
+    for (const item of candidate) {
+      if (!item || typeof item !== 'object') continue;
+      const key = getVariantIdentity(item, variants.length);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      variants.push(item);
+    }
+  }
+
+  return variants;
+}
+
 export function findCategoryForProduct(product, categoriesById = {}) {
   if (!product) return null;
   const rawId = product.default_category_id;
   const id = rawId === null || rawId === undefined || rawId === '' ? null : Number(rawId);
   if (id && categoriesById[id]) return categoriesById[id];
   return product.default_category || product.category_info || null;
+}
+
+function getOptionText(item = {}) {
+  return [item?.option1, item?.option2, item?.option3, item?.color, item?.size]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .join(' / ');
+}
+
+export function getProductSku(item = {}, parent = null) {
+  return firstNonEmpty(
+    item?.sku,
+    item?.product_sku,
+    item?.productSku,
+    item?.variant_sku,
+    item?.variantSku,
+    item?.barcode,
+    item?.sapo_sku,
+    item?.sapo_variant_id ? `Sapo-${item.sapo_variant_id}` : '',
+    item?.variant_id ? `VAR-${item.variant_id}` : '',
+    parent?.sku ? `${parent.sku}-${getVariantIdentity(item)}` : '',
+  );
+}
+
+export function normalizeInventoryVariant(variant = {}, parent = null, fallbackIndex = 0) {
+  const optionText = getOptionText(variant);
+  const name = firstNonEmpty(
+    getProductDisplayName(variant, parent),
+    variant?.display_name,
+    variant?.displayName,
+    variant?.variant_name,
+    variant?.variantName,
+    variant?.product_name,
+    variant?.productName,
+    optionText,
+    getProductSku(variant, parent),
+    parent?.name ? `${parent.name} - Biến thể ${fallbackIndex + 1}` : `Biến thể ${fallbackIndex + 1}`,
+  );
+
+  return {
+    ...variant,
+    id: variant?.id ?? variant?.variant_id ?? variant?.variantId ?? variant?.sapo_variant_id ?? getVariantIdentity(variant, fallbackIndex),
+    name,
+    sku: getProductSku(variant, parent),
+    import_price: variant?.import_price ?? variant?.cost ?? variant?.cost_price ?? variant?.inventory_cost ?? variant?.original_price ?? 0,
+    retail_price: variant?.retail_price ?? variant?.price ?? variant?.sale_price ?? variant?.selling_price ?? 0,
+    wholesale_price: variant?.wholesale_price ?? variant?.wholesalePrice ?? variant?.price ?? 0,
+    vip_price: variant?.vip_price ?? variant?.vipPrice ?? variant?.compare_at_price ?? variant?.price ?? 0,
+    stock: Number(variant?.stock ?? variant?.quantity ?? variant?.inventory_quantity ?? variant?.qty ?? 0) || 0,
+    option_text: optionText,
+  };
+}
+
+export function normalizeProductTree(products = []) {
+  const input = Array.isArray(products) ? products : [];
+  const byId = new Map(input.map(item => [Number(item?.id), item]).filter(([id]) => Number.isFinite(id) && id > 0));
+  const parents = [];
+  const variantsByParentId = new Map();
+
+  for (const item of input) {
+    const parentId = Number(item?.parent_id ?? item?.parentId ?? item?._parentId);
+    const isVariant = Number.isFinite(parentId) && parentId > 0;
+    if (isVariant) {
+      if (!variantsByParentId.has(parentId)) variantsByParentId.set(parentId, []);
+      variantsByParentId.get(parentId).push(item);
+    } else {
+      parents.push(item);
+    }
+  }
+
+  return parents.map(parent => {
+    const nested = getProductVariants(parent);
+    const rowChildren = variantsByParentId.get(Number(parent?.id)) || [];
+    const variants = [];
+    const seen = new Set();
+    [...nested, ...rowChildren].forEach((variant, index) => {
+      const normalized = normalizeInventoryVariant(variant, parent, index);
+      const key = getVariantIdentity(normalized, index);
+      if (seen.has(key)) return;
+      seen.add(key);
+      variants.push({
+        ...normalized,
+        parent_id: normalized.parent_id || parent.id,
+        parent_name: normalized.parent_name || parent.name,
+        parent_sku: normalized.parent_sku || parent.sku,
+        is_variant: true,
+      });
+    });
+    return {
+      ...parent,
+      name: firstNonEmpty(parent?.display_name, parent?.displayName, parent?.product_name, parent?.productName, parent?.name, parent?.sku, 'Sản phẩm'),
+      sku: getProductSku(parent),
+      variants,
+      children: variants,
+      child_products: variants,
+      variant_count: variants.length,
+    };
+  });
 }
 
 export function buildProductSearchFields(item, parent = null, categoriesById = {}) {
@@ -282,7 +421,7 @@ export function filterProductTree(products = [], query = '', options = {}) {
 
   for (const parent of productList) {
     const parentScore = scorePreparedProductMatch(parent, preparedQuery, null, context);
-    const variants = parent.variants || [];
+    const variants = getProductVariants(parent);
     const matchedVariantIds = [];
     const matchedVariantIdSet = new Set();
     const variantSearchScores = new Map();
@@ -291,15 +430,16 @@ export function filterProductTree(products = [], query = '', options = {}) {
     for (const variant of variants) {
       const result = scorePreparedProductMatch(variant, preparedQuery, parent, context);
       if (result.matched) {
-        matchedVariantIds.push(variant.id);
-        matchedVariantIdSet.add(variant.id);
-        variantSearchScores.set(variant.id, result.score);
+        const variantId = getVariantIdentity(variant, matchedVariantIds.length);
+        matchedVariantIds.push(variantId);
+        matchedVariantIdSet.add(variantId);
+        variantSearchScores.set(variantId, result.score);
         if (result.score > maxVariantScore) maxVariantScore = result.score;
       }
     }
 
     const visibleMatchedVariantIds = parentScore.matched && includeAllVariantsOnParentMatch
-      ? variants.map(v => v.id)
+      ? variants.map((v, index) => getVariantIdentity(v, index))
       : matchedVariantIds;
 
     if (parentScore.matched || visibleMatchedVariantIds.length > 0) {
@@ -321,19 +461,23 @@ export function flattenProductTree(products = [], options = {}) {
   const rows = [];
   for (const parent of products || []) {
     rows.push({ ...parent, _isParent: true, parent: null });
-    const variants = parent.variants || [];
+    const variants = getProductVariants(parent);
     const visibleVariants = options.onlyMatchedVariants && !parent._matchesParentSearch
-      ? variants.filter(v => parent._matchedVariantIds?.includes(v.id))
+      ? variants.filter((v, index) => parent._matchedVariantIds?.includes(getVariantIdentity(v, index)))
       : variants;
     for (const variant of visibleVariants) {
+      const normalizedVariant = normalizeInventoryVariant(variant, parent, rows.length);
       rows.push({
-        ...variant,
+        ...normalizedVariant,
         _isParent: false,
         _parentId: parent.id,
         parent,
-        default_category_id: variant.default_category_id || parent.default_category_id || null,
-        default_category: variant.default_category || parent.default_category || null,
-        category: variant.category || parent.category || '',
+        parent_id: normalizedVariant.parent_id || parent.id,
+        parent_name: normalizedVariant.parent_name || parent.name,
+        parent_sku: normalizedVariant.parent_sku || parent.sku,
+        default_category_id: normalizedVariant.default_category_id || parent.default_category_id || null,
+        default_category: normalizedVariant.default_category || parent.default_category || null,
+        category: normalizedVariant.category || parent.category || '',
       });
     }
   }
@@ -363,10 +507,10 @@ export function searchFlatProducts(products = [], query = '', options = {}) {
       if (!shouldContinue) break;
     }
 
-    const variants = parent.variants || [];
+    const variants = getProductVariants(parent);
     const visibleVariants = !normalizedQuery || parent._matchesParentSearch
       ? variants
-      : variants.filter(v => parent._matchedVariantIdSet?.has(v.id) || parent._matchedVariantIds?.includes(v.id));
+      : variants.filter((v, index) => parent._matchedVariantIdSet?.has(getVariantIdentity(v, index)) || parent._matchedVariantIds?.includes(getVariantIdentity(v, index)));
 
     if (includeVariants) {
       for (const variant of visibleVariants) {

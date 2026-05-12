@@ -22,6 +22,21 @@ function formatVND(n) {
   return vndFormatter.format(n || 0);
 }
 
+const QUANTITY_STEP = 0.1;
+const MIN_QUANTITY = 0.1;
+
+function parseDecimalQuantity(value, fallback = MIN_QUANTITY) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const number = Number(String(value).trim().replace(',', '.'));
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function normalizeDecimalQuantity(value, fallback = MIN_QUANTITY) {
+  const quantity = parseDecimalQuantity(value, fallback);
+  if (!Number.isFinite(quantity)) return fallback;
+  return Math.max(MIN_QUANTITY, Math.round((quantity + Number.EPSILON) * 10) / 10);
+}
+
 const EMPTY_PRODUCT_FORM = Object.freeze({
   sku: '',
   name: '',
@@ -708,7 +723,7 @@ export default function Products({ store }) {
       retail_price: it.retail_price ?? it.unit_price ?? 0,
       wholesale_price: it.wholesale_price ?? 0,
       unit_price: it.unit_price ?? it.retail_price ?? 0,
-      quantity: Math.max(1, parseInt(it.quantity, 10) || 1),
+      quantity: normalizeDecimalQuantity(it.quantity, 1),
     };
   };
   const openComboAdd = () => {
@@ -734,22 +749,33 @@ export default function Products({ store }) {
     if (!comboForm.name?.trim()) { alert('Vui lòng nhập tên combo!'); return; }
     if (comboForm.retail_price === '' || comboForm.retail_price === null || comboForm.retail_price === undefined) { alert('Vui lòng nhập giá bán lẻ!'); return; }
     if (comboForm.wholesale_price === '' || comboForm.wholesale_price === null || comboForm.wholesale_price === undefined) { alert('Vui lòng nhập giá bán sỉ!'); return; }
-    const payloadItems = comboItems.map(item => ({
-      item_type: item.item_type || (item.variant_id ? 'variant' : 'product'),
-      product_id: item.product_id || null,
-      variant_id: item.variant_id || null,
-      parent_id: item.parent_id || (item.variant_id ? item.product_id : null),
-      name: item.name || item.variant_name || item.product_name || '',
-      parent_name: item.parent_name || '',
-      product_name: item.product_name || item.name || '',
-      variant_name: item.variant_name || '',
-      sku: item.sku || '',
-      quantity: Math.max(1, parseInt(item.quantity, 10) || 1),
-      unit_price: Number(item.unit_price || item.retail_price || 0),
-      retail_price: Number(item.retail_price || item.unit_price || 0),
-      wholesale_price: Number(item.wholesale_price || 0),
-      stock: Number(item.stock || 0),
-    }));
+    let invalidQuantityItem = null;
+    const payloadItems = comboItems.map(item => {
+      const quantity = normalizeDecimalQuantity(item.quantity, Number.NaN);
+      if (!Number.isFinite(quantity) || quantity < MIN_QUANTITY) {
+        invalidQuantityItem = item;
+      }
+      return {
+        item_type: item.item_type || (item.variant_id ? 'variant' : 'product'),
+        product_id: item.product_id || null,
+        variant_id: item.variant_id || null,
+        parent_id: item.parent_id || (item.variant_id ? item.product_id : null),
+        name: item.name || item.variant_name || item.product_name || '',
+        parent_name: item.parent_name || '',
+        product_name: item.product_name || item.name || '',
+        variant_name: item.variant_name || '',
+        sku: item.sku || '',
+        quantity,
+        unit_price: Number(item.unit_price || item.retail_price || 0),
+        retail_price: Number(item.retail_price || item.unit_price || 0),
+        wholesale_price: Number(item.wholesale_price || 0),
+        stock: Number(item.stock || 0),
+      };
+    });
+    if (invalidQuantityItem) {
+      alert(`Số lượng của "${invalidQuantityItem.product_name || invalidQuantityItem.name || invalidQuantityItem.sku || 'sản phẩm'}" phải lớn hơn hoặc bằng ${MIN_QUANTITY}.`);
+      return;
+    }
     const method = editingCombo ? 'PUT' : 'POST';
     const url = editingCombo ? `${API}/combos/${editingCombo.id}` : `${API}/combos`;
     const res = await fetch(url, {
@@ -802,14 +828,14 @@ export default function Products({ store }) {
       const exists = prev.some(item => getComboItemKey(item) === key || item.id === key);
       if (!exists) return [...prev, optionToComboItem(option)];
       return prev.map(item => (getComboItemKey(item) === key || item.id === key)
-        ? { ...item, quantity: Math.max(1, parseInt(item.quantity, 10) || 1) + 1 }
+        ? { ...item, quantity: normalizeDecimalQuantity(item.quantity, 1) + 1 }
         : item);
     });
     setComboProductSearch('');
   };
   const updateComboItem = (idx, field, val) => {
     const updated = [...comboItems];
-    updated[idx] = { ...updated[idx], [field]: field === 'quantity' ? Math.max(1, parseInt(val, 10) || 1) : val };
+    updated[idx] = { ...updated[idx], [field]: field === 'quantity' ? normalizeDecimalQuantity(val, MIN_QUANTITY) : val };
     setComboItems(updated);
   };
   const removeComboItem = (idx) => setComboItems(comboItems.filter((_, i) => i !== idx));
@@ -2082,7 +2108,7 @@ export default function Products({ store }) {
                       </div>
                       <div className="w-24">
                         <label className="text-[10px] text-gray-500 block mb-1 text-center">Số lượng</label>
-                        <input type="number" min="1"
+                        <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal"
                           className="w-full text-center border rounded px-2 py-1.5 text-sm font-semibold"
                           value={item.quantity}
                           onChange={e => updateComboItem(idx, 'quantity', e.target.value)}

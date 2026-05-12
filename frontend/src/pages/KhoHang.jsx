@@ -7,7 +7,10 @@ import {
   categoryFields,
   filterProductTree,
   findCategoryForProduct,
+  firstNonEmpty,
   flattenProductTree,
+  getProductVariants,
+  normalizeProductTree,
   normalizeSearchText,
 } from '../utils/productSearch';
 import { SYNC_UPDATED_EVENT } from '../utils/apiClient';
@@ -25,7 +28,8 @@ function formatOptionalVND(value) {
 }
 
 function getProductVariantCount(product) {
-  if (Array.isArray(product?.variants)) return product.variants.length;
+  const variants = getProductVariants(product);
+  if (variants.length > 0) return variants.length;
   const count = Number(product?.variant_count ?? product?.variants_count ?? product?.variantCount ?? 0);
   return Number.isFinite(count) && count > 0 ? count : 0;
 }
@@ -98,7 +102,7 @@ export default function KhoHang() {
   }, [products]);
 
   const applyProducts = (data, isAutoRefresh = false) => {
-    const nextProducts = Array.isArray(data) ? data : [];
+    const nextProducts = normalizeProductTree(Array.isArray(data) ? data : []);
     if (isAutoRefresh) {
       const changes = detectChanges(products, nextProducts);
       if (changes.length > 0) {
@@ -165,7 +169,7 @@ export default function KhoHang() {
   const categoryMatchesOption = (product, option) => {
     if (!option || option.key === 'all') return true;
     return productMatchesCategoryOption(product, option)
-      || (product?.variants || []).some(variant => productMatchesCategoryOption({ ...variant, parent: product }, option));
+      || getProductVariants(product).some(variant => productMatchesCategoryOption({ ...variant, parent: product }, option));
   };
 
   const inventoryRowMatchesCategoryOption = (row, option) => {
@@ -208,7 +212,7 @@ export default function KhoHang() {
 
     (products || []).forEach(product => {
       collectLegacy(product);
-      (product.variants || []).forEach(collectLegacy);
+      getProductVariants(product).forEach(collectLegacy);
     });
 
     legacyOptions.sort((a, b) => String(a.label || '').localeCompare(String(b.label || ''), 'vi'));
@@ -239,7 +243,7 @@ export default function KhoHang() {
     const buildMap = (list) => {
       (list || []).forEach(p => {
         oldMap[`p-${p.id}`] = p.stock || 0;
-        (p.variants || []).forEach(v => { oldMap[`v-${v.id}`] = v.stock || 0; });
+        getProductVariants(p).forEach(v => { oldMap[`v-${v.id}`] = v.stock || 0; });
       });
     };
     buildMap(oldList);
@@ -250,7 +254,7 @@ export default function KhoHang() {
         const diff = newStock - oldStock;
         changes.push(`${p.name}: ${oldStock} → ${newStock} (${diff > 0 ? '+' + diff : diff})`);
       }
-      (p.variants || []).forEach(v => {
+      getProductVariants(p).forEach(v => {
         const oldVs = oldMap[`v-${v.id}`] ?? -1;
         const newVs = v.stock || 0;
         if (oldVs >= 0 && newVs !== oldVs) {
@@ -308,8 +312,8 @@ export default function KhoHang() {
     .filter(row => row._isParent)
     .reduce((sum, p) => sum + (p.stock || 0), 0);
 
-  // Tổng sản phẩm con (variant count đang hiển thị trong danh sách chính)
-  const totalChildProducts = filteredInventoryRows.filter(row => !row._isParent).length;
+  // Tổng sản phẩm con theo cây đã lọc, không phụ thuộc trạng thái mở/thu gọn hoặc dòng bị render trong panel.
+  const totalChildProducts = filteredProducts.reduce((sum, product) => sum + getProductVariantCount(product), 0);
 
   // Tổng tồn kho của BIẾN THỂ (chỉ tính variant stock đang hiển thị)
   const totalVariantStock = filteredInventoryRows
@@ -475,86 +479,95 @@ export default function KhoHang() {
             </div>
           )}
 
-          {filteredProducts.map((product, idx) => {
-            const variants = Array.isArray(product.variants) ? product.variants : [];
-            const variantCount = getProductVariantCount(product);
-            const hasVariants = variantCount > 0;
-            const isExpanded = expandedProductIds.has(product.id);
-            const categoryName = getCategoryName(product);
+          {filteredInventoryRows.map((row, idx) => {
+            const isParentRow = row._isParent;
+            const parent = isParentRow ? null : row.parent;
+            const variants = isParentRow ? getProductVariants(row) : [];
+            const variantCount = isParentRow ? variants.length : 0;
+            const hasVariants = isParentRow && variantCount > 0;
+            const isExpanded = isParentRow && expandedProductIds.has(row.id);
+            const categoryName = getCategoryName(row);
+            const rowName = firstNonEmpty(row.name, row.display_name, row.displayName, row.product_name, row.productName, row.variant_name, row.variantName, row.option_text, row.sku, 'Sản phẩm');
+            const rowSku = firstNonEmpty(row.sku, row.product_sku, row.productSku, row.variant_sku, row.variantSku, row.barcode, row.sapo_sku, row.sapo_variant_id ? `Sapo-${row.sapo_variant_id}` : '');
+            const rowKey = isParentRow ? `p-${row.id}` : `v-${row._parentId || row.parent_id || parent?.id || 'parent'}-${row.id || rowSku || idx}`;
 
             return (
-              <div key={`p-${product.id}`} className="border-b last:border-b-0">
+              <div key={rowKey} className={`border-b last:border-b-0 ${isParentRow ? 'bg-white' : 'bg-blue-50/30'}`}>
                 <div className="flex flex-wrap items-center gap-2 px-3 py-3 hover:bg-gray-50 md:flex-nowrap md:py-2">
                   {/* STT */}
                   <div className="w-8 text-center text-xs text-gray-400">{idx + 1}</div>
 
-                  {/* Chevron */}
+                  {/* Chevron / Loại dòng */}
                   <div className="w-8 text-center">
-                    <button
-                      type="button"
-                      onClick={() => toggleExpanded(product.id)}
-                      className={`inline-flex items-center justify-center w-7 h-7 rounded-full border transition ${isExpanded ? 'bg-orange-100 border-orange-300 text-orange-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                      title={isExpanded ? 'Thu gọn chi tiết tồn kho' : 'Mở chi tiết tồn kho'}
-                    >
-                      {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </button>
+                    {isParentRow && hasVariants ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(row.id)}
+                        className={`inline-flex items-center justify-center w-7 h-7 rounded-full border transition ${isExpanded ? 'bg-orange-100 border-orange-300 text-orange-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                        title={isExpanded ? 'Thu gọn chi tiết tồn kho' : 'Mở chi tiết tồn kho'}
+                      >
+                        {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      </button>
+                    ) : isParentRow ? (
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-gray-100 bg-gray-50 text-xs font-bold text-gray-300" title="Sản phẩm không có biến thể">—</span>
+                    ) : (
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-blue-50 text-xs font-bold text-blue-500" title="Biến thể">↳</span>
+                    )}
                   </div>
 
                   {/* Tên sản phẩm */}
                   <div className="flex-1 min-w-[12rem] md:min-w-0">
-                    <div className={`font-semibold text-sm truncate ${!hasVariants && (product.stock ?? 0) === 0 ? 'text-red-400 line-through' : 'text-gray-800'}`}>{product.name}</div>
-                    <div className="text-xs text-gray-400 truncate">{product.sku || 'Không có SKU'} · {variantCount} biến thể</div>
+                    <div className={`text-sm truncate ${isParentRow ? 'font-semibold' : 'pl-2 font-medium'} ${!hasVariants && (row.stock ?? 0) === 0 ? 'text-red-400 line-through' : (isParentRow ? 'text-gray-800' : 'text-blue-700')}`} title={rowName}>{rowName}</div>
+                    <div className="text-xs text-gray-400 truncate" title={isParentRow ? `${rowSku || 'Không có SKU'} · ${variantCount} biến thể` : `Biến thể của: ${parent?.name || row.parent_name || 'Sản phẩm cha'} · SKU: ${rowSku || '—'}${row.option_text ? ` · ${row.option_text}` : ''}`}>
+                      {isParentRow
+                        ? `${rowSku || 'Không có SKU'} · ${variantCount} biến thể`
+                        : `Biến thể của: ${parent?.name || row.parent_name || 'Sản phẩm cha'} · SKU: ${rowSku || '—'}${row.option_text ? ` · ${row.option_text}` : ''}`}
+                    </div>
                   </div>
 
                   {/* Danh mục */}
                   <div className="hidden w-36 text-xs text-gray-500 truncate sm:block" title={categoryName}>{categoryName}</div>
 
                   {/* Tồn kho */}
-                  <div className="w-20 text-center" title={hasVariants ? 'Tồn kho được quản lý ở từng biến thể' : undefined}>{hasVariants ? <span className="text-gray-300 text-xs">—</span> : <StockBadge stock={product.stock} />}</div>
+                  <div className="w-20 text-center" title={hasVariants ? 'Tồn kho được quản lý ở từng biến thể' : undefined}>{hasVariants ? <span className="text-gray-300 text-xs">—</span> : <StockBadge stock={row.stock} />}</div>
 
                   {/* Giá nhập */}
-                  <div className={`hidden w-28 text-right text-xs md:block ${hasVariants ? 'text-gray-300' : 'text-gray-500'}`} title={hasVariants ? 'Giá nhập được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(product.import_price)}</div>
+                  <div className={`hidden w-28 text-right text-xs md:block ${hasVariants ? 'text-gray-300' : 'text-gray-500'}`} title={hasVariants ? 'Giá nhập được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(row.import_price)}</div>
                   {/* Giá lẻ */}
-                  <div className={`hidden w-28 text-right text-xs font-medium md:block ${hasVariants ? 'text-gray-300' : 'text-green-600'}`} title={hasVariants ? 'Giá lẻ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(product.retail_price)}</div>
+                  <div className={`hidden w-28 text-right text-xs font-medium md:block ${hasVariants ? 'text-gray-300' : 'text-green-600'}`} title={hasVariants ? 'Giá lẻ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(row.retail_price)}</div>
                   {/* Giá sỉ */}
-                  <div className={`hidden w-28 text-right text-xs font-medium md:block ${hasVariants ? 'text-gray-300' : 'text-red-600'}`} title={hasVariants ? 'Giá sỉ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(product.wholesale_price)}</div>
+                  <div className={`hidden w-28 text-right text-xs font-medium md:block ${hasVariants ? 'text-gray-300' : 'text-red-600'}`} title={hasVariants ? 'Giá sỉ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(row.wholesale_price)}</div>
                   {/* Giá VIP */}
-                  <div className={`hidden w-28 text-right font-medium text-xs md:block ${hasVariants ? 'text-gray-300' : 'text-blue-600'}`} title={hasVariants ? 'Giá VIP được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(product.vip_price)}</div>
+                  <div className={`hidden w-28 text-right font-medium text-xs md:block ${hasVariants ? 'text-gray-300' : 'text-blue-600'}`} title={hasVariants ? 'Giá VIP được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(row.vip_price)}</div>
                 </div>
 
-                {isExpanded && (
+                {isExpanded && hasVariants && (
                   <div className="bg-orange-50/40 border-t border-orange-100 px-3 py-3 sm:px-12 sm:py-4">
                     <div className="bg-white border border-orange-100 rounded-lg overflow-hidden">
                       <div className="px-3 py-2 bg-orange-100/70 text-xs font-semibold text-orange-800 flex items-center justify-between">
                         <span>Biến thể và tồn kho từng biến thể</span>
                         <span>{variantCount} biến thể</span>
                       </div>
-                      {variants.length === 0 ? (
-                        <div className="px-3 py-4 text-sm text-gray-500">Sản phẩm này chưa có biến thể. Tồn kho hiện tại đang nằm ở dòng sản phẩm cha.</div>
-                      ) : (
-                        <div>
-                          <div className="hidden md:grid grid-cols-[1fr_150px_110px_120px_120px_120px_120px] gap-2 px-3 py-2 bg-gray-50 text-xs font-semibold text-gray-500 border-b">
-                            <div>Tên biến thể</div>
-                            <div>SKU</div>
-                            <div className="text-center">Tồn kho</div>
-                            <div className="text-right">Giá nhập</div>
-                            <div className="text-right">Giá lẻ</div>
-                            <div className="text-right">Giá sỉ</div>
-                            <div className="text-right">Giá VIP</div>
-                          </div>
-                          {variants.map(variant => (
-                            <div key={`v-${variant.id}`} className="grid grid-cols-2 gap-2 px-3 py-3 text-xs border-b last:border-b-0 items-center md:grid-cols-[1fr_150px_110px_120px_120px_120px_120px] md:py-2">
-                              <div className={`col-span-2 font-medium md:col-span-1 ${(variant.stock ?? 0) === 0 ? 'text-red-400 line-through' : 'text-blue-700'}`}>{variant.name}</div>
-                              <div className="text-gray-500 truncate" title={variant.sku || ''}>SKU: {variant.sku || '—'}</div>
-                              <div className="text-right md:text-center"><StockBadge stock={variant.stock} /></div>
-                              <div className="hidden text-right text-gray-500 md:block">{formatOptionalVND(variant.import_price)}</div>
-                              <div className="hidden text-right text-green-600 font-medium md:block">{formatOptionalVND(variant.retail_price)}</div>
-                              <div className="hidden text-right text-red-600 font-medium md:block">{formatOptionalVND(variant.wholesale_price)}</div>
-                              <div className="hidden text-right text-blue-600 font-medium md:block">{formatOptionalVND(variant.vip_price)}</div>
+                      <div className="divide-y divide-orange-50">
+                        {variants.map((variant, variantIndex) => {
+                          const variantName = firstNonEmpty(variant.name, variant.display_name, variant.displayName, variant.product_name, variant.productName, variant.variant_name, variant.variantName, variant.option_text, variant.sku, `Biến thể ${variantIndex + 1}`);
+                          const variantSku = firstNonEmpty(variant.sku, variant.product_sku, variant.productSku, variant.variant_sku, variant.variantSku, variant.barcode, variant.sapo_sku, variant.sapo_variant_id ? `Sapo-${variant.sapo_variant_id}` : '');
+                          const variantKey = `expanded-v-${row.id}-${variant.id || variantSku || variantIndex}`;
+                          return (
+                            <div key={variantKey} className="grid grid-cols-1 gap-2 px-3 py-2 text-xs text-gray-600 md:grid-cols-[minmax(0,1fr)_7rem_6rem_7rem_7rem_7rem] md:items-center">
+                              <div className="min-w-0">
+                                <div className="truncate font-medium text-blue-700" title={variantName}>↳ {variantName}</div>
+                                <div className="truncate text-gray-400" title={variant.option_text || variantSku || 'Không có SKU'}>SKU: {variantSku || '—'}{variant.option_text ? ` · ${variant.option_text}` : ''}</div>
+                              </div>
+                              <div className="md:text-center"><StockBadge stock={variant.stock} /></div>
+                              <div className="text-gray-500 md:text-right">Nhập: {formatOptionalVND(variant.import_price)}</div>
+                              <div className="font-medium text-green-600 md:text-right">Lẻ: {formatOptionalVND(variant.retail_price)}</div>
+                              <div className="font-medium text-red-600 md:text-right">Sỉ: {formatOptionalVND(variant.wholesale_price)}</div>
+                              <div className="font-medium text-blue-600 md:text-right">VIP: {formatOptionalVND(variant.vip_price)}</div>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}
