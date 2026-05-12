@@ -367,7 +367,7 @@ function resolveEffectiveSettings(body = {}) {
 function getSapoHeaders(settings) {
   return {
     Accept: 'application/json',
-    'User-Agent': 'phanmienoffline-sapo-sync/1.2.1',
+    'User-Agent': 'phanmienoffline-sapo-sync/1.2.2',
     'X-Sapo-Access-Token': settings.access_token,
   };
 }
@@ -545,7 +545,7 @@ function normalizeSapoProduct(product = {}) {
   const title = toSafeString(product?.name || product?.title, 500) || `Sapo product ${productId}`;
   const categoryText = toSafeString(product?.product_type || product?.category || product?.vendor || product?.tags, 300);
   const description = stripHtml(product?.body_html || product?.description || '');
-  const sku = normalizeSku(product?.sku || firstVariant?.sku || firstVariant?.barcode || (productId ? `SAPO-${productId}` : ''));
+  const sku = normalizeSku(product?.sku || product?.barcode || (productId ? `SAPO-${productId}` : ''));
   const barcode = normalizeBarcode(product?.barcode || firstVariant?.barcode);
   const imageUrl = toSafeString(pickProductImage(product, firstVariant), 1200);
   const status = toSafeString(product?.status || product?.published_status || product?.published_scope || '', 80);
@@ -784,10 +784,10 @@ function createStatusSummary(items = []) {
 function previewMappedProduct(mapped, indexes) {
   const parentMatch = findParentProductMatch(mapped, indexes);
   const existing = parentMatch.index >= 0 ? indexes.products[parentMatch.index] : null;
-  const changedFields = existing ? diffFields(existing, mapped, [
-    'sku', 'barcode', 'name', 'retail_price', 'import_price', 'stock', 'unit', 'category',
-    'image_url', 'description', 'option1', 'option2', 'option3', 'sapo_status', 'sapo_updated_at',
-  ]) : [];
+  const parentDiffFields = existing
+    ? ['barcode', 'name', 'retail_price', 'import_price', 'stock', 'unit', 'category', 'image_url', 'description', 'option1', 'option2', 'option3', 'sapo_status', 'sapo_updated_at']
+    : ['sku', 'barcode', 'name', 'retail_price', 'import_price', 'stock', 'unit', 'category', 'image_url', 'description', 'option1', 'option2', 'option3', 'sapo_status', 'sapo_updated_at'];
+  const changedFields = existing ? diffFields(existing, mapped, parentDiffFields) : [];
   const parentAction = parentMatch.status === 'conflict'
     ? 'conflict'
     : (existing ? (changedFields.length > 0 ? 'update' : 'existing') : 'create');
@@ -910,7 +910,7 @@ function applyProductUpdate(target, mapped, extras = {}) {
   const syncImages = extras.syncImages !== false;
   const syncDescriptions = extras.syncDescriptions !== false;
   const timestamp = extras.timestamp || now();
-  target.sku = normalizeSku(mapped.sku) || target.sku || '';
+  if (!extras.preserveSku) target.sku = normalizeSku(mapped.sku) || target.sku || '';
   target.name = mapped.name || target.name || '';
   target.import_price = normalizeNumber(mapped.import_price, target.import_price || 0);
   target.wholesale_price = normalizeNumber(mapped.wholesale_price, target.wholesale_price || 0);
@@ -1027,13 +1027,14 @@ function syncMappedProducts(mappedProducts, options = {}) {
           summary.skipped += 1;
           parentAction = 'skipped';
         } else {
-          parentPayload.sku = makeUniqueSku(parentPayload.sku || parent.sku, products, parentIndex);
+          parentPayload.sku = parent.sku || '';
           applyProductUpdate(parent, parentPayload, {
             timestamp,
             default_category_id: defaultCategoryId,
             inventoryPolicy: options.inventoryPolicy,
             syncImages: options.syncImages,
             syncDescriptions: options.syncDescriptions,
+            preserveSku: true,
           });
           parent.parent_id = null;
           summary.updatedParents += 1;

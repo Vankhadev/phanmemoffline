@@ -7,6 +7,7 @@ import {
   categoryFields,
   filterProductTree,
   findCategoryForProduct,
+  flattenProductTree,
   normalizeSearchText,
 } from '../utils/productSearch';
 import { SYNC_UPDATED_EVENT } from '../utils/apiClient';
@@ -21,6 +22,12 @@ function hasPrice(value) {
 
 function formatOptionalVND(value) {
   return hasPrice(value) ? formatVND(value) : '—';
+}
+
+function getProductVariantCount(product) {
+  if (Array.isArray(product?.variants)) return product.variants.length;
+  const count = Number(product?.variant_count ?? product?.variants_count ?? product?.variantCount ?? 0);
+  return Number.isFinite(count) && count > 0 ? count : 0;
 }
 
 function compactCategoryText(value) {
@@ -161,6 +168,12 @@ export default function KhoHang() {
       || (product?.variants || []).some(variant => productMatchesCategoryOption({ ...variant, parent: product }, option));
   };
 
+  const inventoryRowMatchesCategoryOption = (row, option) => {
+    if (!option || option.key === 'all') return true;
+    if (row?._isParent) return categoryMatchesOption(row, option);
+    return productMatchesCategoryOption(row, option);
+  };
+
   const buildLegacyCategoryOption = (label) => ({
     key: `text:${compactCategoryText(label)}`,
     type: 'text',
@@ -259,16 +272,21 @@ export default function KhoHang() {
     [searchFilteredProducts, selectedCategory, categoriesById],
   );
 
-  const filteredProducts = useMemo(() => {
-    if (!showStockSortButtons || !stockSortDirection) return categoryFilteredProducts;
+  const filteredProducts = categoryFilteredProducts;
+
+  const filteredInventoryRows = useMemo(() => {
+    const rows = flattenProductTree(categoryFilteredProducts, { onlyMatchedVariants: hasManualSearch })
+      .filter(row => inventoryRowMatchesCategoryOption(row, selectedCategory));
+
+    if (!showStockSortButtons || !stockSortDirection) return rows;
 
     const directionMultiplier = stockSortDirection === 'asc' ? 1 : -1;
-    return [...categoryFilteredProducts].sort((a, b) => {
+    return [...rows].sort((a, b) => {
       const stockA = Number(a?.stock ?? 0);
       const stockB = Number(b?.stock ?? 0);
       return (stockA - stockB) * directionMultiplier;
     });
-  }, [categoryFilteredProducts, showStockSortButtons, stockSortDirection]);
+  }, [categoryFilteredProducts, hasManualSearch, selectedCategory, showStockSortButtons, stockSortDirection]);
 
   const toggleExpanded = (productId) => {
     setExpandedProductIds(prev => {
@@ -279,29 +297,32 @@ export default function KhoHang() {
     });
   };
 
+  // Tổng dòng tồn kho chính (sản phẩm cha + từng biến thể hiển thị riêng)
+  const totalInventoryRows = filteredInventoryRows.length;
+
   // Tổng sản phẩm cha (không đếm variant)
   const totalParentProducts = filteredProducts.length;
 
   // Tổng tồn kho của SẢN PHẨM CHA (stock field trên product)
-  const totalParentStock = filteredProducts.reduce((sum, p) => sum + (p.stock || 0), 0);
+  const totalParentStock = filteredInventoryRows
+    .filter(row => row._isParent)
+    .reduce((sum, p) => sum + (p.stock || 0), 0);
 
-  // Tổng sản phẩm con (variant count)
-  const totalChildProducts = filteredProducts.reduce((sum, p) => sum + ((p.variants || []).length), 0);
+  // Tổng sản phẩm con (variant count đang hiển thị trong danh sách chính)
+  const totalChildProducts = filteredInventoryRows.filter(row => !row._isParent).length;
 
-  // Tổng tồn kho của BIẾN THỂ (chỉ tính variant stock)
-  const totalVariantStock = filteredProducts.reduce(
-    (sum, p) => sum + (p.variants || []).reduce((variantSum, v) => variantSum + (v.stock || 0), 0),
-    0,
-  );
+  // Tổng tồn kho của BIẾN THỂ (chỉ tính variant stock đang hiển thị)
+  const totalVariantStock = filteredInventoryRows
+    .filter(row => !row._isParent)
+    .reduce((sum, v) => sum + (v.stock || 0), 0);
 
   // Tổng tồn kho TỔNG THỂ (product stock + variant stock)
   const totalCombinedStock = totalParentStock + totalVariantStock;
 
-  // Sắp hết hàng: đếm variant có stock < 5; sản phẩm không có variant thì đếm stock cha.
-  const lowStock = filteredProducts.reduce((sum, p) => {
-    const variants = p.variants || [];
-    if (variants.length === 0) return sum + ((p.stock || 0) < 5 ? 1 : 0);
-    return sum + variants.reduce((variantSum, v) => variantSum + ((v.stock || 0) < 5 ? 1 : 0), 0);
+  // Sắp hết hàng: đếm dòng tồn kho đang hiển thị; dòng cha có biến thể không quản lý tồn trực tiếp thì bỏ qua.
+  const lowStock = filteredInventoryRows.reduce((sum, row) => {
+    if (row._isParent && getProductVariantCount(row) > 0) return sum;
+    return sum + ((row.stock || 0) < 5 ? 1 : 0);
   }, 0);
 
   const emptyMessage = selectedCategory?.key !== 'all'
@@ -309,7 +330,7 @@ export default function KhoHang() {
     : 'Không có sản phẩm nào phù hợp.';
 
   return (
-    <div>
+    <div className="min-w-0">
       {/* ===== ALERT THÔNG BÁO THAY ĐỔI ===== */}
       {alertMsg && (
         <div className="fixed top-4 right-4 z-50 bg-orange-100 border border-orange-400 text-orange-800 px-4 py-3 rounded-xl shadow-lg text-sm font-medium animate-pulse">
@@ -348,11 +369,11 @@ export default function KhoHang() {
         </div>
 
         {/* BÊN PHẢI: Thống kê */}
-        <div className="flex items-center gap-3 text-sm flex-wrap justify-end">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-center">
-            <div className="text-xs text-blue-500 font-medium">Tổng sản phẩm cha</div>
-            <div className="text-lg font-bold text-blue-700">{totalParentProducts}</div>
-          </div>
+    <div className="grid w-full grid-cols-2 gap-2 text-sm sm:grid-cols-3 xl:w-auto xl:grid-cols-6 xl:gap-3">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-center">
+        <div className="text-xs text-blue-500 font-medium">Tổng dòng tồn kho</div>
+        <div className="text-lg font-bold text-blue-700">{totalInventoryRows}</div>
+      </div>
           <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-center">
             <div className="text-xs text-green-500 font-medium">Tổng tồn kho SP cha</div>
             <div className="text-lg font-bold text-green-700">{totalParentStock.toLocaleString()}</div>
@@ -387,7 +408,7 @@ export default function KhoHang() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm min-w-[280px]">
+        <div className="flex w-full min-w-0 items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm lg:w-[360px]">
           <label htmlFor="kho-category-filter" className="text-xs font-semibold text-gray-500 whitespace-nowrap">Danh mục</label>
           {showStockSortButtons && (
             <button
@@ -428,25 +449,25 @@ export default function KhoHang() {
         <span className="px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-100">
           Đang xem: {selectedCategory?.label || 'Tất cả danh mục'}
         </span>
-        <span>{filteredProducts.length.toLocaleString()} sản phẩm</span>
+        <span>{totalInventoryRows.toLocaleString()} dòng tồn kho ({totalParentProducts.toLocaleString()} cha, {totalChildProducts.toLocaleString()} biến thể)</span>
       </div>
 
       {/* ===== TABLE: TT | Chevron | Tên | Danh mục | Tồn kho | Giá nhập | Giá lẻ | Giá sỉ | Giá vip ===== */}
-      <div className="card overflow-x-auto">
-        <div className="min-w-[980px]">
+      <div className="card overflow-hidden p-0">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-xs text-gray-600 font-semibold border-b sticky top-0 z-10">
             <div className="w-8 text-center font-bold">TT</div>
             <div className="w-8 text-center font-bold">CT</div>
             <div className="flex-1 min-w-0">Tên sản phẩm</div>
             <div className="w-36">Danh mục</div>
             <div className="w-20 text-center font-bold">Tồn kho</div>
-            <div className="w-28 text-right">Giá nhập</div>
-            <div className="w-28 text-right">Giá lẻ</div>
-            <div className="w-28 text-right">Giá sỉ</div>
-            <div className="w-28 text-right">Giá vip</div>
+            <div className="hidden w-28 text-right md:block">Giá nhập</div>
+            <div className="hidden w-28 text-right md:block">Giá lẻ</div>
+            <div className="hidden w-28 text-right md:block">Giá sỉ</div>
+            <div className="hidden w-28 text-right md:block">Giá vip</div>
           </div>
 
-          {filteredProducts.length === 0 && (
+          {filteredInventoryRows.length === 0 && (
             <div className="text-center text-gray-400 py-16">
               <div className="text-5xl mb-3 opacity-20">📦</div>
               <div className="font-medium text-gray-500">{emptyMessage}</div>
@@ -455,13 +476,15 @@ export default function KhoHang() {
           )}
 
           {filteredProducts.map((product, idx) => {
-            const variants = product.variants || [];
+            const variants = Array.isArray(product.variants) ? product.variants : [];
+            const variantCount = getProductVariantCount(product);
+            const hasVariants = variantCount > 0;
             const isExpanded = expandedProductIds.has(product.id);
             const categoryName = getCategoryName(product);
 
             return (
               <div key={`p-${product.id}`} className="border-b last:border-b-0">
-                <div className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50">
+                <div className="flex flex-wrap items-center gap-2 px-3 py-3 hover:bg-gray-50 md:flex-nowrap md:py-2">
                   {/* STT */}
                   <div className="w-8 text-center text-xs text-gray-400">{idx + 1}</div>
 
@@ -478,39 +501,39 @@ export default function KhoHang() {
                   </div>
 
                   {/* Tên sản phẩm */}
-                  <div className="flex-1 min-w-0">
-                    <div className={`font-semibold text-sm truncate ${(product.stock ?? 0) === 0 ? 'text-red-400 line-through' : 'text-gray-800'}`}>{product.name}</div>
-                    <div className="text-xs text-gray-400 truncate">{product.sku || 'Không có SKU'} · {variants.length} biến thể</div>
+                  <div className="flex-1 min-w-[12rem] md:min-w-0">
+                    <div className={`font-semibold text-sm truncate ${!hasVariants && (product.stock ?? 0) === 0 ? 'text-red-400 line-through' : 'text-gray-800'}`}>{product.name}</div>
+                    <div className="text-xs text-gray-400 truncate">{product.sku || 'Không có SKU'} · {variantCount} biến thể</div>
                   </div>
 
                   {/* Danh mục */}
-                  <div className="w-36 text-xs text-gray-500 truncate" title={categoryName}>{categoryName}</div>
+                  <div className="hidden w-36 text-xs text-gray-500 truncate sm:block" title={categoryName}>{categoryName}</div>
 
                   {/* Tồn kho */}
-                  <div className="w-20 text-center"><StockBadge stock={product.stock} /></div>
+                  <div className="w-20 text-center" title={hasVariants ? 'Tồn kho được quản lý ở từng biến thể' : undefined}>{hasVariants ? <span className="text-gray-300 text-xs">—</span> : <StockBadge stock={product.stock} />}</div>
 
                   {/* Giá nhập */}
-                  <div className="w-28 text-right text-gray-500 text-xs">{formatOptionalVND(product.import_price)}</div>
+                  <div className={`hidden w-28 text-right text-xs md:block ${hasVariants ? 'text-gray-300' : 'text-gray-500'}`} title={hasVariants ? 'Giá nhập được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(product.import_price)}</div>
                   {/* Giá lẻ */}
-                  <div className="w-28 text-right text-green-600 text-xs font-medium">{formatOptionalVND(product.retail_price)}</div>
+                  <div className={`hidden w-28 text-right text-xs font-medium md:block ${hasVariants ? 'text-gray-300' : 'text-green-600'}`} title={hasVariants ? 'Giá lẻ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(product.retail_price)}</div>
                   {/* Giá sỉ */}
-                  <div className="w-28 text-right text-red-600 text-xs font-medium">{formatOptionalVND(product.wholesale_price)}</div>
+                  <div className={`hidden w-28 text-right text-xs font-medium md:block ${hasVariants ? 'text-gray-300' : 'text-red-600'}`} title={hasVariants ? 'Giá sỉ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(product.wholesale_price)}</div>
                   {/* Giá VIP */}
-                  <div className="w-28 text-right text-blue-600 font-medium text-xs">{formatOptionalVND(product.vip_price)}</div>
+                  <div className={`hidden w-28 text-right font-medium text-xs md:block ${hasVariants ? 'text-gray-300' : 'text-blue-600'}`} title={hasVariants ? 'Giá VIP được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(product.vip_price)}</div>
                 </div>
 
                 {isExpanded && (
-                  <div className="bg-orange-50/40 border-t border-orange-100 px-12 py-4">
+                  <div className="bg-orange-50/40 border-t border-orange-100 px-3 py-3 sm:px-12 sm:py-4">
                     <div className="bg-white border border-orange-100 rounded-lg overflow-hidden">
                       <div className="px-3 py-2 bg-orange-100/70 text-xs font-semibold text-orange-800 flex items-center justify-between">
                         <span>Biến thể và tồn kho từng biến thể</span>
-                        <span>{variants.length} biến thể</span>
+                        <span>{variantCount} biến thể</span>
                       </div>
                       {variants.length === 0 ? (
                         <div className="px-3 py-4 text-sm text-gray-500">Sản phẩm này chưa có biến thể. Tồn kho hiện tại đang nằm ở dòng sản phẩm cha.</div>
                       ) : (
                         <div>
-                          <div className="grid grid-cols-[1fr_150px_110px_120px_120px_120px_120px] gap-2 px-3 py-2 bg-gray-50 text-xs font-semibold text-gray-500 border-b">
+                          <div className="hidden md:grid grid-cols-[1fr_150px_110px_120px_120px_120px_120px] gap-2 px-3 py-2 bg-gray-50 text-xs font-semibold text-gray-500 border-b">
                             <div>Tên biến thể</div>
                             <div>SKU</div>
                             <div className="text-center">Tồn kho</div>
@@ -520,14 +543,14 @@ export default function KhoHang() {
                             <div className="text-right">Giá VIP</div>
                           </div>
                           {variants.map(variant => (
-                            <div key={`v-${variant.id}`} className="grid grid-cols-[1fr_150px_110px_120px_120px_120px_120px] gap-2 px-3 py-2 text-xs border-b last:border-b-0 items-center">
-                              <div className={`font-medium ${(variant.stock ?? 0) === 0 ? 'text-red-400 line-through' : 'text-blue-700'}`}>{variant.name}</div>
-                              <div className="text-gray-500 truncate" title={variant.sku || ''}>{variant.sku || '—'}</div>
-                              <div className="text-center"><StockBadge stock={variant.stock} /></div>
-                              <div className="text-right text-gray-500">{formatOptionalVND(variant.import_price)}</div>
-                              <div className="text-right text-green-600 font-medium">{formatOptionalVND(variant.retail_price)}</div>
-                              <div className="text-right text-red-600 font-medium">{formatOptionalVND(variant.wholesale_price)}</div>
-                              <div className="text-right text-blue-600 font-medium">{formatOptionalVND(variant.vip_price)}</div>
+                            <div key={`v-${variant.id}`} className="grid grid-cols-2 gap-2 px-3 py-3 text-xs border-b last:border-b-0 items-center md:grid-cols-[1fr_150px_110px_120px_120px_120px_120px] md:py-2">
+                              <div className={`col-span-2 font-medium md:col-span-1 ${(variant.stock ?? 0) === 0 ? 'text-red-400 line-through' : 'text-blue-700'}`}>{variant.name}</div>
+                              <div className="text-gray-500 truncate" title={variant.sku || ''}>SKU: {variant.sku || '—'}</div>
+                              <div className="text-right md:text-center"><StockBadge stock={variant.stock} /></div>
+                              <div className="hidden text-right text-gray-500 md:block">{formatOptionalVND(variant.import_price)}</div>
+                              <div className="hidden text-right text-green-600 font-medium md:block">{formatOptionalVND(variant.retail_price)}</div>
+                              <div className="hidden text-right text-red-600 font-medium md:block">{formatOptionalVND(variant.wholesale_price)}</div>
+                              <div className="hidden text-right text-blue-600 font-medium md:block">{formatOptionalVND(variant.vip_price)}</div>
                             </div>
                           ))}
                         </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { API } from '../App';
 import { SYNC_UPDATED_EVENT } from '../utils/apiClient';
-import { BarChart3, ShoppingCart, ShoppingBag, Layers, AlertCircle, TrendingUp, Calendar, FileText, HelpCircle, Store, Package} from 'lucide-react';
+import { BarChart3, ShoppingCart, ShoppingBag, Layers, AlertCircle, TrendingUp, Calendar, FileText, HelpCircle, Store, Package,} from 'lucide-react';
 import HelpModal from '../components/HelpModal';
 
 export default function Home({ user, store }) {
@@ -230,7 +230,7 @@ export default function Home({ user, store }) {
             <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center group-hover:bg-yellow-500 transition">
               <Store  size={24} className="text-yellow-600 group-hover:text-white" />
             </div>
-            <span className="text-sm font-medium text-gray-700 group-hover:text-yellow-600">Báo cáo sản</span>
+            <span className="text-sm font-medium text-gray-700 group-hover:text-yellow-600">Báo cáo sản phẩm</span>
           </Link>
         </div>
       </div>

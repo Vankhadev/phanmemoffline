@@ -6,7 +6,7 @@ import { createInvoicePrintData } from '../utils/invoicePrintData';
 import { printInvoice, writePrintWindowMessage } from '../utils/printInvoice';
 import { getProductDisplayName } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
-import { SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { SYNC_UPDATED_EVENT, requestSyncCheck } from '../utils/apiClient';
 
 const STATUS_LABELS = {
   pending: { text: 'Chờ xác nhận', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500', icon: '⏳' },
@@ -15,6 +15,24 @@ const STATUS_LABELS = {
   cancelled: { text: 'Đã hủy', color: 'bg-red-100 text-red-600', dot: 'bg-red-500', icon: '❌' },
 };
 const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
+const SOURCE_BADGES = {
+  web: { text: 'Web', color: 'bg-gray-100 text-gray-600' },
+  direct: { text: 'Web', color: 'bg-gray-100 text-gray-600' },
+  mobile: { text: 'Mobile', color: 'bg-indigo-100 text-indigo-700' },
+  sync: { text: 'Sync', color: 'bg-cyan-100 text-cyan-700' },
+  sapo: { text: 'Sapo Sync', color: 'bg-violet-100 text-violet-700' },
+  offline: { text: 'Offline mobile', color: 'bg-blue-100 text-blue-700' },
+};
+const MOBILE_SYNC_BADGES = {
+  applied: { text: 'Đã đồng bộ', color: 'bg-green-100 text-green-700' },
+  idempotent: { text: 'Đã có trên server', color: 'bg-emerald-100 text-emerald-700' },
+  received: { text: 'Đã nhận', color: 'bg-blue-100 text-blue-700' },
+  retry_later: { text: 'Chờ thử lại', color: 'bg-amber-100 text-amber-700' },
+  conflict: { text: 'Xung đột', color: 'bg-red-100 text-red-700' },
+  failed: { text: 'Lỗi sync', color: 'bg-red-100 text-red-700' },
+  pending: { text: 'Chờ sync', color: 'bg-amber-100 text-amber-700' },
+  pending_local: { text: 'Offline chưa sync', color: 'bg-orange-100 text-orange-700' },
+};
 
 function formatPaymentMethod(method) {
   return PAYMENT_LABELS[method] || method || 'Tiền mặt';
@@ -35,6 +53,44 @@ function displayOrderCode(code) {
 function formatDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function normalizeSourceValue(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getOrderSourceKey(inv = {}) {
+  if (inv._isOffline) return 'offline';
+  const raw = normalizeSourceValue(inv.order_source || inv.source || inv.created_by_platform || inv.sync_source);
+  if (raw.includes('mobile') || inv.mobile_device_id) return 'mobile';
+  if (raw.includes('sapo')) return 'sapo';
+  if (raw.includes('sync')) return 'sync';
+  if (raw.includes('direct') || raw.includes('web')) return 'web';
+  return raw || 'web';
+}
+
+function getOrderSourceBadge(inv = {}) {
+  const key = getOrderSourceKey(inv);
+  return SOURCE_BADGES[key] || { text: key || 'Web', color: 'bg-gray-100 text-gray-600' };
+}
+
+function getMobileSyncStatusKey(inv = {}) {
+  if (inv._isOffline) return 'pending_local';
+  const raw = normalizeSourceValue(inv.mobile_sync_status || inv.sync_status || '');
+  if (raw) return raw;
+  if (getOrderSourceKey(inv) === 'mobile' && inv.mobile_synced_at) return 'applied';
+  return '';
+}
+
+function getMobileSyncBadge(inv = {}) {
+  const key = getMobileSyncStatusKey(inv);
+  if (!key) return null;
+  return MOBILE_SYNC_BADGES[key] || { text: key, color: 'bg-gray-100 text-gray-600' };
+}
+
+function isMobileLikeOrder(inv = {}) {
+  const sourceKey = getOrderSourceKey(inv);
+  return sourceKey === 'mobile' || sourceKey === 'offline' || Boolean(getMobileSyncStatusKey(inv));
 }
 
 // Hợp nhất các sản phẩm trùng ID (để tránh duplicate khi edit)
@@ -68,10 +124,21 @@ function buildVietQRUrl(store, amount, invoiceCode) {
   return `https://img.vietqr.io/image/${bankCode}-${account}-compact2.png?amount=${amount}&addInfo=${addInfo}&accountName=${accountName}`;
 }
 
+function getOrderDedupeKey(order = {}) {
+  return order.client_order_id || order.payload?.client_order_id || order.invoice_code || order.id;
+}
+
+function sameOrderIdentity(a = {}, b = {}) {
+  const aClientId = a.client_order_id || a.payload?.client_order_id;
+  const bClientId = b.client_order_id || b.payload?.client_order_id;
+  if (aClientId && bClientId && aClientId === bClientId) return true;
+  return Boolean(a.invoice_code && b.invoice_code && a.invoice_code === b.invoice_code);
+}
+
 function dedupeOrdersByInvoiceCode(orders) {
   const map = new Map();
   for (const order of orders) {
-    const key = order.invoice_code || order.id;
+    const key = getOrderDedupeKey(order);
     if (!key) continue;
     const existing = map.get(key);
     if (!existing || (existing._isOffline && !order._isOffline)) {
@@ -88,6 +155,8 @@ export default function OrderList({ store = {} }) {
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterSource, setFilterSource] = useState('all');
+  const [filterMobileSync, setFilterMobileSync] = useState('all');
   const [loading, setLoading] = useState(true);
   const [serverOnline, setServerOnline] = useState(false);
   const [allOrders, setAllOrders] = useState([]);
@@ -106,6 +175,16 @@ export default function OrderList({ store = {} }) {
   const [expandedParents, setExpandedParents] = useState({});
   const [showHelp, setShowHelp] = useState(false);
   const [showExcelImport, setShowExcelImport] = useState(false);
+
+  const notifyOrderChanged = (detail = {}) => {
+    window.dispatchEvent(new CustomEvent('kha-order-created', {
+      detail: { _syncOnly: true, ...detail },
+    }));
+    requestSyncCheck({
+      reason: detail.reason || 'order-mutated',
+      tables: ['invoices', 'invoice_details', 'products', 'customers'],
+    });
+  };
 
   // Load products for picker
   useEffect(() => {
@@ -151,15 +230,19 @@ export default function OrderList({ store = {} }) {
     };
     checkAndLoad();
 
-    // ── Lắng nghe sự kiện tạo đơn thành công từ CreateOrder ──
+    // ── Lắng nghe sự kiện tạo/cập nhật/hủy/thanh toán đơn trong thiết bị hiện tại ──
     const onOrderCreated = (e) => {
       const inv = e.detail;
+      if (!inv || inv._syncOnly || !(inv.invoice_code || inv.client_order_id || inv.id)) {
+        fetchInvoices();
+        return;
+      }
       setAllOrders(prev => dedupeOrdersByInvoiceCode([
         { ...inv, _isOffline: !inv.invoice_code?.startsWith('HD') },
-        ...prev.filter(o => o.invoice_code !== inv.invoice_code),
+        ...prev.filter(o => !sameOrderIdentity(o, inv)),
       ]));
       setInvoices(prev => {
-        if (prev.find(i => i.invoice_code === inv.invoice_code)) return prev;
+        if (prev.find(i => sameOrderIdentity(i, inv))) return prev;
         return [{ ...inv, _isOffline: false }, ...prev];
       });
     };
@@ -209,12 +292,20 @@ export default function OrderList({ store = {} }) {
   const filtered = displayOrders.filter(inv => {
     const matchSearch =
       (inv.invoice_code || '').toLowerCase().includes(normalizedSearch) ||
+      (inv.client_order_id || inv.payload?.client_order_id || '').toLowerCase().includes(normalizedSearch) ||
       displayOrderCode(inv.invoice_code).toLowerCase().includes(normalizedSearch) ||
       (inv.customer_name || '').toLowerCase().includes(normalizedSearch);
+    const sourceKey = getOrderSourceKey(inv);
+    const syncStatusKey = getMobileSyncStatusKey(inv);
     const matchStatus = filterStatus === 'all' ||
       inv.status === filterStatus ||
       (filterStatus === 'offline' && inv._isOffline);
-    return matchSearch && matchStatus;
+    const matchSource = filterSource === 'all' ||
+      sourceKey === filterSource ||
+      (filterSource === 'mobile_like' && isMobileLikeOrder(inv)) ||
+      (filterSource === 'sync' && sourceKey === 'sapo');
+    const matchMobileSync = filterMobileSync === 'all' || syncStatusKey === filterMobileSync;
+    return matchSearch && matchStatus && matchSource && matchMobileSync;
   });
 
   const summaryCards = [
@@ -246,6 +337,13 @@ export default function OrderList({ store = {} }) {
       icon: Wallet,
       tone: 'bg-purple-50 text-purple-700 border-purple-100',
     },
+    {
+      key: 'mobile',
+      label: 'Mobile/offline',
+      value: displayOrders.filter(isMobileLikeOrder).length,
+      icon: UploadCloud,
+      tone: 'bg-indigo-50 text-indigo-700 border-indigo-100',
+    },
   ];
 
   const statusTabs = [
@@ -255,6 +353,26 @@ export default function OrderList({ store = {} }) {
     { key: 'completed', label: 'Hoàn thành', count: displayOrders.filter(inv => inv.status === 'completed').length },
     { key: 'cancelled', label: 'Đã hủy', count: displayOrders.filter(inv => inv.status === 'cancelled').length },
     { key: 'offline', label: 'Offline', count: displayOrders.filter(inv => inv._isOffline).length },
+  ];
+
+  const sourceOptions = [
+    { key: 'all', label: 'Tất cả nguồn', count: displayOrders.length },
+    { key: 'mobile_like', label: 'Mobile/offline', count: displayOrders.filter(isMobileLikeOrder).length },
+    { key: 'mobile', label: 'Mobile', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'mobile').length },
+    { key: 'offline', label: 'Offline local', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'offline').length },
+    { key: 'web', label: 'Web', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'web').length },
+    { key: 'sync', label: 'Sync', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'sync' || getOrderSourceKey(inv) === 'sapo').length },
+  ];
+
+  const mobileSyncOptions = [
+    { key: 'all', label: 'Tất cả sync' },
+    { key: 'pending_local', label: 'Offline chưa sync' },
+    { key: 'applied', label: 'Đã đồng bộ' },
+    { key: 'idempotent', label: 'Đã có trên server' },
+    { key: 'received', label: 'Đã nhận' },
+    { key: 'retry_later', label: 'Chờ thử lại' },
+    { key: 'conflict', label: 'Xung đột' },
+    { key: 'failed', label: 'Lỗi sync' },
   ];
 
   const selectedAll = filtered.length > 0 && filtered.every(inv => selectedOrders.includes(inv.id || inv.invoice_code));
@@ -297,7 +415,7 @@ export default function OrderList({ store = {} }) {
       // Remove offline orders from localStorage (hard delete for offline)
       if (offlineOrders.length > 0) {
         const pending = JSON.parse(localStorage.getItem('kha_pending_orders') || '[]');
-        const updatedPending = pending.filter(o => !offlineOrders.some(oo => oo.invoice_code === o.invoice_code));
+        const updatedPending = pending.filter(o => !offlineOrders.some(oo => sameOrderIdentity(oo, o)));
         localStorage.setItem('kha_pending_orders', JSON.stringify(updatedPending));
       }
 
@@ -305,7 +423,7 @@ export default function OrderList({ store = {} }) {
       alert(`✅ Đã hủy ${totalAffected} đơn hàng!`);
       setSelectedOrders([]);
       // Refresh data - cancelled orders will disappear from list
-      fetchInvoices();
+      notifyOrderChanged({ reason: 'orders-cancelled' });
       fetch(`${API}/products/all/with-variants`).catch(() => { });
     } catch (err) {
       alert(`📡 Lỗi khi hủy: ${err.message}`);
@@ -330,7 +448,7 @@ export default function OrderList({ store = {} }) {
       if (!res.ok) { alert('Không tải được chi tiết đơn!'); return; }
       const data = await res.json();
       setInvoiceDetails(data.details || []);
-      setShowView(data);
+      setShowView({ ...inv, ...data });
     } catch {
       alert('📡 Không kết nối được server!');
     }
@@ -520,25 +638,50 @@ export default function OrderList({ store = {} }) {
         const remainingAmount = Math.max(0, newTotal - paidAmount);
         const changeAmount = Math.max(0, paidAmount - newTotal);
 
+        const updatedCart = editDetails.map(c => ({
+          id: c.id,
+          product_id: c.product_id,
+          variant_id: c.variant_id || null,
+          parent_id: c.parent_id || null,
+          parent_name: c.parent_name || '',
+          variant_name: c.variant_name || '',
+          product_name: c.product_name || c.name || '',
+          product_sku: c.product_sku || c.sku || '',
+          name: c.name || c.product_name || '',
+          sku: c.sku || c.product_sku || '',
+          quantity: c.quantity,
+          unit_price: c.unit_price,
+          discount_percent: c.discount_percent,
+          discount_amount: c.discount_amount,
+          line_total: c.line_total,
+        }));
+        const updatedPayload = {
+          ...(showEdit.payload || {}),
+          client_order_id: showEdit.client_order_id || showEdit.payload?.client_order_id || '',
+          invoice_code: showEdit.invoice_code || showEdit.payload?.invoice_code || '',
+          customer_id: editForm.customer_id || null,
+          payment_method: editForm.payment_method,
+          note: editForm.note || '',
+          subtotal: sub,
+          vat_percent: editForm.vat_percent,
+          vat_amount: vat,
+          discount_percent: editForm.discount_percent,
+          discount_amount: disc,
+          delivery_fee: deliveryFee,
+          paid_amount: paidAmount,
+          change_amount: changeAmount,
+          remaining_amount: remainingAmount,
+          total: newTotal,
+          status: editForm.status || 'pending',
+          created_at: editForm.created_at || showEdit.created_at,
+          details: updatedCart,
+        };
         const updated = {
           ...showEdit,
-          cart: editDetails.map(c => ({
-            id: c.id,
-            product_id: c.product_id,
-            variant_id: c.variant_id || null,
-            parent_id: c.parent_id || null,
-            parent_name: c.parent_name || '',
-            variant_name: c.variant_name || '',
-            product_name: c.product_name || c.name || '',
-            product_sku: c.product_sku || c.sku || '',
-            name: c.name || c.product_name || '',
-            sku: c.sku || c.product_sku || '',
-            quantity: c.quantity,
-            unit_price: c.unit_price,
-            discount_percent: c.discount_percent,
-            discount_amount: c.discount_amount,
-            line_total: c.line_total,
-          })),
+          id: showEdit.id || updatedPayload.client_order_id || showEdit.invoice_code,
+          client_order_id: updatedPayload.client_order_id,
+          payload: updatedPayload,
+          cart: updatedCart,
           customer_id: editForm.customer_id || null,
           customer_name: editForm.customer_name || 'Khách lẻ',
           payment_method: editForm.payment_method,
@@ -558,14 +701,14 @@ export default function OrderList({ store = {} }) {
         };
 
         const pending = JSON.parse(localStorage.getItem('kha_pending_orders') || '[]');
-        const idx = pending.findIndex(o => o.invoice_code === showEdit.invoice_code);
+        const idx = pending.findIndex(o => sameOrderIdentity(o, showEdit));
         if (idx >= 0) pending[idx] = updated;
         else pending.unshift(updated);
         localStorage.setItem('kha_pending_orders', JSON.stringify(pending));
 
         // Cập nhật allOrders
         setAllOrders(prev => prev.map(o =>
-          o.invoice_code === showEdit.invoice_code ? updated : o
+          sameOrderIdentity(o, showEdit) ? updated : o
         ));
         setShowEdit(null);
         alert('✅ Đơn offline đã được cập nhật!');
@@ -609,7 +752,7 @@ export default function OrderList({ store = {} }) {
       const data = await res.json();
       if (data.ok) {
         setShowEdit(null);
-        await fetchInvoices();
+        notifyOrderChanged({ reason: 'order-updated', invoice_id: showEdit.id });
         fetch(`${API}/products/all/with-variants`).catch(() => { });
       } else {
         alert(`⚠️ Lỗi khi lưu!\n\nCode: HTTP ${res.status}\nLý do: ${data.error || 'Không rõ'}`);
@@ -641,7 +784,7 @@ export default function OrderList({ store = {} }) {
       if (isOffline) {
         // Delete offline order from localStorage
         const pending = JSON.parse(localStorage.getItem('kha_pending_orders') || '[]');
-        const updatedPending = pending.filter(o => o.invoice_code !== inv.invoice_code);
+        const updatedPending = pending.filter(o => !sameOrderIdentity(o, inv));
         localStorage.setItem('kha_pending_orders', JSON.stringify(updatedPending));
         success = true;
       } else {
@@ -663,7 +806,7 @@ export default function OrderList({ store = {} }) {
       if (success) {
         // Remove from selected if present
         setSelectedOrders(prev => prev.filter(id => id !== orderId));
-        fetchInvoices();
+        notifyOrderChanged({ reason: 'order-cancelled', invoice_id: inv.id || null, invoice_code: inv.invoice_code || '' });
         // Refresh product stock
         fetch(`${API}/products/all/with-variants`).catch(() => { });
         alert('✅ Đã hủy đơn hàng!');
@@ -683,13 +826,14 @@ export default function OrderList({ store = {} }) {
       if (inv._isOffline) {
         // Cập nhật offline order trong localStorage
         const pending = JSON.parse(localStorage.getItem('kha_pending_orders') || '[]');
-        const idx = pending.findIndex(o => o.invoice_code === inv.invoice_code);
+        const idx = pending.findIndex(o => sameOrderIdentity(o, inv));
         if (idx >= 0) {
           pending[idx].status = 'completed';
+          pending[idx].payload = { ...(pending[idx].payload || {}), status: 'completed' };
           localStorage.setItem('kha_pending_orders', JSON.stringify(pending));
           // Cập nhật allOrders
           setAllOrders(prev => prev.map(o =>
-            o.invoice_code === inv.invoice_code ? { ...o, status: 'completed', _isOffline: true } : o
+            sameOrderIdentity(o, inv) ? { ...o, status: 'completed', _isOffline: true } : o
           ));
         }
         alert('✅ Đã cập nhật trạng thái đơn offline thành "Đã thanh toán"!');
@@ -703,7 +847,7 @@ export default function OrderList({ store = {} }) {
         const data = await res.json();
         if (data.ok) {
           alert('✅ Đã xác nhận thanh toán!');
-          await fetchInvoices();
+          notifyOrderChanged({ reason: 'order-paid', invoice_id: inv.id || null, invoice_code: inv.invoice_code || '' });
           fetch(`${API}/products/all/with-variants`).catch(() => { });
         } else {
           alert('Lỗi: ' + (data.error || 'Không thể xác nhận'));
@@ -888,7 +1032,7 @@ export default function OrderList({ store = {} }) {
         </div>
 
         <div className="p-4 border-t border-gray-100">
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_220px]">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_220px_220px_220px]">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -905,6 +1049,16 @@ export default function OrderList({ store = {} }) {
               <option value="completed">✅ Hoàn thành</option>
               <option value="cancelled">❌ Đã hủy</option>
               <option value="offline">📡 Offline</option>
+            </select>
+            <select className="input-field" value={filterSource} onChange={e => setFilterSource(e.target.value)}>
+              {sourceOptions.map(option => (
+                <option key={option.key} value={option.key}>{option.label}{option.count !== undefined ? ` (${option.count})` : ''}</option>
+              ))}
+            </select>
+            <select className="input-field" value={filterMobileSync} onChange={e => setFilterMobileSync(e.target.value)}>
+              {mobileSyncOptions.map(option => (
+                <option key={option.key} value={option.key}>{option.label}</option>
+              ))}
             </select>
           </div>
 
@@ -924,8 +1078,157 @@ export default function OrderList({ store = {} }) {
           </div>
         </div>
 
-        <div className="w-full max-w-full overflow-x-auto border-t border-gray-100">
-          <table className="w-full min-w-[1120px] text-sm">
+        <div className="border-t border-gray-100 lg:hidden">
+          {loading ? (
+            <div className="text-center text-gray-400 py-12 flex flex-col items-center justify-center gap-3">
+              <Loader size={28} className="animate-spin text-blue-400" />
+              <div>
+                <div className="font-medium text-gray-600">Đang tải danh sách đơn hàng...</div>
+                {!serverOnline && <div className="text-xs text-red-400 mt-1">⚠️ Server đang offline</div>}
+              </div>
+            </div>
+          ) : !serverOnline && filtered.length === 0 ? (
+            <div className="text-center py-12 px-4">
+              <div className="text-5xl mb-3 opacity-30">📡</div>
+              <div className="font-semibold text-gray-500 mb-1">Server đang offline</div>
+              <div className="text-sm text-gray-400 mb-4">Danh sách đang hiển thị từ dữ liệu cục bộ nếu có.</div>
+              <button onClick={() => {
+                setLoading(true);
+                fetchInvoices().finally(() => setLoading(false));
+              }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
+                🔄 Thử lại
+              </button>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center text-gray-400 py-12 px-4">
+              <div className="text-5xl mb-3 opacity-20">📦</div>
+              <div className="font-medium text-gray-500">Không có đơn phù hợp</div>
+              <div className="text-sm mt-1">Thử đổi trạng thái lọc hoặc từ khóa tìm kiếm</div>
+            </div>
+          ) : (
+            <div className="space-y-3 p-3">
+              <div className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2 text-sm">
+                <button
+                  onClick={toggleSelectAll}
+                  className="inline-flex min-h-10 items-center gap-2 text-gray-600 hover:text-blue-700"
+                  title={selectedAll ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                >
+                  {selectedAll ? <CheckSquare size={16} /> : <Square size={16} />}
+                  <span>{selectedAll ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</span>
+                </button>
+                <span className="text-xs text-gray-400">{filtered.length} đơn</span>
+              </div>
+              {filtered.map(inv => {
+                const st = STATUS_LABELS[inv.status] || STATUS_LABELS.pending;
+                const formatDelivery = (d) => {
+                  if (!d) return 'Chưa chốt';
+                  const [y, mo, day] = d.split('-');
+                  return `${day}/${mo}/${y}`;
+                };
+                const isUnpaid = inv._isOffline || inv.status === 'pending';
+                const orderKey = inv.id || inv.invoice_code;
+                const isSelected = selectedOrders.includes(orderKey);
+                const sourceBadge = getOrderSourceBadge(inv);
+                const syncBadge = getMobileSyncBadge(inv);
+                const creatorName = inv.user_name || inv.invoice_writer || inv.created_by_user_name || '';
+                const rowBg = inv.status === 'cancelled'
+                  ? 'opacity-70 bg-gray-50'
+                  : inv.status === 'pending'
+                    ? 'bg-orange-50/70'
+                    : inv._isOffline
+                      ? 'bg-blue-50/70'
+                      : 'bg-white';
+
+                return (
+                  <div key={orderKey} className={`rounded-2xl border border-gray-200 p-3 shadow-sm ${rowBg}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <button
+                          onClick={() => toggleSelectOrder(orderKey)}
+                          className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:text-blue-600"
+                          title={isSelected ? 'Bỏ chọn' : 'Chọn'}
+                        >
+                          {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                        </button>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-blue-700">{displayOrderCode(inv.invoice_code)}</div>
+                          <div className="mt-1 truncate text-sm font-medium text-gray-800">{inv.customer_name || 'Khách lẻ'}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                            <span className={`rounded-full px-2 py-0.5 font-medium ${sourceBadge.color}`}>{sourceBadge.text}</span>
+                            {syncBadge && <span className={`rounded-full px-2 py-0.5 font-medium ${syncBadge.color}`}>{syncBadge.text}</span>}
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${st.color}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`}></span>
+                              {st.text}
+                            </span>
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">{isUnpaid ? 'Chưa thanh toán' : formatPaymentMethod(inv.payment_method)}</span>
+                          </div>
+                          {creatorName && <div className="mt-1 text-xs text-gray-400">Người tạo: {creatorName}</div>}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="font-bold text-gray-900">{formatVND(inv.total)}</div>
+                        <div className="mt-1 text-xs text-gray-400">{formatDate(inv.created_at)}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
+                      <div className="rounded-xl bg-white/70 p-2">
+                        <div className="text-gray-400">Tạm tính</div>
+                        <div className="font-semibold text-gray-700">{formatVND(inv.subtotal)}</div>
+                      </div>
+                      <div className="rounded-xl bg-white/70 p-2">
+                        <div className="text-gray-400">Ngày giao</div>
+                        <div className="font-semibold text-gray-700">{formatDelivery(inv.delivery_date)}</div>
+                      </div>
+                      <div className="rounded-xl bg-white/70 p-2">
+                        <div className="text-gray-400">Người nhận</div>
+                        <div className="truncate font-semibold text-gray-700">{inv.receiver_name || 'Chưa có'}</div>
+                      </div>
+                      <div className="rounded-xl bg-white/70 p-2">
+                        <div className="text-gray-400">Thanh toán</div>
+                        <div className="font-semibold text-gray-700">{formatPaymentMethod(inv.payment_method)}</div>
+                      </div>
+                      <div className="rounded-xl bg-white/70 p-2">
+                        <div className="text-gray-400">Nguồn tạo</div>
+                        <div className="font-semibold text-gray-700">{sourceBadge.text}</div>
+                      </div>
+                      <div className="rounded-xl bg-white/70 p-2">
+                        <div className="text-gray-400">Mobile sync</div>
+                        <div className="font-semibold text-gray-700">{syncBadge?.text || '—'}</div>
+                      </div>
+                    </div>
+
+                    {inv.note && (
+                      <div className="mt-2 rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-600">
+                        {inv.note}
+                      </div>
+                    )}
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <button onClick={() => openView(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-medium text-gray-600 hover:border-blue-200 hover:text-blue-700" title="Xem chi tiết">
+                        <Eye size={14} /> Xem
+                      </button>
+                      <button onClick={() => openEdit(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100" title="Sửa">
+                        <Edit2 size={14} /> Sửa
+                      </button>
+                      {(inv._isOffline || inv.status === 'pending' || inv.status === 'processing') && (
+                        <button onClick={() => handleMarkAsPaid(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-2 text-xs font-medium text-green-700 hover:bg-green-100" title="Xác nhận thanh toán">
+                          <CheckSquare size={14} /> Thanh toán
+                        </button>
+                      )}
+                      <button onClick={() => handleCancel(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-medium text-red-600 hover:bg-red-100" title="Hủy đơn">
+                        <Trash2 size={14} /> Hủy
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden w-full max-w-full overflow-x-auto border-t border-gray-100 lg:block">
+          <table className="w-full min-w-[1320px] text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
                 <th className="px-4 py-3 text-center w-12">
@@ -938,6 +1241,8 @@ export default function OrderList({ store = {} }) {
                   </button>
                 </th>
                 <th className="px-4 py-3 text-left">Đơn hàng</th>
+                <th className="px-4 py-3 text-left">Nguồn</th>
+                <th className="px-4 py-3 text-left">Mobile sync</th>
                 <th className="px-4 py-3 text-left">Khách hàng</th>
                 <th className="px-4 py-3 text-right">Giá trị đơn</th>
                 <th className="px-4 py-3 text-left">Thanh toán</th>
@@ -961,6 +1266,9 @@ export default function OrderList({ store = {} }) {
                 const paymentLabel = isUnpaid
                   ? <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-500">Chưa thanh toán</span>
                   : <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700">{formatPaymentMethod(inv.payment_method)}</span>;
+                const sourceBadge = getOrderSourceBadge(inv);
+                const syncBadge = getMobileSyncBadge(inv);
+                const creatorName = inv.user_name || inv.invoice_writer || inv.created_by_user_name || '';
                 const rowBg = inv.status === 'cancelled'
                   ? 'opacity-60 bg-gray-50'
                   : inv.status === 'pending'
@@ -988,15 +1296,24 @@ export default function OrderList({ store = {} }) {
                         <div>
                           <div className="font-semibold text-blue-700">{displayOrderCode(inv.invoice_code)}</div>
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                            {inv._isOffline && (
-                              <span className="rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 font-medium">Offline</span>
-                            )}
                             {inv.note && (
                               <span className="rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 max-w-[220px] truncate">{inv.note}</span>
                             )}
                           </div>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${sourceBadge.color}`}>{sourceBadge.text}</span>
+                      {inv.mobile_device_id && <div className="mt-1 text-xs text-gray-400">Device #{inv.mobile_device_id}</div>}
+                    </td>
+                    <td className="px-4 py-4">
+                      {syncBadge ? (
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${syncBadge.color}`}>{syncBadge.text}</span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                      {inv.mobile_synced_at && <div className="mt-1 text-xs text-gray-400">{formatDate(inv.mobile_synced_at)}</div>}
                     </td>
                     <td className="px-4 py-4">
                       <div className="font-medium text-gray-800">{inv.customer_name || 'Khách lẻ'}</div>
@@ -1020,7 +1337,7 @@ export default function OrderList({ store = {} }) {
                     </td>
                     <td className="px-4 py-4">
                       <div className="text-sm text-gray-700">{formatDate(inv.created_at)}</div>
-                      <div className="mt-1 text-xs text-gray-400">{inv.invoice_writer || '—'}</div>
+                      <div className="mt-1 text-xs text-gray-400">{creatorName || '—'}</div>
                     </td>
                     <td className="px-4 py-4">
                       {inv.delivery_date ? (
@@ -1100,6 +1417,10 @@ export default function OrderList({ store = {} }) {
               <div><span className="text-gray-500">Ngày tạo:</span> <b>{formatDate(showView.created_at)}</b></div>
               <div><span className="text-gray-500">Thanh toán:</span> <b>{formatPaymentMethod(showView.payment_method)}</b></div>
               <div><span className="text-gray-500">Trạng thái:</span> <b>{STATUS_LABELS[showView.status]?.text}</b></div>
+              <div><span className="text-gray-500">Nguồn tạo:</span> <b>{getOrderSourceBadge(showView).text}</b></div>
+              <div><span className="text-gray-500">Mobile sync:</span> <b>{getMobileSyncBadge(showView)?.text || '—'}</b></div>
+              <div><span className="text-gray-500">Người tạo:</span> <b>{showView.user_name || showView.invoice_writer || '—'}</b></div>
+              {showView.mobile_synced_at && <div><span className="text-gray-500">Đồng bộ lúc:</span> <b>{formatDate(showView.mobile_synced_at)}</b></div>}
               {showView.note && <div className="sm:col-span-2"><span className="text-gray-500">Ghi chú:</span> {showView.note}</div>}
             </div>
 

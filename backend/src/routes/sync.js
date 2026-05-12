@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, remove, now, getSyncVersions } = require('../db/database');
 const { requireAuth, requirePermission, publicSession } = require('../middleware/auth');
-const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
+const { createInvoiceFromPayload } = require('../services/invoiceCreationService');
 
 const PULL_TABLES = [
   'store_info',
@@ -138,7 +138,37 @@ function upsertCustomerFromSync(payload, req) {
   return { id, action: 'created' };
 }
 
+function toOptionalNumber(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function isProductVariantPayload(payload = {}) {
+  return Boolean(toOptionalNumber(payload.parent_id) || payload.is_variant || payload.item_type === 'variant' || payload.type === 'variant');
+}
+
+function hasProductVariants(parentId) {
+  const id = Number(parentId);
+  if (!Number.isFinite(id) || id <= 0) return false;
+  return Boolean(getOne('products', row => row && row.active !== 0 && Number(row.parent_id) === id));
+}
+
+function findProductByNaturalKey(payload = {}) {
+  const variantPayload = isProductVariantPayload(payload);
+  if (payload.id !== undefined && payload.id !== null) {
+    const byId = getOne('products', row => Number(row.id) === Number(payload.id));
+    if (byId && Boolean(byId.parent_id) === variantPayload) return byId;
+  }
+
+  const sku = String(payload.sku || '').trim();
+  if (!sku) return null;
+  return getOne('products', row => row && row.active !== 0 && String(row.sku || '').trim() === sku && (variantPayload ? row.parent_id != null : !row.parent_id));
+}
+
 function findByNaturalKey(table, payload = {}) {
+  if (table === 'products') return findProductByNaturalKey(payload);
+
   if (payload.id !== undefined && payload.id !== null) {
     const byId = getOne(table, row => Number(row.id) === Number(payload.id));
     if (byId) return byId;
@@ -166,11 +196,6 @@ function findByNaturalKey(table, payload = {}) {
     ));
   }
 
-  if (table === 'products') {
-    const sku = String(payload.sku || '').trim();
-    return sku ? getOne('products', row => row && row.active !== 0 && String(row.sku || '').trim() === sku) : null;
-  }
-
   if (table === 'import_logs') {
     const code = String(payload.import_code || '').trim();
     return code ? getOne('import_logs', row => String(row.import_code || '').trim() === code) : null;
@@ -186,8 +211,52 @@ function pickAllowedFields(payload = {}, fields = []) {
   }, {});
 }
 
+function upsertProductFromSync(payload, req) {
+  if (!payload || typeof payload !== 'object') return null;
+  const row = pickAllowedFields(payload, SIMPLE_PUSH_FIELDS.products);
+  const existing = findProductByNaturalKey(payload);
+  const variantPayload = isProductVariantPayload(payload);
+  const nextSku = String(row.sku || '').trim();
+  row.updated_at = row.updated_at || now();
+
+  if (existing) {
+    if (existing.parent_id) {
+      row.parent_id = toOptionalNumber(row.parent_id) || existing.parent_id;
+      if (!nextSku) row.sku = existing.sku || '';
+    } else {
+      row.parent_id = null;
+      if (!nextSku || hasProductVariants(existing.id)) row.sku = existing.sku || '';
+    }
+    update('products', existing.id, row);
+    return { id: existing.id, action: 'updated' };
+  }
+
+  if (!nextSku) return { id: null, action: 'skipped', message: 'Bỏ qua đồng bộ sản phẩm thiếu SKU để không ghi SKU rỗng.' };
+  if (!variantPayload) {
+    const skuAsVariant = getOne('products', product => product && product.active !== 0 && product.parent_id != null && String(product.sku || '').trim() === nextSku);
+    if (skuAsVariant) return { id: null, action: 'skipped', message: 'Bỏ qua tạo sản phẩm cha từ SKU đang thuộc biến thể.' };
+  }
+  if (variantPayload) {
+    const parentId = toOptionalNumber(row.parent_id || payload.parent_id);
+    const parent = parentId ? getOne('products', product => Number(product.id) === parentId && !product.parent_id && product.active !== 0) : null;
+    if (!parent) return { id: null, action: 'skipped', message: 'Bỏ qua biến thể đồng bộ vì không tìm thấy sản phẩm cha hợp lệ.' };
+    row.parent_id = parent.id;
+  } else {
+    row.parent_id = null;
+  }
+
+  const id = insert('products', {
+    ...row,
+    account_id: req.accountId,
+    active: row.active === undefined ? 1 : row.active,
+    created_at: row.created_at || now(),
+  });
+  return { id, action: 'created' };
+}
+
 function upsertSimpleRowFromSync(table, payload, req) {
   if (!payload || typeof payload !== 'object') return null;
+  if (table === 'products') return upsertProductFromSync(payload, req);
   const fields = SIMPLE_PUSH_FIELDS[table];
   if (!fields) return null;
   const row = pickAllowedFields(payload, fields);
@@ -261,61 +330,29 @@ function createPendingOrderFromSync(payload, req) {
   const details = Array.isArray(payload.details) ? payload.details : [];
   if (details.length === 0) return null;
 
-  const invoiceCode = payload.invoice_code || `SYNC-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  const exists = getOne('invoices', invoice => invoice.invoice_code === invoiceCode);
-  if (exists) return { id: exists.id, invoice_code: invoiceCode, action: 'skipped_existing' };
+  try {
+    const result = createInvoiceFromPayload({
+      ...payload,
+      user_id: req.user?.id || payload.user_id || null,
+      note: payload.note || 'Đơn đồng bộ từ thiết bị',
+    }, req, { orderSource: 'sync' });
 
-  const invoiceId = insert('invoices', {
-    account_id: req.accountId,
-    invoice_code: invoiceCode,
-    customer_id: payload.customer_id || null,
-    user_id: req.user.id,
-    subtotal: Number(payload.subtotal) || 0,
-    vat_percent: Number(payload.vat_percent) || 0,
-    vat_amount: Number(payload.vat_amount) || 0,
-    discount_amount: Number(payload.discount_amount) || 0,
-    discount_percent: Number(payload.discount_percent) || 0,
-    total: Number(payload.total) || 0,
-    paid_amount: Number(payload.paid_amount) || 0,
-    change_amount: Number(payload.change_amount) || 0,
-    remaining_amount: Number(payload.remaining_amount) || 0,
-    delivery_fee: Number(payload.delivery_fee) || 0,
-    payment_method: payload.payment_method || 'cash',
-    note: payload.note || 'Đơn đồng bộ từ thiết bị',
-    invoice_writer: payload.invoice_writer || req.user.name || '',
-    receiver_name: payload.receiver_name || '',
-    delivery_date: payload.delivery_date || null,
-    status: payload.status || 'pending',
-    created_at: payload.created_at || now(),
-    updated_at: now(),
-  });
-
-  for (const detail of details) {
-    const displayFields = resolveInvoiceDetailDisplayFields(detail, id => getOne('products', product => Number(product.id) === Number(id)));
-    insert('invoice_details', {
-      account_id: req.accountId,
-      invoice_id: invoiceId,
-      type: detail.type || detail.item_type || (detail.combo_id ? 'combo' : 'product'),
-      item_type: detail.item_type || detail.type || (detail.combo_id ? 'combo' : 'product'),
-      combo_id: detail.combo_id || null,
-      product_id: detail.product_id || null,
-      variant_id: displayFields.variant_id || detail.variant_id || null,
-      product_name: displayFields.product_name,
-      product_sku: displayFields.product_sku,
-      name: displayFields.name,
-      sku: displayFields.sku,
-      quantity: Number(detail.quantity) || 1,
-      unit_price: Number(detail.unit_price) || 0,
-      import_price: Number(detail.import_price) || 0,
-      discount_amount: Number(detail.discount_amount) || 0,
-      discount_percent: Number(detail.discount_percent) || 0,
-      line_total: Number(detail.line_total) || ((Number(detail.quantity) || 1) * (Number(detail.unit_price) || 0)),
-      created_at: detail.created_at || now(),
-      updated_at: now(),
-    });
+    return {
+      id: result.invoice_id,
+      invoice_code: result.invoice_code,
+      client_order_id: result.client_order_id || '',
+      action: result.idempotent ? 'existing_idempotent' : 'created_pending',
+      idempotent: result.idempotent === true,
+    };
+  } catch (err) {
+    return {
+      id: null,
+      invoice_code: payload.invoice_code || '',
+      client_order_id: payload.client_order_id || '',
+      action: 'error',
+      error: err.message,
+    };
   }
-
-  return { id: invoiceId, invoice_code: invoiceCode, action: 'created_pending' };
 }
 
 router.get('/bootstrap/status', (req, res) => {

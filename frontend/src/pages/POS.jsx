@@ -5,6 +5,7 @@ import { getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
 import { printInvoice, writePrintWindowMessage } from '../utils/printInvoice';
 import { getProductDisplayName } from '../utils/productSearch';
+import { attachClientOrderMetadata, generateClientOrderId, getExistingClientOrderId } from '../utils/clientOrderId';
 
 const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
 const PAYMENT_METHODS = [
@@ -93,17 +94,25 @@ export default function POS({ user, store }) {
   // Đồng bộ đơn offline
   useEffect(() => {
     if (!serverOnline || pendingOrders.length === 0) return;
+    const samePendingOrder = (a, b) => {
+      const aClientId = getExistingClientOrderId(a);
+      const bClientId = getExistingClientOrderId(b);
+      if (aClientId && bClientId && aClientId === bClientId) return true;
+      return Boolean(a?.invoice_code && b?.invoice_code && a.invoice_code === b.invoice_code);
+    };
     const syncPending = async () => {
       for (const order of [...pendingOrders]) {
         try {
+          const payload = attachClientOrderMetadata(order.payload || order, order);
+          const orderWithStableId = { ...order, client_order_id: payload.client_order_id, payload };
           const res = await fetch(`${API}/invoices`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(order.payload),
+            body: JSON.stringify(payload),
           });
           const data = await res.json();
           if (data.ok) {
-            const remaining = pendingOrders.filter(o => o.id !== order.id);
+            const remaining = pendingOrders.filter(o => !samePendingOrder(o, orderWithStableId));
             setPendingOrders(remaining);
             localStorage.setItem('kha_pending_orders', JSON.stringify(remaining));
             alert(`📦 Đơn offline đã đồng bộ! Mã: ${data.invoice_code}`);
@@ -239,7 +248,8 @@ export default function POS({ user, store }) {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
-    const orderPayload = {
+    const clientOrderId = generateClientOrderId();
+    const orderPayload = attachClientOrderMetadata({
       customer_id: selectedCustomer?.id || null,
       user_id: selectedUser?.id,
       subtotal,
@@ -256,7 +266,7 @@ export default function POS({ user, store }) {
       note,
       details: cart.map(({ id, product_id, variant_id, parent_id, parent_name, variant_name, product_name, product_sku, name, sku, quantity, unit_price, discount_amount, discount_percent, line_total }) =>
         ({ product_id, variant_id: variant_id || null, parent_id: parent_id || null, parent_name: parent_name || '', variant_name: variant_name || '', product_name: product_name || name || '', product_sku: product_sku || sku || '', name: name || product_name || '', sku: sku || product_sku || '', quantity, unit_price, discount_amount, discount_percent, line_total })),
-    };
+    }, { client_order_id: clientOrderId });
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
@@ -269,7 +279,9 @@ export default function POS({ user, store }) {
       clearTimeout(timeout);
       const data = await res.json();
       if (data.ok) {
-        setLastInvoice({ ...data, customer: selectedCustomer, user: selectedUser, cart, subtotal, vatAmount, vatPercent, discountAmount, discountPercent, total, paid_amount: orderPayload.paid_amount, change_amount: orderPayload.change_amount, remaining_amount: orderPayload.remaining_amount, delivery_fee: orderPayload.delivery_fee, note, paymentMethod });
+        const invoiceDetail = { ...data, client_order_id: data.client_order_id || orderPayload.client_order_id, customer: selectedCustomer, user: selectedUser, cart, subtotal, vatAmount, vatPercent, discountAmount, discountPercent, total, paid_amount: orderPayload.paid_amount, change_amount: orderPayload.change_amount, remaining_amount: orderPayload.remaining_amount, delivery_fee: orderPayload.delivery_fee, note, paymentMethod, status: 'pending', payment_method: paymentMethod, created_at: new Date().toISOString() };
+        setLastInvoice(invoiceDetail);
+        window.dispatchEvent(new CustomEvent('kha-order-created', { detail: invoiceDetail }));
         setShowSuccess(true);
         // Reset
         setCart([]);
@@ -284,17 +296,37 @@ export default function POS({ user, store }) {
       }
     } catch {
       // ===== LƯU ĐƠN OFFLINE =====
+      const createdAt = new Date().toISOString();
+      const invoiceCode = `LOCAL_${Date.now().toString(36).toUpperCase()}`;
+      const offlinePayload = {
+        ...orderPayload,
+        invoice_code: invoiceCode,
+        created_at: createdAt,
+      };
       const offlineOrder = {
-        id: Date.now().toString(),
-        payload: orderPayload,
-        created_at: new Date().toISOString(),
+        id: orderPayload.client_order_id,
+        invoice_code: invoiceCode,
+        client_order_id: orderPayload.client_order_id,
+        payload: offlinePayload,
+        cart: [...cart],
+        created_at: createdAt,
         total,
+        subtotal,
+        vat_percent: vatPercent,
+        vat_amount: vatAmount,
+        discount_amount: discountAmount,
+        discount_percent: discountPercent,
+        payment_method: paymentMethod,
+        note,
+        status: 'pending',
+        customer_id: selectedCustomer?.id || null,
         customer_name: selectedCustomer?.name || 'Khách lẻ',
         item_count: cart.reduce((s, i) => s + i.quantity, 0),
       };
       const updated = [offlineOrder, ...pendingOrders].slice(0, 50);
       setPendingOrders(updated);
       localStorage.setItem('kha_pending_orders', JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('kha-order-created', { detail: offlineOrder }));
       setCart([]);
       setSelectedCustomer(null);
       setVatPercent(0);
@@ -353,12 +385,12 @@ export default function POS({ user, store }) {
   const formatDate = (d) => new Date(d).toLocaleString('vi-VN');
 
   return (
-    <div className="flex gap-4 h-full">
+    <div className="flex flex-col xl:flex-row gap-3 sm:gap-4 h-auto xl:h-full min-h-0 pb-[34rem] sm:pb-[30rem] xl:pb-0">
       {/* ===== LEFT: Product list ===== */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 xl:min-h-0">
 
         {/* Server status + Pending */}
-        <div className="mb-3 flex items-center gap-3">
+        <div className="mb-3 flex flex-wrap items-center gap-2 sm:gap-3">
           {pendingOrders.length > 0 && (
             <button
               onClick={() => {
@@ -388,10 +420,10 @@ export default function POS({ user, store }) {
         </div>
 
         {/* Form: Loại khách + Khách hàng + Nhân viên - THỨ HAI */}
-        <div className="card mb-3 flex gap-3 items-end">
+        <div className="card mb-3 grid grid-cols-1 gap-3 md:grid-cols-3 md:items-end">
           <div className="flex-1">
             <label className="text-xs text-gray-500">Loại khách hàng / Giá</label>
-            <div className="flex gap-2 mt-1">
+            <div className="flex flex-wrap gap-2 mt-1">
               {Object.entries(PRICE_LABELS).map(([k, v]) => (
                 <button key={k} onClick={() => setPriceType(k)}
                   className={`px-3 py-1.5 rounded text-sm font-medium transition border ${priceType === k ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:border-blue-400'}`}>
@@ -402,7 +434,7 @@ export default function POS({ user, store }) {
           </div>
           <div className="flex-1">
             <label className="text-xs text-gray-500">Khách hàng</label>
-            <div className="flex mt-1">
+            <div className="flex mt-1 gap-2">
               <select className="input-field flex-1" value={selectedCustomer?.id || ''} onChange={e => {
                 const c = customers.find(c => c.id === +e.target.value);
                 setSelectedCustomer(c || null);
@@ -411,7 +443,7 @@ export default function POS({ user, store }) {
                 <option value="">-- Khách lẻ --</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
               </select>
-              <button onClick={() => setShowCustomerForm(!showCustomerForm)} className="ml-2 btn-primary text-sm px-3">+</button>
+              <button onClick={() => setShowCustomerForm(!showCustomerForm)} className="btn-primary text-sm px-3 shrink-0 min-h-10">+</button>
             </div>
           </div>
           <div className="flex-1">
@@ -429,13 +461,13 @@ export default function POS({ user, store }) {
         {showCustomerForm && (
           <div className="card mb-3 border-l-4 border-blue-500">
             <h3 className="font-semibold text-sm mb-2">Thêm khách hàng mới</h3>
-            <div className="grid grid-cols-4 gap-2 mb-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
               <input className="input-field" placeholder="Tên KH" value={newCustomer.name} onChange={e => setNewCustomer({ ...newCustomer, name: e.target.value })} />
               <input className="input-field" placeholder="SĐT" value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })} />
               <input className="input-field" placeholder="Email" value={newCustomer.email} onChange={e => setNewCustomer({ ...newCustomer, email: e.target.value })} />
               <input className="input-field" placeholder="MST" value={newCustomer.tax_code} onChange={e => setNewCustomer({ ...newCustomer, tax_code: e.target.value })} />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <button onClick={addNewCustomer} className="btn-success text-sm">💾 Lưu</button>
               <button onClick={() => setShowCustomerForm(false)} className="btn-danger text-sm">Hủy</button>
             </div>
@@ -444,7 +476,7 @@ export default function POS({ user, store }) {
 
         {/* Products grid */}
         <div className="flex-1 overflow-auto">
-          <div className="grid grid-cols-3 xl:grid-cols-4 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
             {filteredProducts.map(p => (
               p.variants && p.variants.length > 0 ? (
                 <div key={p.id}
@@ -506,13 +538,13 @@ export default function POS({ user, store }) {
 
         {/* Variant Picker Modal */}
         {showVariantPicker && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 w-[520px] max-h-[80vh] overflow-auto">
+          <div className="fixed inset-0 bg-black/40 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
+            <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-xl max-h-[90dvh] overflow-auto">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold">Chọn biến thể: {showVariantPicker.name}</h2>
                 <button onClick={() => { setShowVariantPicker(null); setVariantQty({}); }} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
               </div>
-              <div className="grid grid-cols-2 gap-2 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                 {showVariantPicker.variants.map(v => {
                   const qty = variantQty[v.id] || 1;
                   const overStock = qty > v.stock && v.stock > 0;
@@ -546,7 +578,7 @@ export default function POS({ user, store }) {
                   );
                 })}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={() => {
                     showVariantPicker.variants.forEach(v => {
@@ -601,8 +633,8 @@ export default function POS({ user, store }) {
       </div>
 
       {/* ===== RIGHT: Cart ===== */}
-      <div className="w-[380px] flex flex-col">
-        <div className="card flex-1 flex flex-col overflow-hidden">
+      <div className="fixed inset-x-0 bottom-0 z-30 w-full p-2 sm:p-3 xl:static xl:inset-auto xl:z-auto xl:w-[380px] xl:p-0 xl:flex xl:flex-col">
+        <div className="card flex max-h-[58dvh] flex-col overflow-hidden shadow-2xl xl:flex-1 xl:max-h-none xl:shadow">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-bold text-lg">🛒 Đơn hàng</h2>
             <span className="text-sm text-gray-500">{cart.length} món</span>
@@ -610,7 +642,7 @@ export default function POS({ user, store }) {
 
           {/* Cart table: STT | Tên SP | CK% | Thành tiền | ✕ */}
           <div className="flex-1 overflow-auto border rounded-lg">
-            <table className="w-full text-xs">
+            <table className="w-full min-w-[360px] text-xs">
               <thead>
                 <tr className="bg-blue-600 text-white text-[10px]">
                   <th className="py-1.5 px-2 text-center w-8">STT</th>
@@ -680,7 +712,7 @@ export default function POS({ user, store }) {
           {/* Note + Payment */}
           <div className="mt-2 space-y-2">
             <input className="input-field text-xs" placeholder="Ghi chú đơn hàng..." value={note} onChange={e => setNote(e.target.value)} />
-            <div className="flex gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {PAYMENT_METHODS.map(({ value, label }) => (
                 <button key={value} onClick={() => setPaymentMethod(value)}
                   className={`flex-1 py-2 rounded text-sm font-medium border transition ${paymentMethod === value ? 'bg-green-600 text-white border-green-600' : 'border-gray-300 text-gray-600'}`}>
@@ -698,8 +730,8 @@ export default function POS({ user, store }) {
 
       {/* ===== SUCCESS / PRINT MODAL ===== */}
       {(showSuccess && lastInvoice) && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-[700px] max-h-[90vh] overflow-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
+          <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-2xl max-h-[90dvh] overflow-auto">
             <div className="text-center mb-4">
               <div className="text-5xl mb-2">✅</div>
               <h2 className="text-xl font-bold text-green-600">Thanh toán thành công!</h2>
@@ -907,7 +939,7 @@ export default function POS({ user, store }) {
               <div className="text-center text-[9px] font-medium">Cảm ơn quý khách! Hẹn gặp lại!</div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <button onClick={handlePrint} className="flex-1 btn-primary py-2">🖨️ In hóa đơn</button>
               <button onClick={() => { setShowSuccess(false); setLastInvoice(null); }} className="flex-1 btn-success py-2">Tiếp tục bán</button>
             </div>

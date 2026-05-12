@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { API } from '../App';
 import {
   Store, Settings2, Printer, Bot, Users,
-  Plus, X, Edit2, Trash2, CheckCircle, Tag, HelpCircle
+  Plus, X, Edit2, Trash2, CheckCircle, Tag, HelpCircle,
+  Smartphone, Link2, Copy, RefreshCw, ShieldOff
 } from 'lucide-react';
 import HelpModal from '../components/HelpModal';
+import { mobileAdminApi, usersApi } from '../utils/apiClient';
 
 function formatBytes(value) {
   const bytes = Number(value) || 0;
@@ -17,6 +19,51 @@ function formatBytes(value) {
     unitIndex += 1;
   }
   return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getMobileEnabledState(user = {}) {
+  if (Object.prototype.hasOwnProperty.call(user, 'mobile_enabled')) {
+    return user.mobile_enabled !== false && user.mobile_enabled !== 0;
+  }
+  if (Object.prototype.hasOwnProperty.call(user, 'mobileEnabled')) {
+    return user.mobileEnabled !== false && user.mobileEnabled !== 0;
+  }
+  return null;
+}
+
+function getMobileLastLogin(user = {}) {
+  return user.mobile_last_login_at || user.last_mobile_login || user.last_mobile_login_at || user.mobileLastLoginAt || null;
+}
+
+function getPlatformLabel(platform) {
+  const value = String(platform || '').trim().toLowerCase();
+  if (value === 'android') return 'Android';
+  if (value === 'ios') return 'iOS';
+  if (value === 'web') return 'Web/PWA';
+  return platform || 'Không rõ';
+}
+
+function isExpiredDate(value) {
+  if (!value) return false;
+  const expiresAt = new Date(value).getTime();
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
+}
+
+function getMobileStatusTone(active) {
+  return active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
 }
 
 function getUpdateStatusLabel(status) {
@@ -156,6 +203,19 @@ export default function Settings({ store }) {
   const [updateResult, setUpdateResult] = useState(null);
   const [updateNotice, setUpdateNotice] = useState('');
 
+  // Mobile admin
+  const [mobileInstallLinks, setMobileInstallLinks] = useState([]);
+  const [mobileDevices, setMobileDevices] = useState([]);
+  const [mobileUrls, setMobileUrls] = useState({});
+  const [mobileLoading, setMobileLoading] = useState(false);
+  const [mobileAction, setMobileAction] = useState('');
+  const [mobileNotice, setMobileNotice] = useState('');
+  const [installForm, setInstallForm] = useState({
+    android_url: '',
+    ios_url: '',
+    expires_days: 7,
+  });
+
   const handleSavePrintTemplate = (val) => {
     setPrintTemplate(val);
     localStorage.setItem('kha_print_template', val);
@@ -167,6 +227,10 @@ export default function Settings({ store }) {
     loadEmployees();
     loadCustomerTypes();
   }, []);
+
+  useEffect(() => {
+    if (tab === 'mobile') loadMobileAdmin();
+  }, [tab]);
 
   useEffect(() => {
     if (!window.khaDesktop?.isElectron) return undefined;
@@ -231,6 +295,108 @@ export default function Settings({ store }) {
     setCustomerTypes(Array.isArray(data) ? data : []);
   };
 
+  const loadMobileAdmin = async () => {
+    setMobileLoading(true);
+    setMobileNotice('');
+    try {
+      const [linksData, devicesData] = await Promise.all([
+        mobileAdminApi.listInstallLinks(),
+        mobileAdminApi.listDevices(),
+      ]);
+      const urls = linksData?.urls || {};
+      setMobileInstallLinks(Array.isArray(linksData?.links) ? linksData.links : []);
+      setMobileDevices(Array.isArray(devicesData?.devices) ? devicesData.devices : []);
+      setMobileUrls(urls);
+      setInstallForm(prev => ({
+        ...prev,
+        android_url: prev.android_url || urls.android_url || '',
+        ios_url: prev.ios_url || urls.ios_url || '',
+      }));
+    } catch (err) {
+      setMobileNotice(err?.message || 'Không thể tải dữ liệu mobile.');
+    } finally {
+      setMobileLoading(false);
+    }
+  };
+
+  const buildInstallApiUrl = (link = {}) => {
+    if (!link.token) return '';
+    const rawUrl = `${API}/mobile/install/${encodeURIComponent(link.token)}`;
+    try {
+      return new URL(rawUrl, window.location.origin).toString();
+    } catch (_) {
+      return rawUrl;
+    }
+  };
+
+  const copyText = async (value, label = 'link') => {
+    const text = String(value || '').trim();
+    if (!text) {
+      setMobileNotice(`Chưa có ${label} để copy.`);
+      return;
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setMobileNotice(`Đã copy ${label}.`);
+    } catch (err) {
+      setMobileNotice(`Không thể copy ${label}: ${err?.message || 'trình duyệt không cho phép'}`);
+    }
+  };
+
+  const handleCreateMobileInstallLink = async (kind = 'common') => {
+    const actionKey = `create-${kind}`;
+    const kindLabel = kind === 'android' ? 'Android' : kind === 'ios' ? 'iOS' : 'chung';
+    setMobileAction(actionKey);
+    setMobileNotice('');
+    try {
+      const payload = {
+        expires_days: Number(installForm.expires_days) || 7,
+      };
+      if (String(installForm.android_url || '').trim()) payload.android_url = String(installForm.android_url).trim();
+      if (String(installForm.ios_url || '').trim()) payload.ios_url = String(installForm.ios_url).trim();
+
+      const data = await mobileAdminApi.createInstallLink(payload);
+      if (data?.link) {
+        setMobileInstallLinks(prev => [data.link, ...prev.filter(link => String(link.id) !== String(data.link.id))]);
+      }
+      if (data?.urls) setMobileUrls(data.urls);
+      setMobileNotice(`Đã tạo link cài đặt mobile ${kindLabel}. Copy link bên dưới để gửi cho nhân viên.`);
+    } catch (err) {
+      setMobileNotice(err?.message || 'Không thể tạo link cài đặt mobile.');
+    } finally {
+      setMobileAction('');
+    }
+  };
+
+  const handleRevokeMobileDevice = async (device) => {
+    if (!device?.id) return;
+    const deviceLabel = device.device_name || device.device_uid || `#${device.id}`;
+    if (!confirm(`Thu hồi quyền truy cập mobile của thiết bị ${deviceLabel}?`)) return;
+    const reason = prompt('Lý do thu hồi thiết bị:', 'admin_revoke') || 'admin_revoke';
+    setMobileAction(`revoke-${device.id}`);
+    try {
+      await mobileAdminApi.revokeDevice(device.id, { reason });
+      await loadMobileAdmin();
+      setMobileNotice(`Đã thu hồi thiết bị ${deviceLabel}.`);
+    } catch (err) {
+      setMobileNotice(err?.message || 'Không thể thu hồi thiết bị mobile.');
+    } finally {
+      setMobileAction('');
+    }
+  };
+
   // ===== STORE =====
   const handleSaveStore = async () => {
     const res = await fetch(`${API}/store`, {
@@ -264,6 +430,19 @@ export default function Settings({ store }) {
     if (!confirm('Xóa nhân viên này?')) return;
     await fetch(`${API}/users/${id}`, { method: 'DELETE' });
     loadEmployees();
+  };
+
+  const handleToggleEmpMobile = async (employee) => {
+    const currentState = getMobileEnabledState(employee);
+    if (currentState === null) return;
+    const nextState = !currentState;
+    if (!confirm(`${nextState ? 'Bật' : 'Tắt'} quyền đăng nhập mobile cho ${employee.name}?`)) return;
+    try {
+      await usersApi.updateMobileEnabled(employee.id, nextState);
+      await loadEmployees();
+    } catch (err) {
+      alert(err?.message || 'Không thể cập nhật quyền mobile cho nhân viên.');
+    }
   };
 
   const openAddEmp = () => {
@@ -386,8 +565,22 @@ export default function Settings({ store }) {
     return runUpdateAction('installing', updates => updates.install());
   };
 
+  const employeeById = new Map(employees.map(employee => [Number(employee.id), employee]));
+  const mobileDefaultAndroidUrl = mobileUrls.android_url || mobileUrls.androidUrl || '';
+  const mobileDefaultIosUrl = mobileUrls.ios_url || mobileUrls.iosUrl || '';
+  const mobileServerUrl = mobileUrls.server_url || mobileUrls.serverUrl || mobileUrls.api_url || '';
+  let resolvedMobileServerUrl = mobileServerUrl;
+  if (!resolvedMobileServerUrl) {
+    try {
+      resolvedMobileServerUrl = new URL(API, window.location.origin).toString();
+    } catch (_) {
+      resolvedMobileServerUrl = API;
+    }
+  }
+  const hasMobileFields = employees.some(employee => getMobileEnabledState(employee) !== null || getMobileLastLogin(employee));
+
   const desktopAvailable = Boolean(window.khaDesktop?.isElectron && window.khaDesktop?.updates);
-  const currentVersion = appInfo?.version || updateState?.currentVersion || '1.2.1';
+  const currentVersion = appInfo?.version || updateState?.currentVersion || '1.2.2';
   const updateInfo = updateState?.updateInfo || null;
   const progress = updateState?.progress || null;
   const progressPercent = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
@@ -422,6 +615,7 @@ export default function Settings({ store }) {
         {[
           { key: 'store', icon: <Store size={16} />, label: 'Cửa hàng' },
           { key: 'employees', icon: <Users size={16} />, label: 'Nhân viên' },
+          { key: 'mobile', icon: <Smartphone size={16} />, label: 'Mobile' },
           { key: 'customer-types', icon: <Tag size={16} />, label: 'Loại khách' },
           { key: 'updates', icon: <Settings2 size={16} />, label: 'Cập nhật' },
         ].map(t => (
@@ -570,34 +764,301 @@ export default function Settings({ store }) {
                   <th className="p-2 text-left">Email</th>
                   <th className="p-2 text-left">SĐT</th>
                   <th className="p-2 text-left">Vai trò</th>
+                  <th className="p-2 text-left">Mobile</th>
+                  <th className="p-2 text-left">Lần mobile gần nhất</th>
                   <th className="p-2 text-center">Hành động</th>
                 </tr>
               </thead>
               <tbody>
-                {employees.map(u => (
-                  <tr key={u.id} className="border-b hover:bg-gray-50">
-                    <td className="p-2 font-medium">{u.name}</td>
-                    <td className="p-2 text-gray-600">{u.email}</td>
-                    <td className="p-2">{u.phone || '—'}</td>
-                    <td className="p-2">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                        {u.role === 'admin' ? 'Admin' : 'Nhân viên'}
-                      </span>
-                    </td>
-                    <td className="p-2 text-center flex justify-center gap-1">
-                      <button onClick={() => openEditEmp(u)} className="text-blue-600 hover:text-blue-800 text-xs px-2 py-1 border border-blue-300 rounded flex items-center gap-1">
-                        <Edit2 size={12} /> Sửa
-                      </button>
-                      {u.role !== 'admin' && (
-                        <button onClick={() => handleDeleteEmp(u.id)} className="text-red-500 hover:text-red-700 text-xs px-2 py-1 border border-red-300 rounded flex items-center gap-1">
-                          <Trash2 size={12} /> Xóa
+                {employees.map(u => {
+                  const mobileState = getMobileEnabledState(u);
+                  const mobileLastLogin = getMobileLastLogin(u);
+                  return (
+                    <tr key={u.id} className="border-b hover:bg-gray-50">
+                      <td className="p-2 font-medium">{u.name}</td>
+                      <td className="p-2 text-gray-600">{u.email}</td>
+                      <td className="p-2">{u.phone || '—'}</td>
+                      <td className="p-2">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {u.role === 'admin' ? 'Admin' : 'Nhân viên'}
+                        </span>
+                      </td>
+                      <td className="p-2">
+                        {mobileState === null ? (
+                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">Theo mặc định</span>
+                        ) : (
+                          <button
+                            onClick={() => handleToggleEmpMobile(u)}
+                            className={`px-2 py-0.5 rounded text-xs font-medium ${getMobileStatusTone(mobileState)}`}
+                            title="Bật/tắt quyền mobile nếu backend users API hỗ trợ"
+                          >
+                            {mobileState ? 'Được bật' : 'Đã tắt'}
+                          </button>
+                        )}
+                      </td>
+                      <td className="p-2 text-gray-600">{formatDateTime(mobileLastLogin)}</td>
+                      <td className="p-2 text-center flex justify-center gap-1">
+                        <button onClick={() => openEditEmp(u)} className="text-blue-600 hover:text-blue-800 text-xs px-2 py-1 border border-blue-300 rounded flex items-center gap-1">
+                          <Edit2 size={12} /> Sửa
                         </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        {u.role !== 'admin' && (
+                          <button onClick={() => handleDeleteEmp(u.id)} className="text-red-500 hover:text-red-700 text-xs px-2 py-1 border border-red-300 rounded flex items-center gap-1">
+                            <Trash2 size={12} /> Xóa
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+            {!hasMobileFields && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                API nhân viên hiện chưa trả về trường mobile_enabled/mobile_last_login_at; hệ thống mobile sẽ áp dụng mặc định từ backend và vẫn hiển thị thiết bị đã đăng nhập ở tab Mobile.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== MOBILE TAB ===== */}
+      {tab === 'mobile' && (
+        <div className="space-y-4">
+          <div className="card">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="font-bold flex items-center gap-2"><Smartphone size={18} /> Mobile / Offline Sync</h2>
+                <p className="text-sm text-gray-500 mt-1">Tạo link cài đặt app, copy URL Android/iOS cho nhân viên và quản lý thiết bị mobile đã đăng nhập.</p>
+              </div>
+              <button
+                onClick={loadMobileAdmin}
+                disabled={mobileLoading}
+                className="btn-primary flex items-center gap-2 text-sm disabled:opacity-60"
+              >
+                <RefreshCw size={14} className={mobileLoading ? 'animate-spin' : ''} /> Làm mới
+              </button>
+            </div>
+
+            {mobileNotice && (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                {mobileNotice}
+              </div>
+            )}
+
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="rounded-xl border bg-gray-50 p-4">
+                <div className="text-xs text-gray-500">Link cài đặt</div>
+                <div className="mt-1 text-2xl font-bold text-gray-800">{mobileInstallLinks.length}</div>
+              </div>
+              <div className="rounded-xl border bg-green-50 p-4 text-green-700">
+                <div className="text-xs opacity-80">Thiết bị active</div>
+                <div className="mt-1 text-2xl font-bold">{mobileDevices.filter(device => device.active !== 0 && !device.revoked_at).length}</div>
+              </div>
+              <div className="rounded-xl border bg-red-50 p-4 text-red-700">
+                <div className="text-xs opacity-80">Thiết bị revoked</div>
+                <div className="mt-1 text-2xl font-bold">{mobileDevices.filter(device => device.active === 0 || device.revoked_at).length}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 className="font-bold flex items-center gap-2"><Link2 size={18} /> Tạo link cài đặt mobile</h3>
+                <p className="text-sm text-gray-500 mt-1">Backend trả một token cài đặt có đủ URL Android và iOS; admin có thể copy từng URL hoặc copy toàn bộ hướng dẫn gửi nhân viên.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium text-gray-700">Android URL</label>
+                <input
+                  className="input-field w-full mt-1"
+                  placeholder={mobileDefaultAndroidUrl || 'https://.../android.apk'}
+                  value={installForm.android_url}
+                  onChange={e => setInstallForm({ ...installForm, android_url: e.target.value })}
+                />
+                {mobileDefaultAndroidUrl && <div className="text-xs text-gray-400 mt-1">Mặc định backend: {mobileDefaultAndroidUrl}</div>}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">iOS URL</label>
+                <input
+                  className="input-field w-full mt-1"
+                  placeholder={mobileDefaultIosUrl || 'https://.../ios'}
+                  value={installForm.ios_url}
+                  onChange={e => setInstallForm({ ...installForm, ios_url: e.target.value })}
+                />
+                {mobileDefaultIosUrl && <div className="text-xs text-gray-400 mt-1">Mặc định backend: {mobileDefaultIosUrl}</div>}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Số ngày hiệu lực</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="90"
+                  className="input-field w-full mt-1"
+                  value={installForm.expires_days}
+                  onChange={e => setInstallForm({ ...installForm, expires_days: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Server/API URL cho mobile</label>
+                <div className="mt-1 flex gap-2">
+                  <input className="input-field w-full" value={resolvedMobileServerUrl || ''} readOnly />
+                  <button onClick={() => copyText(resolvedMobileServerUrl, 'server URL')} className="px-3 rounded-lg border text-gray-600 hover:bg-gray-50" title="Copy server URL">
+                    <Copy size={15} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button onClick={() => handleCreateMobileInstallLink('common')} disabled={!!mobileAction} className="btn-success flex items-center gap-2 disabled:opacity-60">
+                <Link2 size={14} /> {mobileAction === 'create-common' ? 'Đang tạo...' : 'Tạo link chung Android/iOS'}
+              </button>
+              <button onClick={() => handleCreateMobileInstallLink('android')} disabled={!!mobileAction} className="btn-primary flex items-center gap-2 disabled:opacity-60">
+                <Smartphone size={14} /> {mobileAction === 'create-android' ? 'Đang tạo...' : 'Tạo link Android'}
+              </button>
+              <button onClick={() => handleCreateMobileInstallLink('ios')} disabled={!!mobileAction} className="btn-primary flex items-center gap-2 disabled:opacity-60">
+                <Smartphone size={14} /> {mobileAction === 'create-ios' ? 'Đang tạo...' : 'Tạo link iOS'}
+              </button>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold flex items-center gap-2"><Link2 size={18} /> Link cài đặt đã tạo ({mobileInstallLinks.length})</h3>
+            </div>
+            <div className="space-y-3">
+              {mobileInstallLinks.length === 0 && (
+                <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+                  Chưa có link cài đặt mobile. Hãy tạo link chung Android/iOS rồi gửi cho nhân viên.
+                </div>
+              )}
+              {mobileInstallLinks.map(link => {
+                const installApiUrl = buildInstallApiUrl(link);
+                const androidUrl = link.android_url || mobileDefaultAndroidUrl;
+                const iosUrl = link.ios_url || mobileDefaultIosUrl;
+                const active = link.active !== 0 && !isExpiredDate(link.expires_at);
+                const instruction = [
+                  'Cài app bán hàng mobile:',
+                  androidUrl ? `Android: ${androidUrl}` : '',
+                  iosUrl ? `iOS: ${iosUrl}` : '',
+                  installApiUrl ? `Token/link xác thực: ${installApiUrl}` : '',
+                  resolvedMobileServerUrl ? `Server URL: ${resolvedMobileServerUrl}` : '',
+                ].filter(Boolean).join('\n');
+                return (
+                  <div key={link.id || link.token} className="rounded-xl border p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {active ? 'Active' : 'Hết hạn/tắt'}
+                          </span>
+                          <span className="text-xs text-gray-400">Tạo: {formatDateTime(link.created_at)}</span>
+                          <span className="text-xs text-gray-400">Hết hạn: {formatDateTime(link.expires_at)}</span>
+                          <span className="text-xs text-gray-400">Đã mở: {link.used_count || 0}</span>
+                        </div>
+                        <div className="mt-2 text-xs text-gray-500 break-all">Token/link API: {installApiUrl}</div>
+                        {androidUrl && <div className="mt-1 text-xs text-gray-500 break-all">Android: {androidUrl}</div>}
+                        {iosUrl && <div className="mt-1 text-xs text-gray-500 break-all">iOS: {iosUrl}</div>}
+                        {link.last_resolved_at && <div className="mt-1 text-xs text-gray-400">Lần nhân viên mở gần nhất: {formatDateTime(link.last_resolved_at)}</div>}
+                      </div>
+                      <div className="flex flex-wrap gap-2 lg:justify-end">
+                        <button onClick={() => copyText(androidUrl, 'link Android')} className="px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-600 hover:bg-gray-50 flex items-center gap-1">
+                          <Copy size={13} /> Android
+                        </button>
+                        <button onClick={() => copyText(iosUrl, 'link iOS')} className="px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-600 hover:bg-gray-50 flex items-center gap-1">
+                          <Copy size={13} /> iOS
+                        </button>
+                        <button onClick={() => copyText(installApiUrl, 'link token cài đặt')} className="px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-600 hover:bg-gray-50 flex items-center gap-1">
+                          <Copy size={13} /> Token
+                        </button>
+                        <button onClick={() => copyText(instruction, 'hướng dẫn cài đặt')} className="px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-xs font-medium text-blue-700 hover:bg-blue-100 flex items-center gap-1">
+                          <Copy size={13} /> Copy hướng dẫn
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold flex items-center gap-2"><Smartphone size={18} /> Thiết bị mobile đã đăng nhập ({mobileDevices.length})</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-sm">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-600 text-xs">
+                    <th className="p-2 text-left">Nhân viên</th>
+                    <th className="p-2 text-left">Thiết bị</th>
+                    <th className="p-2 text-left">Nền tảng</th>
+                    <th className="p-2 text-left">Phiên bản app</th>
+                    <th className="p-2 text-left">Lần thấy cuối</th>
+                    <th className="p-2 text-left">Trạng thái</th>
+                    <th className="p-2 text-center">Hành động</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mobileDevices.map(device => {
+                    const employee = employeeById.get(Number(device.user_id));
+                    const active = device.active !== 0 && !device.revoked_at;
+                    return (
+                      <tr key={device.id} className="border-b hover:bg-gray-50">
+                        <td className="p-2">
+                          <div className="font-medium text-gray-800">{employee?.name || `User #${device.user_id || '—'}`}</div>
+                          <div className="text-xs text-gray-400">{employee?.email || 'Không có email trong payload thiết bị'}</div>
+                        </td>
+                        <td className="p-2">
+                          <div className="font-medium text-gray-800">{device.device_name || 'Không rõ thiết bị'}</div>
+                          <div className="text-xs text-gray-400 break-all">{device.device_uid || '—'}</div>
+                        </td>
+                        <td className="p-2">{getPlatformLabel(device.platform)}</td>
+                        <td className="p-2">{device.app_version || '—'}</td>
+                        <td className="p-2">
+                          <div>{formatDateTime(device.last_seen_at)}</div>
+                          <div className="text-xs text-gray-400">Login: {formatDateTime(device.last_login_at)}</div>
+                        </td>
+                        <td className="p-2">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getMobileStatusTone(active)}`}>
+                            {active ? 'Active' : 'Revoked'}
+                          </span>
+                          {device.revoked_at && <div className="text-xs text-gray-400 mt-1">{formatDateTime(device.revoked_at)}</div>}
+                          {device.revoked_reason && <div className="text-xs text-gray-400 mt-1">{device.revoked_reason}</div>}
+                        </td>
+                        <td className="p-2 text-center">
+                          <button
+                            onClick={() => handleRevokeMobileDevice(device)}
+                            disabled={!active || mobileAction === `revoke-${device.id}`}
+                            className="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            <ShieldOff size={12} /> {mobileAction === `revoke-${device.id}` ? 'Đang revoke...' : 'Revoke'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {mobileDevices.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-gray-400">Chưa có thiết bị mobile đăng nhập.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="card bg-blue-50 border-blue-100 text-sm text-blue-800">
+            <h3 className="font-bold mb-2">Hướng dẫn gửi cho nhân viên</h3>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Tạo link cài đặt, copy URL Android hoặc iOS phù hợp và gửi qua Zalo/email nội bộ.</li>
+              <li>Nếu app mobile hỏi server URL, dùng giá trị hiển thị ở ô Server/API URL.</li>
+              <li>Sau khi nhân viên đăng nhập app, thiết bị sẽ xuất hiện trong danh sách để admin theo dõi và revoke khi cần.</li>
+              <li>Quyền truy cập theo account do backend kiểm soát; frontend không tự mở rộng phạm vi dữ liệu.</li>
+            </ul>
           </div>
         </div>
       )}

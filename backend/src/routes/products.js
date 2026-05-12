@@ -65,7 +65,11 @@ function activeParents() {
 }
 
 function activeVariants(parentId) {
-  return getAll('products', v => v.active !== 0 && v.parent_id === parentId);
+  return getAll('products', v => v.active !== 0 && Number(v.parent_id) === Number(parentId));
+}
+
+function hasActiveVariants(parentId) {
+  return activeVariants(parentId).length > 0;
 }
 
 function buildProductsTree() {
@@ -1001,11 +1005,12 @@ router.put('/:id', (req, res) => {
 
     const isVariant = product.parent_id != null;
     const parent = isVariant ? getOne('products', p => p.id === product.parent_id && p.active !== 0) : null;
+    const parentHasVariants = !isVariant && hasActiveVariants(id);
     const requestBody = isVariant
       ? { ...req.body, sku: normalizeSku(product.sku) }
-      : req.body;
+      : (parentHasVariants ? { ...req.body, sku: normalizeSku(product.sku) } : req.body);
 
-    if (!isVariant && req.body.sku !== undefined && req.body.sku !== null) {
+    if (!isVariant && !parentHasVariants && req.body.sku !== undefined && req.body.sku !== null) {
       const nextSku = normalizeSku(req.body.sku);
       if (!nextSku) return res.status(400).json({ error: 'Mã SKU không được để trống' });
       if (nextSku !== (product.sku || '')) {

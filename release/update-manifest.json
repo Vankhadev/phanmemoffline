@@ -1,0 +1,12 @@
+{
+  "version": "1.2.2",
+  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.2.2/BanHangOffline-Setup-v1.2.2.exe",
+  "sha256": "15d4e3c5848517c727f916c4db0617019ae8ee634a4f720e1c916f5253106250",
+  "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.2.2.",
+  "releaseDate": "2026-05-12T10:33:04.925Z",
+  "platform": "win32",
+  "arch": "x64",
+  "size": 77163423,
+  "mandatory": false,
+  "installerType": "nsis"
+}

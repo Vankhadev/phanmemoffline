@@ -1,130 +1,164 @@
 # Bán hàng offline - by Van kha mmo
-## Phiên bản hiện tại: 1.2.1
 
-Phiên bản ứng dụng được đồng bộ trong `package.json`, `package-lock.json`, `frontend/package.json` và `backend/package.json`.
+## Phiên bản hiện tại: 1.2.2
 
-### Ghi chú bản vá 1.2.1
+Ứng dụng hiện hỗ trợ 3 lớp triển khai chính:
 
-- Sửa bố cục bảng lịch sử đơn nhập hàng để card dùng đủ chiều rộng trang nhập hàng, giữ cuộn ngang ổn định và căn khớp header/body sau khi bổ sung cột Nhà cung cấp.
-- Đảm bảo các cột chọn dòng, STT, mã đơn, ngày lập, sản phẩm, số lượng, tổng tiền, nhà cung cấp, thanh toán, trạng thái và thao tác hiển thị nhất quán trên màn hình hẹp.
+- Web admin/nhân viên chạy bằng backend Express + frontend React/Vite.
+- Desktop Windows đóng gói bằng Electron.
+- Mobile Android/iOS dùng Capacitor, chạy nhánh route `/mobile/*` và đồng bộ hóa đơn theo mô hình offline-first.
 
----
-
-## 🚀 Cách 1: Chạy Development (cần Node.js)
-
-### Bước 1: Cài đặt Node.js
-Tải Node.js từ https://nodejs.org (chọn LTS)
-
-### Bước 2: Cài đặt dependencies
-```bash
-# Cài backend
-cd backend
-npm install
-
-# Cài frontend
-cd ../frontend
-npm install
-```
-
-### Bước 3: Chạy ứng dụng
-```bash
-# Từ thư mục gốc (root)
-npm run dev
-```
-- Backend chạy: http://localhost:3001
-- Frontend chạy: http://localhost:5173
+Phiên bản ứng dụng đang được đồng bộ trong `package.json`, `package-lock.json`, `frontend/package.json` và `backend/package.json`.
 
 ---
 
-## 📦 Cách 2: Đóng gói file .exe
+## Tính năng chính
 
-### Bước 1: Cài đặt tất cả dependencies
+### Nghiệp vụ bán hàng
+
+1. **Bán hàng (POS)**: tạo hóa đơn, chọn giá Sỉ/Lẻ/VIP, in bill.
+2. **Nhập hàng**: nhập kho, quản lý nhà cung cấp, tạo combo.
+3. **Sản phẩm**: CRUD đầy đủ, nhiều mức giá và đồng bộ dữ liệu hiển thị.
+4. **Khách hàng**: phân loại khách, áp giá phù hợp.
+5. **Thống kê**: doanh thu theo ngày/tuần/tháng/năm.
+6. **In hóa đơn**: hỗ trợ mẫu in và xem trước hóa đơn.
+7. **Chạy offline**: backend local + dữ liệu runtime cục bộ.
+
+### Mobile Android/iOS
+
+1. **Route mobile riêng**: `/mobile/login`, `/mobile/pos`, `/mobile/orders`, `/mobile/sync`, `/mobile/settings`.
+2. **Đăng nhập mobile qua backend**: backend đã có namespace `/api/mobile` riêng cho login, bootstrap, pull/push sync, thiết bị và install links.
+3. **Offline-first hóa đơn**: app mobile lưu hóa đơn local trước, ghi vào outbox IndexedDB rồi push khi có mạng.
+4. **Idempotency khi sync**: server xử lý theo tổ hợp `account_id + client_order_id + payload_hash` để tránh tạo trùng hóa đơn khi retry.
+5. **Admin quản lý mobile**: tab Mobile trong Settings hỗ trợ quản lý install links và danh sách thiết bị đã đăng nhập.
+6. **Theo dõi nguồn đơn hàng**: danh sách đơn web hiển thị nguồn mobile và trạng thái sync.
+7. **Cron reconcile phía server**: job nền phía backend dọn link hết hạn và đánh dấu event sync bị treo sang trạng thái thử lại sau.
+
+---
+
+## Chạy development
+
+### 1. Cài đặt dependencies
+
 ```bash
 npm install
 cd backend && npm install && cd ..
 cd frontend && npm install && cd ..
 ```
 
-### Bước 2: Build frontend
+### 2. Chạy backend + frontend
+
+Chạy nhanh từ root workspace:
+
+```bash
+npm run dev
+```
+
+Hoặc chạy riêng từng service:
+
+```bash
+cd backend
+npm start
+```
+
+```bash
+cd frontend
+npm run dev
+```
+
+Mặc định:
+
+- Backend: `http://localhost:3001`
+- API web: `http://localhost:3001/api`
+- API mobile: `http://localhost:3001/api/mobile`
+- Frontend dev: `http://localhost:5173`
+- Mobile routes trên frontend: `http://localhost:5173/mobile/login` và các route `/mobile/*`
+
+### 3. Dùng mobile trên điện thoại thật
+
+Khi đăng nhập trên điện thoại Android/iPhone hoặc app native Capacitor, **không dùng `localhost`**. Hãy nhập **LAN URL** của máy đang chạy backend, ví dụ:
+
+- `http://192.168.1.10:3001`
+- `http://192.168.1.10:3001/api`
+
+Frontend mobile sẽ tự chuẩn hóa về base API `/api` khi lưu cấu hình Server URL.
+
+### 4. Build web assets cho mobile Capacitor
+
+Từ root workspace:
+
+```bash
+npm run mobile:build
+npm run mobile:sync
+```
+
+Tài liệu build Android/iOS chi tiết nằm tại:
+
+- `frontend/MOBILE-CAPACITOR.md`
+- `docs/offline-first-sync.md`
+
+---
+
+## Mobile Android/iOS bằng Capacitor
+
+Luồng hiện tại:
+
+1. Admin web tạo hoặc bật nhân viên được phép đăng nhập mobile.
+2. Admin vào **Settings > Mobile** để tạo install link và theo dõi thiết bị.
+3. Nhân viên mở link cài đặt, cài app Android/iOS phù hợp.
+4. Ở màn hình `/mobile/login`, nhân viên nhập Server URL theo LAN rồi đăng nhập.
+5. App bootstrap dữ liệu cửa hàng, sản phẩm, khách hàng và hóa đơn gần đây.
+6. Khi tạo đơn ở `/mobile/pos`, hóa đơn được lưu local trước và đưa vào outbox.
+7. Khi online, foreground/resume hoặc bấm đồng bộ thủ công ở `/mobile/sync`, app sẽ push outbox lên server và pull dữ liệu mới.
+
+Giới hạn hiện tại:
+
+- Chưa triển khai background fetch liên tục.
+- iOS **không** đồng bộ nền liên tục; chỉ sync khi app foreground, resume, có mạng hoặc người dùng bấm tay.
+- Android hiện cũng đang theo cùng cơ chế foreground/resume/manual trong bản triển khai hiện tại.
+- Hiện tại một account/admin tương ứng một store.
+
+---
+
+## Build desktop Windows
+
+### 1. Build frontend
+
 ```bash
 npm run build:frontend
 ```
 
-### Bước 3: Đóng gói .exe
+### 2. Đóng gói Electron
+
 ```bash
 npm run build:electron
 ```
-File .exe sẽ nằm trong thư mục `release/`
 
-### Phát hành bản cập nhật qua GitHub Release
+Artifact sẽ nằm trong thư mục `release/`.
 
-Ứng dụng Windows production dùng `electron-updater` với provider generic để đọc trực tiếp metadata public tại `https://github.com/Vankhadev/phanmemoffline/releases/latest/download/latest.yml`. Cách này tránh phụ thuộc endpoint `releases.atom` của GitHub. File `release/update-manifest.json` vẫn được tạo/upload như manifest legacy, nhưng không phải feed chính của luồng auto-update hiện tại.
-
-Sau khi build installer, tạo manifest legacy bằng:
+### 3. Manifest phát hành
 
 ```bash
 npm run generate:update-manifest
 ```
 
-GitHub Actions workflow `.github/workflows/release-windows.yml` sẽ build Windows installer khi push tag `v*.*.*` như `v1.2.1`, tạo `release/latest.yml` và `release/update-manifest.json`, upload installer/blockmap/metadata lên GitHub Release, rồi kiểm tra các URL update có truy cập ẩn danh được hay không. Nếu repo/release asset đang private và URL trả 401/403/404, client Electron không có token sẽ không thể hiện hộp thoại cập nhật. Xem hướng dẫn chi tiết tại `UPDATE-RELEASE.md` và manifest mẫu tại `release/update-manifest.example.json`.
+Luồng auto-update Windows dùng `electron-updater` với provider generic và metadata `release/latest.yml`. Xem thêm tại `UPDATE-RELEASE.md`.
 
 ---
 
-## 📁 Cấu trúc Project
+## Tài liệu liên quan
 
-```
-phanmienoffline/
-├── phanmienoffline.sql       ← Schema database SQLite
-├── phanmienoffline.db        ← File database (tự tạo khi chạy)
-├── package.json              ← Electron config & scripts
-├── backend/
-│   ├── package.json
-│   └── src/index.js          ← API server (Express + SQLite)
-├── frontend/
-│   ├── package.json
-│   ├── src/
-│   │   ├── App.jsx           ← Router + Layout
-│   │   └── pages/
-│   │       ├── Login.jsx     ← Đăng nhập (chọn User 1/2/3)
-│   │       ├── POS.jsx       ← Màn hình Bán hàng
-│   │       ├── Imports.jsx   ← Nhập hàng + Combo
-│   │       ├── Products.jsx  ← Quản lý sản phẩm
-│   │       ├── Customers.jsx ← Quản lý khách hàng
-│   │       ├── Stats.jsx     ← Thống kê doanh thu
-│   │       └── Settings.jsx  ← Cài đặt cửa hàng
-│   └── dist/                 ← Build output (sau khi build)
-└── src/
-    ├── main.js               ← Electron main process
-    └── preload.js            ← Electron preload
-```
+- `HOW-TO-RUN.md`: hướng dẫn chạy backend/frontend/mobile theo môi trường local.
+- `frontend/MOBILE-CAPACITOR.md`: hướng dẫn build và chạy Android/iOS bằng Capacitor.
+- `docs/offline-first-sync.md`: kiến trúc outbox, IndexedDB, idempotency, API sync, cron reconcile và checklist kiểm thử.
+- `UPDATE-RELEASE.md`: phát hành bản Windows và auto-update.
 
 ---
 
-## 🔐 Tài khoản mặc định
+## Lưu ý vận hành
 
-| Nhân viên | PIN  | Quyền     |
-|-----------|------|-----------|
-| User 1    | 1234 | Thu ngân  |
-| User 2    | 5678 | Thu ngân  |
-| User 3    | 9012 | Quản trị  |
-
----
-
-## 📌 Tính năng chính
-
-1. **Bán hàng (POS)**: Tạo hóa đơn, chọn giá Sỉ/Lẻ/VIP, in bill
-2. **Nhập hàng**: Nhập kho, quản lý nhà cung cấp, tạo combo
-3. **Sản phẩm**: CRUD đầy đủ, 4 loại giá (nhập/sỉ/lẻ/VIP)
-4. **Khách hàng**: Phân loại khách (lẻ/sỉ/VIP), tự động áp giá
-5. **Thống kê**: Doanh thu theo ngày/tuần/tháng/năm, biểu đồ
-6. **In hóa đơn**: Tích hợp `react-to-print`, hỗ trợ máy in bill
-7. **Cron job**: Tự động quét mỗi 5 phút, cập nhật tồn kho
-8. **Chạy offline**: SQLite, không cần cài SQL Server
-
----
-
-## ⚠️ Lưu ý
-
-- Bản Electron lưu database runtime trong userData với tên `phanmienoffline.db.json`; installer không bundle hoặc xóa file database runtime
-- Khi cập nhật, `electron-updater` xác minh metadata/checksum từ `latest.yml`; app backup database vào `userData/backups` trước khi gọi cài đặt
-- Để thêm icon .exe: tạo thư mục `build/` và đặt file `icon.ico` vào đó
+- Mobile app lưu session/cấu hình và dữ liệu cache trong IndexedDB; có fallback sang localStorage nếu WebView không mở được IndexedDB.
+- Install links Android/iOS được backend trả theo cấu hình môi trường server.
+- Trạng thái pending sync có thể kiểm tra trực tiếp trong màn hình `/mobile/sync` trên app và trong Order List trên web admin.
+- Bản Electron lưu database runtime trong userData; installer không bundle hoặc xóa file database runtime đang dùng.
+- Khi cập nhật Electron, `electron-updater` xác minh checksum/metadata từ `latest.yml` trước khi cài đặt.

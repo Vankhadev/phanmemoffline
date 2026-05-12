@@ -33,6 +33,8 @@ const productCategoriesRoutes = require('./routes/productCategories');
 const printTemplatesRoutes = require('./routes/printTemplates');
 const sapoSyncRoutes = require('./routes/sapoSync');
 const excelImportsRoutes = require('./routes/excelImports');
+const mobileRoutes = require('./routes/mobile');
+const { reconcileMobileServerState } = require('./services/mobileSyncService');
 
 // ============================================================
 //  EXPRESS APP
@@ -135,6 +137,7 @@ app.get('/api/health', (_req, res) => {
 // Public auth/setup endpoints remain inside usersRoutes and syncRoutes; business routes require a valid server session.
 app.use('/api/users',          usersRoutes);
 app.use('/api',                syncRoutes);
+app.use('/api/mobile',         mobileRoutes);
 app.use('/api/store',          requireAuth, requireAnyPermission(['store.read', 'store.manage']), storeRoutes);
 app.use('/api/customers',      requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customersRoutes);
 app.use('/api/products',       requireAuth, requireAnyPermission(['products.read', 'products.manage']), productsRoutes);
@@ -213,6 +216,20 @@ cron.schedule('*/5 * * * *', () => {
   const { getOne } = require('./db/database');
   if (!getOne('daily_stats', s => s.stat_date === t)) {
     upsertDailyStats(t, 0);
+  }
+});
+
+// ============================================================
+//  CRON: mỗi 15 phút - reconcile trạng thái mobile server-side
+// ============================================================
+cron.schedule('*/15 * * * *', () => {
+  try {
+    const result = reconcileMobileServerState();
+    if (result.expiredLinks || result.staleEvents) {
+      console.log(`[KHA MOBILE CRON] expiredLinks=${result.expiredLinks}, staleEvents=${result.staleEvents}`);
+    }
+  } catch (err) {
+    console.warn('[KHA MOBILE CRON] Reconcile failed:', err.message);
   }
 });
 

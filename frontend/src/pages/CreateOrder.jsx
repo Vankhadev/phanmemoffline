@@ -8,6 +8,7 @@ import { buildCategoriesById, filterProductTree, normalizeSearchText, getProduct
 import InvoicePrintPreviewModal from '../components/InvoicePrintPreviewModal';
 import { getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
+import { attachClientOrderMetadata, generateClientOrderId } from '../utils/clientOrderId';
 
 const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
 const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
@@ -689,7 +690,8 @@ export default function CreateOrder({ user, store }) {
   const handleCreateOrder = async () => {
     if (cart.length === 0) { alert('Chưa có sản phẩm nào!'); return; }
     setCreating(true);
-    const orderPayload = {
+    const clientOrderId = generateClientOrderId();
+    const orderPayload = attachClientOrderMetadata({
       customer_id: selectedCustomer?.id || null,
       user_id: user?.id,
       subtotal, vat_percent: vatPercent, vat_amount: vatAmount,
@@ -704,11 +706,17 @@ export default function CreateOrder({ user, store }) {
       delivery_date: deliveryDate || null,
       details: cart.map(({ type, item_type, combo_id, product_id, variant_id, product_name, product_sku, name, sku, quantity, unit_price, discount_amount, discount_percent, line_total }) =>
         ({ type: type || item_type || 'product', item_type: item_type || type || 'product', combo_id: combo_id || null, product_id: product_id || null, variant_id: variant_id || null, product_name: product_name || name || '', product_sku: product_sku || sku || '', name: name || product_name || '', sku: sku || product_sku || '', quantity, unit_price, discount_amount, discount_percent, line_total })),
-    };
+    }, { client_order_id: clientOrderId });
     const showSuccess = (invoice_code, invoice_id = null, saveToPending = true) => {
+      const payloadForStorage = saveToPending
+        ? { ...orderPayload, invoice_code, created_at: orderPayload.created_at || new Date().toISOString() }
+        : orderPayload;
       const inv = {
-        id: invoice_id,
+        id: invoice_id || orderPayload.client_order_id,
         invoice_code,
+        client_order_id: orderPayload.client_order_id,
+        payload: payloadForStorage,
+        customer_id: selectedCustomer?.id || null,
         customer_name: selectedCustomer?.name || 'Khách lẻ',
         total: grandTotal,
         subtotal,
@@ -733,14 +741,25 @@ export default function CreateOrder({ user, store }) {
       try {
         const pending = JSON.parse(localStorage.getItem('kha_pending_orders') || '[]');
         if (saveToPending) {
-          const exists = pending.find(o => o.invoice_code === inv.invoice_code);
+          const exists = pending.find(o =>
+            (inv.client_order_id && o.client_order_id === inv.client_order_id) ||
+            (inv.client_order_id && o.payload?.client_order_id === inv.client_order_id) ||
+            o.invoice_code === inv.invoice_code
+          );
           if (!exists) {
-            pending.unshift(inv);
-            localStorage.setItem('kha_pending_orders', JSON.stringify(pending));
+            const updatedPending = [inv, ...pending].slice(0, 50);
+            localStorage.setItem('kha_pending_orders', JSON.stringify(updatedPending));
+            setPendingOrders(updatedPending);
           }
         } else {
-          const cleaned = pending.filter(o => o.invoice_code !== inv.invoice_code);
+          const cleaned = pending.filter(o =>
+            !(
+              (inv.client_order_id && (o.client_order_id === inv.client_order_id || o.payload?.client_order_id === inv.client_order_id)) ||
+              o.invoice_code === inv.invoice_code
+            )
+          );
           localStorage.setItem('kha_pending_orders', JSON.stringify(cleaned));
+          setPendingOrders(cleaned);
         }
       } catch (_) { }
 
@@ -972,48 +991,48 @@ export default function CreateOrder({ user, store }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
+    <div className="min-h-screen bg-gray-100 p-3 sm:p-4 pb-36 lg:pb-4">
       <style>{`@keyframes slideUp{from{transform:translateY(120%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
 
       {/* ===== HEADER ===== */}
-      <div className="flex items-center justify-between mb-3">
-        <h1 className="text-xl font-bold flex items-center gap-2">
+      <div className="flex flex-col gap-3 mb-3 lg:flex-row lg:items-center lg:justify-between">
+        <h1 className="text-lg sm:text-xl font-bold flex items-center gap-2 min-w-0">
           <ShoppingCart className="text-blue-600" size={24} />
           <span className="text-gray-800">Sản phẩm:</span>
           <span className="text-blue-600">{editingInvoiceId ? 'Sửa đơn hàng' : 'Tạo đơn hàng'}</span>
         </h1>
-        <div className="flex gap-2 items-center">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
           {lastInvoice && !editingInvoiceId && !lastInvoice.id && (
             <button
               onClick={handleStartEdit}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium">
+              className="px-3 sm:px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium">
               Sửa đơn hàng
             </button>
           )}
           {editingInvoiceId && (
             <button
               onClick={resetForm}
-              className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium">
+              className="px-3 sm:px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium">
               Hủy sửa
             </button>
           )}
           <button
             onClick={resetForm}
-            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium">
+            className="px-3 sm:px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium">
             Thoát
           </button>
           {editingInvoiceId ? (
             <button
               onClick={handleSaveEdit}
               disabled={cart.length === 0 || creating}
-              className="px-5 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center gap-2">
+              className="px-3 sm:px-5 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
               {creating ? '⏳ Đang lưu...' : 'Lưu thay đổi'}
             </button>
           ) : (
             <button
               onClick={handleCreateOrder}
               disabled={cart.length === 0 || creating}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center gap-2">
+              className="px-3 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
               {creating ? '⏳ Đang tạo...' : 'Tạo Đơn Hàng'}
             </button>
           )}
@@ -1021,10 +1040,10 @@ export default function CreateOrder({ user, store }) {
       </div>
 
       {/* ===== MAIN LAYOUT ===== */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
 
         {/* ===== CONTENT: Khách hàng + Sản phẩm ===== */}
-        <div className="col-span-2 flex flex-col gap-3">
+        <div className="xl:col-span-2 flex flex-col gap-3 min-w-0">
 
           {/* Thông tin khách hàng */}
           <div className="bg-white rounded-lg shadow-sm border">
@@ -1032,7 +1051,7 @@ export default function CreateOrder({ user, store }) {
               <span className="font-semibold text-sm text-gray-700">Thông tin khách hàng</span>
             </div>
             <div className="p-3 space-y-2">
-              <div className="flex gap-2 items-end">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="relative flex-1">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input className="input-field pl-9 w-full text-sm"
@@ -1055,7 +1074,7 @@ export default function CreateOrder({ user, store }) {
                     <button onClick={() => { setShowCustomerForm(false); setNewCustomer({ name: '', phone: '', email: '', tax_code: '', customer_type: 'Khách lẻ' }); }}
                       className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <input className="input-field text-sm" placeholder="Tên khách hàng *" value={newCustomer.name}
                       onChange={e => setNewCustomer(c => ({ ...c, name: e.target.value }))} />
                     <input className="input-field text-sm" placeholder="SĐT" value={newCustomer.phone}
@@ -1119,7 +1138,7 @@ export default function CreateOrder({ user, store }) {
                 )}
               </div>
               {selectedCustomer ? (
-                <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-between">
+                <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="font-semibold text-sm">{selectedCustomer.name}</div>
                     <div className="text-xs text-gray-500">{selectedCustomer.phone} | {selectedCustomer.email || '—'}</div>
@@ -1162,9 +1181,9 @@ export default function CreateOrder({ user, store }) {
 
           {/* Thông tin sản phẩm */}
           <div className="bg-white rounded-lg shadow-sm border flex-1">
-            <div className="px-4 py-3 border-b bg-gray-50 rounded-t-lg flex items-center justify-between">
+            <div className="px-4 py-3 border-b bg-gray-50 rounded-t-lg flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <span className="font-semibold text-sm text-gray-700">Thông tin sản phẩm</span>
-              <div className="flex items-center gap-3 text-xs text-gray-500">
+              <div className="flex flex-wrap items-center gap-2 lg:gap-3 text-xs text-gray-500">
                 <label className="flex items-center gap-1 cursor-pointer">
                   <input type="checkbox" checked={splitLine} onChange={e => setSplitLine(e.target.checked)} className="accent-blue-600" />
                   Tách dòng
@@ -1177,7 +1196,7 @@ export default function CreateOrder({ user, store }) {
             </div>
 
             {/* Search row */}
-            <div className="p-3 border-b flex gap-2 items-center bg-gray-50">
+            <div className="p-3 border-b flex flex-col gap-2 bg-gray-50 lg:flex-row lg:items-center">
               <div className="flex-1 relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input className="input-field pl-9 w-full text-sm"
@@ -1186,7 +1205,7 @@ export default function CreateOrder({ user, store }) {
                   onFocus={handleProductSearchFocus}
                   onChange={e => setProductSearch(e.target.value)} />
               </div>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
                 {selectedCustomer ? (
                   <span className={`px-3 py-2 rounded text-xs font-bold border ${(selectedCustomer.customer_type || '').toLowerCase().includes('sỉ') || (selectedCustomer.customer_type || '').toLowerCase().includes('wholesale')
                     ? 'bg-orange-100 text-orange-700 border-orange-300'
@@ -1222,7 +1241,7 @@ export default function CreateOrder({ user, store }) {
             {/* Product grid when searching */}
             {productSearch && (
               <div className="p-3 border-b bg-blue-50">
-                <div className="flex items-center gap-2 mb-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
                   {[
                     ['all', `Tất cả sản phẩm thường (${allResultCount})`],
                     ['product', `Sản phẩm (${productResultCount})`],
@@ -1249,7 +1268,7 @@ export default function CreateOrder({ user, store }) {
                         setProductSearch('');
                       }}
                     >
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-600 text-white font-bold">Combo</span>
@@ -1257,7 +1276,7 @@ export default function CreateOrder({ user, store }) {
                           </div>
                           <div className="text-[10px] text-purple-500 truncate mt-0.5">{getComboItemSummary(combo)}</div>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                           <div className="text-[10px] text-gray-500">{combo.sku || '—'}</div>
                           <div className="text-xs font-bold text-purple-700 whitespace-nowrap">{formatVND(getComboPrice(combo))}</div>
                         </div>
@@ -1285,7 +1304,7 @@ export default function CreateOrder({ user, store }) {
                               }
                             }}
                           >
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 {hasVariants && (
                                   <span className="text-gray-400 shrink-0">
@@ -1300,7 +1319,7 @@ export default function CreateOrder({ user, store }) {
                                   <div className="text-[10px] text-gray-400 truncate">{getCategoryName(parent)} · {getSupplierName(parent.supplier_id)}</div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-3 shrink-0">
+                              <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                                 <div className="text-[10px] text-gray-400">{parent.sku || '—'}</div>
                                 {parent.stock <= 0 ? (
                                   <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
@@ -1327,7 +1346,7 @@ export default function CreateOrder({ user, store }) {
                                     }
                                   }}
                                 >
-                                  <div className="flex items-center justify-between">
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
                                       <span className="text-gray-300 shrink-0">⊙</span>
                                       <div className={`flex-1 min-w-0 ${variant.stock <= 0 ? 'text-red-500' : 'text-blue-600'}`}>
@@ -1338,7 +1357,7 @@ export default function CreateOrder({ user, store }) {
                                         <div className="text-[10px] text-gray-400 truncate">{getCategoryName(variant) || getCategoryName(parent)} · {getSupplierName(variant.supplier_id || parent.supplier_id)}</div>
                                       </div>
                                     </div>
-                                    <div className="flex items-center gap-3 shrink-0">
+                                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                                       <div className="text-[10px] text-gray-400">{variant.sku || '—'}</div>
                                       {variant.stock <= 0 ? (
                                         <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
@@ -1369,8 +1388,8 @@ export default function CreateOrder({ user, store }) {
             )}
 
             {/* Product table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto -mx-3 sm:mx-0">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead>
                   <tr className="bg-gray-100 text-gray-600 text-xs border-b">
                     <th className="py-2 px-3 text-center w-10">STT</th>
@@ -1502,7 +1521,7 @@ export default function CreateOrder({ user, store }) {
             {/* Full product panel */}
             {showProductPanel && (
               <div className="p-3 border-t bg-blue-50">
-                <div className="flex gap-2 mb-2">
+                <div className="flex flex-col gap-2 mb-2 lg:flex-row">
                   <div className="flex-1 relative">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input className="input-field pl-9 w-full text-sm"
@@ -1518,7 +1537,7 @@ export default function CreateOrder({ user, store }) {
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-2 mb-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
                   {[
                     ['all', `Tất cả sản phẩm thường (${allResultCount})`],
                     ['product', `Sản phẩm (${productResultCount})`],
@@ -1546,7 +1565,7 @@ export default function CreateOrder({ user, store }) {
                         setProductSearch('');
                       }}
                     >
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-600 text-white font-bold">Combo</span>
@@ -1554,7 +1573,7 @@ export default function CreateOrder({ user, store }) {
                           </div>
                           <div className="text-[10px] text-purple-500 truncate mt-0.5">{getComboItemSummary(combo)}</div>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                           <div className="text-[10px] text-gray-500">{combo.sku || '—'}</div>
                           <div className="text-xs font-bold text-purple-700 whitespace-nowrap">{formatVND(getComboPrice(combo))}</div>
                         </div>
@@ -1583,7 +1602,7 @@ export default function CreateOrder({ user, store }) {
                               }
                             }}
                           >
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 {hasVariants && (
                                   <span className="text-gray-400 shrink-0">
@@ -1598,7 +1617,7 @@ export default function CreateOrder({ user, store }) {
                                   <div className="text-[10px] text-gray-400 truncate">{getCategoryName(parent)} · {getSupplierName(parent.supplier_id)}</div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-3 shrink-0">
+                              <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                                 <div className="text-[10px] text-gray-400">{parent.sku || '—'}</div>
                                 {parent.stock <= 0 ? (
                                   <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
@@ -1626,7 +1645,7 @@ export default function CreateOrder({ user, store }) {
                                     }
                                   }}
                                 >
-                                  <div className="flex items-center justify-between">
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
                                       <span className="text-gray-300 shrink-0">⊙</span>
                                       <div className={`flex-1 min-w-0 ${variant.stock <= 0 ? 'text-red-500' : 'text-blue-600'}`}>
@@ -1637,7 +1656,7 @@ export default function CreateOrder({ user, store }) {
                                         <div className="text-[10px] text-gray-400 truncate">{getCategoryName(variant) || getCategoryName(parent)} · {getSupplierName(variant.supplier_id || parent.supplier_id)}</div>
                                       </div>
                                     </div>
-                                    <div className="flex items-center gap-3 shrink-0">
+                                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                                       <div className="text-[10px] text-gray-400">{variant.sku || '—'}</div>
                                       {variant.stock <= 0 ? (
                                         <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
@@ -1669,7 +1688,7 @@ export default function CreateOrder({ user, store }) {
           </div>
 
           {/* Tags + Ghi chú + Tổng tiền */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {/* Trái: Tags + Ghi chú */}
             <div className="bg-white rounded-lg shadow-sm border p-4 space-y-3">
               <div>
@@ -1686,7 +1705,7 @@ export default function CreateOrder({ user, store }) {
             </div>
 
             {/* Phải: Tổng tiền */}
-            <div className="bg-white rounded-lg shadow-sm border p-4 space-y-2 text-sm">
+            <div className="bg-white rounded-lg shadow-sm border p-4 space-y-2 text-sm lg:static fixed inset-x-0 bottom-0 z-30 max-h-[48dvh] overflow-auto rounded-b-none lg:rounded-b-lg">
               <div className="flex justify-between items-center text-gray-600">
                 <span>Tổng tiền ({cart.reduce((s, i) => s + i.quantity, 0)} sp)</span>
                 <span className="font-medium">{formatVND(subtotal)}</span>
@@ -1759,8 +1778,8 @@ export default function CreateOrder({ user, store }) {
         </div>
 
         {/* ===== COL 3: Thông tin đơn hàng ===== */}
-        <div className="flex flex-col gap-3">
-          <div className="bg-white rounded-lg shadow-sm border h-fit sticky top-4">
+        <div className="flex flex-col gap-3 min-w-0">
+          <div className="bg-white rounded-lg shadow-sm border h-fit xl:sticky xl:top-4">
             <div className="px-4 py-3 border-b bg-gray-50 rounded-t-lg">
               <span className="font-semibold text-sm text-gray-700">Thông tin đơn hàng</span>
             </div>
@@ -1786,7 +1805,7 @@ export default function CreateOrder({ user, store }) {
                   <option value="debt">Công nợ</option>
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-1">Người nhập hàng</label>
                   <div className="text-[10px] text-gray-400 italic mb-1">(Ký và ghi rõ họ tên)</div>
@@ -1821,7 +1840,7 @@ export default function CreateOrder({ user, store }) {
               <button onClick={resetForm} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
             <div className="p-5 overflow-auto space-y-4">
-              <div className="grid grid-cols-3 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                 <div className="rounded-lg border p-3 bg-gray-50">
                   <div className="text-xs text-gray-500">Mã đơn</div>
                   <div className="font-bold text-gray-800">{lastInvoice.invoice_code}</div>
@@ -1836,8 +1855,8 @@ export default function CreateOrder({ user, store }) {
                 </div>
               </div>
 
-              <div className="border rounded-xl overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="border rounded-xl overflow-x-auto">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead>
                     <tr className="bg-gray-100 text-gray-600 text-xs border-b">
                       <th className="py-2 px-3 text-center w-12">STT</th>
@@ -1864,7 +1883,7 @@ export default function CreateOrder({ user, store }) {
                 </table>
               </div>
             </div>
-            <div className="px-5 py-4 border-t bg-gray-50 flex justify-end gap-2">
+            <div className="px-5 py-4 border-t bg-gray-50 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 onClick={resetForm}
                 className="px-4 py-2 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium"
@@ -1937,8 +1956,8 @@ export default function CreateOrder({ user, store }) {
       {/* ===== VARIANT PICKER MODAL ===== */}
       {
         showVariantPicker && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-2xl w-[560px] max-h-[80vh] flex flex-col">
+          <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] flex flex-col">
               <div className="flex items-center justify-between px-5 py-4 border-b bg-gray-50 rounded-t-xl">
                 <div>
                   <h3 className="font-bold text-gray-800">Chọn biến thể</h3>
@@ -1948,7 +1967,7 @@ export default function CreateOrder({ user, store }) {
               </div>
               <div className="flex-1 overflow-auto p-4 space-y-2">
                 {(showVariantPicker.variants || []).map(v => (
-                  <div key={v.id} className={`flex items-center gap-3 border rounded-lg p-3 hover:border-blue-400 bg-white ${v.stock <= 0 ? 'opacity-50' : ''}`}>
+                  <div key={v.id} className={`flex flex-col gap-3 border rounded-lg p-3 hover:border-blue-400 bg-white sm:flex-row sm:items-center ${v.stock <= 0 ? 'opacity-50' : ''}`}>
                     <div className="flex-1 min-w-0">
                       <div className={`font-medium text-sm truncate ${v.stock <= 0 ? 'text-red-500' : 'text-gray-800'}`}>{getProductDisplayName(v, showVariantPicker)}</div>
                       {v.stock <= 0 ? (
@@ -1958,7 +1977,7 @@ export default function CreateOrder({ user, store }) {
                       )}
                       <div className="text-sm font-bold text-blue-600 mt-0.5">{formatVND(getPrice(v))}</div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 sm:shrink-0">
                       <input type="number" min="1" max={v.stock}
                         value={variantQty[v.id] || 1}
                         onChange={e => setVariantQty(q => ({ ...q, [v.id]: Math.max(1, Math.min(v.stock, +e.target.value)) }))}
@@ -1990,8 +2009,8 @@ export default function CreateOrder({ user, store }) {
       {/* ===== NEW PRODUCT FORM MODAL ===== */}
       {
         showNewProductForm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-2xl w-[520px] max-h-[90vh] flex flex-col">
+          <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] flex flex-col">
               <div className="flex items-center justify-between px-5 py-4 border-b bg-blue-50 rounded-t-xl">
                 <div>
                   <h3 className="font-bold text-blue-800 flex items-center gap-2">
@@ -2006,13 +2025,13 @@ export default function CreateOrder({ user, store }) {
                   <label className="text-xs text-gray-500 block mb-1">Tên sản phẩm <span className="text-red-500">*</span></label>
                   <input className="input-field w-full" value={newProduct.name} onChange={e => setNewProduct(p => ({ ...p, name: e.target.value }))} placeholder="VD: Sản phẩm XYZ" />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Mã SKU</label>
                     <input className="input-field w-full" value={newProduct.sku} onChange={e => setNewProduct(p => ({ ...p, sku: e.target.value }))} placeholder="SP001" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Giá nhập</label>
                     <input className="input-field w-full" type="number" min="0" value={newProduct.import_price} onChange={e => setNewProduct(p => ({ ...p, import_price: e.target.value }))} placeholder="0" />
@@ -2022,7 +2041,7 @@ export default function CreateOrder({ user, store }) {
                     <input className="input-field w-full" type="number" min="0" value={newProduct.stock} onChange={e => setNewProduct(p => ({ ...p, stock: e.target.value }))} placeholder="0" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Đơn vị</label>
                     <input className="input-field w-full" value={newProduct.unit} onChange={e => setNewProduct(p => ({ ...p, unit: e.target.value }))} placeholder="VD: cái, hộp, thùng..." />
@@ -2038,7 +2057,7 @@ export default function CreateOrder({ user, store }) {
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Giá lẻ</label>
                     <input className="input-field w-full" type="number" min="0" value={newProduct.retail_price} onChange={e => setNewProduct(p => ({ ...p, retail_price: e.target.value }))} placeholder="0" />
@@ -2062,7 +2081,7 @@ export default function CreateOrder({ user, store }) {
                   </select>
                 </div>
               </div>
-              <div className="px-5 py-4 border-t bg-gray-50 rounded-b-xl flex gap-2">
+              <div className="px-5 py-4 border-t bg-gray-50 rounded-b-xl flex flex-col sm:flex-row gap-2">
                 <button onClick={() => { setShowNewProductForm(false); setNewProduct({ name: '', sku: '', import_price: '', wholesale_price: '', retail_price: '', vip_price: '', stock: '', unit: 'cái', category: '', default_category_id: '', supplier_id: '' }); }}
                   className="flex-1 py-2.5 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">
                   Hủy

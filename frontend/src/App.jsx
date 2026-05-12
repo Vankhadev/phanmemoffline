@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate, } from 'react-router-dom';
+import PwaInstallPrompt from './components/PwaInstallPrompt';
 import Home from './pages/Home';
 import POS from './pages/POS';
 import CreateOrder from './pages/CreateOrder';
@@ -19,7 +20,7 @@ import ProductReport from './pages/ProductReport';
 import CashBook from './pages/CashBook';
 import Payroll from './pages/Payroll';
 import PrintTemplates from './pages/PrintTemplates';
-import SapoProductSync from './pages/SapoProductSync';
+import SanThuongMaiDienTu from './pages/santhuongmaidientu';
 import {
   BadgeDollarSign,
   BarChart3,
@@ -46,6 +47,7 @@ import {
 import {
   API_BASE,
   AUTH_EXPIRED_EVENT,
+  SYNC_CHECK_REQUEST_EVENT,
   SYNC_UPDATED_EVENT,
   authApi,
   getApiErrorMessage,
@@ -57,6 +59,23 @@ import {
 import { clearAuthSession, clearVolatileCache, getAuthToken, normalizePermissions } from './utils/authStorage';
 
 export const API = API_BASE;
+
+const MOBILE_ROUTE_PREFIX = '/mobile';
+
+function isCapacitorNativeRuntime() {
+  try {
+    return Boolean(window.Capacitor?.isNativePlatform?.() || ['android', 'ios'].includes(window.Capacitor?.getPlatform?.()));
+  } catch (_) {
+    return false;
+  }
+}
+
+function isMobileAppRoute() {
+  if (typeof window === 'undefined') return false;
+  if (isCapacitorNativeRuntime()) return true;
+  const route = String(window.location.hash || '').replace(/^#/, '') || window.location.pathname || '';
+  return route === MOBILE_ROUTE_PREFIX || route.startsWith(`${MOBILE_ROUTE_PREFIX}/`);
+}
 
 const ROUTE_ALIASES = {
   '/settings': '/cai-dat',
@@ -72,8 +91,23 @@ const DESKTOP_SIDEBAR_QUERY = '(min-width: 768px)';
 const MOBILE_SIDEBAR_QUERY = '(max-width: 767px)';
 const NAV_ICON_CLASS = 'h-5 w-5 shrink-0';
 const NAV_CHILD_ICON_CLASS = 'h-4 w-4 shrink-0';
-const SYNC_POLL_INTERVAL_MS = 15000;
+const SYNC_POLL_ACTIVE_INTERVAL_MS = 4000;
+const SYNC_POLL_INITIAL_DELAY_MS = 1500;
+const SYNC_POLL_IMMEDIATE_DELAY_MS = 250;
+const SYNC_POLL_BACKGROUND_INTERVAL_MS = 30000;
+const SYNC_POLL_OFFLINE_INTERVAL_MS = 30000;
 const SYNC_POLL_BACKOFF_MAX_MS = 60000;
+
+function SapoProductSync() {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800 shadow-sm">
+      <div className="text-base font-bold">Đồng bộ sản phẩm Sapo chưa khả dụng</div>
+      <p className="mt-1 text-sm">
+        Route này đang được giữ để desktop web không lỗi build, nhưng file trang SapoProductSync hiện không còn trong workspace.
+      </p>
+    </div>
+  );
+}
 
 function matchesMediaQuery(query, fallback = false) {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return fallback;
@@ -133,6 +167,8 @@ const ROUTE_PERMISSIONS = {
   '/cai-dat': ['settings.read', 'store.read', 'users.read'],
   '/mau-in': ['print_templates.read'],
   '/dong-bo-san-pham': ['products.manage'],
+  "/san-thuong-mai-dien-tu": ['']
+
 };
 
 function isKnownAppRoute(route) {
@@ -335,6 +371,14 @@ function AppLayout({
           { to: '/mau-in', label: 'Mẫu in', icon: Printer },
         ],
       },
+      {
+        key: 'khác',
+        label: 'Khác',
+        icon: SettingsIcon,
+        items: [
+          { to: '/san-thuong-mai-dien-tu', label: 'Sàn TMDT', icon: BarChart3 },
+        ],
+      },
     ];
 
     return groups
@@ -394,7 +438,7 @@ function AppLayout({
             {sidebarOpen ? (
               <div className="min-w-0">
                 <div className="truncate text-xs font-bold text-gray-300">{storeDisplayName}</div>
-                <div className="truncate text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.2.1'}</div>
+                <div className="truncate text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.2.2'}</div>
               </div>
             ) : (
               <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white md:flex">
@@ -536,6 +580,7 @@ function AppLayout({
             <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><Settings store={store} /></ProtectedRoute>} />
             <Route path="/mau-in" element={<ProtectedRoute user={user} permissions={permissions} path="/mau-in"><PrintTemplates store={store} /></ProtectedRoute>} />
             <Route path="/dong-bo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/dong-bo-san-pham"><SapoProductSync /></ProtectedRoute>} />
+            <Route path="/san-thuong-mai-dien-tu" element={<ProtectedRoute user={user} permissions={permissions} path="/san-thuong-mai-dien-tu"><SanThuongMaiDienTu store={store} /></ProtectedRoute>} />
             <Route path={LOGIN_REGISTER_ROUTE} element={<Navigate to={firstAccessibleRoute(user, permissions)} replace />} />
             {Object.entries(ROUTE_ALIASES).map(([from, to]) => (
               <Route key={from} path={from} element={<Navigate to={canAccess(to) ? to : firstAccessibleRoute(user, permissions)} replace />} />
@@ -557,7 +602,7 @@ const emptyAuthState = {
   bootstrap: {},
 };
 
-export default function App() {
+function DesktopApp() {
   const [authState, setAuthState] = useState(emptyAuthState);
   const [store, setStore] = useState({});
   const [sidebarOpen, setSidebarOpen] = useState(() => matchesMediaQuery(DESKTOP_SIDEBAR_QUERY, true));
@@ -692,16 +737,58 @@ export default function App() {
 
     let stopped = false;
     let timer = null;
-    let nextDelay = SYNC_POLL_INTERVAL_MS;
+    let nextDelay = SYNC_POLL_ACTIVE_INTERVAL_MS;
+    let consecutiveFailures = 0;
+
+    const isAppOnline = () => typeof navigator === 'undefined' || navigator.onLine !== false;
+    const isAppVisible = () => typeof document === 'undefined' || document.visibilityState !== 'hidden';
+    const getBaseDelay = () => {
+      if (!isAppOnline()) return SYNC_POLL_OFFLINE_INTERVAL_MS;
+      if (!isAppVisible()) return SYNC_POLL_BACKGROUND_INTERVAL_MS;
+      return SYNC_POLL_ACTIVE_INTERVAL_MS;
+    };
+
+    const clearScheduledPoll = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = null;
+    };
 
     const schedule = (delay = nextDelay) => {
       if (stopped) return;
-      timer = window.setTimeout(pollVersions, delay);
+      clearScheduledPoll();
+      const safeDelay = Math.max(0, Number(delay) || 0);
+      timer = window.setTimeout(pollVersions, safeDelay);
     };
 
-    const pollVersions = async () => {
-      if (stopped || syncPollingRef.current || !getAuthToken()) {
+    const requestImmediatePoll = () => {
+      if (stopped || !getAuthToken()) return;
+      if (!isAppOnline()) {
+        nextDelay = SYNC_POLL_OFFLINE_INTERVAL_MS;
         schedule(nextDelay);
+        return;
+      }
+      consecutiveFailures = 0;
+      nextDelay = isAppVisible() ? SYNC_POLL_ACTIVE_INTERVAL_MS : SYNC_POLL_BACKGROUND_INTERVAL_MS;
+      schedule(isAppVisible() ? SYNC_POLL_IMMEDIATE_DELAY_MS : SYNC_POLL_BACKGROUND_INTERVAL_MS);
+    };
+
+    async function pollVersions() {
+      if (stopped) return;
+
+      if (!getAuthToken()) {
+        nextDelay = SYNC_POLL_BACKGROUND_INTERVAL_MS;
+        schedule(nextDelay);
+        return;
+      }
+
+      if (!isAppOnline()) {
+        nextDelay = SYNC_POLL_OFFLINE_INTERVAL_MS;
+        schedule(nextDelay);
+        return;
+      }
+
+      if (syncPollingRef.current) {
+        schedule(Math.min(getBaseDelay(), 1000));
         return;
       }
 
@@ -733,20 +820,51 @@ export default function App() {
           syncVersionsRef.current = nextVersions;
         }
 
-        nextDelay = SYNC_POLL_INTERVAL_MS;
+        consecutiveFailures = 0;
+        nextDelay = getBaseDelay();
       } catch (err) {
         console.warn('Không thể polling phiên bản đồng bộ:', err);
-        nextDelay = Math.min(nextDelay * 2, SYNC_POLL_BACKOFF_MAX_MS);
+        consecutiveFailures += 1;
+        nextDelay = Math.min(getBaseDelay() * (2 ** consecutiveFailures), SYNC_POLL_BACKOFF_MAX_MS);
       } finally {
         syncPollingRef.current = false;
         schedule(nextDelay);
       }
+    }
+
+    const handleOnline = () => requestImmediatePoll();
+    const handleOffline = () => {
+      nextDelay = SYNC_POLL_OFFLINE_INTERVAL_MS;
+      schedule(nextDelay);
+    };
+    const handleFocus = () => {
+      if (isAppVisible()) requestImmediatePoll();
+    };
+    const handleVisibilityChange = () => {
+      if (isAppVisible()) requestImmediatePoll();
+      else {
+        nextDelay = getBaseDelay();
+        schedule(nextDelay);
+      }
     };
 
-    schedule(5000);
+    schedule(SYNC_POLL_INITIAL_DELAY_MS);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('kha-order-created', requestImmediatePoll);
+    window.addEventListener(SYNC_CHECK_REQUEST_EVENT, requestImmediatePoll);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       stopped = true;
-      if (timer) window.clearTimeout(timer);
+      clearScheduledPoll();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('kha-order-created', requestImmediatePoll);
+      window.removeEventListener(SYNC_CHECK_REQUEST_EVENT, requestImmediatePoll);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [authState.user]);
 
@@ -776,6 +894,7 @@ export default function App() {
 
   return (
     <HashRouter>
+      <PwaInstallPrompt />
       {!authState.user ? (
         <Routes>
           <Route path={LOGIN_REGISTER_ROUTE} element={<Register onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} />} />
@@ -796,4 +915,16 @@ export default function App() {
       )}
     </HashRouter>
   );
+}
+
+export default function App() {
+  if (isMobileAppRoute()) {
+    return (
+      <HashRouter>
+        <MobileApp />
+      </HashRouter>
+    );
+  }
+
+  return <DesktopApp />;
 }

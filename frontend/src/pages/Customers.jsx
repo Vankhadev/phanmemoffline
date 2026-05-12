@@ -4,7 +4,7 @@ import { API } from '../App';
 import { Users, FileDown, Plus, X, Edit2, Trash2, Loader, Tag, HelpCircle, UploadCloud } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
-import { customerTypesApi, customersApi, getApiErrorMessage } from '../utils/apiClient';
+import { customerTypesApi, customersApi, getApiErrorMessage, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 
 export default function Customers() {
   const navigate = useNavigate();
@@ -32,6 +32,23 @@ export default function Customers() {
   const [typeForm, setTypeForm] = useState({ name: '', color: '#3b82f6' });
 
   useEffect(() => { setLoading(true); Promise.all([fetchCustomers(), fetchCustomerTypes()]).finally(() => setLoading(false)); }, []);
+
+  useEffect(() => {
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      const syncData = event.detail?.data || {};
+      if (changedTables.includes('customers')) {
+        if (Array.isArray(syncData.customers)) setCustomers(syncData.customers);
+        else fetchCustomers();
+      }
+      if (changedTables.includes('customer_types')) {
+        if (Array.isArray(syncData.customer_types)) setCustomerTypes(syncData.customer_types);
+        else fetchCustomerTypes();
+      }
+    };
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+  }, []);
 
   useEffect(() => {
     if (!showForm) return undefined;
@@ -318,12 +335,12 @@ export default function Customers() {
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
+    <div className="min-w-0">
+      <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-center lg:justify-between">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Users className="text-blue-600" size={24} /> Quản lý Khách hàng
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => navigate('/dong-bo-san-pham?tab=customers&import=1')}
             className="px-3 py-2 border border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-medium flex items-center gap-1">
             <UploadCloud size={13} /> Nhập Excel
@@ -347,10 +364,10 @@ export default function Customers() {
         <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
           <FileDown className="text-blue-600" size={16} /> Xuất báo cáo khách hàng theo tháng
         </h3>
-        <div className="flex flex-wrap gap-3 items-end">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="sm:w-auto">
             <label className="text-xs text-gray-500 block mb-1">Chọn tháng</label>
-            <input type="month" className="input-field" value={reportMonth}
+            <input type="month" className="input-field w-full" value={reportMonth}
               onChange={e => setReportMonth(e.target.value)} />
           </div>
           <button onClick={exportCustomersReport} className="btn-primary flex items-center gap-1">
@@ -378,8 +395,67 @@ export default function Customers() {
         </div>
       )}
 
-      <div className="card overflow-x-auto">
-        <table className="w-full min-w-[980px] text-sm">
+      <div className="md:hidden space-y-3">
+        {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> Đang tải...</div>}
+        {!loading && filtered.length === 0 && <div className="rounded-xl border-2 border-dashed bg-white p-8 text-center text-gray-400">Không có khách hàng nào</div>}
+        {!loading && filtered.length > 0 && (
+          <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+            <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-gray-600">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                checked={allVisibleSelected}
+                ref={el => { if (el) el.indeterminate = someVisibleSelected; }}
+                onChange={toggleSelectAllVisible}
+                disabled={visibleCustomerIds.length === 0 || isBulkDeleting}
+              />
+              Chọn tất cả khách hàng đang hiển thị ({filtered.length})
+            </label>
+          </div>
+        )}
+        {!loading && filtered.map(c => {
+          const isSelected = selectedIdSet.has(String(c.id));
+          return (
+            <div key={c.id} className={`rounded-2xl border border-gray-200 bg-white p-3 shadow-sm ${isSelected ? 'ring-2 ring-blue-100 bg-blue-50/40' : ''}`}>
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-gray-300 cursor-pointer shrink-0"
+                  checked={isSelected}
+                  onChange={() => toggleSelectCustomer(c.id)}
+                  disabled={isBulkDeleting}
+                  aria-label={`Chọn khách hàng ${c.name || c.id}`}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-gray-900">{c.name}</div>
+                  {(c.customer_code || c.sapo_customer_id) && <div className="text-[11px] text-gray-400">Mã: {c.customer_code || c.sapo_customer_id}</div>}
+                  <div className="mt-2 grid grid-cols-1 gap-1 text-sm text-gray-600">
+                    <div><span className="text-gray-400">SĐT:</span> {c.phone || '—'}</div>
+                    <div><span className="text-gray-400">Email:</span> {c.email || '—'}</div>
+                    <div><span className="text-gray-400">MST:</span> <span className="font-mono text-xs">{c.tax_code || '—'}</span></div>
+                  </div>
+                  <div className="mt-2">
+                    <span className="px-2 py-0.5 rounded text-xs font-medium" style={getTypeColor(c.customer_type)}>
+                      {getTypeLabel(c.customer_type)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-gray-100 pt-3">
+                <button onClick={() => openEdit(c)} disabled={isBulkDeleting} className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 disabled:opacity-50">
+                  <Edit2 size={12} /> Sửa
+                </button>
+                <button onClick={() => handleDelete(c.id)} disabled={isBulkDeleting} className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600 disabled:opacity-50">
+                  <Trash2 size={12} /> Xóa
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="card hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[860px] text-sm">
           <thead>
             <tr className="bg-gray-100 text-gray-600">
               <th className="p-2 text-center w-10">
@@ -447,8 +523,8 @@ export default function Customers() {
 
       {/* Form modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="relative z-10 bg-white rounded-xl shadow-2xl p-6 w-[500px]">
+        <div className="fixed inset-0 bg-black/40 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
+          <div className="relative z-10 bg-white rounded-xl shadow-2xl p-4 sm:p-6 w-full max-w-lg max-h-[90dvh] overflow-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <Users size={20} className="text-blue-600" />
@@ -460,11 +536,11 @@ export default function Customers() {
             </div>
             <div className="space-y-3 mb-4">
               <div><label className="text-xs text-gray-500">Tên KH</label><input ref={customerNameInputRef} className="input-field w-full" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Tên..." /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className="text-xs text-gray-500">SĐT</label><input className="input-field" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
                 <div><label className="text-xs text-gray-500">Email</label><input className="input-field" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className="text-xs text-gray-500">Mã số thuế</label><input className="input-field" value={form.tax_code} onChange={e => setForm({ ...form, tax_code: e.target.value })} /></div>
                 <div><label className="text-xs text-gray-500">Loại KH</label>
                   <select className="input-field" value={form.customer_type || ''} onChange={e => setForm({ ...form, customer_type: e.target.value })}>
@@ -477,7 +553,7 @@ export default function Customers() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <button onClick={handleSubmit} className="btn-success flex-1">💾 Lưu</button>
               <button onClick={() => setShowForm(false)} className="btn-danger flex-1">Hủy</button>
             </div>
@@ -487,8 +563,8 @@ export default function Customers() {
 
       {/* ===== QUẢN LÝ LOẠI KHÁCH HÀNG ===== */}
       {showTypeManager && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-[520px] max-h-[85vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-purple-50 rounded-t-xl">
               <div>
                 <h2 className="text-lg font-bold text-purple-800 flex items-center gap-2">
@@ -539,8 +615,8 @@ export default function Customers() {
 
       {/* ===== FORM THÊM/SỬA LOẠI KH ===== */}
       {showTypeForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl shadow-2xl w-[400px] p-6">
+        <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-[60] overflow-y-auto p-3 sm:p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-4 sm:p-6 max-h-[90dvh] overflow-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-purple-800">
                 {editingType ? 'Sửa loại khách' : 'Thêm loại khách hàng'}
@@ -556,8 +632,8 @@ export default function Customers() {
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Màu nhóm</label>
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="flex flex-wrap gap-2">
                     {COLOR_PRESETS.map(c => (
                       <button key={c}
                         onClick={() => setTypeForm(f => ({ ...f, color: c }))}
@@ -578,7 +654,7 @@ export default function Customers() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-2 mt-5">
+            <div className="flex flex-col sm:flex-row gap-2 mt-5">
               <button onClick={() => setShowTypeForm(false)}
                 className="flex-1 py-2 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Hủy</button>
               <button onClick={handleTypeSubmit}

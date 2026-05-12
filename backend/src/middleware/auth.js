@@ -49,6 +49,8 @@ function publicSession(session) {
     account_id: session.account_id,
     device_name: session.device_name || '',
     device_id: session.device_id || '',
+    platform: session.platform || '',
+    app_version: session.app_version || '',
     ip: session.ip || '',
     user_agent: session.user_agent || '',
     created_at: session.created_at,

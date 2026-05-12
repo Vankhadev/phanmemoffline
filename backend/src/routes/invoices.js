@@ -8,6 +8,7 @@ const router = express.Router();
 const { getAll, getOne, insert, update, remove, upsertDailyStats, today, now, getNextSeq, normalizePaymentMethod, getActiveAccountId } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
+const { createInvoiceFromPayload } = require('../services/invoiceCreationService');
 
 // ─────────────────────────────────────────────
 // Helper: tạo mã đơn tự động HD000001
@@ -329,83 +330,22 @@ router.get('/:id', (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/', (req, res) => {
   try {
-    const {
-      customer_id, user_id,
-      subtotal, vat_percent, vat_amount,
-      discount_amount, discount_percent,
-      total, payment_method, note,
-      paid_amount, change_amount, remaining_amount, delivery_fee,
-      invoice_writer, receiver_name,
-      delivery_date,
-      details,
-    } = req.body;
+    const result = createInvoiceFromPayload(req.body, req, { orderSource: 'direct' });
 
-    // ── Kiểm tra tồn kho trước khi tạo đơn (dùng helper nhận diện product/variant) ──
-    for (const d of (details || [])) {
-      if (isComboDetail(d)) continue;
-      if (d.product_id) {
-        const prod = getOne('products', p => p.id == d.product_id);
-        if (!prod) {
-          res.status(400).json({ error: `Sản phẩm ID ${d.product_id} không tồn tại` });
-          return;
-        }
-        if ((prod.stock || 0) < (d.quantity || 1)) {
-          res.status(400).json({ error: `Sản phẩm "${prod.name}" không đủ tồn kho! Còn: ${prod.stock || 0}, cần: ${d.quantity || 1}` });
-          return;
-        }
-      }
-    }
+    // Trigger bot tồn kho (async) chỉ khi thật sự tạo đơn mới; request idempotent không trừ kho lại.
+    if (result.created) triggerBotStockCheck(req).catch(() => { });
 
-    const sapoInvoiceMetadata = ['sapo_order_id', 'sapo_order_number', 'sapo_customer_id', 'sapo_status', 'sapo_payment_status', 'sapo_fulfillment_status', 'sapo_updated_at', 'sapo_last_synced_at', 'sync_source']
-      .reduce((acc, field) => {
-        if (Object.prototype.hasOwnProperty.call(req.body, field)) acc[field] = req.body[field] || '';
-        return acc;
-      }, {});
-
-    const invoice_code = genInvoiceCode();
-    const invoice_id = insert('invoices', {
-      invoice_code,
-      customer_id: customer_id || null,
-      user_id: user_id || null,
-      subtotal: +subtotal || 0,
-      vat_percent: +vat_percent || 0,
-      vat_amount: vat_amount || 0,
-      discount_amount: discount_amount || 0,
-      discount_percent: discount_percent || 0,
-      total: +total || 0,
-      paid_amount: +paid_amount || 0,
-      change_amount: +change_amount || 0,
-      remaining_amount: +remaining_amount || 0,
-      delivery_fee: +delivery_fee || 0,
-      payment_method: normalizePaymentMethod(payment_method),
-      note: note || '',
-      invoice_writer: invoice_writer || '',
-      receiver_name: receiver_name || '',
-      delivery_date: delivery_date || null,
-      status: req.body.status || 'pending',
-      ...sapoInvoiceMetadata,
-      created_at: now(),
+    res.json({
+      ok: true,
+      invoice_id: result.invoice_id,
+      invoice_code: result.invoice_code,
+      client_order_id: result.client_order_id || '',
+      idempotent: result.idempotent === true,
+      existing: result.idempotent === true,
     });
-
-    // Lưu chi tiết + trừ tồn kho sản phẩm lẻ; combo là dòng bán hàng riêng, không trừ kho ở đây
-    for (const d of (details || [])) {
-      const detailRow = normalizeInvoiceDetail(d, invoice_id);
-      insert('invoice_details', detailRow);
-      if (!isComboDetail(d) && d.product_id) deductStock(d.product_id, +d.quantity || 1);
-    }
-
-    // Cập nhật thống kê ngày
-    upsertDailyStats(today(), +total || 0);
-    // Trigger bot tồn kho (async)
-    triggerBotStockCheck(req).catch(() => { });
-    // Tạo giao dịch thu vào sổ quỹ nếu đơn hoàn tất
-    if (req.body.status === 'completed') {
-      addCashBookIncome({ id: invoice_id, invoice_code, total });
-    }
-
-    res.json({ ok: true, invoice_id, invoice_code });
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi tạo đơn: ' + err.message });
+    const status = err.status || 500;
+    res.status(status).json({ error: 'Lỗi khi tạo đơn: ' + err.message });
   }
 });
 

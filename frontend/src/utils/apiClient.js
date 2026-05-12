@@ -7,9 +7,18 @@ import {
   saveAuthSession,
 } from './authStorage';
 import { getProductDisplayName } from './productSearch';
+import { attachClientOrderMetadata, ensureClientOrderId } from './clientOrderId';
 
 export const AUTH_EXPIRED_EVENT = 'kha-auth:expired';
 export const SYNC_UPDATED_EVENT = 'kha-sync:updated';
+export const SYNC_CHECK_REQUEST_EVENT = 'kha-sync:check-now';
+
+export function requestSyncCheck(detail = {}) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(SYNC_CHECK_REQUEST_EVENT, {
+    detail: { reason: 'manual', ...detail },
+  }));
+}
 
 export class ApiError extends Error {
   constructor(message, options = {}) {
@@ -633,6 +642,65 @@ export const authApi = {
   },
 };
 
+export const usersApi = {
+  list() {
+    return apiJson('/users', {}, 'Không thể tải danh sách nhân viên.');
+  },
+
+  update(id, payload = {}) {
+    return apiJson(`/users/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: payload,
+    }, 'Không thể cập nhật nhân viên.');
+  },
+
+  updateMobileEnabled(id, mobileEnabled) {
+    return this.update(id, { mobile_enabled: Boolean(mobileEnabled) });
+  },
+};
+
+export const mobileAdminApi = {
+  listInstallLinks() {
+    return apiJson('/mobile/install-links', {}, 'Không thể tải link cài đặt mobile.');
+  },
+
+  createInstallLink(payload = {}) {
+    return apiJson('/mobile/install-links', {
+      method: 'POST',
+      body: payload,
+    }, 'Không thể tạo link cài đặt mobile.');
+  },
+
+  resolveInstallLink(token) {
+    return apiJson(`/mobile/install/${encodeURIComponent(token)}`, {
+      skipAuth: true,
+      handleUnauthorized: false,
+    }, 'Không thể mở link cài đặt mobile.');
+  },
+
+  listDevices() {
+    return apiJson('/mobile/devices', {}, 'Không thể tải danh sách thiết bị mobile.');
+  },
+
+  revokeDevice(id, payload = {}) {
+    return apiJson(`/mobile/devices/${encodeURIComponent(id)}/revoke`, {
+      method: 'PATCH',
+      body: payload,
+    }, 'Không thể thu hồi thiết bị mobile.');
+  },
+
+  updateDevice(id, payload = {}) {
+    return apiJson(`/mobile/devices/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: payload,
+    }, 'Không thể cập nhật thiết bị mobile.');
+  },
+
+  syncStatus() {
+    return apiJson('/mobile/sync/status', {}, 'Không thể tải trạng thái đồng bộ mobile.');
+  },
+};
+
 function normalizePendingOrder(order) {
   const payload = order?.payload && typeof order.payload === 'object' ? order.payload : order;
   if (!payload || typeof payload !== 'object') return null;
@@ -665,9 +733,11 @@ function normalizePendingOrder(order) {
 
   if (!Array.isArray(details) || details.length === 0) return null;
 
-  return {
+  const clientOrderId = ensureClientOrderId(order || payload);
+  return attachClientOrderMetadata({
     ...payload,
-    invoice_code: payload.invoice_code || order?.invoice_code || `LOCAL_${order?.id || Date.now()}`,
+    client_order_id: clientOrderId,
+    invoice_code: payload.invoice_code || order?.invoice_code || `LOCAL_${clientOrderId || order?.id || Date.now()}`,
     subtotal: Number(payload.subtotal ?? order?.subtotal) || 0,
     vat_percent: Number(payload.vat_percent ?? order?.vatPercent) || 0,
     vat_amount: Number(payload.vat_amount ?? order?.vatAmount) || 0,
@@ -678,7 +748,7 @@ function normalizePendingOrder(order) {
     delivery_date: payload.delivery_date || order?.delivery_date || null,
     created_at: payload.created_at || order?.created_at || new Date().toISOString(),
     details,
-  };
+  }, { client_order_id: clientOrderId });
 }
 
 function normalizePendingCustomer(customer) {
@@ -706,7 +776,16 @@ export async function pushPendingLocalData() {
   }
 
   const result = await authApi.syncPush({ pending: { orders, customers } });
-  if (result?.ok) clearPendingLocalData();
+  const orderResults = Array.isArray(result?.accepted?.orders) ? result.accepted.orders : [];
+  const failedOrderIds = new Set(orderResults
+    .filter(item => item && item.action === 'error')
+    .map(item => item.client_order_id || item.invoice_code)
+    .filter(Boolean));
+
+  if (result?.ok && failedOrderIds.size === 0) {
+    clearPendingLocalData();
+  }
+
   return {
     ...result,
     pushed: { orders: orders.length, customers: customers.length },

@@ -34,10 +34,22 @@
   }
 
   @media (max-width: 767px) {
+    .app-main-scroll {
+      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+      overscroll-behavior: contain;
+    }
+
     .app-main-scroll input,
     .app-main-scroll select,
     .app-main-scroll textarea {
       font-size: 16px;
+    }
+
+    .app-main-scroll .btn-primary,
+    .app-main-scroll .btn-success,
+    .app-main-scroll .btn-danger {
+      min-height: 44px;
+      touch-action: manipulation;
     }
   }
 }

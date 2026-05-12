@@ -24,6 +24,9 @@ const DB_PATH = resolveDBPath();
 const SCHEMA = {
   accounts: [],
   sessions: [],
+  mobile_devices: [],
+  mobile_install_links: [],
+  mobile_sync_events: [],
   permissions: [],
   role_permissions: [],
   sync_metadata: [],
@@ -57,7 +60,7 @@ const SCHEMA = {
 };
 
 const INITIAL_NEXT_ID = {
-  accounts: 1, sessions: 1, permissions: 1, role_permissions: 1, sync_metadata: 1, audit_logs: 1,
+  accounts: 1, sessions: 1, mobile_devices: 1, mobile_install_links: 1, mobile_sync_events: 1, permissions: 1, role_permissions: 1, sync_metadata: 1, audit_logs: 1,
   store_info: 1, users: 1, customers: 1, products: 1, product_categories: 1, partners: 1,
   invoices: 1, invoice_details: 1, import_logs: 1, import_details: 1,
   combos: 1, combo_items: 1, daily_stats: 1,
@@ -74,6 +77,7 @@ const ACCOUNT_SCOPED_TABLES = new Set([
   'daily_stats', 'return_logs', 'return_details', 'bot_settings', 'bot_alerts',
   'customer_types', 'counters', 'cash_book', 'payrolls', 'print_templates',
   'sapo_settings', 'sapo_sync_runs', 'excel_import_runs', 'excel_import_details',
+  'mobile_devices', 'mobile_install_links', 'mobile_sync_events',
   'sync_metadata', 'audit_logs',
 ]);
 
@@ -133,7 +137,7 @@ const SYNC_TRACKED_TABLES = [
   'store_info', 'users', 'customers', 'products', 'product_categories', 'partners',
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
   'daily_stats', 'return_logs', 'return_details', 'bot_settings', 'bot_alerts',
-  'customer_types', 'cash_book', 'payrolls', 'print_templates',
+  'customer_types', 'cash_book', 'payrolls', 'print_templates', 'mobile_devices',
   'excel_import_runs', 'excel_import_details',
 ];
 
@@ -209,9 +213,26 @@ function loadDB() {
     }
 
     const needsSapoMigration = !Array.isArray(parsed.sapo_settings) || !Array.isArray(parsed.sapo_sync_runs);
+    const hasOwnField = (row, field) => Object.prototype.hasOwnProperty.call(row || {}, field);
+    const needsMobileMigration =
+      !Array.isArray(parsed.mobile_devices) ||
+      !Array.isArray(parsed.mobile_install_links) ||
+      !Array.isArray(parsed.mobile_sync_events) ||
+      (Array.isArray(parsed.invoices) && parsed.invoices.some(row =>
+        !hasOwnField(row, 'payload_hash') ||
+        !hasOwnField(row, 'mobile_sync_status') ||
+        !hasOwnField(row, 'idempotency_key') ||
+        !hasOwnField(row, 'client_created_at')
+      )) ||
+      (Array.isArray(parsed.users) && parsed.users.some(row => !hasOwnField(row, 'mobile_enabled')));
     replaceDB(parsed);
     recalculateNextIds();
-    if (needsMigrationBackup() || needsSapoMigration) backupDB(needsSapoMigration ? 'pre-sapo-sync-migration' : 'pre-auth-sync-migration');
+    if (needsMigrationBackup() || needsSapoMigration || needsMobileMigration) {
+      const backupReason = needsMobileMigration
+        ? 'pre-mobile-sync-migration'
+        : (needsSapoMigration ? 'pre-sapo-sync-migration' : 'pre-auth-sync-migration');
+      backupDB(backupReason);
+    }
     migrateDB();
     recalculateNextIds();
     console.log('[KHA] DB loaded from', DB_PATH);
@@ -736,6 +757,24 @@ function ensureSapoMetadataSchema() {
   }
 
   const invoiceDefaults = {
+    client_order_id: '',
+    payload_hash: '',
+    mobile_sync_status: '',
+    mobile_synced_at: null,
+    mobile_device_id: null,
+    store_info_snapshot: null,
+    idempotency_key: '',
+    client_created_at: null,
+    created_by_user_id: row => row.user_id || null,
+    created_by_session_id: null,
+    created_by_device_id: '',
+    created_by_device_name: '',
+    created_by_platform: '',
+    created_by_app_version: '',
+    created_by_user_agent: '',
+    created_by_ip: '',
+    order_source: '',
+    source: row => row.order_source || '',
     sapo_order_id: '',
     sapo_order_number: '',
     sapo_customer_id: '',
@@ -779,6 +818,114 @@ function ensureSapoMetadataSchema() {
   for (const run of db.sapo_sync_runs || []) {
     for (const [field, defaultValue] of Object.entries(runDefaults)) {
       if (ensureField(run, field, defaultValue)) changed = true;
+    }
+  }
+
+  return changed;
+}
+
+function ensureMobileSchema() {
+  let changed = false;
+  const time = now();
+  const mobileTables = ['mobile_devices', 'mobile_install_links', 'mobile_sync_events'];
+
+  for (const table of mobileTables) {
+    if (!Array.isArray(db[table])) {
+      db[table] = [];
+      changed = true;
+    }
+    if (!nextId[table]) {
+      nextId[table] = 1;
+      changed = true;
+    }
+  }
+
+  const userDefaults = {
+    mobile_enabled: true,
+    mobile_last_login_at: null,
+  };
+  for (const user of db.users || []) {
+    for (const [field, defaultValue] of Object.entries(userDefaults)) {
+      if (ensureField(user, field, defaultValue)) changed = true;
+    }
+  }
+
+  const invoiceDefaults = {
+    payload_hash: '',
+    mobile_sync_status: '',
+    mobile_synced_at: null,
+    mobile_device_id: null,
+    store_info_snapshot: null,
+    idempotency_key: '',
+    client_created_at: null,
+    source: row => row.order_source || '',
+  };
+  for (const invoice of db.invoices || []) {
+    for (const [field, defaultValue] of Object.entries(invoiceDefaults)) {
+      if (ensureField(invoice, field, defaultValue)) changed = true;
+    }
+  }
+
+  const deviceDefaults = {
+    device_uid: row => row.device_uid || row.device_id || '',
+    user_id: null,
+    device_name: '',
+    platform: '',
+    app_version: '',
+    user_agent: '',
+    ip: '',
+    push_token: '',
+    active: 1,
+    first_seen_at: row => row.created_at || time,
+    last_seen_at: row => row.updated_at || row.created_at || time,
+    last_login_at: null,
+    revoked_at: null,
+    revoked_by_user_id: null,
+    revoked_reason: '',
+  };
+  for (const device of db.mobile_devices || []) {
+    for (const [field, defaultValue] of Object.entries(deviceDefaults)) {
+      if (ensureField(device, field, defaultValue)) changed = true;
+    }
+  }
+
+  const installLinkDefaults = {
+    token: '',
+    created_by_user_id: null,
+    android_url: '',
+    ios_url: '',
+    expires_at: null,
+    active: 1,
+    used_count: 0,
+    last_resolved_at: null,
+  };
+  for (const link of db.mobile_install_links || []) {
+    for (const [field, defaultValue] of Object.entries(installLinkDefaults)) {
+      if (ensureField(link, field, defaultValue)) changed = true;
+    }
+  }
+
+  const eventDefaults = {
+    event_type: 'create_invoice',
+    action: 'create_invoice',
+    status: 'received',
+    attempts: 1,
+    client_order_id: '',
+    payload_hash: '',
+    idempotency_key: '',
+    mobile_device_id: null,
+    user_id: null,
+    session_id: null,
+    invoice_id: null,
+    invoice_code: '',
+    last_error: '',
+    payload_summary: null,
+    received_at: row => row.created_at || time,
+    applied_at: null,
+  };
+  for (const event of db.mobile_sync_events || []) {
+    for (const [field, defaultValue] of Object.entries(eventDefaults)) {
+      if (ensureField(event, field, defaultValue)) changed = true;
     }
   }
 
@@ -1025,6 +1172,7 @@ function normalizeDBData() {
 
   if (ensureAuthAndSyncSchema()) changed = true;
   if (ensureSapoMetadataSchema()) changed = true;
+  if (ensureMobileSchema()) changed = true;
 
   for (const category of db.product_categories) {
     if (!category.name) { category.name = 'Danh mục'; changed = true; }
@@ -1281,6 +1429,7 @@ function migrateDB() {
 
   if (ensureAuthAndSyncSchema()) migrated = true;
   if (ensureSapoMetadataSchema()) migrated = true;
+  if (ensureMobileSchema()) migrated = true;
 
   if (migrated) {
     saveDB();
@@ -1607,6 +1756,7 @@ function seedData() {
   seedDefaultPrintTemplates();
   ensureAuthAndSyncSchema();
   ensureSapoMetadataSchema();
+  ensureMobileSchema();
   console.log('[KHA] Base data inserted');
 }
 
