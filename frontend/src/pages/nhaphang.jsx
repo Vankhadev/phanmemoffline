@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Search, Plus, X, Save, Package, Tag, FileText, LogOut, AlertCircle, CheckCircle, Building, Trash2, CreditCard } from 'lucide-react';
+import { Search, Plus, X, Save, Package, Tag, FileText, LogOut, AlertCircle, CheckCircle, Building, Trash2, CreditCard, RotateCcw } from 'lucide-react';
 import { API } from '../App';
 import ProductLabelPrintModal from '../components/ProductLabelPrintModal';
-import { buildCategoriesById, categoryFields, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
+import { buildCategoriesById, categoryFields, getProductDisplayName, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
 
 const SUPPLIER_CHANGE_CONFIRM_MESSAGE = 'Đổi nhà cung cấp sẽ xóa danh sách sản phẩm hiện tại. Bạn có muốn tiếp tục?';
 const PRODUCT_SEARCH_LIMIT = 80;
@@ -434,6 +434,63 @@ const productMatchesImportSearchQuery = (product = {}, query = '') => {
     skuCompact.includes(queryCompact);
 };
 
+const isImportVariantProduct = (product = {}, parent = null) => Boolean(
+  parent
+  || product?.is_variant
+  || product?.parent_id
+  || product?._parentId
+  || product?.parentId
+  || product?.variant_id
+  || product?.parent_name
+  || product?.parent?.name
+  || product?.variant_name
+  || product?.variant?.name
+);
+
+const importProductHasVariants = (product = {}) => (
+  Array.isArray(product?.variants) && product.variants.length > 0
+);
+
+const shouldShowImportSearchProduct = (product = {}) => !(
+  !isImportVariantProduct(product) && importProductHasVariants(product)
+);
+
+const normalizeImportSearchProduct = (product = {}, productTree = []) => {
+  const parent = product?.parent || findParentProductInTree(product, productTree);
+  const isVariant = isImportVariantProduct(product, parent);
+  const displayName = isVariant
+    ? getProductDisplayName(product, parent)
+    : firstImportValue(product?.display_name, product?.displayName, product?.product_name, product?.productName, product?.name, product?.tenSP, product?.label, product?.sku);
+
+  if (!isVariant) {
+    return {
+      ...product,
+      name: displayName || product?.name || '',
+      tenSP: firstImportValue(product?.tenSP, displayName) || '',
+      display_name: displayName || product?.display_name || '',
+    };
+  }
+
+  return {
+    ...product,
+    is_variant: true,
+    parent: parent || product?.parent || null,
+    parent_id: firstImportValue(product?.parent_id, product?._parentId, product?.parentId, parent?.id, product?.product_id) || null,
+    parent_name: firstImportValue(product?.parent_name, parent?.name) || '',
+    name: displayName || product?.name || '',
+    tenSP: displayName || product?.tenSP || product?.name || '',
+    display_name: displayName || product?.display_name || '',
+  };
+};
+
+const prepareImportSearchResults = (rows = [], query = '', productTree = []) => (
+  (rows || [])
+    .map(product => normalizeImportSearchProduct(product, productTree))
+    .filter(shouldShowImportSearchProduct)
+    .filter(product => productMatchesImportSearchQuery(product, query))
+    .slice(0, PRODUCT_SEARCH_LIMIT)
+);
+
 const filterProductTreeBySupplier = (productTree = [], supplier = null, options = {}) => {
   const supplierId = getSupplierRecordId(supplier);
   if (!hasImportValue(supplierId)) return [];
@@ -499,7 +556,7 @@ const getProductAvailableQuantity = (product = {}) => {
 const mapProductForImport = (searchProduct = {}, fullProduct = {}, productTree = []) => {
   const source = { ...searchProduct, ...fullProduct };
   const parent = source.parent || searchProduct.parent || fullProduct.parent || findParentProductInTree(source, productTree) || findParentProductInTree(searchProduct, productTree);
-  const isVariant = Boolean(searchProduct.is_variant || fullProduct.is_variant || source.is_variant || source.parent_id || source._parentId);
+  const isVariant = isImportVariantProduct(source, parent) || isImportVariantProduct(searchProduct, searchProduct.parent || parent) || isImportVariantProduct(fullProduct, fullProduct.parent || parent);
   const productId = isVariant
     ? firstImportValue(source.parent_id, searchProduct.parent_id, source._parentId, searchProduct._parentId, parent?.id, source.product_id)
     : firstImportValue(source.product_id, source.id, searchProduct.id);
@@ -507,7 +564,10 @@ const mapProductForImport = (searchProduct = {}, fullProduct = {}, productTree =
     ? firstImportValue(source.variant_id, source.id, searchProduct.variant_id, searchProduct.id)
     : firstImportValue(source.variant_id);
   const sku = firstImportValue(source.sku, searchProduct.sku, source.maSP, searchProduct.maSP);
-  const name = firstImportValue(source.name, searchProduct.name, source.tenSP, searchProduct.tenSP);
+  const displayName = isVariant ? getProductDisplayName({ ...source, ...searchProduct }, parent) : '';
+  const name = isVariant
+    ? firstImportValue(displayName, searchProduct.tenSP, searchProduct.display_name, searchProduct.name, source.tenSP, source.name)
+    : firstImportValue(source.name, searchProduct.name, source.tenSP, searchProduct.tenSP);
   const unit = firstImportValue(source.unit, searchProduct.unit, source.donVi, searchProduct.donVi) || 'cái';
   const importPrice = Math.max(0, getFirstFiniteNumber(source.import_price, searchProduct.import_price, source.giaNhap, searchProduct.giaNhap, source.retail_price, searchProduct.retail_price));
   const retailPrice = Math.max(0, getFirstFiniteNumber(source.retail_price, searchProduct.retail_price, source.giaBan, searchProduct.giaBan, source.price, searchProduct.price));
@@ -632,9 +692,9 @@ const Nhaphang = ({ store }) => {
       categoriesById,
       includeParents: true,
       includeVariants: true,
-    }).filter(product => productMatchesImportSearchQuery(product, trimmedQuery));
+    });
 
-    return localResults.slice(0, PRODUCT_SEARCH_LIMIT);
+    return prepareImportSearchResults(localResults, trimmedQuery, allProducts);
   }, [allProducts, categoriesById]);
 
   // Fetch suppliers/products/categories from API
@@ -729,16 +789,14 @@ const Nhaphang = ({ store }) => {
         } else {
           const response = await fetch(`${API}/products/search?q=${encodeURIComponent(trimmedQuery)}&limit=${PRODUCT_SEARCH_LIMIT}`);
           const results = await response.json();
-          const matchedResults = (results || []).filter(product => productMatchesImportSearchQuery(product, trimmedQuery));
-          setFilteredProducts(matchedResults.slice(0, PRODUCT_SEARCH_LIMIT));
+          setFilteredProducts(prepareImportSearchResults(results || [], trimmedQuery, allProducts));
         }
       } catch (err) {
         console.error('Lỗi tìm kiếm sản phẩm:', err);
         try {
           const response = await fetch(`${API}/products?search=${encodeURIComponent(trimmedQuery)}`);
           const results = await response.json();
-          const matchedResults = (results || []).filter(product => productMatchesImportSearchQuery(product, trimmedQuery));
-          setFilteredProducts(matchedResults.slice(0, PRODUCT_SEARCH_LIMIT));
+          setFilteredProducts(prepareImportSearchResults(results || [], trimmedQuery, allProducts));
         } catch (_) {
           setFilteredProducts([]);
         }
@@ -1414,6 +1472,11 @@ const Nhaphang = ({ store }) => {
     handleReset();
   };
 
+  const handleOpenReturns = () => {
+    setError(null);
+    setSuccess('Chức năng hoàn trả hàng chưa được cấu hình trên giao diện. Vui lòng kiểm tra luồng hoàn trả hiện có hoặc cấu hình route hoàn trả.');
+  };
+
   // Reset form
   const handleReset = () => {
     setProducts([]);
@@ -1751,6 +1814,15 @@ const Nhaphang = ({ store }) => {
             </div>
             <div className="flex items-center gap-2">
               <button
+                type="button"
+                onClick={handleOpenReturns}
+                disabled={saving}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Hoàn trả hàng
+              </button>
+              <button
                 onClick={handleExit}
                 disabled={saving}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1962,11 +2034,12 @@ const Nhaphang = ({ store }) => {
                           filteredProducts.map(product => {
                             // Map price from API field
                             const price = product.retail_price || product.import_price || product.giaNhap || 0;
-                            const name = product.name || product.tenSP || '';
+                            const isVariant = isImportVariantProduct(product, product.parent || null);
+                            const name = isVariant ? getProductDisplayName(product, product.parent || null) : (product.name || product.tenSP || '');
                             const sku = product.sku || product.maSP || '';
                             const unit = product.unit || product.donVi || 'cái';
                             const categoryName = product.default_category?.name || product.category || '';
-                            const parentName = product.parent_name || product.parent?.name || '';
+                            const parentName = !isVariant ? (product.parent_name || product.parent?.name || '') : '';
                             const availableQuantity = getProductAvailableQuantity(product);
                             return (
                               <div

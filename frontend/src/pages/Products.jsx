@@ -1,6 +1,6 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { API } from '../App';
-import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown, Printer } from 'lucide-react';
+import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown, Printer, Ban } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ProductLabelPrintModal from '../components/ProductLabelPrintModal';
 import ExcelImportPanel from '../components/ExcelImportPanel';
@@ -63,6 +63,51 @@ const EMPTY_VARIANT_FORM = Object.freeze({
 
 const createProductFormInitial = (overrides = {}) => ({ ...EMPTY_PRODUCT_FORM, ...overrides });
 const createVariantFormInitial = (overrides = {}) => ({ ...EMPTY_VARIANT_FORM, ...overrides });
+
+const stripInventoryFields = (data = {}) => {
+  const {
+    stock,
+    quantity,
+    inventory,
+    available_quantity,
+    availableQuantity,
+    so_luong,
+    soLuong,
+    ton_kho,
+    tonKho,
+    tonkho,
+    ...safeData
+  } = data || {};
+  return safeData;
+};
+
+const LockedStockField = memo(function LockedStockField({ value, className = '' }) {
+  const displayValue = value === undefined || value === null || value === '' ? '0' : value;
+  return (
+    <div className={className} title="Tồn kho chỉ được cập nhật qua nghiệp vụ Nhập hàng">
+      <label className="text-xs text-gray-500 flex items-center gap-1">
+        Tồn kho <Ban size={13} className="text-red-500" aria-hidden="true" />
+      </label>
+      <div className="group relative cursor-not-allowed">
+        <input
+          type="text"
+          className="input-field w-full cursor-not-allowed bg-gray-100 pr-9 text-gray-500 caret-transparent"
+          value={displayValue}
+          readOnly
+          aria-readonly="true"
+          tabIndex={-1}
+          onKeyDown={e => e.preventDefault()}
+          onPointerDown={e => e.preventDefault()}
+          placeholder="tồn kho"
+        />
+        <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-red-500 transition group-hover:scale-110" aria-hidden="true">
+          <Ban size={18} />
+        </span>
+      </div>
+      <p className="mt-0.5 text-[10px] text-red-500">Chỉ cập nhật qua Nhập hàng.</p>
+    </div>
+  );
+});
 
 // Tạo SKU mới gồm đúng 5 chữ số, mỗi chữ số từ 1-9 và không có tiền tố chữ.
 const random5Digits = () => Array.from({ length: 5 }, () => String(Math.floor(Math.random() * 9) + 1)).join('');
@@ -179,7 +224,7 @@ const ProductFormModal = memo(function ProductFormModal({
             <div><label className="text-xs text-gray-500">Giá VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="giá VIP" /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="text-xs text-gray-500">Tồn kho</label><input type="number" className="input-field" value={form.stock} onChange={e => updateField('stock', e.target.value)} placeholder="tồn kho" /></div>
+            <LockedStockField value={form.stock} />
             <div><label className="text-xs text-gray-500">Đơn vị tính</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="đơn vị tính" /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -300,7 +345,7 @@ const VariantFormModal = memo(function VariantFormModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div><label className="text-xs text-gray-500">Giá sỉ</label><input type="number" className="input-field" value={form.wholesale_price} onChange={e => updateField('wholesale_price', e.target.value)} placeholder="giá sỉ" /></div>
             <div><label className="text-xs text-gray-500">Giá VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="giá VIP" /></div>
-            <div><label className="text-xs text-gray-500">Tồn kho</label><input type="number" className="input-field" value={form.stock} onChange={e => updateField('stock', e.target.value)} placeholder="tồn kho" /></div>
+            <LockedStockField value={form.stock} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -1434,7 +1479,7 @@ export default function Products({ store }) {
       const method = currentEditing ? 'PUT' : 'POST';
       const url = currentEditing ? `${API}/products/${currentEditing.id}` : `${API}/products`;
       const payload = {
-        ...nextForm,
+        ...stripInventoryFields(nextForm),
         sku: nextSku,
         category: String(nextForm.category || '').trim(),
       };
@@ -1525,7 +1570,7 @@ export default function Products({ store }) {
       const url = currentEditingVariant
         ? `${API}/products/variants/${currentEditingVariant.id}`
         : `${API}/products/${variantParent.id}/variants`;
-      const variantPayload = { ...nextVariantForm };
+      const variantPayload = stripInventoryFields(nextVariantForm);
       delete variantPayload.sku;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
