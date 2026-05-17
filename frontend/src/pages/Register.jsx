@@ -58,14 +58,14 @@ export default function Register({ onLogin, bootstrapStatus }) {
 
     if (isFirstAccount) {
       return {
-        title: 'Đăng ký tài khoản đầu tiên',
-        description: 'Tài khoản đầu tiên sẽ được server tự động cấp quyền ADMIN',
+        title: 'Đăng ký tài khoản ',
+        description: 'Chào Mừng Bạn Đến Hệ Thống Đăng Ký Tài Khoản Của Phần Mềm',
       };
     }
 
     return {
-      title: 'Đăng ký tài khoản người dùng',
-      description: 'Hệ thống đã có tài khoản, tài khoản mới sẽ là USER',
+      title: 'Đăng ký tài khoản',
+      description: 'Chào Mừng Bạn Đến Hệ Thống Đăng Ký Tài Khoản Của Phần Mềm',
     };
   }, [checkingSetup, isFirstAccount]);
 
@@ -129,7 +129,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
     }
 
     if (form.name.trim().length < 2) {
-      setError('Họ và tên phải có ít nhất 2 ký tự.');
+      setError('Họ và tên phải có ít nhất 8 ký tự.');
       return false;
     }
 
@@ -149,7 +149,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
     }
 
     if (!/^0\d{9,10}$/.test(normalizePhone(form.phone))) {
-      setError('Số điện thoại phải bắt đầu bằng 0 và gồm 10-11 chữ số.');
+      setError('Số điện thoại phải bắt đầu bằng 0 và gồm 10 chữ số.');
       return false;
     }
 
@@ -248,18 +248,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
 
         {!checkingSetup && (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className={`${isFirstAccount ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-blue-50 border-blue-200 text-blue-700'} border rounded-xl px-4 py-3 text-sm flex items-start gap-2`}>
-              <Info size={18} className="shrink-0 mt-0.5" />
-              <div>
-                <div className="font-semibold">Server tự quyết định quyền tài khoản.</div>
-                <div>
-                  {isFirstAccount
-                    ? 'Database chưa có user nào: tài khoản này sẽ được cấp quyền ADMIN.'
-                    : 'Hệ thống đã có user/admin: tài khoản đăng ký mới sẽ mặc định là USER.'}
-                </div>
-                <div className="mt-1 text-xs opacity-80">Form đăng ký không gửi và không cho chọn role từ client.</div>
-              </div>
-            </div>
+            
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -269,7 +258,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                 type="text"
                 value={form.name}
                 onChange={event => set('name', event.target.value)}
-                placeholder="VD: Nguyễn Văn A"
+                placeholder="vankhadev07"
                 className="input-field w-full pl-4"
                 autoComplete="name"
                 disabled={submitDisabled}
@@ -285,7 +274,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                 type="email"
                 value={form.email}
                 onChange={event => set('email', event.target.value)}
-                placeholder="nguyenvana@cuahang.com"
+                placeholder="vankhaqc@gmail.com"
                 className="input-field w-full pl-4"
                 autoComplete="email"
                 disabled={submitDisabled}
@@ -301,7 +290,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                 type="tel"
                 value={form.phone}
                 onChange={event => set('phone', event.target.value)}
-                placeholder="0909 123 456"
+                placeholder="0904 045 075"
                 className="input-field w-full pl-4"
                 autoComplete="tel"
                 disabled={submitDisabled}
@@ -318,7 +307,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                   type={showPass ? 'text' : 'password'}
                   value={form.password}
                   onChange={event => set('password', event.target.value)}
-                  placeholder="Tối thiểu 6 ký tự"
+                  placeholder="Vui Lòng Nhập Mật Khẩu"
                   className="input-field w-full pl-4 pr-10"
                   autoComplete="new-password"
                   disabled={submitDisabled}
@@ -345,7 +334,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                   type={showConfirm ? 'text' : 'password'}
                   value={form.confirmPassword}
                   onChange={event => set('confirmPassword', event.target.value)}
-                  placeholder="Nhập lại mật khẩu"
+                  placeholder="Nhập Mật Khẩu Xác Nhận"
                   className="input-field w-full pl-4 pr-10"
                   autoComplete="new-password"
                   disabled={submitDisabled}
@@ -371,9 +360,9 @@ export default function Register({ onLogin, bootstrapStatus }) {
               {loading ? (
                 <><RefreshCw size={20} className="animate-spin" /> Đang đăng ký...</>
               ) : isFirstAccount ? (
-                <><ShieldCheck size={20} /> Đăng ký ADMIN đầu tiên</>
+                <><ShieldCheck size={20} /> Đăng ký</>
               ) : (
-                <><UserPlus size={20} /> Đăng ký USER</>
+                <><UserPlus size={20} /> Đăng ký </>
               )}
             </button>
           </form>
@@ -383,19 +372,6 @@ export default function Register({ onLogin, bootstrapStatus }) {
           <Link to="/" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium">
             <ArrowLeft size={14} /> Quay lại đăng nhập
           </Link>
-        </div>
-
-        <div className="mt-4 bg-gray-50 rounded-xl p-4 text-xs text-gray-600">
-          <div className="font-semibold mb-1">📌 Trạng thái quyền đăng ký:</div>
-          {checkingSetup ? (
-            <div>Đang tải trạng thái từ server...</div>
-          ) : (
-            <div className="space-y-1">
-              <div>{currentBootstrapStatus.message}</div>
-              <div>Tổng user hiện có: {currentBootstrapStatus.totalUsers}. Đã có admin: {currentBootstrapStatus.hasAdmin ? 'Có' : 'Chưa'}.</div>
-              <div>Quyền dự kiến cho tài khoản mới: <span className="font-bold">{nextRole}</span>.</div>
-            </div>
-          )}
         </div>
       </div>
     </div>

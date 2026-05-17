@@ -1,9 +1,9 @@
 {
-  "version": "1.2.4",
-  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.2.4/BanHangOffline-Setup-v1.2.4.exe",
+  "version": "1.2.5",
+  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.2.5/BanHangOffline-Setup-v1.2.5.exe",
   "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "releaseNotes": "- Ví dụ manifest production phát hành qua GitHub Release public Vankhadev/phanmemoffline.\n- SHA256 phải khớp tuyệt đối với installer đã upload.",
-  "releaseDate": "2026-05-09T00:00:00.000Z",
+  "releaseDate": "2026-05-17T00:00:00.000Z",
   "platform": "win32",
   "arch": "x64",
   "size": 0,

@@ -68,7 +68,7 @@ jobs:
         run: |
           $version = '${{ steps.version.outputs.version }}'
           $tag = '${{ steps.version.outputs.tag }}'
-          $installer = "release/BanHangOffline-Setup-v$version.exe"
+          $installer = "release/vankhadev-setup-v$version.exe"
           $blockmap = "$installer.blockmap"
           $latest = 'release/latest.yml'
           $manifest = 'release/update-manifest.json'
@@ -83,7 +83,7 @@ jobs:
           if ($latestContent -notmatch "(?m)^version:\s*$([regex]::Escape($version))\s*$") {
             throw "latest.yml does not contain expected version $version"
           }
-          if ($latestContent -notmatch "BanHangOffline-Setup-v$([regex]::Escape($version))\.exe") {
+          if ($latestContent -notmatch "vankhadev-setup-v$([regex]::Escape($version))\.exe") {
             throw "latest.yml does not reference installer for version $version"
           }
           if ($latestContent -notmatch "(?m)^sha512:\s*\S+") {
@@ -94,7 +94,7 @@ jobs:
           if ([string]$manifestJson.version -ne $version) {
             throw "update-manifest.json version '$($manifestJson.version)' does not match package version '$version'"
           }
-          if ([string]$manifestJson.url -notmatch "/releases/download/$([regex]::Escape($tag))/BanHangOffline-Setup-v$([regex]::Escape($version))\.exe$") {
+          if ([string]$manifestJson.url -notmatch "/releases/download/$([regex]::Escape($tag))/vankhadev-setup-v$([regex]::Escape($version))\.exe$") {
             throw "update-manifest.json URL does not point to release tag $tag and installer version $version"
           }
 
@@ -122,8 +122,8 @@ jobs:
           generate_release_notes: true
           make_latest: true
           files: |
-            release/BanHangOffline-Setup-v${{ steps.version.outputs.version }}.exe
-            release/BanHangOffline-Setup-v${{ steps.version.outputs.version }}.exe.blockmap
+            release/vankhadev-setup-v${{ steps.version.outputs.version }}.exe
+            release/vankhadev-setup-v${{ steps.version.outputs.version }}.exe.blockmap
             release/latest.yml
             release/update-manifest.json
         env:
@@ -137,8 +137,8 @@ jobs:
           $urls = @(
             "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/latest.yml",
             "https://github.com/Vankhadev/phanmemoffline/releases/download/$tag/latest.yml",
-            "https://github.com/Vankhadev/phanmemoffline/releases/download/$tag/BanHangOffline-Setup-v$version.exe",
-            "https://github.com/Vankhadev/phanmemoffline/releases/download/$tag/BanHangOffline-Setup-v$version.exe.blockmap"
+            "https://github.com/Vankhadev/phanmemoffline/releases/download/$tag/vankhadev-setup-v$version.exe",
+            "https://github.com/Vankhadev/phanmemoffline/releases/download/$tag/vankhadev-setup-v$version.exe.blockmap"
           )
 
           foreach ($url in $urls) {

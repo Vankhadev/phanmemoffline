@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate, } from 'react-router-dom';
 import Home from './pages/Home';
-import POS from './pages/POS';
 import CreateOrder from './pages/CreateOrder';
 import NhaCungCap from './pages/nhacungcap';
 import Products from './pages/Products';
@@ -19,7 +18,7 @@ import ProductReport from './pages/ProductReport';
 import CashBook from './pages/CashBook';
 import Payroll from './pages/Payroll';
 import PrintTemplates from './pages/PrintTemplates';
-import SanThuongMaiDienTu from './pages/santhuongmaidientu';
+import KeyBangQuyen from './pages/keybangquyen';
 import {
   BadgeDollarSign,
   BarChart3,
@@ -35,6 +34,7 @@ import {
   PlusCircle,
   Printer,
   Settings as SettingsIcon,
+  ShieldCheck,
   ShoppingCart,
   Sliders,
   Truck,
@@ -44,20 +44,22 @@ import {
   X,
 } from 'lucide-react';
 import {
-  API_BASE,
   AUTH_EXPIRED_EVENT,
   SYNC_CHECK_REQUEST_EVENT,
   SYNC_UPDATED_EVENT,
   authApi,
+  getApiBase,
   getApiErrorMessage,
+  licenseApi,
   persistAuthenticatedPayload,
   persistAuthSnapshot,
   pullServerBootstrapData,
   pushPendingLocalData,
 } from './utils/apiClient';
 import { clearAuthSession, clearVolatileCache, getAuthToken, normalizePermissions } from './utils/authStorage';
+import { clearStoredLicense, getStoredLicense, getStoredLicenseDaysRemaining, isStoredLicenseStillValid, saveStoredLicense } from './utils/licenseStorage';
 
-export const API = API_BASE;
+export const API = getApiBase();
 
 const MOBILE_ROUTE_PREFIX = '/mobile';
 
@@ -97,16 +99,6 @@ const SYNC_POLL_BACKGROUND_INTERVAL_MS = 30000;
 const SYNC_POLL_OFFLINE_INTERVAL_MS = 30000;
 const SYNC_POLL_BACKOFF_MAX_MS = 60000;
 
-function SapoProductSync() {
-  return (
-    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800 shadow-sm">
-      <div className="text-base font-bold">Đồng bộ sản phẩm Sapo chưa khả dụng</div>
-      <p className="mt-1 text-sm">
-        Route này đang được giữ để desktop web không lỗi build, nhưng file trang SapoProductSync hiện không còn trong workspace.
-      </p>
-    </div>
-  );
-}
 
 function matchesMediaQuery(query, fallback = false) {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return fallback;
@@ -149,7 +141,6 @@ function getCurrentHashRoute() {
 
 const ROUTE_PERMISSIONS = {
   [HOME_ROUTE]: [],
-  '/pos': ['invoices.manage'],
   '/tao-don-hang': ['invoices.manage'],
   '/danh-sach-don-hang': ['invoices.read'],
   '/kho-hang': ['products.read'],
@@ -165,8 +156,10 @@ const ROUTE_PERMISSIONS = {
   '/bao-cao-theo-san-pham': ['stats.read'],
   '/cai-dat': ['settings.read', 'store.read', 'users.read'],
   '/mau-in': ['print_templates.read'],
-  '/dong-bo-san-pham': ['products.manage'],
-  "/san-thuong-mai-dien-tu": ['']
+  '/key-bang-quyen': ['settings.manage'],
+  '/admin-ban-quyen': [],
+
+  
 
 };
 
@@ -199,6 +192,9 @@ function hasAnyPermission(user, permissions, required = []) {
 
 function canAccessRoute(route, user, permissions) {
   if (!user || !isKnownAppRoute(route)) return false;
+  if (route === '/admin-ban-quyen') {
+    return hasAnyPermission(user, permissions, ['licenses.manage', 'features.manage', 'updates.manage', 'users.manage']);
+  }
   const required = ROUTE_PERMISSIONS[route] || [];
   return hasAnyPermission(user, permissions, required);
 }
@@ -255,6 +251,115 @@ function FullScreenLoading({ message = 'Đang khởi tạo ứng dụng...' }) {
         <div className="mt-2 text-sm text-gray-500">{message}</div>
       </div>
     </div>
+  );
+}
+
+function LicenseActivationGate({ children }) {
+  const [checking, setChecking] = useState(true);
+  const [license, setLicense] = useState(() => getStoredLicense());
+  const [status, setStatus] = useState(() => (isStoredLicenseStillValid() ? 'active' : 'missing'));
+  const [keyInput, setKeyInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const applyLicense = useCallback((nextLicense) => {
+    if (nextLicense && nextLicense.status === 'active' && nextLicense.expires_at) {
+      const saved = saveStoredLicense(nextLicense);
+      setLicense(saved || nextLicense);
+      setStatus('active');
+      setError('');
+      return;
+    }
+    clearStoredLicense();
+    setLicense(null);
+    setStatus(nextLicense?.status === 'expired' ? 'expired' : 'missing');
+  }, []);
+
+  const checkLicense = useCallback(async () => {
+    setChecking(true);
+    try {
+      const data = await licenseApi.status();
+      if (data?.activated && data?.license) applyLicense(data.license);
+      else applyLicense(null);
+    } catch (err) {
+      const stored = getStoredLicense();
+      if (isStoredLicenseStillValid(stored)) {
+        setLicense(stored);
+        setStatus('active');
+      } else {
+        clearStoredLicense();
+        setLicense(null);
+        setStatus(stored?.expires_at ? 'expired' : 'missing');
+      }
+    } finally {
+      setChecking(false);
+    }
+  }, [applyLicense]);
+
+  useEffect(() => {
+    checkLicense();
+  }, [checkLicense]);
+
+  const handleActivate = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      const data = await licenseApi.activate({
+        key: keyInput,
+        device_name: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      });
+      if (!data?.ok || !data?.license) throw new Error(getApiErrorMessage(data, 'Kích hoạt key thất bại.'));
+      applyLicense(data.license);
+      setKeyInput('');
+    } catch (err) {
+      setError(getApiErrorMessage(err?.data, err?.message || 'Kích hoạt key thất bại.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const locked = status !== 'active' || !isStoredLicenseStillValid(license);
+  const expired = status === 'expired' || (license?.expires_at && !isStoredLicenseStillValid(license));
+  const daysRemaining = getStoredLicenseDaysRemaining(license);
+
+  if (checking) return <FullScreenLoading message="Đang kiểm tra key bản quyền..." />;
+
+  return (
+    <>
+      {children}
+      {!locked && license && (
+        <div className="fixed bottom-3 right-3 z-40 max-w-xs rounded-xl border border-green-200 bg-white/95 p-3 text-xs text-gray-700 shadow-lg backdrop-blur">
+          <div className="font-semibold text-green-700">Phần mềm đã kích hoạt</div>
+          <div>Ngày kích hoạt: {license.activated_at ? new Date(license.activated_at).toLocaleDateString('vi-VN') : '—'}</div>
+          <div>Ngày hết hạn: {license.expires_at ? new Date(license.expires_at).toLocaleDateString('vi-VN') : '—'}</div>
+          <div>Còn lại: {daysRemaining} ngày</div>
+        </div>
+      )}
+      {locked && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-950/80 p-4 backdrop-blur-sm">
+          <form onSubmit={handleActivate} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="text-center text-xl font-bold text-gray-900">Kích hoạt phần mềm</div>
+            <p className="mt-3 text-center text-sm font-medium text-gray-700">
+              {expired
+                ? 'Key của bạn đã hết hạn, vui lòng liên hệ nhà cung cấp để mua key'
+                : 'Vui lòng nhập key để kích hoạt phần mềm. Chưa có key vui lòng liên hệ Zalo 0904 045 075 để lấy key'}
+            </p>
+            <input
+              value={keyInput}
+              onChange={event => setKeyInput(event.target.value)}
+              autoFocus
+              placeholder="Nhập key bản quyền"
+              className="mt-5 h-12 w-full rounded-xl border border-gray-300 px-4 text-center font-mono text-sm uppercase outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+            {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+            <button type="submit" disabled={submitting || !keyInput.trim()} className="mt-4 h-12 w-full rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+              {submitting ? 'Đang kích hoạt...' : 'Kích hoạt'}
+            </button>
+          </form>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -353,7 +458,7 @@ function AppLayout({
           { to: '/kho-hang', label: 'Kho hàng', icon: Warehouse },
           { to: '/khach-hang', label: 'Khách hàng', icon: Users },
           { to: '/nhap-hang', label: 'Nhập hàng', icon: ShoppingCart },
-          { to: '/nha-cung-cap', label: 'Nhà cung cấp', icon: Truck },
+          { to: '/nha-cung-cap', label: 'Đối Tác', icon: Truck },
         ],
       },
       {
@@ -367,15 +472,16 @@ function AppLayout({
           { to: '/bao-cao-theo-san-pham', label: 'Báo cáo sản phẩm', icon: Boxes },
           { to: '/bang-luong-nhan-vien', label: 'Bảng lương nhân viên', icon: BadgeDollarSign },
           { to: '/cai-dat', label: 'Cài đặt', icon: SettingsIcon },
-          { to: '/mau-in', label: 'Mẫu in', icon: Printer },
+          { to: '/hoa-don', label: 'Hóa đơn', icon: Printer },
         ],
       },
       {
-        key: 'khác',
-        label: 'Khác',
+        key: 'quan_tri_he_thong',
+        label: 'Quản trị hệ thống',
         icon: SettingsIcon,
         items: [
-          { to: '/san-thuong-mai-dien-tu', label: 'Sàn TMDT', icon: BarChart3 },
+          { to: '/admin-ban-quyen', label: 'Bản quyền & khách hàng', icon: ShieldCheck },
+          { to: '/key-bang-quyen', label: 'Key bản quyền', icon: BarChart3 },
         ],
       },
     ];
@@ -437,7 +543,7 @@ function AppLayout({
             {sidebarOpen ? (
               <div className="min-w-0">
                 <div className="truncate text-xs font-bold text-gray-300">{storeDisplayName}</div>
-                <div className="truncate text-xs text-blue-400">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.2.4'}</div>
+                <div className="truncate text-xs text-yellow-600">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.2.5'}</div>
               </div>
             ) : (
               <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white md:flex">
@@ -562,7 +668,6 @@ function AppLayout({
         <div className="app-main-scroll flex-1 min-h-0 min-w-0 overflow-x-auto overflow-y-auto p-3 sm:p-4">
           <Routes>
             <Route path={HOME_ROUTE} element={<Home user={user} store={store} />} />
-            <Route path="/pos" element={<ProtectedRoute user={user} permissions={permissions} path="/pos"><POS user={user} store={store} /></ProtectedRoute>} />
             <Route path="/tao-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/tao-don-hang"><CreateOrder user={user} store={store} /></ProtectedRoute>} />
             <Route path="/danh-sach-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/danh-sach-don-hang"><OrderList store={store} /></ProtectedRoute>} />
             <Route path="/kho-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/kho-hang"><KhoHang /></ProtectedRoute>} />
@@ -573,13 +678,12 @@ function AppLayout({
             <Route path="/thong-ke" element={<ProtectedRoute user={user} permissions={permissions} path="/thong-ke"><Stats /></ProtectedRoute>} />
             <Route path="/so-quy" element={<ProtectedRoute user={user} permissions={permissions} path="/so-quy"><CashBook /></ProtectedRoute>} />
             <Route path="/bang-luong-nhan-vien" element={<ProtectedRoute user={user} permissions={permissions} path="/bang-luong-nhan-vien"><Payroll /></ProtectedRoute>} />
-            <Route path="/bao-cao-thu-e" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-thu-e"><Reports /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><CustomerOrderReport /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ProductReport /></ProtectedRoute>} />
             <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><Settings store={store} /></ProtectedRoute>} />
             <Route path="/mau-in" element={<ProtectedRoute user={user} permissions={permissions} path="/mau-in"><PrintTemplates store={store} /></ProtectedRoute>} />
-            <Route path="/dong-bo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/dong-bo-san-pham"><SapoProductSync /></ProtectedRoute>} />
-            <Route path="/san-thuong-mai-dien-tu" element={<ProtectedRoute user={user} permissions={permissions} path="/san-thuong-mai-dien-tu"><SanThuongMaiDienTu store={store} /></ProtectedRoute>} />
+            <Route path="/admin-ban-quyen" element={<ProtectedRoute user={user} permissions={permissions} path="/admin-ban-quyen"><KeyBangQuyen /></ProtectedRoute>} />
+            <Route path="/key-bang-quyen" element={<ProtectedRoute user={user} permissions={permissions} path="/key-bang-quyen"><KeyBangQuyen /></ProtectedRoute>} />
             <Route path={LOGIN_REGISTER_ROUTE} element={<Navigate to={firstAccessibleRoute(user, permissions)} replace />} />
             {Object.entries(ROUTE_ALIASES).map(([from, to]) => (
               <Route key={from} path={from} element={<Navigate to={canAccess(to) ? to : firstAccessibleRoute(user, permissions)} replace />} />
@@ -888,7 +992,7 @@ function DesktopApp() {
   }, [loadBootstrapStatus, resetAuthState]);
 
   if (initializing) {
-    return <FullScreenLoading message="Đang khôi phục phiên từ server..." />;
+    return <FullScreenLoading message="Đang Loading Lại Trang ..." />;
   }
 
   return (
@@ -899,17 +1003,19 @@ function DesktopApp() {
           <Route path="*" element={<Login onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} onBootstrapStatus={setBootstrapStatus} />} />
         </Routes>
       ) : (
-        <AppLayout
-          authState={authState}
-          user={authState.user}
-          store={store}
-          setStore={setStore}
-          sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
-          onLogout={handleLogout}
-          redirectPath={redirectPath}
-          onRedirected={() => setRedirectPath('')}
-        />
+        <LicenseActivationGate>
+          <AppLayout
+            authState={authState}
+            user={authState.user}
+            store={store}
+            setStore={setStore}
+            sidebarOpen={sidebarOpen}
+            setSidebarOpen={setSidebarOpen}
+            onLogout={handleLogout}
+            redirectPath={redirectPath}
+            onRedirected={() => setRedirectPath('')}
+          />
+        </LicenseActivationGate>
       )}
     </HashRouter>
   );

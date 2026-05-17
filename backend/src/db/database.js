@@ -57,6 +57,12 @@ const SCHEMA = {
   sapo_sync_runs: [],
   excel_import_runs: [],
   excel_import_details: [],
+  license_customers: [],
+  license_keys: [],
+  license_events: [],
+  feature_catalog: [],
+  feature_entitlements: [],
+  update_releases: [],
 };
 
 const INITIAL_NEXT_ID = {
@@ -67,7 +73,8 @@ const INITIAL_NEXT_ID = {
   return_logs: 1, return_details: 1,
   bot_settings: 1, bot_alerts: 1, customer_types: 1, counters: 1,
   cash_book: 1, payrolls: 1, print_templates: 1, sapo_settings: 1, sapo_sync_runs: 1,
-  excel_import_runs: 1, excel_import_details: 1,
+  excel_import_runs: 1, excel_import_details: 1, license_customers: 1, license_keys: 1, license_events: 1,
+  feature_catalog: 1, feature_entitlements: 1, update_releases: 1,
 };
 
 const DEFAULT_ACCOUNT_SLUG = 'default';
@@ -82,6 +89,14 @@ const ACCOUNT_SCOPED_TABLES = new Set([
 ]);
 
 const DEFAULT_PERMISSIONS = [
+  ['admin_panel.read', 'Xem bảng quản trị', 'Truy cập và xem khu vực quản trị hệ thống'],
+  ['admin_panel.manage', 'Quản lý bảng quản trị', 'Quản lý các cấu hình và tác vụ cấp quản trị'],
+  ['licenses.read', 'Xem bản quyền', 'Xem khách hàng mua phần mềm và license key'],
+  ['licenses.manage', 'Quản lý bản quyền', 'Tạo, sửa, khóa, gia hạn và xóa license key'],
+  ['features.read', 'Xem tính năng', 'Xem danh mục tính năng và quyền tính năng của khách hàng'],
+  ['features.manage', 'Quản lý tính năng', 'Tạo, sửa tính năng và bật/tắt quyền tính năng'],
+  ['updates.read', 'Xem bản cập nhật', 'Xem metadata bản cập nhật phần mềm'],
+  ['updates.manage', 'Quản lý bản cập nhật', 'Tạo, sửa và phát hành metadata bản cập nhật'],
   ['users.read', 'Xem tài khoản', 'Xem danh sách và hồ sơ tài khoản trong cửa hàng'],
   ['users.manage', 'Quản lý tài khoản', 'Tạo, sửa, khóa tài khoản và vai trò'],
   ['store.read', 'Xem cấu hình cửa hàng', 'Xem thông tin cửa hàng'],
@@ -1143,6 +1158,53 @@ function ensureSyncMetadataForAccounts() {
   return changed;
 }
 
+function seedDefaultAdmin(defaultAccountId) {
+  let changed = false;
+  if (!Array.isArray(db.users)) {
+    db.users = [];
+    changed = true;
+  }
+  if (!nextId.users) nextId.users = 1;
+
+  const adminEmail = 'vankhaqc@gmail.com';
+  const time = now();
+  let admin = db.users.find(user => String(user?.email || '').trim().toLowerCase() === adminEmail);
+  if (!admin) {
+    admin = {
+      id: nextId.users++,
+      account_id: defaultAccountId || null,
+      name: 'Admin bản quyền',
+      email: adminEmail,
+      phone: '',
+      password: hashPassword('Vankhammo07@2026'),
+      role: 'admin',
+      permissions: [],
+      approved: 1,
+      active: 1,
+      session_token: null,
+      created_at: time,
+      updated_at: time,
+      server_updated_at: time,
+      sync_version: 1,
+    };
+    db.users.push(admin);
+    return true;
+  }
+
+  if (!admin.account_id && defaultAccountId) { admin.account_id = defaultAccountId; changed = true; }
+  if (!admin.name) { admin.name = 'Admin bản quyền'; changed = true; }
+  if (admin.role !== 'admin') { admin.role = 'admin'; changed = true; }
+  if (admin.approved !== 1) { admin.approved = 1; changed = true; }
+  if (admin.active !== 1) { admin.active = 1; changed = true; }
+  if (!Array.isArray(admin.permissions)) { admin.permissions = []; changed = true; }
+  if (!admin.password) { admin.password = hashPassword('Vankhammo07@2026'); changed = true; }
+  if (!admin.created_at) { admin.created_at = time; changed = true; }
+  if (!admin.updated_at) { admin.updated_at = time; changed = true; }
+  if (!admin.server_updated_at) { admin.server_updated_at = admin.updated_at || time; changed = true; }
+  if (!admin.sync_version) { admin.sync_version = 1; changed = true; }
+  return changed;
+}
+
 function ensureAuthAndSyncSchema() {
   let changed = false;
   const result = ensureDefaultAccount();
@@ -1150,6 +1212,7 @@ function ensureAuthAndSyncSchema() {
   if (result.changed) changed = true;
   if (seedDefaultPermissions()) changed = true;
   if (seedDefaultRolePermissions()) changed = true;
+  if (seedDefaultAdmin(defaultAccount.id)) changed = true;
   if (normalizeAccountScopedRows(defaultAccount.id)) changed = true;
   if (ensureSyncMetadataForAccounts()) changed = true;
   return changed;
@@ -1173,6 +1236,106 @@ function normalizeDBData() {
   if (ensureAuthAndSyncSchema()) changed = true;
   if (ensureSapoMetadataSchema()) changed = true;
   if (ensureMobileSchema()) changed = true;
+
+  if (!Array.isArray(db.license_customers)) { db.license_customers = []; changed = true; }
+  if (!Array.isArray(db.license_keys)) { db.license_keys = []; changed = true; }
+  if (!Array.isArray(db.license_events)) { db.license_events = []; changed = true; }
+  if (!Array.isArray(db.feature_catalog)) { db.feature_catalog = []; changed = true; }
+  if (!Array.isArray(db.feature_entitlements)) { db.feature_entitlements = []; changed = true; }
+  if (!Array.isArray(db.update_releases)) { db.update_releases = []; changed = true; }
+  if (!nextId.license_customers) { nextId.license_customers = 1; changed = true; }
+  if (!nextId.license_keys) { nextId.license_keys = 1; changed = true; }
+  if (!nextId.license_events) { nextId.license_events = 1; changed = true; }
+  if (!nextId.feature_catalog) { nextId.feature_catalog = 1; changed = true; }
+  if (!nextId.feature_entitlements) { nextId.feature_entitlements = 1; changed = true; }
+  if (!nextId.update_releases) { nextId.update_releases = 1; changed = true; }
+
+  for (const licenseCustomer of db.license_customers) {
+    if (!licenseCustomer.name) { licenseCustomer.name = 'Khách hàng'; changed = true; }
+    if (licenseCustomer.phone === undefined) { licenseCustomer.phone = ''; changed = true; }
+    if (licenseCustomer.zalo === undefined) { licenseCustomer.zalo = licenseCustomer.phone || ''; changed = true; }
+    if (licenseCustomer.email === undefined) { licenseCustomer.email = ''; changed = true; }
+    if (licenseCustomer.address === undefined) { licenseCustomer.address = ''; changed = true; }
+    if (licenseCustomer.full_name === undefined) { licenseCustomer.full_name = licenseCustomer.name || 'Khách hàng'; changed = true; }
+    if (licenseCustomer.status === undefined) { licenseCustomer.status = licenseCustomer.active === 0 ? 'inactive' : 'active'; changed = true; }
+    if (licenseCustomer.purchase_date === undefined) { licenseCustomer.purchase_date = licenseCustomer.created_at || null; changed = true; }
+    if (licenseCustomer.notes === undefined) { licenseCustomer.notes = licenseCustomer.note || ''; changed = true; }
+    if (licenseCustomer.note === undefined) { licenseCustomer.note = licenseCustomer.notes || ''; changed = true; }
+    if (licenseCustomer.active === undefined) { licenseCustomer.active = licenseCustomer.status === 'inactive' ? 0 : 1; changed = true; }
+    if (!licenseCustomer.created_at) { licenseCustomer.created_at = now(); changed = true; }
+    if (!licenseCustomer.updated_at) { licenseCustomer.updated_at = licenseCustomer.created_at; changed = true; }
+  }
+
+  for (const licenseKey of db.license_keys) {
+    if (licenseKey.customer_id === undefined) { licenseKey.customer_id = null; changed = true; }
+    if (licenseKey.customer_name === undefined) { licenseKey.customer_name = ''; changed = true; }
+    if (licenseKey.customer_phone === undefined) { licenseKey.customer_phone = ''; changed = true; }
+    if (licenseKey.customer_zalo === undefined) { licenseKey.customer_zalo = licenseKey.customer_phone || ''; changed = true; }
+    if (licenseKey.customer_email === undefined) { licenseKey.customer_email = ''; changed = true; }
+    if (licenseKey.software_name === undefined) { licenseKey.software_name = 'Phần mềm bán hàng offline'; changed = true; }
+    if (licenseKey.package_name === undefined) { licenseKey.package_name = ''; changed = true; }
+    if (licenseKey.purchase_date === undefined) { licenseKey.purchase_date = licenseKey.created_at || now(); changed = true; }
+    if (licenseKey.start_at === undefined) { licenseKey.start_at = licenseKey.activated_at || null; changed = true; }
+    if (licenseKey.creation_date === undefined) { licenseKey.creation_date = licenseKey.created_at || now(); changed = true; }
+    if (licenseKey.activation_date === undefined) { licenseKey.activation_date = licenseKey.activated_at || null; changed = true; }
+    if (licenseKey.expiration_date === undefined) { licenseKey.expiration_date = licenseKey.expires_at || null; changed = true; }
+    if (licenseKey.assigned_customer_id === undefined) { licenseKey.assigned_customer_id = licenseKey.customer_id || null; changed = true; }
+    if (licenseKey.disabled_reason === undefined) { licenseKey.disabled_reason = ''; changed = true; }
+    if (licenseKey.deleted_at === undefined) { licenseKey.deleted_at = null; changed = true; }
+    if (licenseKey.deleted_by_user_id === undefined) { licenseKey.deleted_by_user_id = null; changed = true; }
+    if (licenseKey.active === undefined) { licenseKey.active = 1; changed = true; }
+    if (!licenseKey.created_at) { licenseKey.created_at = now(); changed = true; }
+    if (!licenseKey.updated_at) { licenseKey.updated_at = licenseKey.created_at; changed = true; }
+  }
+
+  for (const licenseEvent of db.license_events) {
+    if (licenseEvent.license_key_id === undefined) { licenseEvent.license_key_id = null; changed = true; }
+    if (licenseEvent.customer_id === undefined) { licenseEvent.customer_id = null; changed = true; }
+    if (!licenseEvent.event_type) { licenseEvent.event_type = licenseEvent.action || 'note'; changed = true; }
+    if (!licenseEvent.action) { licenseEvent.action = licenseEvent.event_type || 'note'; changed = true; }
+    if (licenseEvent.user_id === undefined) { licenseEvent.user_id = null; changed = true; }
+    if (licenseEvent.message === undefined) { licenseEvent.message = ''; changed = true; }
+    if (licenseEvent.meta === undefined) { licenseEvent.meta = {}; changed = true; }
+    if (!licenseEvent.created_at) { licenseEvent.created_at = now(); changed = true; }
+  }
+
+  for (const feature of db.feature_catalog) {
+    if (!feature.key) { feature.key = `feature_${feature.id || nextId.feature_catalog}`; changed = true; }
+    feature.key = String(feature.key).trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, '_');
+    if (!feature.name) { feature.name = feature.key; changed = true; }
+    if (feature.description === undefined) { feature.description = ''; changed = true; }
+    if (feature.active === undefined) { feature.active = 1; changed = true; }
+    if (!feature.created_at) { feature.created_at = now(); changed = true; }
+    if (!feature.updated_at) { feature.updated_at = feature.created_at; changed = true; }
+  }
+
+  for (const entitlement of db.feature_entitlements) {
+    if (entitlement.customer_id === undefined) { entitlement.customer_id = null; changed = true; }
+    if (entitlement.license_key_id === undefined) { entitlement.license_key_id = null; changed = true; }
+    if (!entitlement.feature_key) { entitlement.feature_key = entitlement.key || ''; changed = true; }
+    entitlement.feature_key = String(entitlement.feature_key || '').trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, '_');
+    if (entitlement.enabled === undefined) { entitlement.enabled = 1; changed = true; }
+    if (entitlement.source === undefined) { entitlement.source = 'manual'; changed = true; }
+    if (entitlement.note === undefined) { entitlement.note = ''; changed = true; }
+    if (!entitlement.created_at) { entitlement.created_at = now(); changed = true; }
+    if (!entitlement.updated_at) { entitlement.updated_at = entitlement.created_at; changed = true; }
+  }
+
+  for (const release of db.update_releases) {
+    if (!release.version) { release.version = '0.0.0'; changed = true; }
+    if (!release.channel) { release.channel = 'stable'; changed = true; }
+    if (!release.platform) { release.platform = 'windows'; changed = true; }
+    if (!release.status) { release.status = release.active === 0 ? 'disabled' : 'published'; changed = true; }
+    if (release.release_notes === undefined) { release.release_notes = release.notes || ''; changed = true; }
+    if (release.download === undefined) { release.download = release.download_url || ''; changed = true; }
+    if (release.download_url === undefined) { release.download_url = release.download || ''; changed = true; }
+    if (release.manifest === undefined) { release.manifest = {}; changed = true; }
+    if (release.mandatory === undefined) { release.mandatory = false; changed = true; }
+    if (release.active === undefined) { release.active = release.status === 'disabled' ? 0 : 1; changed = true; }
+    if (!release.created_at) { release.created_at = now(); changed = true; }
+    if (!release.updated_at) { release.updated_at = release.created_at; changed = true; }
+    if (!release.published_at && release.status === 'published') { release.published_at = release.updated_at; changed = true; }
+  }
 
   for (const category of db.product_categories) {
     if (!category.name) { category.name = 'Danh mục'; changed = true; }

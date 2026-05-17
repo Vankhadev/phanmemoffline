@@ -1,8 +1,8 @@
-version: 1.2.4
+version: 1.2.5
 files:
-  - url: BanHangOffline-Setup-v1.2.4.exe
-    sha512: e45qcplhigcOI/jW+DQurotRoKVpMGNb/oi2zK+Vu0FYLJG/BFn20MAG/Zg7w5GfW8VKwfd8FeUmw3x+tPzBxA==
-    size: 77189922
-path: BanHangOffline-Setup-v1.2.4.exe
-sha512: e45qcplhigcOI/jW+DQurotRoKVpMGNb/oi2zK+Vu0FYLJG/BFn20MAG/Zg7w5GfW8VKwfd8FeUmw3x+tPzBxA==
-releaseDate: '2026-05-12T15:29:21.747Z'
+  - url: vankhadev-setup-v1.2.5.exe
+    sha512: EQ9bwCR53PbLIvOZiAOBuGtgz3AHlTTcJ+pBixyCquy2mAs3wGkkOqFe7Z5eIIeMD6hHuehP6VZnZfE3P2h0wA==
+    size: 77229178
+path: vankhadev-setup-v1.2.5.exe
+sha512: EQ9bwCR53PbLIvOZiAOBuGtgz3AHlTTcJ+pBixyCquy2mAs3wGkkOqFe7Z5eIIeMD6hHuehP6VZnZfE3P2h0wA==
+releaseDate: '2026-05-17T15:00:00.000Z'

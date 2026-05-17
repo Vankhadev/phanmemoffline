@@ -140,12 +140,6 @@ export default function Stats() {
           <TrendingUp className="text-green-600" size={24} /> Thống kê Doanh thu
         </h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowHelp(true)}
-            className="px-3 py-1.5 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium flex items-center gap-1"
-          >
-            <HelpCircle size={14} /> Hướng dẫn
-          </button>
           <div className="flex gap-2">
             {[['day', 'Hôm nay'], ['week', 'Tuần'], ['month', 'Tháng'], ['year', 'Năm']].map(([k, v]) => (
               <button key={k} onClick={() => setPeriod(k)}

@@ -1,6 +1,6 @@
 # Bán hàng offline - by Van kha mmo
 
-## Phiên bản hiện tại: 1.2.4
+## Phiên bản hiện tại: 1.2.5
 
 Ứng dụng hiện hỗ trợ 3 lớp triển khai chính:
 

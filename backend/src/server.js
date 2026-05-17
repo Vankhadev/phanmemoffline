@@ -31,6 +31,9 @@ const botRoutes       = require('./routes/bot');
 const customerTypesRoutes = require('./routes/customerTypes');
 const productCategoriesRoutes = require('./routes/productCategories');
 const printTemplatesRoutes = require('./routes/printTemplates');
+const licenseKeysRoutes = require('./routes/licenseKeys');
+const featuresRoutes = require('./routes/features');
+const updatesRoutes = require('./routes/updates');
 const sapoSyncRoutes = require('./routes/sapoSync');
 const excelImportsRoutes = require('./routes/excelImports');
 const mobileRoutes = require('./routes/mobile');
@@ -106,8 +109,8 @@ app.use((err, req, res, next) => {
       'Tên sản phẩm',
       'Tên cha',
       'Giá nhập',
-      'Giá sỉ',
       'Giá lẻ',
+      'Giá sỉ',
       'Giá VIP',
       'Tồn kho',
       'Đơn vị',
@@ -153,6 +156,7 @@ app.use('/api/bot',            requireAuth, requireAnyPermission(['bot.read', 'b
 app.use('/api/customer-types', requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customerTypesRoutes);
 app.use('/api/product-categories', requireAuth, requireAnyPermission(['products.read', 'products.manage']), productCategoriesRoutes);
 app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
+app.use('/api/license-keys', licenseKeysRoutes);
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);
 app.use('/api/sapo', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), sapoSyncRoutes);
 
@@ -211,7 +215,7 @@ app.get('/api/dashboard', requireAuth, requirePermission('stats.read'), (_req, r
 //  CRON: mỗi 5 phút - kiểm tra & đồng bộ daily_stats
 // ============================================================
 cron.schedule('*/5 * * * *', () => {
-  console.log('[KHA CRON]', new Date().toISOString());
+  console.log('[VANKHA CRON]', new Date().toISOString());
   const t = today();
   const { getOne } = require('./db/database');
   if (!getOne('daily_stats', s => s.stat_date === t)) {
@@ -234,14 +238,14 @@ cron.schedule('*/15 * * * *', () => {
 });
 
 // ============================================================
-//  CRON: mỗi ngày lúc 02:00 - xóa đơn hàng đã hủy cũ hơn 3 ngày
+//  CRON: mỗi ngày lúc 02:00 - xóa đơn hàng đã hủy cũ hơn 5 ngày
 // ============================================================
 cron.schedule('0 2 * * *', () => {
   console.log('[KHA CRON CLEANUP] Xóa đơn hàng cũ -', new Date().toISOString());
   const { getAll, remove } = require('./db/database');
   const invoices = getAll('invoices');
   const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - 3); // 3 ngày trước
+  cutoffDate.setDate(cutoffDate.getDate() - 5); // 5 ngày trước
 
   let deletedCount = 0;
   invoices.forEach(inv => {
@@ -253,7 +257,7 @@ cron.schedule('0 2 * * *', () => {
       }
     }
   });
-  console.log(`[KHA CRON CLEANUP] Đã xóa ${deletedCount} đơn hàng đã hủy cũ hơn 3 ngày`);
+  console.log(`[VANKHA CRON CLEANUP] Đã xóa ${deletedCount} đơn hàng đã hủy cũ hơn 5 ngày`);
 });
 
 // ============================================================

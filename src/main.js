@@ -11,6 +11,7 @@ const BACKEND_HOST = String(process.env.KHA_BACKEND_HOST || process.env.PHANMEM_
 const BACKEND_API_BASE_CHANNEL = 'kha:backend:get-api-base';
 const BACKEND_INFO_CHANNEL = 'kha:backend:get-info';
 const WINDOW_FOCUS_CHANNEL = 'kha:window:ensure-input-focus';
+const APP_USER_MODEL_ID = 'com.vankhammo.phanmienoffline';
 
 let mainWindow = null;
 let backendProcess = null;
@@ -275,6 +276,13 @@ function registerWindowFocusIpc() {
   ipcMain.handle(WINDOW_FOCUS_CHANNEL, (_event, details) => ensureMainWindowInputFocus(details));
 }
 
+function getAppIconPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'icons', 'app-icon.png');
+  }
+  return path.join(__dirname, '..', 'build', 'icon.png');
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -282,6 +290,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     show: false,
+    icon: getAppIconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -299,6 +308,10 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
   }
+}
+
+if (process.platform === 'win32') {
+  app.setAppUserModelId(APP_USER_MODEL_ID);
 }
 
 app.whenReady().then(async () => {

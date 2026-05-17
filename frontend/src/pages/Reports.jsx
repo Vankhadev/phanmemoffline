@@ -63,12 +63,6 @@ export default function Reports() {
           Báo cáo Thuế & Lợi nhuận
         </h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowHelp(true)}
-            className="px-3 py-1.5 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium flex items-center gap-1"
-          >
-            <HelpCircle size={14} /> Hướng dẫn
-          </button>
           <select
             className="input-field w-36"
             value={period}

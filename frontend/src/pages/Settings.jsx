@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { API } from '../App';
 import {
   Store, Settings2, Printer, Bot, Users,
@@ -580,7 +580,7 @@ export default function Settings({ store }) {
   const hasMobileFields = employees.some(employee => getMobileEnabledState(employee) !== null || getMobileLastLogin(employee));
 
   const desktopAvailable = Boolean(window.khaDesktop?.isElectron && window.khaDesktop?.updates);
-  const currentVersion = appInfo?.version || updateState?.currentVersion || '1.2.4';
+  const currentVersion = appInfo?.version || updateState?.currentVersion || '1.2.5';
   const updateInfo = updateState?.updateInfo || null;
   const progress = updateState?.progress || null;
   const progressPercent = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
@@ -602,12 +602,6 @@ export default function Settings({ store }) {
           <h1 className="text-xl font-bold">Cài đặt Hệ thống</h1>
           <p className="text-sm text-gray-500">Quản lý cửa hàng, nhân viên, khách hàng</p>
         </div>
-        <button
-          onClick={() => setShowHelp(true)}
-          className="px-3 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium flex items-center gap-1"
-        >
-          <HelpCircle size={16} /> Hướng dẫn
-        </button>
       </div>
 
       {/* Tab navigation */}
@@ -615,7 +609,6 @@ export default function Settings({ store }) {
         {[
           { key: 'store', icon: <Store size={16} />, label: 'Cửa hàng' },
           { key: 'employees', icon: <Users size={16} />, label: 'Nhân viên' },
-          { key: 'mobile', icon: <Smartphone size={16} />, label: 'Mobile' },
           { key: 'customer-types', icon: <Tag size={16} />, label: 'Loại khách' },
           { key: 'updates', icon: <Settings2 size={16} />, label: 'Cập nhật' },
         ].map(t => (
@@ -647,10 +640,6 @@ export default function Settings({ store }) {
               <input className="input-field w-full mt-1" value={storeForm.email}
                 onChange={e => setStoreForm({ ...storeForm, email: e.target.value })} />
             </div>
-            <div><label className="text-sm font-medium text-gray-700">Mã số thuế (MST)</label>
-              <input className="input-field w-full mt-1" value={storeForm.tax_code}
-                onChange={e => setStoreForm({ ...storeForm, tax_code: e.target.value })} />
-            </div>
             <div><label className="text-sm font-medium text-gray-700">Số tài khoản</label>
               <input className="input-field w-full mt-1" value={storeForm.bank_account}
                 onChange={e => setStoreForm({ ...storeForm, bank_account: e.target.value })} />
@@ -662,89 +651,12 @@ export default function Settings({ store }) {
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button onClick={handleSaveStore} className="btn-success flex items-center gap-1">
-              <CheckCircle size={16} />💾 Lưu thay đổi
+              <CheckCircle size={16} /> Lưu thay đổi
             </button>
             {saved && <span className="text-green-600 text-sm font-medium">✓ Đã lưu!</span>}
           </div>
         </div>
       )}
-
-      {/* ===== INVOICE TAB ===== */}
-      {tab === 'invoice' && (
-        <div className="card">
-          <h2 className="font-bold mb-4 flex items-center gap-2"><Printer size={18} /> Tùy chỉnh hóa đơn</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-sm font-medium text-gray-700">Tên cửa hàng</label>
-              <input className="input-field w-full mt-1" value={storeForm.name}
-                onChange={e => setStoreForm({ ...storeForm, name: e.target.value })} />
-            </div>
-            <div><label className="text-sm font-medium text-gray-700">Số điện thoại</label>
-              <input className="input-field w-full mt-1" value={storeForm.phone}
-                onChange={e => setStoreForm({ ...storeForm, phone: e.target.value })} />
-            </div>
-            <div><label className="text-sm font-medium text-gray-700">Email</label>
-              <input className="input-field w-full mt-1" value={storeForm.email}
-                onChange={e => setStoreForm({ ...storeForm, email: e.target.value })} />
-            </div>
-            <div><label className="text-sm font-medium text-gray-700">Mã số thuế (MST)</label>
-              <input className="input-field w-full mt-1" value={storeForm.tax_code}
-                onChange={e => setStoreForm({ ...storeForm, tax_code: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Mẫu in hóa đơn</label>
-              <select className="input-field w-full mt-1" value={printTemplate}
-                onChange={e => handleSavePrintTemplate(e.target.value)}>
-                <option value="1">Mẫu 1 — Logo nổi bật, thông tin 2 cột</option>
-                <option value="2">Mẫu 2 — 2 box thông tin cửa hàng & đơn hàng</option>
-                <option value="3">Mẫu 3 — Gọn, tiêu đề bên phải (kiểu Sapo)</option>
-              </select>
-              <div className="text-xs text-gray-400 mt-1">Áp dụng khi in từ Danh sách đơn hàng</div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Kích thước hóa đơn</label>
-              <select className="input-field w-full mt-1" value={storeForm.invoice_width}
-                onChange={e => setStoreForm({ ...storeForm, invoice_width: e.target.value })}>
-                <option value="58">58mm (Máy in mini)</option>
-                <option value="76">76mm (Máy in trung)</option>
-                <option value="80">80mm (Máy in phổ biến)</option>
-                <option value="108">108mm (Máy in wide)</option>
-              </select>
-            </div>
-            <div><label className="text-sm font-medium text-gray-700">Logo cửa hàng (URL)</label>
-              <input className="input-field w-full mt-1" placeholder="https://.../logo.png"
-                value={storeForm.invoice_logo}
-                onChange={e => setStoreForm({ ...storeForm, invoice_logo: e.target.value })} />
-              {storeForm.invoice_logo && <img src={storeForm.invoice_logo} alt="logo" className="mt-1 h-10 object-contain" onError={e => { e.target.style.display = 'none'; }} />}
-            </div>
-            <div><label className="text-sm font-medium text-gray-700">Logo VietQR (URL PNG)</label>
-              <input className="input-field w-full mt-1" placeholder="https://.../vietqr-logo.png"
-                value={storeForm.invoice_vietqr_logo}
-                onChange={e => setStoreForm({ ...storeForm, invoice_vietqr_logo: e.target.value })} />
-              <div className="text-xs text-gray-400 mt-1">Logo hiển thị bên dưới mã QR trên hóa đơn</div>
-              {storeForm.invoice_vietqr_logo && <img src={storeForm.invoice_vietqr_logo} alt="vietqr logo" className="mt-1 h-10 object-contain" onError={e => { e.target.style.display = 'none'; }} />}
-            </div>
-            <div className="col-span-2"><label className="text-sm font-medium text-gray-700">Khẩu hiệu / Ghi chú</label>
-              <input className="input-field w-full mt-1" placeholder="Cảm ơn quý khách! Hẹn gặp lại!"
-                value={storeForm.invoice_slogan}
-                onChange={e => setStoreForm({ ...storeForm, invoice_slogan: e.target.value })} />
-            </div>
-            <div className="col-span-2"><label className="text-sm font-medium text-gray-700">Ghi chú hóa đơn</label>
-              <textarea className="input-field w-full mt-1" rows={3}
-                placeholder="Nội dung ghi chú ở cuối hóa đơn..."
-                value={storeForm.invoice_note}
-                onChange={e => setStoreForm({ ...storeForm, invoice_note: e.target.value })} />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center gap-3">
-            <button onClick={handleSaveStore} className="btn-success flex items-center gap-1">
-              <CheckCircle size={16} />💾 Lưu cài đặt in
-            </button>
-            {saved && <span className="text-green-600 text-sm font-medium">✓ Đã lưu!</span>}
-          </div>
-        </div>
-      )}
-
-      
 
       {/* ===== EMPLOYEES TAB ===== */}
       {tab === 'employees' && (
@@ -764,8 +676,6 @@ export default function Settings({ store }) {
                   <th className="p-2 text-left">Email</th>
                   <th className="p-2 text-left">SĐT</th>
                   <th className="p-2 text-left">Vai trò</th>
-                  <th className="p-2 text-left">Mobile</th>
-                  <th className="p-2 text-left">Lần mobile gần nhất</th>
                   <th className="p-2 text-center">Hành động</th>
                 </tr>
               </thead>
@@ -812,253 +722,6 @@ export default function Settings({ store }) {
                 })}
               </tbody>
             </table>
-            {!hasMobileFields && (
-              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                API nhân viên hiện chưa trả về trường mobile_enabled/mobile_last_login_at; hệ thống mobile sẽ áp dụng mặc định từ backend và vẫn hiển thị thiết bị đã đăng nhập ở tab Mobile.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ===== MOBILE TAB ===== */}
-      {tab === 'mobile' && (
-        <div className="space-y-4">
-          <div className="card">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="font-bold flex items-center gap-2"><Smartphone size={18} /> Mobile / Offline Sync</h2>
-                <p className="text-sm text-gray-500 mt-1">Tạo link cài đặt app, copy URL Android/iOS cho nhân viên và quản lý thiết bị mobile đã đăng nhập.</p>
-              </div>
-              <button
-                onClick={loadMobileAdmin}
-                disabled={mobileLoading}
-                className="btn-primary flex items-center gap-2 text-sm disabled:opacity-60"
-              >
-                <RefreshCw size={14} className={mobileLoading ? 'animate-spin' : ''} /> Làm mới
-              </button>
-            </div>
-
-            {mobileNotice && (
-              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-                {mobileNotice}
-              </div>
-            )}
-
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-xl border bg-gray-50 p-4">
-                <div className="text-xs text-gray-500">Link cài đặt</div>
-                <div className="mt-1 text-2xl font-bold text-gray-800">{mobileInstallLinks.length}</div>
-              </div>
-              <div className="rounded-xl border bg-green-50 p-4 text-green-700">
-                <div className="text-xs opacity-80">Thiết bị active</div>
-                <div className="mt-1 text-2xl font-bold">{mobileDevices.filter(device => device.active !== 0 && !device.revoked_at).length}</div>
-              </div>
-              <div className="rounded-xl border bg-red-50 p-4 text-red-700">
-                <div className="text-xs opacity-80">Thiết bị revoked</div>
-                <div className="mt-1 text-2xl font-bold">{mobileDevices.filter(device => device.active === 0 || device.revoked_at).length}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <h3 className="font-bold flex items-center gap-2"><Link2 size={18} /> Tạo link cài đặt mobile</h3>
-                <p className="text-sm text-gray-500 mt-1">Backend trả một token cài đặt có đủ URL Android và iOS; admin có thể copy từng URL hoặc copy toàn bộ hướng dẫn gửi nhân viên.</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <label className="text-sm font-medium text-gray-700">Android URL</label>
-                <input
-                  className="input-field w-full mt-1"
-                  placeholder={mobileDefaultAndroidUrl || 'https://.../android.apk'}
-                  value={installForm.android_url}
-                  onChange={e => setInstallForm({ ...installForm, android_url: e.target.value })}
-                />
-                {mobileDefaultAndroidUrl && <div className="text-xs text-gray-400 mt-1">Mặc định backend: {mobileDefaultAndroidUrl}</div>}
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">iOS URL</label>
-                <input
-                  className="input-field w-full mt-1"
-                  placeholder={mobileDefaultIosUrl || 'https://.../ios'}
-                  value={installForm.ios_url}
-                  onChange={e => setInstallForm({ ...installForm, ios_url: e.target.value })}
-                />
-                {mobileDefaultIosUrl && <div className="text-xs text-gray-400 mt-1">Mặc định backend: {mobileDefaultIosUrl}</div>}
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Số ngày hiệu lực</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="90"
-                  className="input-field w-full mt-1"
-                  value={installForm.expires_days}
-                  onChange={e => setInstallForm({ ...installForm, expires_days: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Server/API URL cho mobile</label>
-                <div className="mt-1 flex gap-2">
-                  <input className="input-field w-full" value={resolvedMobileServerUrl || ''} readOnly />
-                  <button onClick={() => copyText(resolvedMobileServerUrl, 'server URL')} className="px-3 rounded-lg border text-gray-600 hover:bg-gray-50" title="Copy server URL">
-                    <Copy size={15} />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={() => handleCreateMobileInstallLink('common')} disabled={!!mobileAction} className="btn-success flex items-center gap-2 disabled:opacity-60">
-                <Link2 size={14} /> {mobileAction === 'create-common' ? 'Đang tạo...' : 'Tạo link chung Android/iOS'}
-              </button>
-              <button onClick={() => handleCreateMobileInstallLink('android')} disabled={!!mobileAction} className="btn-primary flex items-center gap-2 disabled:opacity-60">
-                <Smartphone size={14} /> {mobileAction === 'create-android' ? 'Đang tạo...' : 'Tạo link Android'}
-              </button>
-              <button onClick={() => handleCreateMobileInstallLink('ios')} disabled={!!mobileAction} className="btn-primary flex items-center gap-2 disabled:opacity-60">
-                <Smartphone size={14} /> {mobileAction === 'create-ios' ? 'Đang tạo...' : 'Tạo link iOS'}
-              </button>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold flex items-center gap-2"><Link2 size={18} /> Link cài đặt đã tạo ({mobileInstallLinks.length})</h3>
-            </div>
-            <div className="space-y-3">
-              {mobileInstallLinks.length === 0 && (
-                <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
-                  Chưa có link cài đặt mobile. Hãy tạo link chung Android/iOS rồi gửi cho nhân viên.
-                </div>
-              )}
-              {mobileInstallLinks.map(link => {
-                const installApiUrl = buildInstallApiUrl(link);
-                const androidUrl = link.android_url || mobileDefaultAndroidUrl;
-                const iosUrl = link.ios_url || mobileDefaultIosUrl;
-                const active = link.active !== 0 && !isExpiredDate(link.expires_at);
-                const instruction = [
-                  'Cài app bán hàng mobile:',
-                  androidUrl ? `Android: ${androidUrl}` : '',
-                  iosUrl ? `iOS: ${iosUrl}` : '',
-                  installApiUrl ? `Token/link xác thực: ${installApiUrl}` : '',
-                  resolvedMobileServerUrl ? `Server URL: ${resolvedMobileServerUrl}` : '',
-                ].filter(Boolean).join('\n');
-                return (
-                  <div key={link.id || link.token} className="rounded-xl border p-4">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {active ? 'Active' : 'Hết hạn/tắt'}
-                          </span>
-                          <span className="text-xs text-gray-400">Tạo: {formatDateTime(link.created_at)}</span>
-                          <span className="text-xs text-gray-400">Hết hạn: {formatDateTime(link.expires_at)}</span>
-                          <span className="text-xs text-gray-400">Đã mở: {link.used_count || 0}</span>
-                        </div>
-                        <div className="mt-2 text-xs text-gray-500 break-all">Token/link API: {installApiUrl}</div>
-                        {androidUrl && <div className="mt-1 text-xs text-gray-500 break-all">Android: {androidUrl}</div>}
-                        {iosUrl && <div className="mt-1 text-xs text-gray-500 break-all">iOS: {iosUrl}</div>}
-                        {link.last_resolved_at && <div className="mt-1 text-xs text-gray-400">Lần nhân viên mở gần nhất: {formatDateTime(link.last_resolved_at)}</div>}
-                      </div>
-                      <div className="flex flex-wrap gap-2 lg:justify-end">
-                        <button onClick={() => copyText(androidUrl, 'link Android')} className="px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-600 hover:bg-gray-50 flex items-center gap-1">
-                          <Copy size={13} /> Android
-                        </button>
-                        <button onClick={() => copyText(iosUrl, 'link iOS')} className="px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-600 hover:bg-gray-50 flex items-center gap-1">
-                          <Copy size={13} /> iOS
-                        </button>
-                        <button onClick={() => copyText(installApiUrl, 'link token cài đặt')} className="px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-600 hover:bg-gray-50 flex items-center gap-1">
-                          <Copy size={13} /> Token
-                        </button>
-                        <button onClick={() => copyText(instruction, 'hướng dẫn cài đặt')} className="px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-xs font-medium text-blue-700 hover:bg-blue-100 flex items-center gap-1">
-                          <Copy size={13} /> Copy hướng dẫn
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold flex items-center gap-2"><Smartphone size={18} /> Thiết bị mobile đã đăng nhập ({mobileDevices.length})</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm">
-                <thead>
-                  <tr className="bg-gray-100 text-gray-600 text-xs">
-                    <th className="p-2 text-left">Nhân viên</th>
-                    <th className="p-2 text-left">Thiết bị</th>
-                    <th className="p-2 text-left">Nền tảng</th>
-                    <th className="p-2 text-left">Phiên bản app</th>
-                    <th className="p-2 text-left">Lần thấy cuối</th>
-                    <th className="p-2 text-left">Trạng thái</th>
-                    <th className="p-2 text-center">Hành động</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {mobileDevices.map(device => {
-                    const employee = employeeById.get(Number(device.user_id));
-                    const active = device.active !== 0 && !device.revoked_at;
-                    return (
-                      <tr key={device.id} className="border-b hover:bg-gray-50">
-                        <td className="p-2">
-                          <div className="font-medium text-gray-800">{employee?.name || `User #${device.user_id || '—'}`}</div>
-                          <div className="text-xs text-gray-400">{employee?.email || 'Không có email trong payload thiết bị'}</div>
-                        </td>
-                        <td className="p-2">
-                          <div className="font-medium text-gray-800">{device.device_name || 'Không rõ thiết bị'}</div>
-                          <div className="text-xs text-gray-400 break-all">{device.device_uid || '—'}</div>
-                        </td>
-                        <td className="p-2">{getPlatformLabel(device.platform)}</td>
-                        <td className="p-2">{device.app_version || '—'}</td>
-                        <td className="p-2">
-                          <div>{formatDateTime(device.last_seen_at)}</div>
-                          <div className="text-xs text-gray-400">Login: {formatDateTime(device.last_login_at)}</div>
-                        </td>
-                        <td className="p-2">
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getMobileStatusTone(active)}`}>
-                            {active ? 'Active' : 'Revoked'}
-                          </span>
-                          {device.revoked_at && <div className="text-xs text-gray-400 mt-1">{formatDateTime(device.revoked_at)}</div>}
-                          {device.revoked_reason && <div className="text-xs text-gray-400 mt-1">{device.revoked_reason}</div>}
-                        </td>
-                        <td className="p-2 text-center">
-                          <button
-                            onClick={() => handleRevokeMobileDevice(device)}
-                            disabled={!active || mobileAction === `revoke-${device.id}`}
-                            className="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                          >
-                            <ShieldOff size={12} /> {mobileAction === `revoke-${device.id}` ? 'Đang revoke...' : 'Revoke'}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {mobileDevices.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-gray-400">Chưa có thiết bị mobile đăng nhập.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="card bg-blue-50 border-blue-100 text-sm text-blue-800">
-            <h3 className="font-bold mb-2">Hướng dẫn gửi cho nhân viên</h3>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Tạo link cài đặt, copy URL Android hoặc iOS phù hợp và gửi qua Zalo/email nội bộ.</li>
-              <li>Nếu app mobile hỏi server URL, dùng giá trị hiển thị ở ô Server/API URL.</li>
-              <li>Sau khi nhân viên đăng nhập app, thiết bị sẽ xuất hiện trong danh sách để admin theo dõi và revoke khi cần.</li>
-              <li>Quyền truy cập theo account do backend kiểm soát; frontend không tự mở rộng phạm vi dữ liệu.</li>
-            </ul>
           </div>
         </div>
       )}
@@ -1115,7 +778,7 @@ export default function Settings({ store }) {
                 <div className="text-xs text-gray-500 mt-2">Nền tảng: {appInfo?.platform || window.khaDesktop?.platform || 'offline'} · Kiến trúc: {appInfo?.arch || 'unknown'}</div>
               </div>
               <div className="border rounded-xl p-4 bg-gray-50">
-                <div className="text-gray-500">Feed cập nhật</div>
+                <div className="text-gray-500">Bảng cập nhật</div>
                 <div className="font-medium text-gray-800 break-all mt-1">{manifestUrl || 'Chưa nạp URL feed'}</div>
                 <div className="text-xs text-gray-500 mt-2">Nguồn: {manifestSourceLabel}</div>
                 {updateState?.manifestUrlDefault && (
@@ -1274,7 +937,7 @@ export default function Settings({ store }) {
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={handleSaveEmp} className="btn-success flex-1">💾 Lưu</button>
+              <button onClick={handleSaveEmp} className="btn-success flex-1"> Lưu</button>
               <button onClick={() => setShowEmpModal(false)} className="btn-danger flex-1">Hủy</button>
             </div>
           </div>
@@ -1304,7 +967,7 @@ export default function Settings({ store }) {
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={handleSaveType} className="btn-success flex-1">💾 Lưu</button>
+              <button onClick={handleSaveType} className="btn-success flex-1"> Lưu</button>
               <button onClick={() => setShowTypeModal(false)} className="btn-danger flex-1">Hủy</button>
             </div>
           </div>
@@ -1378,7 +1041,7 @@ export default function Settings({ store }) {
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">🔄 Tab Cập nhật</h3>
+                <h3 className="font-bold text-gray-800 mb-2"> Tab Cập nhật</h3>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Mặc định kiểm tra GitHub Releases latest.yml bằng electron-updater.</li>
                   <li>Tải gói cập nhật về cache người dùng và chỉ cài đặt khi người dùng chọn “Cập nhật ngay”.</li>
@@ -1388,7 +1051,7 @@ export default function Settings({ store }) {
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h3 className="font-bold text-blue-800 mb-2">💡 Lưu ý quan trọng</h3>
+                <h3 className="font-bold text-blue-800 mb-2"> Lưu ý quan trọng</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
                   <li><strong>Lưu cài đặt:</strong> Nhấn "Lưu thay đổi" ở mỗi tab sau khi chỉnh sửa</li>
                   <li><strong>Xác thực:</strong> Chỉ admin mới có quyền truy cập trang Cài đặt</li>

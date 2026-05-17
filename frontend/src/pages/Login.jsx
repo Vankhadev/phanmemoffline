@@ -442,7 +442,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 </button>
 
                 <Link to="/dang-ky" className="w-full border border-blue-200 text-blue-700 hover:bg-blue-50 py-2.5 rounded-xl font-semibold transition flex items-center justify-center gap-2 text-sm">
-                  <UserPlus size={16} /> Đăng ký tài khoản mới
+                  <UserPlus size={16} /> Đăng ký
                 </Link>
               </form>
             )}
@@ -451,7 +451,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
               {needsSetup ? (
                 <div>Lần đầu sử dụng: tài khoản đầu tiên sẽ được server tự động cấp quyền ADMIN.</div>
               ) : (
-                <div>Nếu chưa có tài khoản, hãy mở trang đăng ký. Sau đăng nhập, ứng dụng chỉ dùng token/payload server để mở đúng trang theo quyền.</div>
+                <div>Nếu chưa có tài khoản, vui lòng đăng ký.</div>
               )}
             </div>
           </>

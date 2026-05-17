@@ -1018,7 +1018,6 @@ export default function Products({ store }) {
     'Giá sỉ',
     'Giá lẻ',
     'Giá VIP',
-    'Tồn kho',
     'Đơn vị',
     'Danh mục text',
     'Default category id',
@@ -1065,7 +1064,6 @@ export default function Products({ store }) {
       'Giá sỉ': product.wholesale_price ?? '',
       'Giá lẻ': product.retail_price ?? '',
       'Giá VIP': product.vip_price ?? '',
-      'Tồn kho': product.stock ?? '',
       'Đơn vị': product.unit || parent?.unit || 'cái',
       'Danh mục text': getProductCategoryText(product, parent),
       'Default category id': product.default_category_id ?? parent?.default_category_id ?? '',
@@ -1725,9 +1723,6 @@ export default function Products({ store }) {
           <Package className="text-blue-600" size={24} /> Quản lý Sản phẩm
         </h1>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setShowHelp(true)} className="px-4 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium flex items-center gap-1.5">
-            <HelpCircle size={16} /> Hướng dẫn
-          </button>
           <button onClick={() => setShowComboSection(s => !s)}
             className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 border transition ${showComboSection ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-700 border-purple-300 hover:bg-purple-50'
               }`}>
@@ -2063,7 +2058,7 @@ export default function Products({ store }) {
                     onChange={e => setComboForm(f => ({ ...f, wholesale_price: e.target.value }))} placeholder="0" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Giá VIP</label>
+                  <label className="text-xs text-gray-500 block mb-1">Giá ký gửi</label>
                   <input type="number" className="input-field w-full" value={comboForm.vip_price}
                     onChange={e => setComboForm(f => ({ ...f, vip_price: e.target.value }))} placeholder="0" />
                 </div>

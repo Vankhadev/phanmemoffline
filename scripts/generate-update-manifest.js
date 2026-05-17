@@ -63,7 +63,7 @@ function normalizeVersion(value) {
 }
 
 function renderArtifactName(template, packageJson, version) {
-  return String(template || 'BanHangOffline-Setup-v${version}.exe')
+  return String(template || 'vankhadev-setup-v${version}.exe')
     .replace(/\$\{version\}/g, version)
     .replace(/\$\{name\}/g, packageJson.name || 'app')
     .replace(/\$\{productName\}/g, packageJson.build?.productName || packageJson.name || 'app');
