@@ -669,8 +669,28 @@ export default function Products({ store }) {
     };
   }, []);
 
-  const fetchCombos = () => { fetch(resolveApiUrl('/combos')).then(r => r.json()).then(setCombos).catch(() => { }); };
-  const fetchSuppliers = () => { fetch(resolveApiUrl('/partners')).then(r => r.json()).then(setSuppliers).catch(() => { }); };
+  const fetchCombos = () => apiJsonChecked('/combos', {}, 'Không thể tải danh sách combo.')
+    .then(data => {
+      const nextCombos = Array.isArray(data) ? data : [];
+      setCombos(nextCombos);
+      return nextCombos;
+    })
+    .catch(err => {
+      console.warn('[Products] Không thể tải danh sách combo:', err);
+      setCombos([]);
+      return [];
+    });
+  const fetchSuppliers = () => apiJsonChecked('/partners', {}, 'Không thể tải danh sách nhà cung cấp.')
+    .then(data => {
+      const nextSuppliers = Array.isArray(data) ? data : [];
+      setSuppliers(nextSuppliers);
+      return nextSuppliers;
+    })
+    .catch(err => {
+      console.warn('[Products] Không thể tải danh sách nhà cung cấp:', err);
+      setSuppliers([]);
+      return [];
+    });
   const normalizeListField = (value) => {
     if (Array.isArray(value)) return value.map(item => String(item || '').trim()).filter(Boolean);
     return String(value || '').split(/[,;\n]/).map(item => item.trim()).filter(Boolean);
@@ -698,11 +718,13 @@ export default function Products({ store }) {
   };
   const fetchCategories = async () => {
     try {
-      const data = await fetch(resolveApiUrl('/product-categories')).then(r => r.json());
+      const data = await apiJsonChecked('/product-categories', {}, 'Không thể tải danh mục sản phẩm.');
       const nextCategories = extractCategoriesFromResponse(data).map(normalizeCategoryRecord).filter(Boolean);
       setCategories(nextCategories);
       return nextCategories;
-    } catch (_) {
+    } catch (err) {
+      console.warn('[Products] Không thể tải danh mục sản phẩm:', err);
+      setCategories([]);
       return [];
     }
   };
@@ -927,13 +949,17 @@ export default function Products({ store }) {
     productsFetchAbortRef.current = controller;
 
     try {
-      const res = await fetch(resolveApiUrl('/products/all/with-variants'), { signal: controller.signal });
-      const data = await res.json();
+      const data = await apiJsonChecked('/products/all/with-variants', {
+        signal: controller.signal,
+      }, 'Không thể tải danh sách sản phẩm.');
       const nextProducts = Array.isArray(data) ? data : [];
       if (productsFetchRequestIdRef.current === requestId) setProducts(nextProducts);
       return nextProducts;
     } catch (err) {
-      if (err.name !== 'AbortError') console.warn('[Products] Không thể tải danh sách sản phẩm:', err);
+      if (err.name !== 'AbortError') {
+        console.warn('[Products] Không thể tải danh sách sản phẩm:', err);
+        if (productsFetchRequestIdRef.current === requestId) setProducts([]);
+      }
       return null;
     } finally {
       if (productsFetchRequestIdRef.current === requestId) productsFetchAbortRef.current = null;
@@ -972,25 +998,6 @@ export default function Products({ store }) {
     );
   }, []);
 
-  const toggleSelectAll = useCallback(() => {
-    if (filteredProductIds.length === 0) return;
-    if (allFilteredSelected) {
-      setSelectedProducts(prev => prev.filter(id => !filteredProductIdSet.has(toProductIdKey(id))));
-    } else {
-      setSelectedProducts(prev => {
-        const existingKeys = new Set(prev.map(toProductIdKey));
-        const next = [...prev];
-        filteredProductIds.forEach(id => {
-          const idKey = toProductIdKey(id);
-          if (!existingKeys.has(idKey)) {
-            existingKeys.add(idKey);
-            next.push(id);
-          }
-        });
-        return next;
-      });
-    }
-  }, [allFilteredSelected, filteredProductIdSet, filteredProductIds]);
 
   const handleBulkDelete = useCallback(async () => {
     if (bulkDeleteInFlightRef.current) return;
@@ -1719,6 +1726,25 @@ export default function Products({ store }) {
   const filteredProductIdSet = useMemo(() => new Set(filteredProductIds.map(toProductIdKey)), [filteredProductIds]);
   const selectedProductIdSet = useMemo(() => new Set(selectedProducts.map(toProductIdKey)), [selectedProducts]);
   const allFilteredSelected = filteredProductIds.length > 0 && filteredProductIds.every(id => selectedProductIdSet.has(toProductIdKey(id)));
+  const toggleSelectAll = useCallback(() => {
+    if (filteredProductIds.length === 0) return;
+    if (allFilteredSelected) {
+      setSelectedProducts(prev => prev.filter(id => !filteredProductIdSet.has(toProductIdKey(id))));
+      return;
+    }
+    setSelectedProducts(prev => {
+      const existingKeys = new Set(prev.map(toProductIdKey));
+      const next = [...prev];
+      filteredProductIds.forEach(id => {
+        const idKey = toProductIdKey(id);
+        if (!existingKeys.has(idKey)) {
+          existingKeys.add(idKey);
+          next.push(id);
+        }
+      });
+      return next;
+    });
+  }, [allFilteredSelected, filteredProductIdSet, filteredProductIds]);
   const stockSortButtonClass = (direction) => `inline-flex items-center justify-center w-7 h-7 rounded-full border transition ${stockSortDirection === direction
     ? 'bg-orange-100 border-orange-300 text-orange-700'
     : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-orange-600'

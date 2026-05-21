@@ -778,28 +778,32 @@ function normalizePendingOrder(order) {
   const cart = Array.isArray(order?.cart) ? order.cart : [];
   const details = Array.isArray(payload.details) && payload.details.length > 0
     ? payload.details
-    : cart.map(item => {
-        const productName = getProductDisplayName(item);
-        return {
-          type: item.type || item.item_type || 'product',
-          item_type: item.item_type || item.type || 'product',
-          combo_id: item.combo_id || null,
-          product_id: item.product_id || null,
-          variant_id: item.variant_id || null,
-          parent_id: item.parent_id || null,
-          parent_name: item.parent_name || '',
-          variant_name: item.variant_name || '',
-          product_name: productName || item.product_name || item.name || '',
-          product_sku: item.product_sku || item.sku || '',
-          name: productName || item.name || item.product_name || '',
-          sku: item.sku || item.product_sku || '',
-          quantity: Number(item.quantity) || 1,
-          unit_price: Number(item.unit_price) || 0,
-          discount_amount: Number(item.discount_amount) || 0,
-          discount_percent: Number(item.discount_percent) || 0,
-          line_total: Number(item.line_total) || 0,
-        };
-      });
+    : cart.reduce((list, item) => {
+        const source = item && typeof item === 'object' ? item : null;
+        if (!source) return list;
+
+        const productName = getProductDisplayName(source);
+        list.push({
+          type: source.type || source.item_type || 'product',
+          item_type: source.item_type || source.type || 'product',
+          combo_id: source.combo_id || null,
+          product_id: source.product_id || null,
+          variant_id: source.variant_id || null,
+          parent_id: source.parent_id || null,
+          parent_name: source.parent_name || '',
+          variant_name: source.variant_name || '',
+          product_name: productName || source.product_name || source.name || '',
+          product_sku: source.product_sku || source.sku || '',
+          name: productName || source.name || source.product_name || '',
+          sku: source.sku || source.product_sku || '',
+          quantity: Number(source.quantity) || 1,
+          unit_price: Number(source.unit_price) || 0,
+          discount_amount: Number(source.discount_amount) || 0,
+          discount_percent: Number(source.discount_percent) || 0,
+          line_total: Number(source.line_total) || 0,
+        });
+        return list;
+      }, []);
 
   if (!Array.isArray(details) || details.length === 0) return null;
 

@@ -11,8 +11,8 @@
 
 Khi phát hành một bản mới, cần upload tối thiểu các file sau vào GitHub Release:
 
-- installer `banhangoffline-setup-v1.2.8.exe`
-- `banhangoffline-setup-v1.2.8.exe.blockmap`
+- installer `banhangoffline-setup-v1.3.3.exe`
+- `banhangoffline-setup-v1.3.3.exe.blockmap`
 - `latest.yml`
 - `update-manifest.json`
 
@@ -22,20 +22,20 @@ Cấu hình publish hiện tại trỏ về GitHub Release public download URL t
 
 ## GitHub Actions release Windows
 
-- Tag release theo version mới, ví dụ `v1.2.8`.
+- Tag release theo version mới, ví dụ `v1.3.3`.
 - Job build phải tạo đúng tên artifact để `electron-updater` đọc được metadata.
 
 ## Quy trình phát hành version mới qua GitHub Actions
 
 ```cmd
-git tag v1.2.8
+git tag v1.3.3
 git push origin main --tags
 ```
 
-Sau đó tạo release/tag `v1.2.8` và upload các asset sau bằng GitHub UI hoặc GitHub CLI đã đăng nhập sẵn:
+Sau đó tạo release/tag `v1.3.3` và upload các asset sau bằng GitHub UI hoặc GitHub CLI đã đăng nhập sẵn:
 
 ```cmd
-gh release create v1.2.8 release/banhangoffline-setup-v1.2.8.exe release/banhangoffline-setup-v1.2.8.exe.blockmap release/latest.yml release/update-manifest.json --title "BanHangOffline v1.2.8" --generate-notes --latest
+gh release create v1.3.3 release/banhangoffline-setup-v1.3.3.exe release/banhangoffline-setup-v1.3.3.exe.blockmap release/latest.yml release/update-manifest.json --title "BanHangOffline v1.3.3" --generate-notes --latest
 ```
 
 ## Publish từ máy dev nếu cần

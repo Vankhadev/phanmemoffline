@@ -1,6 +1,6 @@
 # Phan mem offline
 
-## Phiên bản hiện tại: 1.2.8
+## Phiên bản hiện tại: 1.3.3
 
 Ứng dụng quản lý bán hàng offline gồm:
 

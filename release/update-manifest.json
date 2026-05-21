@@ -1,12 +1,12 @@
 {
-  "version": "1.2.9",
-  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.2.9/banhangoffline-setup-v1.2.9.exe",
-  "sha256": "a8b20c111c9bfdd15c9cfc79adec49d55a77613763d48f0a9a38e2c5530d802c",
-  "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.2.9.",
-  "releaseDate": "2026-05-21T04:42:12.896Z",
+  "version": "1.3.3",
+  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.3/banhangoffline-setup-v1.3.3.exe",
+  "sha256": "c888caf1ab618493ed3a876ed6d3195d10aa8a39bd6235d438edb0eb2f4d6c7f",
+  "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.3.3.",
+  "releaseDate": "2026-05-21T21:27:27.730Z",
   "platform": "win32",
   "arch": "x64",
-  "size": 77329694,
+  "size": 83919038,
   "mandatory": false,
   "installerType": "nsis"
 }

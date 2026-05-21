@@ -106,21 +106,22 @@ function normalizeUser(invoice = {}, user = {}) {
 export function normalizeInvoicePrintItems(items = []) {
   if (!Array.isArray(items)) return [];
   return items.map((item, index) => {
-    const quantity = toNumber(firstDefined(item.quantity, item.qty), 1);
-    const unitPrice = toNumber(firstDefined(item.unit_price, item.price_raw, item.price, item.sale_price), 0);
-    const discountAmount = toNumber(firstDefined(item.discount_amount, item.line_discount, item.discount_raw), 0);
-    const lineTotal = toNumber(firstDefined(item.line_total, item.total, item.amount), quantity * unitPrice - discountAmount);
-    const sku = firstDefined(item.product_sku, item.sku, item.code, '');
-    const name = getProductDisplayName(item) || firstDefined(item.product_name, item.name, item.combo_name, `Sản phẩm ${index + 1}`);
+    const source = item && typeof item === 'object' ? item : {};
+    const quantity = toNumber(firstDefined(source.quantity, source.qty), 1);
+    const unitPrice = toNumber(firstDefined(source.unit_price, source.price_raw, source.price, source.sale_price), 0);
+    const discountAmount = toNumber(firstDefined(source.discount_amount, source.line_discount, source.discount_raw), 0);
+    const lineTotal = toNumber(firstDefined(source.line_total, source.total, source.amount), quantity * unitPrice - discountAmount);
+    const sku = firstDefined(source.product_sku, source.sku, source.code, '');
+    const name = getProductDisplayName(source) || firstDefined(source.product_name, source.name, source.combo_name, `Sản phẩm ${index + 1}`);
 
     return {
-      ...item,
-      id: firstDefined(item.id, item.product_id, item.combo_id, index + 1),
+      ...source,
+      id: firstDefined(source.id, source.product_id, source.combo_id, index + 1),
       sku,
       product_sku: sku,
       name,
       product_name: name,
-      unit: firstDefined(item.unit, item.product_unit, ''),
+      unit: firstDefined(source.unit, source.product_unit, ''),
       quantity_raw: quantity,
       quantity: formatNumber(quantity),
       unit_price: unitPrice,
@@ -131,8 +132,8 @@ export function normalizeInvoicePrintItems(items = []) {
       discount: formatCurrency(discountAmount),
       line_total_raw: lineTotal,
       line_total: formatCurrency(lineTotal),
-      image_url: firstDefined(item.image_url, item.image, item.thumbnail, item.product_image, ''),
-      reason: firstDefined(item.reason, ''),
+      image_url: firstDefined(source.image_url, source.image, source.thumbnail, source.product_image, ''),
+      reason: firstDefined(source.reason, ''),
     };
   });
 }
