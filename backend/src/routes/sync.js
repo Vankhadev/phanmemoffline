@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, remove, now, getSyncVersions } = require('../db/database');
-const { requireAuth, requirePermission, publicSession } = require('../middleware/auth');
+const { requireAuth, requirePermission, requireAnyPermission, publicSession } = require('../middleware/auth');
 const { createInvoiceFromPayload } = require('../services/invoiceCreationService');
 
 const PULL_TABLES = [
@@ -406,7 +406,7 @@ router.post('/sync/pull', requireAuth, requirePermission('sync.read'), (req, res
   });
 });
 
-router.post('/sync/push', requireAuth, requirePermission('sync.write'), (req, res) => {
+router.post('/sync/push', requireAuth, requireAnyPermission(['sync.write', 'sync.manage']), (req, res) => {
   const body = req.body || {};
   const pending = body.pending || body;
   const customerInputs = Array.isArray(pending.customers) ? pending.customers : [];

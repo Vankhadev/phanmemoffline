@@ -24,9 +24,10 @@ export class ApiError extends Error {
   constructor(message, options = {}) {
     super(message || 'Lỗi API');
     this.name = 'ApiError';
-    this.status = options.status || 0;
+    this.status = options.status ?? 0;
     this.data = options.data;
     this.response = options.response;
+    this.cause = options.cause;
     this.isAuthError = Boolean(options.isAuthError || this.status === 401);
   }
 }
@@ -75,7 +76,43 @@ function getBrowserLanApiBase() {
   const currentHost = String(window.location.hostname || '').trim();
   const host = configuredHost || (isLoopbackHost(currentHost) ? '' : currentHost);
   if (!host) return '';
-  return `${protocol}//${host}:${configuredPort}`;
+  return `${protocol}//${host}:${configuredPort}/api`;
+}
+
+function shouldUseDevApiProxyPath(pathname) {
+  if (!pathname || !pathname.startsWith('/')) return false;
+  if (pathname === '/api' || pathname.startsWith('/api/')) return false;
+  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|excel-imports|store|stats|cash-book|cashbook|payrolls|partners|combos|print-templates|sapo|sync|mobile|features|updates|dashboard|license-keys)(\/|\?|$)/i.test(pathname);
+}
+
+function normalizeDevApiProxyPath(input) {
+  if (!input) return input;
+  if (!input.startsWith('/')) return input;
+  if (input.startsWith('/api/') || input === '/api') return input;
+  if (shouldUseDevApiProxyPath(input)) return `/api${input}`;
+  return input;
+}
+
+function apiBaseAlreadyContainsApiPath(base) {
+  if (!base) return false;
+  try {
+    return stripTrailingSlash(new URL(base).pathname || '') === '/api';
+  } catch (_) {
+    return /\/api$/i.test(stripTrailingSlash(base));
+  }
+}
+
+function normalizeRequestPathForBase(input, base) {
+  if (!input || !input.startsWith('/')) return input;
+  if (!base) return normalizeDevApiProxyPath(input);
+
+  if (apiBaseAlreadyContainsApiPath(base)) {
+    if (input === '/api') return '';
+    if (input.startsWith('/api/')) return input.slice(4) || '/';
+    return input;
+  }
+
+  return normalizeDevApiProxyPath(input);
 }
 
 export function getApiBase() {
@@ -83,22 +120,24 @@ export function getApiBase() {
 }
 
 export function resolveApiUrl(input) {
+  if (input === '') return getApiBase() || '/api';
   if (!input) return input;
   if (typeof input !== 'string') return input;
   if (/^https?:\/\//i.test(input) || input.startsWith('blob:') || input.startsWith('data:')) return input;
   if (!input.startsWith('/')) return input;
   const base = getApiBase();
-  return base ? `${base}${input}` : input;
+  const normalizedInput = normalizeRequestPathForBase(input, base);
+  return base ? `${base}${normalizedInput}` : normalizedInput;
 }
 
 function buildHeaders(headers, { skipAuth = false, jsonBody = false } = {}) {
-  const next = new Headers(headers || {});
-  if (jsonBody && !next.has('Content-Type')) next.set('Content-Type', 'application/json');
+  const result = new Headers(headers || {});
+  if (jsonBody && !result.has('Content-Type')) result.set('Content-Type', 'application/json');
   if (!skipAuth) {
     const token = getAuthToken();
-    if (token && !next.has('Authorization')) next.set('Authorization', `Bearer ${token}`);
+    if (token && !result.has('Authorization')) result.set('Authorization', `Bearer ${token}`);
   }
-  return next;
+  return result;
 }
 
 function dispatchAuthExpired(detail = {}) {
@@ -111,12 +150,38 @@ export function handleUnauthorizedResponse(detail = {}) {
   dispatchAuthExpired(detail);
 }
 
-export async function readApiJson(response) {
+function responseHasNoBody(response) {
+  if (!response) return true;
+  if ([204, 205, 304].includes(response.status)) return true;
+  return response.headers?.get('content-length') === '0';
+}
+
+function isJsonResponse(response) {
+  const contentType = response?.headers?.get('content-type') || '';
+  return /(^|\s|;|,)(application\/json|[^\s;,]+\+json)(\s|;|,|$)/i.test(contentType);
+}
+
+function looksLikeJsonText(text) {
+  const value = String(text || '').trim();
+  if (!value) return false;
+  if (value === 'null' || value === 'true' || value === 'false') return true;
+  if (value.startsWith('{') || value.startsWith('[') || value.startsWith('"')) return true;
+  return /^-?\d/.test(value);
+}
+
+export async function readApiJson(response, options = {}) {
+  if (responseHasNoBody(response)) return null;
   const text = await response.text();
-  if (!text) return null;
+  const trimmedText = typeof text === 'string' ? text.trim() : '';
+  if (!trimmedText) return null;
+
+  const shouldParseJson = Boolean(options.forceJson) || isJsonResponse(response) || looksLikeJsonText(trimmedText);
+  if (!shouldParseJson) return text;
+
   try {
     return JSON.parse(text);
-  } catch (_) {
+  } catch (error) {
+    if (options.throwOnInvalidJson) throw error;
     return text;
   }
 }
@@ -129,7 +194,7 @@ export function getApiErrorMessage(data, fallback = 'Yêu cầu API thất bại
 }
 
 function isPublicAuthEndpoint(url) {
-  return typeof url === 'string' && (/\/users\/(login|register|bootstrap-admin)(\?|$)/i.test(url) || /\/license-keys\/status(\?|$)/i.test(url));
+  return typeof url === 'string' && (/\/users\/(login|register|bootstrap-status|bootstrap-admin)(\?|$)/i.test(url) || /\/license-keys\/status(\?|$)/i.test(url));
 }
 
 function isApiRequestUrl(url) {
@@ -137,49 +202,67 @@ function isApiRequestUrl(url) {
 }
 
 function buildInterceptedRequest(input, init = {}) {
-  const url = typeof input === 'string' ? input : String(input?.url || '');
+  const url = resolveApiUrl(typeof input === 'string' ? input : String(input?.url || ''));
   const headers = buildHeaders(init.headers, {
-    skipAuth: isPublicAuthEndpoint(url),
+    skipAuth: Boolean(init.skipAuth) || isPublicAuthEndpoint(url),
     jsonBody: init.body && !(init.body instanceof FormData) && !(init.body instanceof Blob) && !(init.body instanceof ArrayBuffer),
   });
   const requestInit = { ...init, headers };
   if (requestInit.body && headers.get('Content-Type') === 'application/json' && typeof requestInit.body !== 'string') {
     requestInit.body = JSON.stringify(requestInit.body);
   }
-  return [input, requestInit];
+  return [typeof input === 'string' ? url : input, requestInit];
+}
+
+function shouldTreatAsExpiredSession(url, requestInit = {}) {
+  if (requestInit.skipAuth) return false;
+  const authorizationHeader = requestInit.headers instanceof Headers
+    ? requestInit.headers.get('Authorization')
+    : null;
+  if (!authorizationHeader) return false;
+
+  try {
+    const parsed = new URL(String(url), typeof window !== 'undefined' ? window.location.href : 'http://localhost');
+    const pathname = parsed.pathname || '';
+    return pathname !== '/api/users/login'
+      && pathname !== '/api/users/register'
+      && pathname !== '/api/users/bootstrap-status'
+      && pathname !== '/api/users/bootstrap-admin';
+  } catch (_) {
+    const normalized = String(url || '');
+    return !normalized.includes('/users/login')
+      && !normalized.includes('/users/register')
+      && !normalized.includes('/users/bootstrap-status')
+      && !normalized.includes('/users/bootstrap-admin');
+  }
 }
 
 export function installAuthenticatedFetch() {
-  if (typeof window === 'undefined') return;
-  if (window.__khaAuthenticatedFetchInstalled) return;
-  const originalFetch = window.fetch?.bind(window);
-  if (!originalFetch) return;
-  const wrappedFetch = async (input, init = {}) => {
-    const [nextInput, nextInit] = buildInterceptedRequest(input, init);
-    return originalFetch(nextInput, nextInit);
+  if (typeof window === 'undefined' || typeof window.fetch !== 'function' || window.__vankhaFetchPatched) return;
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (input, init = {}) => {
+    const rawUrl = typeof input === 'string' ? input : String(input?.url || '');
+    if (!isApiRequestUrl(rawUrl) && !String(rawUrl || '').startsWith('/')) return originalFetch(input, init);
+    const [url, requestInit] = buildInterceptedRequest(input, init);
+    return originalFetch(url, requestInit);
   };
-  window.fetch = wrappedFetch;
-  window.__khaAuthenticatedFetchInstalled = true;
+  window.__vankhaFetchPatched = true;
 }
 
 function getFetchImplementation() {
   if (typeof window !== 'undefined' && typeof window.fetch === 'function') return window.fetch.bind(window);
   if (typeof fetch === 'function') return fetch.bind(globalThis);
-  throw new Error('Fetch API is not available in this environment.');
+  throw new Error('Fetch is not available in this environment.');
 }
 
 export async function apiFetch(input, init = {}) {
   const fetchImpl = getFetchImplementation();
-  const response = await fetchImpl(resolveApiUrl(input), {
-    ...init,
-    headers: buildHeaders(init.headers, {
-      skipAuth: isPublicAuthEndpoint(typeof input === 'string' ? input : String(input?.url || '')),
-      jsonBody: init.body && !(init.body instanceof FormData) && !(init.body instanceof Blob) && !(init.body instanceof ArrayBuffer),
-    }),
-  });
-  if (response.status === 401) {
+  const [url, requestInit] = buildInterceptedRequest(input, init);
+  const response = await fetchImpl(url, requestInit);
+  if (response.status === 401 && shouldTreatAsExpiredSession(url, requestInit)) {
+    handleUnauthorizedResponse({ status: response.status, url });
     throw new ApiError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', {
-      status: 401,
+      status: response.status,
       response,
       isAuthError: true,
     });
@@ -189,7 +272,21 @@ export async function apiFetch(input, init = {}) {
 
 export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu API thất bại.') {
   const response = await apiFetch(input, init);
-  const data = await readApiJson(response);
+  let data;
+
+  try {
+    data = await readApiJson(response, {
+      forceJson: response.ok,
+      throwOnInvalidJson: response.ok,
+    });
+  } catch (error) {
+    throw new ApiError('Phản hồi API không phải JSON hợp lệ.', {
+      status: response.status,
+      response,
+      cause: error,
+    });
+  }
+
   if (!response.ok) {
     const message = getApiErrorMessage(data, fallbackMessage);
     throw new ApiError(message, {
@@ -201,34 +298,55 @@ export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu AP
   return data;
 }
 
+function isOptionalEndpointError(error) {
+  return error instanceof ApiError && [404, 405, 501].includes(Number(error.status));
+}
+
+async function apiJsonOptional(input, init = {}, options = {}) {
+  try {
+    return await apiJson(input, init, options.fallbackMessage || 'Yêu cầu API thất bại.');
+  } catch (error) {
+    if (!isOptionalEndpointError(error)) throw error;
+    if (typeof options.fallback === 'function') return options.fallback(error);
+    return options.fallback ?? null;
+  }
+}
+
+const MOBILE_ADMIN_UNAVAILABLE_MESSAGE = 'Tính năng quản trị mobile chưa được backend hiện tại hỗ trợ.';
+const DEFAULT_LICENSE_STATUS = {
+  ok: true,
+  licensed: false,
+  status: 'not_configured',
+  message: 'Chưa cấu hình giấy phép cho bản cài đặt này.',
+};
+
 export const excelImportApi = {
-  preview(payload = {}) {
-    return apiJson('/excel-imports/preview', { method: 'POST', body: payload }, 'Không thể xem trước dữ liệu import.');
+  preview(payload = {}) { return apiJson('/excel-imports/preview', { method: 'POST', body: payload }, 'Không thể preview import Excel.'); },
+  commit(payloadOrId = {}, legacyPayload = {}) {
+    if (payloadOrId && typeof payloadOrId === 'object' && !Array.isArray(payloadOrId)) {
+      return apiJson('/excel-imports/commit', { method: 'POST', body: payloadOrId }, 'Không thể ghi import Excel.');
+    }
+    return apiJson(`/excel-imports/${encodeURIComponent(payloadOrId)}/commit`, { method: 'POST', body: legacyPayload }, 'Không thể ghi import Excel.');
   },
-  commit(payload = {}) {
-    return apiJson('/excel-imports/commit', { method: 'POST', body: payload }, 'Không thể ghi dữ liệu import.');
-  },
+  history(params = {}) { const query = new URLSearchParams(params); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/excel-imports/history${suffix}`, {}, 'Không thể tải lịch sử import Excel.'); },
+  detail(id) { return apiJson(`/excel-imports/history/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết import Excel.'); },
+  list(params = {}) { return this.history(params); },
 };
 
 export const sapoApi = {
-  saveSettings(payload = {}) { return apiJson('/sapo/settings', { method: 'POST', body: payload }, 'Không thể lưu cấu hình Sapo.'); },
-  validate(payload = {}) { return apiJson('/sapo/validate', { method: 'POST', body: payload }, 'Không thể kiểm tra cấu hình Sapo.'); },
-  analyze(payload = {}) { return apiJson('/sapo/analyze', { method: 'POST', body: payload }, 'Không thể phân tích Sapo.'); },
-  previewProducts(payload = {}) { return apiJson('/sapo/preview/products', { method: 'POST', body: payload }, 'Không thể xem trước sản phẩm Sapo.'); },
-  syncProducts(payload = {}) { return apiJson('/sapo/sync/products', { method: 'POST', body: payload }, 'Không thể đồng bộ sản phẩm Sapo.'); },
-  previewCustomers(payload = {}) { return apiJson('/sapo/preview/customers', { method: 'POST', body: payload }, 'Không thể xem trước khách hàng Sapo.'); },
-  syncCustomers(payload = {}) { return apiJson('/sapo/sync/customers', { method: 'POST', body: payload }, 'Không thể đồng bộ khách hàng Sapo.'); },
-  previewInvoices(payload = {}) { return apiJson('/sapo/preview/invoices', { method: 'POST', body: payload }, 'Không thể xem trước hóa đơn Sapo.'); },
-  syncInvoices(payload = {}) { return apiJson('/sapo/sync/invoices', { method: 'POST', body: payload }, 'Không thể đồng bộ hóa đơn Sapo.'); },
-  syncAll(payload = {}) { return apiJson('/sapo/sync', { method: 'POST', body: payload }, 'Không thể đồng bộ Sapo.'); },
-  importCustomersPreview(payload = {}) { return apiJson('/sapo/import/customers/preview', { method: 'POST', body: payload }, 'Không thể xem trước import khách hàng Sapo.'); },
+  listImports(params = {}) { const query = new URLSearchParams(params); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/sapo/imports${suffix}`, {}, 'Không thể tải danh sách import Sapo.'); },
+  createImport(payload = {}) { return apiJson('/sapo/imports', { method: 'POST', body: payload }, 'Không thể tạo import Sapo.'); },
+  getImport(id) { return apiJson(`/sapo/imports/${encodeURIComponent(id)}`, {}, 'Không thể tải import Sapo.'); },
+  commitImport(id, payload = {}) { return apiJson(`/sapo/imports/${encodeURIComponent(id)}/commit`, { method: 'POST', body: payload }, 'Không thể ghi import Sapo.'); },
+  listCustomers(params = {}) { const query = new URLSearchParams(params); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/sapo/customers${suffix}`, {}, 'Không thể tải khách hàng Sapo.'); },
+  importCustomersStart(payload = {}) { return apiJson('/sapo/import/customers', { method: 'POST', body: payload }, 'Không thể bắt đầu import khách hàng Sapo.'); },
   importCustomersCommit(payload = {}) { return apiJson('/sapo/import/customers/commit', { method: 'POST', body: payload }, 'Không thể ghi import khách hàng Sapo.'); },
 };
 
 export const customersApi = {
   list(params = {}) { const query = new URLSearchParams(params); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/customers${suffix}`, {}, 'Không thể tải danh sách khách hàng.'); },
   create(payload = {}) { return apiJson('/customers', { method: 'POST', body: payload }, 'Không thể tạo khách hàng.'); },
-  update(id, payload = {}) { return apiJson(`/customers/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }, 'Không thể cập nhật khách hàng.'); },
+  update(id, payload = {}) { return apiJson(`/customers/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật khách hàng.'); },
   remove(id) { return apiJson(`/customers/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể xóa khách hàng.'); },
   bulkRemove(ids = []) { return apiJson('/customers/bulk', { method: 'DELETE', body: { ids } }, 'Không thể xóa nhiều khách hàng.'); },
 };
@@ -236,7 +354,7 @@ export const customersApi = {
 export const customerTypesApi = {
   list() { return apiJson('/customer-types', {}, 'Không thể tải loại khách hàng.'); },
   create(payload = {}) { return apiJson('/customer-types', { method: 'POST', body: payload }, 'Không thể tạo loại khách hàng.'); },
-  update(id, payload = {}) { return apiJson(`/customer-types/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }, 'Không thể cập nhật loại khách hàng.'); },
+  update(id, payload = {}) { return apiJson(`/customer-types/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật loại khách hàng.'); },
   remove(id) { return apiJson(`/customer-types/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể xóa loại khách hàng.'); },
 };
 
@@ -245,28 +363,17 @@ export const authApi = {
   register(payload) { return apiJson('/users/register', { method: 'POST', body: payload }, 'Đăng ký thất bại.'); },
   bootstrapStatus() { return apiJson('/users/bootstrap-status', {}, 'Không thể tải trạng thái thiết lập tài khoản.'); },
   bootstrapAdmin(payload) { return apiJson('/users/bootstrap-admin', { method: 'POST', body: payload }, 'Thiết lập quản trị viên thất bại.'); },
+  profile() { return apiJson('/users/profile', {}, 'Không thể tải thông tin tài khoản.'); },
+  logout() { return apiJson('/users/logout', { method: 'POST' }, 'Không thể đăng xuất.'); },
+  logoutAll() { return apiJson('/users/logout-all', { method: 'POST' }, 'Không thể đăng xuất mọi phiên.'); },
+  syncVersions() { return apiJson('/sync/versions', {}, 'Không thể lấy phiên bản đồng bộ.'); },
+  syncPull(payload = {}) { return apiJson('/sync/pull', { method: 'POST', body: payload }, 'Không thể kéo dữ liệu đồng bộ.'); },
+  syncPush(payload = {}) { return apiJson('/sync/push', { method: 'POST', body: payload }, 'Không thể đẩy dữ liệu đồng bộ.'); },
 };
 
 export const usersApi = {
   list() { return apiJson('/users', {}, 'Không thể tải danh sách người dùng.'); },
-  update(id, payload = {}) { return apiJson(`/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }, 'Không thể cập nhật người dùng.'); },
-};
-
-export const licenseApi = {
-  status() { return apiJson('/license-keys/status', {}, 'Không thể tải trạng thái bản quyền.'); },
-  activate(payload = {}) { return apiJson('/license-keys/activate', { method: 'POST', body: payload }, 'Không thể kích hoạt bản quyền.'); },
-  list() { return apiJson('/license-keys', {}, 'Không thể tải danh sách key bản quyền.'); },
-  detail(id) { return apiJson(`/license-keys/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết key.'); },
-  create(payload = {}) { return apiJson('/license-keys', { method: 'POST', body: payload }, 'Không thể tạo key.'); },
-  update(id, payload = {}) { return apiJson(`/license-keys/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }, 'Không thể cập nhật key.'); },
-  renew(id, payload = {}) { return apiJson(`/license-keys/${encodeURIComponent(id)}/renew`, { method: 'POST', body: payload }, 'Không thể gia hạn key.'); },
-  disable(id, payload = {}) { return apiJson(`/license-keys/${encodeURIComponent(id)}/disable`, { method: 'POST', body: payload }, 'Không thể khóa key.'); },
-  enable(id, payload = {}) { return apiJson(`/license-keys/${encodeURIComponent(id)}/enable`, { method: 'POST', body: payload }, 'Không thể mở khóa key.'); },
-  remove(id) { return apiJson(`/license-keys/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể xóa key.'); },
-  listCustomers() { return apiJson('/license-keys/customers', {}, 'Không thể tải danh sách khách hàng bản quyền.'); },
-  createCustomer(payload = {}) { return apiJson('/license-keys/customers', { method: 'POST', body: payload }, 'Không thể tạo khách hàng bản quyền.'); },
-  updateCustomer(id, payload = {}) { return apiJson(`/license-keys/customers/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }, 'Không thể cập nhật khách hàng bản quyền.'); },
-  customerDetail(id) { return apiJson(`/license-keys/customers/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết khách hàng bản quyền.'); },
+  update(id, payload = {}) { return apiJson(`/users/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật người dùng.'); },
 };
 
 export const featuresApi = {
@@ -275,12 +382,6 @@ export const featuresApi = {
   create(payload = {}) { return apiJson('/features', { method: 'POST', body: payload }, 'Không thể tạo tính năng.'); },
   update(id, payload = {}) { return apiJson(`/features/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }, 'Không thể cập nhật tính năng.'); },
   remove(id, params = {}) { const query = new URLSearchParams(); if (params.hard) query.set('hard', '1'); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/features/${encodeURIComponent(id)}${suffix}`, { method: 'DELETE' }, 'Không thể xóa tính năng.'); },
-  listEntitlements(params = {}) { const query = new URLSearchParams(); if (params.featureId) query.set('feature_id', params.featureId); if (params.customerId) query.set('customer_id', params.customerId); if (params.licenseKeyId) query.set('license_key_id', params.licenseKeyId); if (params.includeInactive) query.set('include_inactive', '1'); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/features/entitlements${suffix}`, {}, 'Không thể tải danh sách quyền tính năng.'); },
-  detailEntitlement(id) { return apiJson(`/features/entitlements/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết quyền tính năng.'); },
-  createEntitlement(payload = {}) { return apiJson('/features/entitlements', { method: 'POST', body: payload }, 'Không thể tạo quyền tính năng.'); },
-  updateEntitlement(id, payload = {}) { return apiJson(`/features/entitlements/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }, 'Không thể cập nhật quyền tính năng.'); },
-  removeEntitlement(id) { return apiJson(`/features/entitlements/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể xóa quyền tính năng.'); },
-  bulkEnableEntitlements(payload = {}) { return apiJson('/features/entitlements/bulk-enable', { method: 'POST', body: payload }, 'Không thể bật hàng loạt quyền tính năng.'); },
 };
 
 export const updatesApi = {
@@ -295,14 +396,64 @@ export const updatesApi = {
   remove(id, params = {}) { const query = new URLSearchParams(); if (params.hard) query.set('hard', '1'); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/updates/${encodeURIComponent(id)}${suffix}`, { method: 'DELETE' }, 'Không thể xóa bản cập nhật.'); },
 };
 
+
 export const mobileAdminApi = {
-  listDevices() { return apiJson('/mobile/devices', {}, 'Không thể tải danh sách thiết bị mobile.'); },
-  createInstallLink(payload = {}) { return apiJson('/mobile/install-links', { method: 'POST', body: payload }, 'Không thể tạo link cài đặt mobile.'); },
-  resolveInstallLink(token) { return apiJson(`/mobile/install/${encodeURIComponent(token)}`, {}, 'Không thể giải mã link cài đặt mobile.'); },
-  revokeDevice(id, payload = {}) { return apiJson(`/mobile/devices/${encodeURIComponent(id)}/revoke`, { method: 'POST', body: payload }, 'Không thể thu hồi thiết bị mobile.'); },
-  updateDevice(id, payload = {}) { return apiJson(`/mobile/devices/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }, 'Không thể cập nhật thiết bị mobile.'); },
-  syncStatus() { return apiJson('/mobile/sync/status', {}, 'Không thể tải trạng thái đồng bộ mobile.'); },
+  listDevices() {
+    return apiJsonOptional('/mobile/devices', {}, {
+      fallbackMessage: 'Không thể tải danh sách thiết bị mobile.',
+      fallback: () => ({ ok: true, unsupported: true, items: [], devices: [], message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
+    });
+  },
+  createInstallLink(payload = {}) {
+    return apiJsonOptional('/mobile/install-links', { method: 'POST', body: payload }, {
+      fallbackMessage: 'Không thể tạo link cài đặt mobile.',
+      fallback: () => ({ ok: false, unsupported: true, token: '', url: '', installLink: null, message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
+    });
+  },
+  resolveInstallLink(token) {
+    return apiJsonOptional(`/mobile/install/${encodeURIComponent(token)}`, {}, {
+      fallbackMessage: 'Không thể giải mã link cài đặt mobile.',
+      fallback: () => ({ ok: false, unsupported: true, token: String(token || ''), installLink: null, message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
+    });
+  },
+  revokeDevice(id, payload = {}) {
+    return apiJsonOptional(`/mobile/devices/${encodeURIComponent(id)}/revoke`, { method: 'POST', body: payload }, {
+      fallbackMessage: 'Không thể thu hồi thiết bị mobile.',
+      fallback: () => ({ ok: false, unsupported: true, revoked: false, message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
+    });
+  },
+  updateDevice(id, payload = {}) {
+    return apiJsonOptional(`/mobile/devices/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }, {
+      fallbackMessage: 'Không thể cập nhật thiết bị mobile.',
+      fallback: () => ({ ok: false, unsupported: true, device: null, message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
+    });
+  },
+  syncStatus() {
+    return apiJsonOptional('/mobile/sync/status', {}, {
+      fallbackMessage: 'Không thể tải trạng thái đồng bộ mobile.',
+      fallback: () => ({ ok: true, unsupported: true, devices: [], summary: { total: 0, active: 0, revoked: 0 }, message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
+    });
+  },
 };
+
+export const licenseApi = {
+  status() {
+    return apiJsonOptional('/license-keys/status', { skipAuth: true }, {
+      fallbackMessage: 'Không thể tải trạng thái giấy phép.',
+      fallback: () => ({ ...DEFAULT_LICENSE_STATUS }),
+    });
+  },
+};
+
+async function readOptionalLicenseStatus() {
+  try {
+    const data = await licenseApi.status();
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    return data;
+  } catch (_) {
+    return null;
+  }
+}
 
 export function persistAuthSnapshot(payload = {}) {
   return saveAuthSession(payload);
@@ -312,15 +463,16 @@ export function persistAuthenticatedPayload(payload = {}) {
   return prepareForAuthenticatedPayload(payload);
 }
 
-export async function pullServerBootstrapData() {
-  const [status, license] = await Promise.allSettled([
-    authApi.bootstrapStatus(),
-    licenseApi.status(),
+export async function pullServerBootstrapData(options = {}) {
+  const syncPayload = options && typeof options === 'object' ? options : {};
+  const [sync, license] = await Promise.all([
+    authApi.syncPull(syncPayload),
+    readOptionalLicenseStatus(),
   ]);
 
   return {
-    auth: status.status === 'fulfilled' ? status.value : null,
-    license: license.status === 'fulfilled' ? license.value : null,
+    ...(sync && typeof sync === 'object' ? sync : {}),
+    license,
   };
 }
 
@@ -338,8 +490,14 @@ export async function pushPendingLocalData() {
 
   result.customers = Array.isArray(pending.customers) ? pending.customers : [];
 
+  const hasPendingData = result.orders.length > 0 || result.customers.length > 0;
+  if (!hasPendingData) {
+    return { ...result, response: null };
+  }
+
+  const response = await authApi.syncPush({ pending: result });
   clearPendingLocalData();
-  return result;
+  return { ...result, response };
 }
 
 function normalizePendingOrder(order) {

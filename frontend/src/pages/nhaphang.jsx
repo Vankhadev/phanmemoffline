@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Plus, X, Save, Package, Tag, FileText, LogOut, AlertCircle, CheckCircle, Building, Trash2, CreditCard, RotateCcw } from 'lucide-react';
-import { API } from '../App';
 import ProductLabelPrintModal from '../components/ProductLabelPrintModal';
+import { resolveApiUrl } from '../utils/apiClient';
 import { buildCategoriesById, categoryFields, getProductDisplayName, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
+
+const API = resolveApiUrl('');
 
 const SUPPLIER_CHANGE_CONFIRM_MESSAGE = 'Đổi nhà cung cấp sẽ xóa danh sách sản phẩm hiện tại. Bạn có muốn tiếp tục?';
 const PRODUCT_SEARCH_LIMIT = 80;
@@ -681,6 +683,7 @@ const Nhaphang = ({ store }) => {
   const searchInputRef = useRef(null);
   const productSearchContainerRef = useRef(null);
   const searchResultsRef = useRef(null);
+  const supplierSearchContainerRef = useRef(null);
   const supplierInputRef = useRef(null);
   const supplierResultsRef = useRef(null);
 
@@ -688,14 +691,20 @@ const Nhaphang = ({ store }) => {
   const selectedSupplierId = getSupplierRecordId(selectedSupplier);
   const getScopedProductSearchResults = useCallback((query = '') => {
     const trimmedQuery = query.trim();
-    const localResults = searchFlatProducts(allProducts, trimmedQuery, {
+    const scopedProductTree = selectedSupplier
+      ? filterProductTreeBySupplier(allProducts, selectedSupplier, {
+        categoriesById,
+        importHistory: orderHistory,
+      })
+      : allProducts;
+    const localResults = searchFlatProducts(scopedProductTree, trimmedQuery, {
       categoriesById,
       includeParents: true,
       includeVariants: true,
     });
 
-    return prepareImportSearchResults(localResults, trimmedQuery, allProducts);
-  }, [allProducts, categoriesById]);
+    return prepareImportSearchResults(localResults, trimmedQuery, scopedProductTree);
+  }, [allProducts, categoriesById, orderHistory, selectedSupplier]);
 
   // Fetch suppliers/products/categories from API
   useEffect(() => {
@@ -709,31 +718,45 @@ const Nhaphang = ({ store }) => {
     try {
       const res = await fetch(`${API}/partners`);
       if (res.ok) {
-        const data = await res.json();
-        setSuppliers(data);
+        const data = await res.json().catch(() => []);
+        setSuppliers(Array.isArray(data) ? data : []);
       } else {
         console.error('Failed to fetch suppliers');
+        setSuppliers([]);
       }
     } catch (err) {
       console.error('Lỗi tải nhà cung cấp:', err);
+      setSuppliers([]);
     }
   };
 
   const fetchAllProducts = async () => {
     try {
       const res = await fetch(`${API}/products/all/with-variants`);
-      if (res.ok) setAllProducts(await res.json());
+      if (res.ok) {
+        const data = await res.json().catch(() => []);
+        setAllProducts(Array.isArray(data) ? data : []);
+      } else {
+        setAllProducts([]);
+      }
     } catch (err) {
       console.error('Lỗi tải danh sách sản phẩm:', err);
+      setAllProducts([]);
     }
   };
 
   const fetchCategories = async () => {
     try {
       const res = await fetch(`${API}/product-categories`);
-      if (res.ok) setCategories(await res.json());
+      if (res.ok) {
+        const data = await res.json().catch(() => []);
+        setCategories(Array.isArray(data) ? data : []);
+      } else {
+        setCategories([]);
+      }
     } catch (err) {
       console.error('Lỗi tải danh mục sản phẩm:', err);
+      setCategories([]);
     }
   };
 
@@ -841,8 +864,8 @@ const Nhaphang = ({ store }) => {
       if (
         supplierResultsRef.current &&
         !supplierResultsRef.current.contains(event.target) &&
-        supplierInputRef.current &&
-        !supplierInputRef.current.contains(event.target)
+        supplierSearchContainerRef.current &&
+        !supplierSearchContainerRef.current.contains(event.target)
       ) {
         setShowSupplierResults(false);
       }
@@ -905,12 +928,23 @@ const Nhaphang = ({ store }) => {
     return thanhTien - (thanhTien * (discount / 100));
   };
 
-  const resetProductSearchState = () => {
+  const resetProductSearchState = (options = {}) => {
+    const {
+      keepSearchQuery = false,
+      keepSearchResults = false
+    } = options;
+
     setSelectedProduct(null);
     setEditingProductIndex(null);
-    setSearchQuery('');
-    setFilteredProducts([]);
-    setShowSearchResults(false);
+
+    if (!keepSearchQuery) {
+      setSearchQuery('');
+    }
+
+    if (!keepSearchResults) {
+      setFilteredProducts([]);
+      setShowSearchResults(false);
+    }
   };
 
   const openProductSearch = useCallback((rowIndex = null) => {
@@ -1006,13 +1040,11 @@ const Nhaphang = ({ store }) => {
       const mappedProduct = mapProductForImport(product, fullProduct, allProducts);
       setSelectedProduct(buildSelectedProductDraft(mappedProduct));
       setShowSearchResults(false);
-      setSearchQuery('');
       setError(null);
     } catch (err) {
       const mappedProduct = mapProductForImport(product, product, allProducts);
       setSelectedProduct(buildSelectedProductDraft(mappedProduct));
       setShowSearchResults(false);
-      setSearchQuery('');
       setError(null);
     } finally {
       setLoading(false);
@@ -1020,33 +1052,18 @@ const Nhaphang = ({ store }) => {
   };
 
   // Handle supplier selection from search
-  const handleSelectSupplier = async (supplier) => {
+  const handleSelectSupplier = (supplier) => {
     if (!prepareSupplierChange(supplier)) {
       setShowSupplierResults(false);
       setShowAllSuppliers(false);
       return;
     }
 
-    try {
-      setLoading(true);
-      const supplierRes = await fetch(`${API}/partners/${supplier.id}`);
-      const fullSupplier = supplierRes.ok ? await supplierRes.json() : supplier;
-      const normalizedSupplier = normalizeSupplierForForm(fullSupplier);
-
-      setSelectedSupplier(normalizedSupplier);
-      setShowSupplierResults(false);
-      setShowAllSuppliers(false);
-      setSupplierSearchQuery('');
-      setError(null);
-    } catch (err) {
-      setSelectedSupplier(normalizeSupplierForForm(supplier));
-      setShowSupplierResults(false);
-      setShowAllSuppliers(false);
-      setSupplierSearchQuery('');
-      setError(null);
-    } finally {
-      setLoading(false);
-    }
+    setSelectedSupplier(normalizeSupplierForForm(supplier));
+    setShowSupplierResults(false);
+    setShowAllSuppliers(false);
+    setSupplierSearchQuery('');
+    setError(null);
   };
 
   const handleClearSupplier = () => {
@@ -1059,7 +1076,11 @@ const Nhaphang = ({ store }) => {
   };
 
   // Add product to list
-  const handleAddProduct = () => {
+  const handleAddProduct = (options = {}) => {
+    const {
+      keepSearching = false
+    } = options;
+
     if (!selectedSupplier) {
       showSupplierRequiredHint();
       return;
@@ -1133,7 +1154,20 @@ const Nhaphang = ({ store }) => {
       setSuccess(null);
     }
 
-    resetProductSearchState();
+    if (keepSearching) {
+      setSelectedProduct(null);
+      setEditingProductIndex(null);
+      setSearchQuery('');
+      setFilteredProducts(getScopedProductSearchResults(''));
+      setShowSearchResults(true);
+      window.setTimeout(() => {
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select?.();
+      }, 0);
+    } else {
+      resetProductSearchState();
+    }
+
     setError(null);
   };
 
@@ -1775,10 +1809,15 @@ const Nhaphang = ({ store }) => {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ctrl + Enter to add product when selected
+      // Ctrl + Enter to add product and keep searching for the next one
       if (e.ctrlKey && e.key === 'Enter' && selectedProduct) {
         e.preventDefault();
-        handleAddProduct();
+        handleAddProduct({ keepSearching: true });
+      }
+      // Enter to add product, Shift+Enter to add and continue searching
+      if (e.key === 'Enter' && selectedProduct && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        handleAddProduct({ keepSearching: e.shiftKey });
       }
       // Escape to close search
       if (e.key === 'Escape') {
@@ -1852,7 +1891,7 @@ const Nhaphang = ({ store }) => {
         )}
 
         {/* Main Content Grid */}
-        <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_480px] 2xl:grid-cols-[minmax(0,1fr)_520px]">
           {/* Left Column - Input Form */}
           <div className="min-w-0 space-y-6">
             {/* Supplier & Product Search Card */}
@@ -1865,7 +1904,7 @@ const Nhaphang = ({ store }) => {
               </div>
               <div className="p-4 space-y-4">
                 {/* Supplier Search */}
-                <div className="relative" ref={supplierInputRef}>
+                <div className="relative" ref={supplierSearchContainerRef}>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     <Building className="inline w-4 h-4 mr-1" />
                     Nhà cung cấp
@@ -2074,7 +2113,7 @@ const Nhaphang = ({ store }) => {
                     <p className="mt-2 text-xs text-amber-600">Chọn nhà cung cấp trước để thêm nhiều sản phẩm vào phiếu nhập.</p>
                   )}
                   {selectedSupplier && (
-                    <p className="mt-2 text-xs text-gray-500">Đã chọn nhà cung cấp: {selectedSupplier.tenNCC}. Mỗi sản phẩm mới sẽ được thêm vào cuối danh sách theo đúng thứ tự chọn.</p>
+                    <p className="mt-2 text-xs text-gray-500">Đã chọn nhà cung cấp: {selectedSupplier.tenNCC}. Có thể bấm Enter để thêm nhanh, hoặc Shift+Enter / Ctrl+Enter để thêm xong và tiếp tục tìm sản phẩm tiếp theo.</p>
                   )}
                 </div>
               </div>
@@ -2186,14 +2225,25 @@ const Nhaphang = ({ store }) => {
                       {selectedProduct.thanhTien.toLocaleString('vi-VN')}đ
                     </div>
                   </div>
-                  <button
-                    onClick={handleAddProduct}
-                    disabled={saving}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Plus className="w-4 h-4" />
-                    {editingProductIndex !== null ? 'Cập nhật dòng sản phẩm' : 'Thêm vào danh sách'}
-                  </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handleAddProduct({ keepSearching: false })}
+                      disabled={saving}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      {editingProductIndex !== null ? 'Cập nhật dòng sản phẩm' : 'Thêm vào danh sách'}
+                    </button>
+                    <button
+                      onClick={() => handleAddProduct({ keepSearching: true })}
+                      disabled={saving}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm"
+                      title="Thêm sản phẩm và giữ nguyên ô tìm kiếm để nhập tiếp"
+                    >
+                      <Search className="w-4 h-4" />
+                      Thêm và tìm tiếp
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

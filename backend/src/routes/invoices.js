@@ -9,6 +9,10 @@ const { getAll, getOne, insert, update, remove, upsertDailyStats, today, now, ge
 const { requireAdmin } = require('../middleware/auth');
 const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
 const { createInvoiceFromPayload } = require('../services/invoiceCreationService');
+const {
+  getInvoiceDetailProductId,
+  validateNegativeStockForDetails,
+} = require('../utils/negativeStock');
 
 // ─────────────────────────────────────────────
 // Helper: tạo mã đơn tự động HD000001
@@ -22,18 +26,18 @@ function genInvoiceCode() {
 // ─────────────────────────────────────────────
 function deductStock(productOrVariantId, quantity) {
   // ① Thử trừ biến thể trước (biến thể lưu trong bảng products với parent_id != null)
-  const variant = getOne('products', v => v.id === productOrVariantId && v.parent_id != null);
+  const variant = getOne('products', v => Number(v.id) === Number(productOrVariantId) && v.parent_id != null);
   if (variant) {
     update('products', variant.id, {
-      stock: Math.max(0, (variant.stock || 0) - quantity),
+      stock: (Number(variant.stock) || 0) - quantity,
     });
     return;
   }
   // ② Thử trừ sản phẩm cha (parent_id là null)
-  const product = getOne('products', p => p.id === productOrVariantId && !p.parent_id);
+  const product = getOne('products', p => Number(p.id) === Number(productOrVariantId) && !p.parent_id);
   if (product) {
     update('products', product.id, {
-      stock: Math.max(0, (product.stock || 0) - quantity),
+      stock: (Number(product.stock) || 0) - quantity,
     });
     return;
   }
@@ -64,10 +68,10 @@ function restoreStock(productOrVariantId, quantity) {
 // Helper: lấy tồn kho thực tế (product hoặc variant)
 // ─────────────────────────────────────────────
 function getStock(productOrVariantId) {
-  const variant = getOne('products', v => v.id === productOrVariantId && v.parent_id != null);
-  if (variant) return { stock: variant.stock || 0, name: variant.name };
-  const product = getOne('products', p => p.id === productOrVariantId && !p.parent_id);
-  if (product) return { stock: product.stock || 0, name: product.name };
+  const variant = getOne('products', v => Number(v.id) === Number(productOrVariantId) && v.parent_id != null);
+  if (variant) return { stock: Number(variant.stock) || 0, name: variant.name };
+  const product = getOne('products', p => Number(p.id) === Number(productOrVariantId) && !p.parent_id);
+  if (product) return { stock: Number(product.stock) || 0, name: product.name };
   return { stock: 0, name: `ID ${productOrVariantId}` };
 }
 
@@ -76,6 +80,31 @@ function getStock(productOrVariantId) {
 // ─────────────────────────────────────────────
 function isComboDetail(detail = {}) {
   return detail.type === 'combo' || detail.item_type === 'combo' || !!detail.combo_id;
+}
+
+function collectProductQuantities(details = []) {
+  const map = new Map();
+  for (const detail of details || []) {
+    const productId = Number(getInvoiceDetailProductId(detail));
+    if (!Number.isFinite(productId) || productId <= 0) continue;
+    const quantity = Math.max(0, Number(detail.quantity) || 0);
+    if (quantity <= 0) continue;
+    map.set(productId, (map.get(productId) || 0) + quantity);
+  }
+  return map;
+}
+
+function validateStockForInvoiceEditDetails(newDetails = [], oldDetails = []) {
+  try {
+    validateNegativeStockForDetails(newDetails, {
+      restoredByProductId: collectProductQuantities(oldDetails),
+    });
+  } catch (error) {
+    if (error?.status) throw error;
+    const err = new Error(error?.message || 'Không thể kiểm tra tồn kho trước khi cập nhật đơn hàng');
+    err.status = 400;
+    throw err;
+  }
 }
 
 function buildDetailKey(detail = {}, index = 0) {
@@ -332,9 +361,6 @@ router.post('/', (req, res) => {
   try {
     const result = createInvoiceFromPayload(req.body, req, { orderSource: 'direct' });
 
-    // Trigger bot tồn kho (async) chỉ khi thật sự tạo đơn mới; request idempotent không trừ kho lại.
-    if (result.created) triggerBotStockCheck(req).catch(() => { });
-
     res.json({
       ok: true,
       invoice_id: result.invoice_id,
@@ -403,6 +429,7 @@ router.put('/:id', requireAdmin, (req, res) => {
 
       // ① Hoàn kho cho chi tiết cũ (dùng helper nhận diện product/variant)
       const oldDetails = getAll('invoice_details', d => d.invoice_id === inv.id);
+      validateStockForInvoiceEditDetails(safeDetails, oldDetails);
       for (const d of oldDetails) {
         if (d.product_id) restoreStock(d.product_id, +d.quantity || 0);
       }
@@ -421,7 +448,8 @@ router.put('/:id', requireAdmin, (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi sửa đơn: ' + err.message });
+    const status = err.status || 500;
+    res.status(status).json({ error: 'Lỗi khi sửa đơn: ' + err.message });
   }
 });
 
@@ -470,14 +498,6 @@ router.patch('/:id/confirm', requireAdmin, (req, res) => {
     res.status(500).json({ error: 'Lỗi khi xác nhận đơn: ' + err.message });
   }
 });
-
-// ─────────────────────────────────────────────
-// Bot: kiểm tra tồn kho sau khi tạo/sửa đơn
-// ─────────────────────────────────────────────
-async function triggerBotStockCheck(req) {
-  const target = `${req.protocol}://${req.get('host')}/api/bot/auto-check-stock`;
-  await globalThis.fetch(target, { method: 'POST' });
-}
 
 // ─────────────────────────────────────────────
 // Helper: tạo giao dịch thu vào sổ quỹ

@@ -14,9 +14,11 @@ import {
   Star,
   Trash2,
 } from 'lucide-react';
-import { API } from '../App';
+import { resolveApiUrl } from '../utils/apiClient';
 import InvoicePreview from '../components/InvoicePreview';
 import InvoiceTemplateVisualEditor from '../components/InvoiceTemplateVisualEditor';
+
+const API = resolveApiUrl('');
 import {
   getDefaultTemplate,
   getFallbackTemplates,
@@ -482,7 +484,7 @@ export default function PrintTemplates({ store }) {
           <div>
             <h1 className="text-xl font-bold text-gray-900">Quản lý mẫu in hóa đơn</h1>
             <p className="text-sm text-gray-500">
-              Chọn mẫu, bấm Sửa để chỉnh trực quan, xem trước realtime và in thử trước khi lưu mặc định.
+              Chọn mẫu, bấm Sửa để chỉnh trực quan, xem trước mẫu in và in thử trước khi lưu mặc định.
             </p>
           </div>
         </div>
@@ -512,7 +514,7 @@ export default function PrintTemplates({ store }) {
       {loadedFromFallback && (
         <div className="rounded-xl px-4 py-3 text-sm bg-amber-50 text-amber-800 border border-amber-200 flex items-start gap-2">
           <AlertCircle size={18} />
-          <span>Đang dùng mẫu fallback frontend. Bấm <strong>Lưu làm mặc định</strong> hoặc <strong>Lưu mới</strong> để tạo mẫu thật qua API.</span>
+          <span>Đang dùng mẫu im Bấm <strong>Lưu làm mặc định</strong> hoặc <strong>Lưu mới</strong> để tạo mẫu thật qua API.</span>
         </div>
       )}
 

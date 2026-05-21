@@ -63,7 +63,7 @@ function normalizeVersion(value) {
 }
 
 function renderArtifactName(template, packageJson, version) {
-  return String(template || 'vankhadev-setup-v${version}.exe')
+  return String(template || 'banhangoffline-setup-v${version}.exe')
     .replace(/\$\{version\}/g, version)
     .replace(/\$\{name\}/g, packageJson.name || 'app')
     .replace(/\$\{productName\}/g, packageJson.build?.productName || packageJson.name || 'app');
@@ -111,7 +111,7 @@ async function main() {
   const version = normalizeVersion(packageJson.version);
   if (!SEMVER_PATTERN.test(version)) fail(`Version trong package.json không hợp lệ: ${packageJson.version}`);
 
-  const artifactTemplate = packageJson.build?.nsis?.artifactName || 'BanHangOffline-Setup-v${version}.exe';
+  const artifactTemplate = packageJson.build?.nsis?.artifactName || 'banhangoffline-setup-v${version}.exe';
   const artifactName = renderArtifactName(artifactTemplate, packageJson, version);
   const installerPath = process.env.KHA_UPDATE_INSTALLER
     ? path.resolve(ROOT_DIR, process.env.KHA_UPDATE_INSTALLER)
@@ -157,3 +157,4 @@ async function main() {
 }
 
 main().catch(err => fail(err.stack || err.message));
+

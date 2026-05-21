@@ -1,6 +1,35 @@
 const express = require('express');
 const router = express.Router();
-const sapoSyncService = require('../services/sapoSyncService');
+
+let sapoSyncService = null;
+try {
+  sapoSyncService = require('../services/sapoSyncService');
+} catch (_) {
+  sapoSyncService = null;
+}
+
+function isSapoAvailable() {
+  return Boolean(sapoSyncService);
+}
+
+function sendSapoUnavailable(res) {
+  return res.status(503).json({
+    ok: false,
+    resource: null,
+    resources: [],
+    summary: {},
+    items: [],
+    results: [],
+    warnings: [],
+    errors: [{ code: 'SAPO_UNAVAILABLE', message: 'Chức năng Sapo hiện không khả dụng.' }],
+    progress: {},
+    error: 'Chức năng Sapo hiện không khả dụng.',
+    message: 'Chức năng Sapo hiện không khả dụng.',
+    code: 'SAPO_UNAVAILABLE',
+    upstream_status: null,
+    detail: 'Dịch vụ đồng bộ Sapo đã bị gỡ hoặc chưa được cấu hình.',
+  });
+}
 
 function normalizeErrorList(err, fallbackMessage) {
   if (Array.isArray(err?.errors)) return err.errors;

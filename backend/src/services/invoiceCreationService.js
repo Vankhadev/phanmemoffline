@@ -10,6 +10,10 @@ const {
   getActiveAccountId,
 } = require('../db/database');
 const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
+const {
+  getInvoiceDetailProductId,
+  validateNegativeStockForDetails,
+} = require('../utils/negativeStock');
 
 const SAPO_INVOICE_METADATA_FIELDS = [
   'sapo_order_id',
@@ -151,7 +155,7 @@ function deductStock(productOrVariantId, quantity) {
   const variant = getOne('products', v => Number(v.id) === Number(productOrVariantId) && v.parent_id != null);
   if (variant) {
     update('products', variant.id, {
-      stock: Math.max(0, (variant.stock || 0) - quantity),
+      stock: (Number(variant.stock) || 0) - quantity,
     });
     return;
   }
@@ -159,7 +163,7 @@ function deductStock(productOrVariantId, quantity) {
   const product = getOne('products', p => Number(p.id) === Number(productOrVariantId) && !p.parent_id);
   if (product) {
     update('products', product.id, {
-      stock: Math.max(0, (product.stock || 0) - quantity),
+      stock: (Number(product.stock) || 0) - quantity,
     });
   }
 }
@@ -248,27 +252,15 @@ function resolveInvoiceCode(payload = {}, options = {}) {
 }
 
 function getDetailProductId(detail = {}) {
-  if (isComboDetail(detail)) return null;
-  return detail.product_id || detail.variant_id || null;
+  return getInvoiceDetailProductId(detail);
 }
 
 function validateStockForDetails(details = []) {
-  const requiredByProductId = new Map();
-
-  for (const detail of details) {
-    const productId = getDetailProductId(detail);
-    if (!productId) continue;
-    const key = Number(productId);
-    const quantity = Math.max(1, Number(detail.quantity) || 1);
-    requiredByProductId.set(key, (requiredByProductId.get(key) || 0) + quantity);
-  }
-
-  for (const [productId, requiredQuantity] of requiredByProductId.entries()) {
-    const prod = getOne('products', p => Number(p.id) === Number(productId));
-    if (!prod) throw createHttpError(`Sản phẩm ID ${productId} không tồn tại`, 400);
-    if ((Number(prod.stock) || 0) < requiredQuantity) {
-      throw createHttpError(`Sản phẩm "${prod.name}" không đủ tồn kho! Còn: ${prod.stock || 0}, cần: ${requiredQuantity}`, 400);
-    }
+  try {
+    validateNegativeStockForDetails(details);
+  } catch (error) {
+    if (error?.status) throw error;
+    throw createHttpError(error?.message || 'Không thể kiểm tra tồn kho trước khi xuất hàng', 400);
   }
 }
 

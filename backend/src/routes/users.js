@@ -3,6 +3,7 @@
  * Email/password auth + secure server sessions + account/permission bootstrap payload
  */
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const {
   getAll,
@@ -30,6 +31,25 @@ const {
 
 const ROLE_ADMIN = 'admin';
 const ROLE_USER = 'user';
+const AUTH_RATE_LIMIT_WINDOW_MS = Number(process.env.KHA_AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
+const AUTH_RATE_LIMIT_MAX = Number(process.env.KHA_AUTH_RATE_LIMIT_MAX || 60);
+const AUTH_SENSITIVE_RATE_LIMIT_MAX = Number(process.env.KHA_AUTH_SENSITIVE_RATE_LIMIT_MAX || 20);
+
+const authPublicLimiter = rateLimit({
+  windowMs: Number.isFinite(AUTH_RATE_LIMIT_WINDOW_MS) && AUTH_RATE_LIMIT_WINDOW_MS > 0 ? AUTH_RATE_LIMIT_WINDOW_MS : 15 * 60 * 1000,
+  limit: Number.isFinite(AUTH_RATE_LIMIT_MAX) && AUTH_RATE_LIMIT_MAX > 0 ? AUTH_RATE_LIMIT_MAX : 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, message: 'Quá nhiều yêu cầu, vui lòng thử lại sau ít phút.' },
+});
+
+const authSensitiveLimiter = rateLimit({
+  windowMs: Number.isFinite(AUTH_RATE_LIMIT_WINDOW_MS) && AUTH_RATE_LIMIT_WINDOW_MS > 0 ? AUTH_RATE_LIMIT_WINDOW_MS : 15 * 60 * 1000,
+  limit: Number.isFinite(AUTH_SENSITIVE_RATE_LIMIT_MAX) && AUTH_SENSITIVE_RATE_LIMIT_MAX > 0 ? AUTH_SENSITIVE_RATE_LIMIT_MAX : 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, message: 'Quá nhiều lần thử đăng nhập/đăng ký, vui lòng thử lại sau ít phút.' },
+});
 
 function isActiveUser(user) {
   return user && user.active !== 0;
@@ -205,7 +225,7 @@ function createAccountWithAutomaticRole(req, res) {
 }
 
 // ===== Public: bootstrap/setup status =====
-router.get('/bootstrap-status', (req, res) => {
+router.get('/bootstrap-status', authPublicLimiter, (req, res) => {
   const info = getBootstrapInfo();
   res.json({
     needsSetup: info.needsSetup,
@@ -220,7 +240,7 @@ router.get('/bootstrap-status', (req, res) => {
   });
 });
 
-router.post('/bootstrap-admin', (req, res) => {
+router.post('/bootstrap-admin', authSensitiveLimiter, (req, res) => {
   const info = getBootstrapInfo();
   if (!info.canCreateAdmin) {
     return res.status(400).json({
@@ -235,10 +255,10 @@ router.post('/bootstrap-admin', (req, res) => {
 });
 
 // ===== Đăng ký tài khoản: server tự gán ADMIN cho user đầu tiên, USER cho user sau =====
-router.post('/register', (req, res) => createAccountWithAutomaticRole(req, res));
+router.post('/register', authSensitiveLimiter, (req, res) => createAccountWithAutomaticRole(req, res));
 
 // ===== Đăng nhập =====
-router.post('/login', (req, res) => {
+router.post('/login', authSensitiveLimiter, (req, res) => {
   const { email, password } = req.body || {};
 
   if (!email || !password) {
@@ -267,13 +287,22 @@ router.post('/login', (req, res) => {
 
 // ===== Profile/session =====
 router.get('/profile', requireAuth, (req, res) => {
+  const account = getAccountById(req.accountId);
+  const permissions = req.permissions || getUserPermissions(req.user);
+  const syncVersions = getSyncVersions(req.accountId);
+  const defaultRoute = req.user.role === ROLE_ADMIN ? '/cai-dat' : '/';
   res.json({
     ok: true,
     user: publicUser(req.user),
-    account: publicAccount(req.account),
-    permissions: req.permissions || getUserPermissions(req.user),
+    account: publicAccount(account),
+    permissions,
     session: publicSession(req.session),
-    syncVersions: getSyncVersions(req.accountId),
+    syncVersions,
+    bootstrap: {
+      defaultRoute,
+      syncVersions,
+    },
+    serverTime: new Date().toISOString(),
   });
 });
 

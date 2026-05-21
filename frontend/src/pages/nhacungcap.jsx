@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { API } from '../App';
+import { resolveApiUrl } from '../utils/apiClient';
 import { Plus, Edit2, Trash2, Search, Loader, FileDown, Upload, X, HelpCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
@@ -109,7 +109,7 @@ export default function NhaCungCap() {
   const fetchSuppliers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/partners`);
+      const res = await fetch(resolveApiUrl('/partners'));
       const data = await res.json();
       setSuppliers(data);
     } catch (err) {
@@ -122,7 +122,7 @@ export default function NhaCungCap() {
   const fetchSupplierPaymentSummaries = async () => {
     setPaymentLoading(true);
     try {
-      const res = await fetch(`${API}/imports`);
+      const res = await fetch(resolveApiUrl('/imports'));
       if (!res.ok) throw new Error('Không thể tải lịch sử nhập hàng để tổng hợp thanh toán');
       const data = await res.json();
       const summaries = {};
@@ -202,7 +202,7 @@ export default function NhaCungCap() {
     setSaving(true);
     try {
       const method = editing ? 'PUT' : 'POST';
-      const url = editing ? `${API}/partners/${editing.id}` : `${API}/partners`;
+      const url = editing ? resolveApiUrl(`/partners/${editing.id}`) : resolveApiUrl('/partners');
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -226,7 +226,7 @@ export default function NhaCungCap() {
   const handleDelete = async (id) => {
     if (!confirm('Xóa nhà cung cấp này?')) return;
     try {
-      const res = await fetch(`${API}/partners/${id}`, { method: 'DELETE' });
+      const res = await fetch(resolveApiUrl(`/partners/${id}`), { method: 'DELETE' });
       const data = await res.json();
       if (data.ok) {
         alert('✅ Đã xóa nhà cung cấp!');
@@ -331,7 +331,7 @@ export default function NhaCungCap() {
 
       for (const supplier of validSuppliers) {
         try {
-          const res = await fetch(`${API}/partners`, {
+          const res = await fetch(resolveApiUrl('/partners'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(supplier),
@@ -455,14 +455,8 @@ export default function NhaCungCap() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
-          <span className="text-orange-500">🏭</span>
+          <span className="text-orange-500"></span>
           <span>Quản lý Nhà cung cấp</span>
-          <button
-            onClick={() => setShowHelp(true)}
-            className="ml-2 px-2 py-0.5 border border-gray-300 text-gray-500 hover:bg-gray-50 rounded text-xs font-medium flex items-center gap-1"
-          >
-            <HelpCircle size={12} /> Hướng dẫn
-          </button>
         </h1>
         <div className="flex gap-2">
           <input
@@ -500,7 +494,7 @@ export default function NhaCungCap() {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-orange-50 text-orange-700 text-xs">
-              <th className="p-2 text-left w-48">Tên NCC</th>
+              <th className="p-2 text-left w-48">Tên đối tác</th>
               <th className="p-2 text-left w-32">SĐT</th>
               <th className="p-2 text-left w-32">MST</th>
               <th className="p-2 text-left w-40">Email</th>
@@ -602,7 +596,7 @@ export default function NhaCungCap() {
                     type="email"
                     value={form.email}
                     onChange={e => setForm({ ...form, email: e.target.value })}
-                    placeholder="ncc@abc.com"
+                    placeholder="example@gmail.com"
                   />
                 </div>
               </div>
@@ -688,7 +682,7 @@ export default function NhaCungCap() {
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">🔍 Tìm kiếm</h3>
+                <h3 className="font-bold text-gray-800 mb-2"> Tìm kiếm</h3>
                 <p>Nhập từ khóa vào ô tìm kiếm để lọc danh sách theo:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>Tên nhà cung cấp</li>

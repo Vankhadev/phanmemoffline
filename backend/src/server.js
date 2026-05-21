@@ -4,6 +4,7 @@
  */
 const express = require('express');
 const cors    = require('cors');
+const helmet  = require('helmet');
 const cron    = require('node-cron');
 const path    = require('path');
 const { version: APP_VERSION } = require('../../package.json');
@@ -27,17 +28,14 @@ const returnsRoutes  = require('./routes/returns');
 const statsRoutes    = require('./routes/stats');
 const cashBookRoutes = require('./routes/cashbook');
 const payrollsRoutes = require('./routes/payrolls');
-const botRoutes       = require('./routes/bot');
 const customerTypesRoutes = require('./routes/customerTypes');
 const productCategoriesRoutes = require('./routes/productCategories');
 const printTemplatesRoutes = require('./routes/printTemplates');
-const licenseKeysRoutes = require('./routes/licenseKeys');
 const featuresRoutes = require('./routes/features');
 const updatesRoutes = require('./routes/updates');
-const sapoSyncRoutes = require('./routes/sapoSync');
 const excelImportsRoutes = require('./routes/excelImports');
-const mobileRoutes = require('./routes/mobile');
-const { reconcileMobileServerState } = require('./services/mobileSyncService');
+const sapoSyncRoutes = require('./routes/sapoSync');
+const licenseKeysRoutes = require('./routes/licenseKeys');
 
 // ============================================================
 //  EXPRESS APP
@@ -78,7 +76,40 @@ function buildHealthPayload() {
   };
 }
 
-app.use(cors());
+function parseAllowedOrigins(value) {
+  return String(value || '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+}
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  /^https?:\/\/localhost(?::\d+)?$/i,
+  /^https?:\/\/127\.0\.0\.1(?::\d+)?$/i,
+  /^https?:\/\/\[::1\](?::\d+)?$/i,
+];
+const configuredAllowedOrigins = parseAllowedOrigins(
+  process.env.KHA_CORS_ORIGINS ||
+  process.env.CORS_ORIGINS ||
+  process.env.ALLOWED_ORIGINS
+);
+
+function isAllowedCorsOrigin(origin) {
+  if (!origin || origin === 'null') return true;
+  if (configuredAllowedOrigins.includes('*')) return true;
+  if (configuredAllowedOrigins.includes(origin)) return true;
+  return DEFAULT_ALLOWED_ORIGINS.some(pattern => pattern.test(origin));
+}
+
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+app.use(cors({
+  origin(origin, callback) {
+    return callback(null, isAllowedCorsOrigin(origin));
+  },
+  credentials: true,
+}));
 app.use('/api/products/import-excel-rows', express.json({ limit: '25mb' }));
 app.use('/api/sapo/import/customers', express.json({ limit: '25mb' }));
 app.use('/api/sapo/customers/import', express.json({ limit: '25mb' }));
@@ -140,7 +171,7 @@ app.get('/api/health', (_req, res) => {
 // Public auth/setup endpoints remain inside usersRoutes and syncRoutes; business routes require a valid server session.
 app.use('/api/users',          usersRoutes);
 app.use('/api',                syncRoutes);
-app.use('/api/mobile',         mobileRoutes);
+app.use('/api/license-keys',   licenseKeysRoutes);
 app.use('/api/store',          requireAuth, requireAnyPermission(['store.read', 'store.manage']), storeRoutes);
 app.use('/api/customers',      requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customersRoutes);
 app.use('/api/products',       requireAuth, requireAnyPermission(['products.read', 'products.manage']), productsRoutes);
@@ -152,11 +183,11 @@ app.use('/api/returns',        requireAuth, requireAnyPermission(['returns.read'
 app.use('/api/stats',          requireAuth, requirePermission('stats.read'), statsRoutes);
 app.use('/api/cash-book',      requireAuth, requireAnyPermission(['cashbook.read', 'cashbook.manage']), cashBookRoutes);
 app.use('/api/payrolls',       requireAuth, requireAnyPermission(['payrolls.read', 'payrolls.manage']), payrollsRoutes);
-app.use('/api/bot',            requireAuth, requireAnyPermission(['bot.read', 'bot.manage']), botRoutes);
 app.use('/api/customer-types', requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customerTypesRoutes);
 app.use('/api/product-categories', requireAuth, requireAnyPermission(['products.read', 'products.manage']), productCategoriesRoutes);
 app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
-app.use('/api/license-keys', licenseKeysRoutes);
+app.use('/api/features', featuresRoutes);
+app.use('/api/updates', updatesRoutes);
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);
 app.use('/api/sapo', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), sapoSyncRoutes);
 
@@ -223,19 +254,6 @@ cron.schedule('*/5 * * * *', () => {
   }
 });
 
-// ============================================================
-//  CRON: mỗi 15 phút - reconcile trạng thái mobile server-side
-// ============================================================
-cron.schedule('*/15 * * * *', () => {
-  try {
-    const result = reconcileMobileServerState();
-    if (result.expiredLinks || result.staleEvents) {
-      console.log(`[KHA MOBILE CRON] expiredLinks=${result.expiredLinks}, staleEvents=${result.staleEvents}`);
-    }
-  } catch (err) {
-    console.warn('[KHA MOBILE CRON] Reconcile failed:', err.message);
-  }
-});
 
 // ============================================================
 //  CRON: mỗi ngày lúc 02:00 - xóa đơn hàng đã hủy cũ hơn 5 ngày
@@ -257,28 +275,22 @@ cron.schedule('0 2 * * *', () => {
       }
     }
   });
-  console.log(`[VANKHA CRON CLEANUP] Đã xóa ${deletedCount} đơn hàng đã hủy cũ hơn 5 ngày`);
+
+  if (deletedCount > 0) {
+    console.log(`[KHA CRON CLEANUP] Đã xóa ${deletedCount} đơn hủy cũ`);
+  }
 });
 
 // ============================================================
-//  START
+//  START SERVER
 // ============================================================
-const displayHost = HOST === '0.0.0.0' || HOST === '::' ? '127.0.0.1' : HOST;
-console.log(`\n========================================`);
-console.log(`[KHA] Backend:  http://${displayHost}:${PORT}`);
-if (HOST === '0.0.0.0' || HOST === '::') {
-  console.log(`[KHA] LAN:      http://<IP-may-chu>:${PORT}`);
-}
-console.log(`[KHA] Database: ${DB_PATH}`);
-console.log(`[KHA] Version:  ${APP_VERSION}`);
-console.log(`========================================\n`);
-
-const server = app.listen(PORT, HOST, () => {
-  console.log(`[KHA] Tables:`, Object.keys(db).map(k => `${k}(${Array.isArray(db[k]) ? db[k].length : 0})`).join(', '));
+app.listen(PORT, HOST, () => {
+  console.log(`
+----------------------------------------------
+📡 KHA Backend listening at http://${HOST}:${PORT}
+----------------------------------------------
+DB path: ${DB_PATH}
+Started: ${SERVER_STARTED_AT}
+----------------------------------------------
+`);
 });
-
-server.on('error', err => {
-  console.error(`[KHA] Không thể khởi động backend trên ${HOST}:${PORT}:`, err.message);
-});
-
-module.exports = { app, server, buildHealthPayload };

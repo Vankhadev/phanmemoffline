@@ -9,6 +9,7 @@ const ALIGN_OPTIONS = [
   { value: 'left', label: 'Trái' },
   { value: 'center', label: 'Giữa' },
   { value: 'right', label: 'Phải' },
+  { value: 'right', label: 'trên' },
 ];
 
 const SECTION_LABELS = {

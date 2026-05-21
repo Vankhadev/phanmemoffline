@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API } from '../App';
+import { resolveApiUrl } from '../utils/apiClient';
 import { Users, FileDown, Plus, X, Edit2, Trash2, Loader, Tag, HelpCircle, UploadCloud } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
 import { customerTypesApi, customersApi, getApiErrorMessage, SYNC_UPDATED_EVENT } from '../utils/apiClient';
+
+const API = resolveApiUrl('');
 
 export default function Customers() {
   const navigate = useNavigate();

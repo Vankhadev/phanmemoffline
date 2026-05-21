@@ -12,7 +12,7 @@ export default function InvoicePreview({ template, store, type = 'sale_invoice',
   const sampleData = useMemo(() => createSampleInvoiceData(type, {
     store: {
       ...(store || {}),
-      name: store?.name || 'Shop',
+      name: store?.name || 'vankha',
       phone: store?.phone || '0901 234 567',
       email: store?.email || 'shop@example.local',
       address: store?.address || '123 Đường Hoa Mai, Quận 1, TP.HCM',

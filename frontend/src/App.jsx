@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate, } from 'react-router-dom';
 import Home from './pages/Home';
 import CreateOrder from './pages/CreateOrder';
@@ -11,21 +11,17 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import OrderList from './pages/OrderList';
 import KhoHang from './pages/KhoHang';
-import Nhaphang from './pages/nhaphang';
-import Reports from './pages/Reports';
+import Nhaphang from './pages/Nhaphang';
 import CustomerOrderReport from './pages/CustomerOrderReport';
 import ProductReport from './pages/ProductReport';
 import CashBook from './pages/CashBook';
 import Payroll from './pages/Payroll';
 import PrintTemplates from './pages/PrintTemplates';
-import KeyBangQuyen from './pages/keybangquyen';
 import {
   BadgeDollarSign,
   BarChart3,
   Box,
   Boxes,
-  ChevronDown,
-  ChevronRight,
   ClipboardList,
   FileText,
   Home as HomeIcon,
@@ -48,20 +44,14 @@ import {
   SYNC_CHECK_REQUEST_EVENT,
   SYNC_UPDATED_EVENT,
   authApi,
-  getApiBase,
   getApiErrorMessage,
-  licenseApi,
   persistAuthenticatedPayload,
   persistAuthSnapshot,
   pullServerBootstrapData,
   pushPendingLocalData,
 } from './utils/apiClient';
 import { clearAuthSession, clearVolatileCache, getAuthToken, normalizePermissions } from './utils/authStorage';
-import { clearStoredLicense, getStoredLicense, getStoredLicenseDaysRemaining, isStoredLicenseStillValid, saveStoredLicense } from './utils/licenseStorage';
 
-export const API = getApiBase();
-
-const MOBILE_ROUTE_PREFIX = '/mobile';
 
 function isCapacitorNativeRuntime() {
   try {
@@ -71,12 +61,6 @@ function isCapacitorNativeRuntime() {
   }
 }
 
-function isMobileAppRoute() {
-  if (typeof window === 'undefined') return false;
-  if (isCapacitorNativeRuntime()) return true;
-  const route = String(window.location.hash || '').replace(/^#/, '') || window.location.pathname || '';
-  return route === MOBILE_ROUTE_PREFIX || route.startsWith(`${MOBILE_ROUTE_PREFIX}/`);
-}
 
 const ROUTE_ALIASES = {
   '/settings': '/cai-dat',
@@ -98,7 +82,6 @@ const SYNC_POLL_IMMEDIATE_DELAY_MS = 250;
 const SYNC_POLL_BACKGROUND_INTERVAL_MS = 30000;
 const SYNC_POLL_OFFLINE_INTERVAL_MS = 30000;
 const SYNC_POLL_BACKOFF_MAX_MS = 60000;
-
 
 function matchesMediaQuery(query, fallback = false) {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return fallback;
@@ -151,16 +134,10 @@ const ROUTE_PERMISSIONS = {
   '/thong-ke': ['stats.read'],
   '/so-quy': ['cashbook.read'],
   '/bang-luong-nhan-vien': ['payrolls.read'],
-  '/bao-cao-thu-e': ['stats.read'],
   '/bao-cao-theo-don-hang': ['invoices.read'],
   '/bao-cao-theo-san-pham': ['stats.read'],
-  '/cai-dat': ['settings.read', 'store.read', 'users.read'],
+  '/cai-dat': ['settings.read', 'settings.manage', 'store.read', 'store.manage', 'users.read', 'users.manage', 'customers.read', 'customers.manage', 'updates.read', 'updates.manage'],
   '/mau-in': ['print_templates.read'],
-  '/key-bang-quyen': ['settings.manage'],
-  '/admin-ban-quyen': [],
-
-  
-
 };
 
 function isKnownAppRoute(route) {
@@ -192,11 +169,21 @@ function hasAnyPermission(user, permissions, required = []) {
 
 function canAccessRoute(route, user, permissions) {
   if (!user || !isKnownAppRoute(route)) return false;
-  if (route === '/admin-ban-quyen') {
-    return hasAnyPermission(user, permissions, ['licenses.manage', 'features.manage', 'updates.manage', 'users.manage']);
-  }
   const required = ROUTE_PERMISSIONS[route] || [];
   return hasAnyPermission(user, permissions, required);
+}
+
+function ProtectedRoute({ user, permissions, path, children }) {
+  if (!user) return <Navigate to={LOGIN_REGISTER_ROUTE} replace />;
+  if (!canAccessRoute(path, user, permissions)) {
+    const accessibleRoute = firstAccessibleRoute(user, permissions);
+    // Tránh redirect loop: nếu không có route nào accessible, giữ nguyên route hiện tại
+    if (accessibleRoute === HOME_ROUTE && !canAccessRoute(HOME_ROUTE, user, permissions)) {
+      return <div className="flex items-center justify-center min-h-screen"><div className="text-center p-6 bg-white rounded-lg shadow-lg"><h2 className="text-xl font-bold text-gray-800 mb-2">Không có quyền truy cập</h2><p className="text-gray-600">Vui lòng liên hệ quản trị viên.</p></div></div>;
+    }
+    return <Navigate to={accessibleRoute} replace />;
+  }
+  return children;
 }
 
 function firstAccessibleRoute(user, permissions) {
@@ -254,123 +241,10 @@ function FullScreenLoading({ message = 'Đang khởi tạo ứng dụng...' }) {
   );
 }
 
-function LicenseActivationGate({ children }) {
-  const [checking, setChecking] = useState(true);
-  const [license, setLicense] = useState(() => getStoredLicense());
-  const [status, setStatus] = useState(() => (isStoredLicenseStillValid() ? 'active' : 'missing'));
-  const [keyInput, setKeyInput] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  const applyLicense = useCallback((nextLicense) => {
-    if (nextLicense && nextLicense.status === 'active' && nextLicense.expires_at) {
-      const saved = saveStoredLicense(nextLicense);
-      setLicense(saved || nextLicense);
-      setStatus('active');
-      setError('');
-      return;
-    }
-    clearStoredLicense();
-    setLicense(null);
-    setStatus(nextLicense?.status === 'expired' ? 'expired' : 'missing');
-  }, []);
-
-  const checkLicense = useCallback(async () => {
-    setChecking(true);
-    try {
-      const data = await licenseApi.status();
-      if (data?.activated && data?.license) applyLicense(data.license);
-      else applyLicense(null);
-    } catch (err) {
-      const stored = getStoredLicense();
-      if (isStoredLicenseStillValid(stored)) {
-        setLicense(stored);
-        setStatus('active');
-      } else {
-        clearStoredLicense();
-        setLicense(null);
-        setStatus(stored?.expires_at ? 'expired' : 'missing');
-      }
-    } finally {
-      setChecking(false);
-    }
-  }, [applyLicense]);
-
-  useEffect(() => {
-    checkLicense();
-  }, [checkLicense]);
-
-  const handleActivate = async (event) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setError('');
-    try {
-      const data = await licenseApi.activate({
-        key: keyInput,
-        device_name: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-      });
-      if (!data?.ok || !data?.license) throw new Error(getApiErrorMessage(data, 'Kích hoạt key thất bại.'));
-      applyLicense(data.license);
-      setKeyInput('');
-    } catch (err) {
-      setError(getApiErrorMessage(err?.data, err?.message || 'Kích hoạt key thất bại.'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const locked = status !== 'active' || !isStoredLicenseStillValid(license);
-  const expired = status === 'expired' || (license?.expires_at && !isStoredLicenseStillValid(license));
-  const daysRemaining = getStoredLicenseDaysRemaining(license);
-
-  if (checking) return <FullScreenLoading message="Đang kiểm tra key bản quyền..." />;
-
-  return (
-    <>
-      {children}
-      {!locked && license && (
-        <div className="fixed bottom-3 right-3 z-40 max-w-xs rounded-xl border border-green-200 bg-white/95 p-3 text-xs text-gray-700 shadow-lg backdrop-blur">
-          <div className="font-semibold text-green-700">Phần mềm đã kích hoạt</div>
-          <div>Ngày kích hoạt: {license.activated_at ? new Date(license.activated_at).toLocaleDateString('vi-VN') : '—'}</div>
-          <div>Ngày hết hạn: {license.expires_at ? new Date(license.expires_at).toLocaleDateString('vi-VN') : '—'}</div>
-          <div>Còn lại: {daysRemaining} ngày</div>
-        </div>
-      )}
-      {locked && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-950/80 p-4 backdrop-blur-sm">
-          <form onSubmit={handleActivate} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="text-center text-xl font-bold text-gray-900">Kích hoạt phần mềm</div>
-            <p className="mt-3 text-center text-sm font-medium text-gray-700">
-              {expired
-                ? 'Key của bạn đã hết hạn, vui lòng liên hệ nhà cung cấp để mua key'
-                : 'Vui lòng nhập key để kích hoạt phần mềm. Chưa có key vui lòng liên hệ Zalo 0904 045 075 để lấy key'}
-            </p>
-            <input
-              value={keyInput}
-              onChange={event => setKeyInput(event.target.value)}
-              autoFocus
-              placeholder="Nhập key bản quyền"
-              className="mt-5 h-12 w-full rounded-xl border border-gray-300 px-4 text-center font-mono text-sm uppercase outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-            <button type="submit" disabled={submitting || !keyInput.trim()} className="mt-4 h-12 w-full rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
-              {submitting ? 'Đang kích hoạt...' : 'Kích hoạt'}
-            </button>
-          </form>
-        </div>
-      )}
-    </>
-  );
-}
-
-function ProtectedRoute({ user, permissions, path, children }) {
-  return canAccessRoute(path, user, permissions) ? children : <Navigate to={firstAccessibleRoute(user, permissions)} replace />;
-}
-
-// Inner layout that uses useLocation/useNavigate
 function AppLayout({
   authState,
   store,
+  onStoreChange,
   sidebarOpen,
   setSidebarOpen,
   onLogout,
@@ -380,62 +254,39 @@ function AppLayout({
   const location = useLocation();
   const navigate = useNavigate();
   const [openMenus, setOpenMenus] = useState({ don_hang: true });
-  const [desktopVersion, setDesktopVersion] = useState('');
   const [updateToast, setUpdateToast] = useState(null);
-  const { user, account, permissions } = authState;
-  const isAdmin = isAdminUser(user);
-
-  useEffect(() => {
-    if (!redirectPath) return;
-    if (location.pathname !== redirectPath) navigate(redirectPath, { replace: true });
-    onRedirected?.();
-  }, [location.pathname, navigate, onRedirected, redirectPath]);
-
-  useEffect(() => {
-    if (!window.khaDesktop?.isElectron) return undefined;
-    let mounted = true;
-    window.khaDesktop.getAppInfo?.().then(result => {
-      if (mounted && result?.ok && result.app?.version) setDesktopVersion(result.app.version);
-    }).catch(() => {});
-
-    const unsubscribe = window.khaDesktop.updates?.onStatus?.(payload => {
-      if (payload?.type === 'update-available') {
-        const version = payload.updateInfo?.version || payload.state?.updateInfo?.version;
-        setUpdateToast({
-          tone: 'info',
-          title: version ? `Có bản cập nhật ${version}` : 'Có bản cập nhật mới',
-          message: 'Vào Cài đặt > Cập nhật để xem ghi chú phát hành, tải và cài đặt an toàn.',
-        });
-      }
-      if (payload?.type === 'downloaded') {
-        setUpdateToast({
-          tone: 'success',
-          title: 'Đã tải xong bản cập nhật',
-          message: 'Bản cập nhật đã được electron-updater xác thực. Có thể chọn Cập nhật ngay hoặc để sau.',
-        });
-      }
-    });
-
-    return () => {
-      mounted = false;
-      if (typeof unsubscribe === 'function') unsubscribe();
-    };
-  }, []);
-
-  const handleSidebarToggle = useCallback(() => {
-    setSidebarOpen(prev => !prev);
-  }, [setSidebarOpen]);
-
-  const closeMobileSidebar = useCallback(() => {
-    if (isMobileSidebarViewport()) setSidebarOpen(false);
-  }, [setSidebarOpen]);
-
-  const toggleMenu = useCallback((key) => {
-    setOpenMenus(prev => ({ ...prev, [key]: !prev[key] }));
-  }, []);
-
+  const [updateToastVisible, setUpdateToastVisible] = useState(false);
+  const [mobileSidebarVisible, setMobileSidebarVisible] = useState(() => isMobileSidebarViewport());
+  const [mobileSidebarAnimating, setMobileSidebarAnimating] = useState(false);
+  const user = authState.user;
+  const permissions = authState.permissions;
   const canAccess = useCallback((route) => canAccessRoute(route, user, permissions), [permissions, user]);
   const canAccessAny = useCallback((routes = []) => routes.some(route => canAccess(route)), [canAccess]);
+
+  useEffect(() => {
+    if (redirectPath && canAccess(redirectPath)) {
+      navigate(redirectPath, { replace: true });
+      onRedirected?.();
+    }
+  }, [canAccess, navigate, onRedirected, redirectPath]);
+
+  useEffect(() => {
+    const handleUpdateToast = (event) => {
+      const detail = event?.detail || {};
+      if (!detail?.available) return;
+      setUpdateToast(detail);
+      setUpdateToastVisible(true);
+    };
+    window.addEventListener('kha-update-available', handleUpdateToast);
+    return () => window.removeEventListener('kha-update-available', handleUpdateToast);
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => setMobileSidebarVisible(isMobileSidebarViewport());
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const navGroups = useMemo(() => {
     const groups = [
@@ -472,199 +323,45 @@ function AppLayout({
           { to: '/bao-cao-theo-san-pham', label: 'Báo cáo sản phẩm', icon: Boxes },
           { to: '/bang-luong-nhan-vien', label: 'Bảng lương nhân viên', icon: BadgeDollarSign },
           { to: '/cai-dat', label: 'Cài đặt', icon: SettingsIcon },
-          { to: '/hoa-don', label: 'Hóa đơn', icon: Printer },
-        ],
-      },
-      {
-        key: 'quan_tri_he_thong',
-        label: 'Quản trị hệ thống',
-        icon: SettingsIcon,
-        items: [
-          { to: '/admin-ban-quyen', label: 'Bản quyền & khách hàng', icon: ShieldCheck },
-          { to: '/key-bang-quyen', label: 'Key bản quyền', icon: BarChart3 },
+          { to: '/mau-in', label: 'Hóa đơn', icon: Printer },
         ],
       },
     ];
 
-    return groups
-      .map(group => group.items ? { ...group, items: group.items.filter(item => canAccess(item.to)) } : group)
-      .filter(group => group.items ? group.items.length > 0 : canAccess(group.to));
+    return groups.filter(group => !group.items || group.items.some(item => canAccess(item.to)) || canAccess(group.to));
   }, [canAccess]);
 
-  useEffect(() => {
-    setOpenMenus(prev => {
-      let changed = false;
-      const next = { ...prev };
-      for (const group of navGroups) {
-        if (group.items?.some(item => item.to === location.pathname) && !next[group.key]) {
-          next[group.key] = true;
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [location.pathname, navGroups]);
-
-  useEffect(() => {
-    if (!sidebarOpen || !isMobileSidebarViewport()) return undefined;
-
-    const previousOverflow = document.body.style.overflow;
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') setSidebarOpen(false);
-    };
-
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, [setSidebarOpen, sidebarOpen]);
-
-  const storeDisplayName = store.name || account?.name || 'Bán hàng offline';
-  const storeContact = [store.phone, store.email].filter(Boolean).join(' · ');
-
   return (
-    <div className="flex h-screen h-[100dvh] min-w-0 bg-gray-100 overflow-hidden">
-      {sidebarOpen && (
-        <button
-          type="button"
-          aria-label="Đóng menu"
-          className="fixed inset-0 z-30 bg-black/45 md:hidden"
-          onClick={closeMobileSidebar}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'translate-x-0 md:w-60' : '-translate-x-full md:translate-x-0 md:w-16'} fixed inset-y-0 left-0 z-40 flex w-72 max-w-[86vw] transform-gpu flex-col bg-gray-900 text-white shadow-2xl transition-transform duration-150 ease-out motion-reduce:transition-none md:relative md:z-auto md:max-w-none md:shrink-0 md:shadow-none md:transition-[width] md:duration-150`}>
-        <div className="border-b border-gray-700 p-3">
-          <div className="flex min-h-11 items-center justify-between gap-2">
-            {sidebarOpen ? (
-              <div className="min-w-0">
-                <div className="truncate text-xs font-bold text-gray-300">{storeDisplayName}</div>
-                <div className="truncate text-xs text-yellow-600">{desktopVersion ? `Version ${desktopVersion}` : 'Version 1.2.5'}</div>
-              </div>
-            ) : (
-              <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white md:flex">
-                <HomeIcon aria-hidden="true" className="h-5 w-5" />
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handleSidebarToggle}
-              aria-label={sidebarOpen ? 'Thu gọn hoặc đóng menu' : 'Mở menu'}
-              aria-expanded={sidebarOpen}
-              className="inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl text-gray-300 outline-none hover:bg-gray-800 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-400 active:bg-gray-700"
-            >
-              {sidebarOpen ? <X aria-hidden="true" className="h-5 w-5 md:hidden" /> : null}
-              <Menu aria-hidden="true" className={`${sidebarOpen ? 'hidden md:block' : 'block'} h-5 w-5`} />
-            </button>
-          </div>
-        </div>
-
-        <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 py-2">
-          {navGroups.map(group => {
-            const groupActive = group.items?.some(item => location.pathname === item.to);
-
-            return group.items ? (
-              <div key={group.key}>
-                <button
-                  type="button"
-                  onClick={() => toggleMenu(group.key)}
-                  title={!sidebarOpen ? group.label : undefined}
-                  aria-expanded={!!openMenus[group.key]}
-                  className={`flex min-h-11 w-full touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium outline-none hover:bg-gray-800 focus-visible:ring-2 focus-visible:ring-blue-400 active:bg-gray-700 ${groupActive ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-300'}`}
-                >
-                  <NavMenuIcon icon={group.icon} />
-                  {sidebarOpen && (
-                    <>
-                      <span className="min-w-0 flex-1 truncate text-left">{group.label}</span>
-                      {openMenus[group.key] ? <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0" /> : <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0" />}
-                    </>
-                  )}
-                </button>
-                {openMenus[group.key] && sidebarOpen && group.items.map(item => (
+    <div className="min-h-screen bg-gray-100">
+      <div className="flex min-h-screen">
+        <aside className={`${sidebarOpen ? 'w-72' : 'w-0'} transition-all duration-300 ease-in-out`}>
+          <nav className="p-4">
+            {navGroups.map(group => (
+              <div key={group.key || group.to} className="mb-4">
+                <div className="flex items-center gap-2 text-gray-700 font-semibold mb-2">
+                  {group.icon && <NavMenuIcon icon={group.icon} className={NAV_ICON_CLASS} />}
+                  <span>{group.label}</span>
+                </div>
+                {group.items?.filter(item => canAccess(item.to)).map(item => (
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    onClick={closeMobileSidebar}
-                    className={({ isActive }) => `mt-1 flex min-h-11 touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 pl-9 text-sm outline-none hover:bg-gray-800 focus-visible:ring-2 focus-visible:ring-blue-400 active:bg-gray-700 ${isActive ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-300'}`}
+                    className={({ isActive }) =>
+                      `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-blue-500 text-white'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      }`
+                    }
                   >
-                    <NavMenuIcon icon={item.icon} className={NAV_CHILD_ICON_CLASS} />
-                    <span className="min-w-0 truncate">{item.label}</span>
+                    {item.icon && <NavMenuIcon icon={item.icon} className={NAV_CHILD_ICON_CLASS} />}
+                    <span className="text-sm">{item.label}</span>
                   </NavLink>
                 ))}
               </div>
-            ) : (
-              <NavLink
-                key={group.to}
-                to={group.to}
-                onClick={closeMobileSidebar}
-                title={!sidebarOpen ? group.label : undefined}
-                className={({ isActive }) => `flex min-h-11 touch-manipulation items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium outline-none hover:bg-gray-800 focus-visible:ring-2 focus-visible:ring-blue-400 active:bg-gray-700 ${isActive ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-300'}`}
-              >
-                <NavMenuIcon icon={group.icon} />
-                {sidebarOpen && <span className="min-w-0 truncate">{group.label}</span>}
-              </NavLink>
-            );
-          })}
-        </nav>
-
-        {/* User footer */}
-        <div className="border-t border-gray-700 p-3">
-          <div className={`mb-2 flex items-center gap-2 ${sidebarOpen ? '' : 'md:justify-center'}`}>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold">
-              {getInitials(user?.name)}
-            </div>
-            {sidebarOpen && (
-              <div className="min-w-0 text-xs">
-                <div className="truncate font-medium text-white">{user?.name}</div>
-                <div className="truncate capitalize text-gray-400">{isAdmin ? 'admin' : user?.role || 'user'}</div>
-              </div>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="min-h-10 w-full touch-manipulation rounded-lg border border-red-500 px-2 py-2 text-center text-xs font-medium text-red-300 outline-none hover:bg-red-950/40 hover:text-red-200 focus-visible:ring-2 focus-visible:ring-red-400 active:bg-red-900/40"
-          >
-            {sidebarOpen ? 'Đăng xuất' : '⬅'}
-          </button>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b bg-white px-3 py-2.5 shadow-sm sm:px-6 sm:py-3">
-          <button
-            type="button"
-            onClick={handleSidebarToggle}
-            aria-label="Mở menu"
-            className="inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-gray-200 text-gray-700 outline-none hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-gray-100 md:hidden"
-          >
-            <Menu aria-hidden="true" className="h-5 w-5" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-base font-bold text-gray-800 sm:text-lg">{storeDisplayName}</div>
-            {storeContact && <div className="truncate text-xs text-gray-500 sm:hidden">{storeContact}</div>}
-          </div>
-          <div className="hidden shrink-0 text-sm text-gray-500 sm:block">
-            {storeContact}
-          </div>
-        </div>
-        {updateToast && (
-          <div className={`mx-3 mt-3 flex flex-col gap-3 rounded-xl border px-4 py-3 sm:mx-4 sm:mt-4 sm:flex-row sm:items-start sm:justify-between ${updateToast.tone === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
-            <div className="min-w-0">
-              <div className="text-sm font-semibold">{updateToast.title}</div>
-              <div className="mt-1 text-sm">{updateToast.message}</div>
-            </div>
-            <div className="flex w-full shrink-0 justify-end gap-2 sm:w-auto">
-              <button type="button" onClick={() => navigate('/cai-dat')} className="min-h-10 rounded-lg border bg-white/80 px-3 py-2 text-xs font-medium hover:bg-white active:bg-gray-50">Mở cài đặt</button>
-              <button type="button" onClick={() => setUpdateToast(null)} className="min-h-10 px-3 py-2 text-xs opacity-70 hover:opacity-100 active:opacity-100">Đóng</button>
-            </div>
-          </div>
-        )}
+            ))}
+          </nav>
+        </aside>
         <div className="app-main-scroll flex-1 min-h-0 min-w-0 overflow-x-auto overflow-y-auto p-3 sm:p-4">
           <Routes>
             <Route path={HOME_ROUTE} element={<Home user={user} store={store} />} />
@@ -680,10 +377,8 @@ function AppLayout({
             <Route path="/bang-luong-nhan-vien" element={<ProtectedRoute user={user} permissions={permissions} path="/bang-luong-nhan-vien"><Payroll /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><CustomerOrderReport /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ProductReport /></ProtectedRoute>} />
-            <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><Settings store={store} /></ProtectedRoute>} />
+            <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><Settings store={store} onStoreChange={onStoreChange} permissions={permissions} /></ProtectedRoute>} />
             <Route path="/mau-in" element={<ProtectedRoute user={user} permissions={permissions} path="/mau-in"><PrintTemplates store={store} /></ProtectedRoute>} />
-            <Route path="/admin-ban-quyen" element={<ProtectedRoute user={user} permissions={permissions} path="/admin-ban-quyen"><KeyBangQuyen /></ProtectedRoute>} />
-            <Route path="/key-bang-quyen" element={<ProtectedRoute user={user} permissions={permissions} path="/key-bang-quyen"><KeyBangQuyen /></ProtectedRoute>} />
             <Route path={LOGIN_REGISTER_ROUTE} element={<Navigate to={firstAccessibleRoute(user, permissions)} replace />} />
             {Object.entries(ROUTE_ALIASES).map(([from, to]) => (
               <Route key={from} path={from} element={<Navigate to={canAccess(to) ? to : firstAccessibleRoute(user, permissions)} replace />} />
@@ -797,18 +492,10 @@ function DesktopApp() {
       }
 
       try {
-        let payload;
-        try {
-          payload = await authApi.bootstrap();
-        } catch (bootstrapErr) {
-          if (bootstrapErr?.status === 403) {
-            payload = await authApi.profile();
-          } else {
-            throw bootstrapErr;
-          }
-        }
+        let payload = await authApi.profile();
 
         if (!mounted) return;
+        // Profile đã trả về đầy đủ user + permissions + syncVersions
         await applyServerPayload(payload, { persistMode: 'snapshot', redirect: true, sync: true });
         setBootstrapStatus(null);
       } catch (err) {
@@ -1003,32 +690,21 @@ function DesktopApp() {
           <Route path="*" element={<Login onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} onBootstrapStatus={setBootstrapStatus} />} />
         </Routes>
       ) : (
-        <LicenseActivationGate>
-          <AppLayout
-            authState={authState}
-            user={authState.user}
-            store={store}
-            setStore={setStore}
-            sidebarOpen={sidebarOpen}
-            setSidebarOpen={setSidebarOpen}
-            onLogout={handleLogout}
-            redirectPath={redirectPath}
-            onRedirected={() => setRedirectPath('')}
-          />
-        </LicenseActivationGate>
+        <AppLayout
+          authState={authState}
+          store={store}
+          onStoreChange={setStore}
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          onLogout={handleLogout}
+          redirectPath={redirectPath}
+          onRedirected={() => setRedirectPath('')}
+        />
       )}
     </HashRouter>
   );
 }
 
 export default function App() {
-  if (isMobileAppRoute()) {
-    return (
-      <HashRouter>
-        <MobileApp />
-      </HashRouter>
-    );
-  }
-
   return <DesktopApp />;
 }

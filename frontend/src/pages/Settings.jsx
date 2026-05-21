@@ -1,12 +1,53 @@
-﻿import { useState, useEffect } from 'react';
-import { API } from '../App';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Store, Settings2, Printer, Bot, Users,
-  Plus, X, Edit2, Trash2, CheckCircle, Tag, HelpCircle,
-  Smartphone, Link2, Copy, RefreshCw, ShieldOff
+  CheckCircle,
+  Edit2,
+  HelpCircle,
+  Loader2,
+  Package,
+  Plus,
+  Settings2,
+  Store,
+  Tag,
+  Trash2,
+  Users,
+  X,
 } from 'lucide-react';
 import HelpModal from '../components/HelpModal';
-import { mobileAdminApi, usersApi } from '../utils/apiClient';
+import { apiJson, customerTypesApi, featuresApi, getApiErrorMessage, usersApi } from '../utils/apiClient';
+
+const INITIAL_STORE_FORM = Object.freeze({
+  name: '',
+  email: '',
+  phone: '',
+  tax_code: '',
+  bank_account: '',
+  bank_name: '',
+  address: '',
+  invoice_width: '80',
+  invoice_logo: '',
+  invoice_note: '',
+  invoice_slogan: '',
+  invoice_vietqr_logo: '',
+});
+
+const INITIAL_EMP_FORM = Object.freeze({
+  name: '',
+  email: '',
+  phone: '',
+  password: '',
+});
+
+const INITIAL_TYPE_FORM = Object.freeze({
+  name: '',
+  color: '#3b82f6',
+});
+
+const NEGATIVE_STOCK_FEATURE_KEY = 'negative_stock_exports';
+const NEGATIVE_STOCK_LIMIT = -10;
+const NEGATIVE_STOCK_FEATURE_NAME = 'Xuất âm tồn kho';
+const NEGATIVE_STOCK_FEATURE_DESCRIPTION = 'Bật để cho phép xuất vượt tồn kho đến giới hạn cố định trong code.';
+const NEGATIVE_STOCK_FEATURE_CATEGORY = 'Kho hàng';
 
 function formatBytes(value) {
   const bytes = Number(value) || 0;
@@ -32,38 +73,6 @@ function formatDateTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function getMobileEnabledState(user = {}) {
-  if (Object.prototype.hasOwnProperty.call(user, 'mobile_enabled')) {
-    return user.mobile_enabled !== false && user.mobile_enabled !== 0;
-  }
-  if (Object.prototype.hasOwnProperty.call(user, 'mobileEnabled')) {
-    return user.mobileEnabled !== false && user.mobileEnabled !== 0;
-  }
-  return null;
-}
-
-function getMobileLastLogin(user = {}) {
-  return user.mobile_last_login_at || user.last_mobile_login || user.last_mobile_login_at || user.mobileLastLoginAt || null;
-}
-
-function getPlatformLabel(platform) {
-  const value = String(platform || '').trim().toLowerCase();
-  if (value === 'android') return 'Android';
-  if (value === 'ios') return 'iOS';
-  if (value === 'web') return 'Web/PWA';
-  return platform || 'Không rõ';
-}
-
-function isExpiredDate(value) {
-  if (!value) return false;
-  const expiresAt = new Date(value).getTime();
-  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
-}
-
-function getMobileStatusTone(active) {
-  return active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
 }
 
 function getUpdateStatusLabel(status) {
@@ -150,105 +159,359 @@ function formatUpdateErrorDetails(details) {
   }
 }
 
-export default function Settings({ store }) {
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+function normalizeHexColor(value, fallback = '#3b82f6') {
+  const normalized = String(value || '').trim();
+  return /^#(?:[0-9a-fA-F]{3}){1,2}$/.test(normalized) ? normalized : fallback;
+}
+
+function normalizeStorePayload(payload = {}) {
+  return {
+    ...INITIAL_STORE_FORM,
+    name: String(payload?.name || ''),
+    email: String(payload?.email || ''),
+    phone: String(payload?.phone || ''),
+    tax_code: String(payload?.tax_code || ''),
+    bank_account: String(payload?.bank_account || ''),
+    bank_name: String(payload?.bank_name || ''),
+    address: String(payload?.address || ''),
+    invoice_width: String(payload?.invoice_width || '80'),
+    invoice_logo: String(payload?.invoice_logo || ''),
+    invoice_note: String(payload?.invoice_note || ''),
+    invoice_slogan: String(payload?.invoice_slogan || ''),
+    invoice_vietqr_logo: String(payload?.invoice_vietqr_logo || ''),
+  };
+}
+
+function normalizeEmployeeForm(payload = {}) {
+  return {
+    ...INITIAL_EMP_FORM,
+    name: String(payload?.name || ''),
+    email: String(payload?.email || ''),
+    phone: String(payload?.phone || ''),
+    password: '',
+  };
+}
+
+function normalizeTypeForm(payload = {}) {
+  return {
+    ...INITIAL_TYPE_FORM,
+    name: String(payload?.name || ''),
+    color: normalizeHexColor(payload?.color),
+  };
+}
+
+function sanitizeStorePayload(form = {}) {
+  const normalized = normalizeStorePayload(form);
+  return {
+    ...normalized,
+    name: normalized.name.trim(),
+    email: normalized.email.trim(),
+    phone: normalized.phone.trim(),
+    tax_code: normalized.tax_code.trim(),
+    bank_account: normalized.bank_account.trim(),
+    bank_name: normalized.bank_name.trim(),
+    address: normalized.address.trim(),
+    invoice_width: String(normalized.invoice_width || '80').trim() || '80',
+    invoice_logo: normalized.invoice_logo.trim(),
+    invoice_note: normalized.invoice_note.trim(),
+    invoice_slogan: normalized.invoice_slogan.trim(),
+    invoice_vietqr_logo: normalized.invoice_vietqr_logo.trim(),
+  };
+}
+
+function sanitizeEmployeePayload(form = {}) {
+  const normalized = normalizeEmployeeForm(form);
+  const payload = {
+    name: normalized.name.trim(),
+    email: normalized.email.trim().toLowerCase(),
+    phone: normalized.phone.trim(),
+  };
+  if (normalized.password) payload.password = normalized.password;
+  return payload;
+}
+
+function sanitizeTypePayload(form = {}) {
+  const normalized = normalizeTypeForm(form);
+  return {
+    name: normalized.name.trim(),
+    color: normalizeHexColor(normalized.color),
+  };
+}
+
+function normalizeNegativeStockFeature(feature = null) {
+  const featureKey = String(feature?.feature_key || feature?.key || NEGATIVE_STOCK_FEATURE_KEY).trim() || NEGATIVE_STOCK_FEATURE_KEY;
+  return {
+    id: feature?.id || null,
+    feature_key: featureKey,
+    key: featureKey,
+    name: String(feature?.name || NEGATIVE_STOCK_FEATURE_NAME),
+    description: String(feature?.description || NEGATIVE_STOCK_FEATURE_DESCRIPTION),
+    category: String(feature?.category || NEGATIVE_STOCK_FEATURE_CATEGORY),
+    active: feature?.active === true || feature?.active === 1 || feature?.active === '1',
+    exists: Boolean(feature?.id),
+  };
+}
+
+function SectionNotice({ notice }) {
+  if (!notice?.message) return null;
+
+  const toneClass = notice.tone === 'success'
+    ? 'border-green-200 bg-green-50 text-green-700'
+    : notice.tone === 'error'
+      ? 'border-red-200 bg-red-50 text-red-700'
+      : 'border-blue-200 bg-blue-50 text-blue-700';
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 text-sm ${toneClass}`}>
+      {notice.message}
+    </div>
+  );
+}
+
+function InputField({ id, label, className = '', ...props }) {
+  return (
+    <div className={className}>
+      <label htmlFor={id} className="text-sm font-medium text-gray-700">
+        {label}
+      </label>
+      <input id={id} className="input-field w-full mt-1" {...props} />
+    </div>
+  );
+}
+
+function TextareaField({ id, label, className = '', rows = 3, ...props }) {
+  return (
+    <div className={className}>
+      <label htmlFor={id} className="text-sm font-medium text-gray-700">
+        {label}
+      </label>
+      <textarea id={id} rows={rows} className="input-field w-full mt-1 resize-y" {...props} />
+    </div>
+  );
+}
+
+function hasAnyPermission(permissionSet, required = []) {
+  if (!required.length) return true;
+  return required.some(permission => permissionSet.has(permission));
+}
+
+export default function Settings({ store, onStoreChange, permissions = [] }) {
+  const mountedRef = useRef(true);
+  const noticeTimersRef = useRef({});
+  const hasExplicitPermissions = Array.isArray(permissions) && permissions.length > 0;
+  const permissionSet = useMemo(
+    () => new Set(
+      hasExplicitPermissions
+        ? permissions.map(permission => String(permission || '').trim()).filter(Boolean)
+        : []
+    ),
+    [hasExplicitPermissions, permissions],
+  );
+  const canAccessSection = useCallback(
+    (required = []) => !hasExplicitPermissions || hasAnyPermission(permissionSet, required),
+    [hasExplicitPermissions, permissionSet],
+  );
+  const canViewStore = canAccessSection(['store.read', 'store.manage']);
+  const canManageStore = canAccessSection(['store.manage']);
+  const canViewEmployees = canAccessSection(['users.read', 'users.manage']);
+  const canManageEmployees = canAccessSection(['users.manage']);
+  const canViewCustomerTypes = canAccessSection(['customers.read', 'customers.manage']);
+  const canManageCustomerTypes = canAccessSection(['customers.manage']);
+  const canViewNegativeStock = canAccessSection(['features.read', 'features.manage']);
+  const canManageNegativeStock = canAccessSection(['features.manage']);
+  const canViewUpdates = canAccessSection(['updates.read', 'updates.manage', 'settings.read', 'settings.manage']);
+
   const [tab, setTab] = useState('store');
-  const [saved, setSaved] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [pageNotice, setPageNotice] = useState(null);
 
-  // Store form
-  const [storeForm, setStoreForm] = useState({
-    name: store?.name || '',
-    email: store?.email || '',
-    phone: store?.phone || '',
-    tax_code: store?.tax_code || '',
-    bank_account: store?.bank_account || '',
-    bank_name: store?.bank_name || '',
-    address: store?.address || '',
-    invoice_width: store?.invoice_width || '80',
-    invoice_logo: store?.invoice_logo || '',
-    invoice_note: store?.invoice_note || '',
-    invoice_slogan: store?.invoice_slogan || '',
-    invoice_vietqr_logo: store?.invoice_vietqr_logo || '',
-  });
+  const [storeForm, setStoreForm] = useState(() => normalizeStorePayload(store));
+  const [storeDirty, setStoreDirty] = useState(false);
+  const [storeSaving, setStoreSaving] = useState(false);
+  const [storeNotice, setStoreNotice] = useState(null);
 
-
-
-  // Employee management
   const [employees, setEmployees] = useState([]);
-  const [empForm, setEmpForm] = useState(null);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  const [employeesNotice, setEmployeesNotice] = useState(null);
   const [showEmpModal, setShowEmpModal] = useState(false);
   const [empEdit, setEmpEdit] = useState(null);
+  const [empForm, setEmpForm] = useState(() => normalizeEmployeeForm());
+  const [empSaving, setEmpSaving] = useState(false);
+  const [empNotice, setEmpNotice] = useState(null);
 
-  // Customer types
   const [customerTypes, setCustomerTypes] = useState([]);
+  const [customerTypesLoading, setCustomerTypesLoading] = useState(false);
+  const [customerTypesNotice, setCustomerTypesNotice] = useState(null);
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [typeEdit, setTypeEdit] = useState(null);
-  const [typeForm, setTypeForm] = useState({ name: '', color: '#3b82f6' });
+  const [typeForm, setTypeForm] = useState(() => normalizeTypeForm());
+  const [typeSaving, setTypeSaving] = useState(false);
+  const [typeNotice, setTypeNotice] = useState(null);
 
-  // Bot settings
-  const [botForm, setBotForm] = useState({
-    telegram_bot_token: '',
-    telegram_chat_id: '',
-    alert_low_stock: 5,
-    alert_enabled: true,
-  });
+  const [negativeStockFeature, setNegativeStockFeature] = useState(() => normalizeNegativeStockFeature());
+  const [negativeStockSaving, setNegativeStockSaving] = useState(false);
+  const [negativeStockNotice, setNegativeStockNotice] = useState(null);
 
-  // Help modal
-  const [showHelp, setShowHelp] = useState(false);
-  const [printTemplate, setPrintTemplate] = useState(() => localStorage.getItem('kha_print_template') || '3');
-
-  // Desktop updater
   const [appInfo, setAppInfo] = useState(null);
   const [updateState, setUpdateState] = useState(null);
   const [updateBusy, setUpdateBusy] = useState('');
   const [updateResult, setUpdateResult] = useState(null);
   const [updateNotice, setUpdateNotice] = useState('');
 
-  // Mobile admin
-  const [mobileInstallLinks, setMobileInstallLinks] = useState([]);
-  const [mobileDevices, setMobileDevices] = useState([]);
-  const [mobileUrls, setMobileUrls] = useState({});
-  const [mobileLoading, setMobileLoading] = useState(false);
-  const [mobileAction, setMobileAction] = useState('');
-  const [mobileNotice, setMobileNotice] = useState('');
-  const [installForm, setInstallForm] = useState({
-    android_url: '',
-    ios_url: '',
-    expires_days: 7,
-  });
+  const getErrorMessage = useCallback(
+    (error, fallback = 'Thao tác thất bại.') => getApiErrorMessage(error?.data || error, error?.message || fallback),
+    [],
+  );
 
-  const handleSavePrintTemplate = (val) => {
-    setPrintTemplate(val);
-    localStorage.setItem('kha_print_template', val);
-  };
+  const setTimedNotice = useCallback((key, setter, notice, timeoutMs = 0) => {
+    if (noticeTimersRef.current[key]) {
+      window.clearTimeout(noticeTimersRef.current[key]);
+      delete noticeTimersRef.current[key];
+    }
 
-  useEffect(() => {
-    loadStore();
-    loadBot();
-    loadEmployees();
-    loadCustomerTypes();
+    setter(notice);
+
+    if (timeoutMs > 0) {
+      noticeTimersRef.current[key] = window.setTimeout(() => {
+        delete noticeTimersRef.current[key];
+        if (mountedRef.current) setter(null);
+      }, timeoutMs);
+    }
   }, []);
 
   useEffect(() => {
-    if (tab === 'mobile') loadMobileAdmin();
-  }, [tab]);
+    return () => {
+      mountedRef.current = false;
+      Object.values(noticeTimersRef.current).forEach(timerId => window.clearTimeout(timerId));
+      noticeTimersRef.current = {};
+    };
+  }, []);
+
+  const loadStore = useCallback(async () => {
+    const data = await apiJson('/store', {}, 'Không thể tải thông tin cửa hàng.');
+    const nextStore = normalizeStorePayload(data);
+    if (!mountedRef.current) return nextStore;
+    setStoreForm(nextStore);
+    setStoreDirty(false);
+    onStoreChange?.(nextStore);
+    return nextStore;
+  }, [onStoreChange]);
+
+  const loadEmployees = useCallback(async () => {
+    if (mountedRef.current) setEmployeesLoading(true);
+    try {
+      const data = await usersApi.list();
+      if (mountedRef.current) setEmployees(Array.isArray(data) ? data : []);
+      return data;
+    } finally {
+      if (mountedRef.current) setEmployeesLoading(false);
+    }
+  }, []);
+
+  const loadCustomerTypes = useCallback(async () => {
+    if (mountedRef.current) setCustomerTypesLoading(true);
+    try {
+      const data = await customerTypesApi.list();
+      if (mountedRef.current) setCustomerTypes(Array.isArray(data) ? data : []);
+      return data;
+    } finally {
+      if (mountedRef.current) setCustomerTypesLoading(false);
+    }
+  }, []);
+
+  const loadNegativeStockFeature = useCallback(async () => {
+    try {
+      const data = await featuresApi.detail(NEGATIVE_STOCK_FEATURE_KEY);
+      const feature = normalizeNegativeStockFeature(data?.item || data?.data || data);
+      if (mountedRef.current) setNegativeStockFeature(feature);
+      return feature;
+    } catch (error) {
+      if (error?.status === 404) {
+        const fallbackFeature = normalizeNegativeStockFeature();
+        if (mountedRef.current) setNegativeStockFeature(fallbackFeature);
+        return fallbackFeature;
+      }
+      throw error;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (storeDirty) return;
+    setStoreForm(current => ({ ...current, ...normalizeStorePayload(store) }));
+  }, [store, storeDirty]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const initialize = async () => {
+      if (mountedRef.current) setInitialLoading(true);
+      const sections = [
+        ...(canViewStore ? [{ label: 'cửa hàng', promise: loadStore() }] : []),
+        ...(canViewEmployees ? [{ label: 'nhân viên', promise: loadEmployees() }] : []),
+        ...(canViewCustomerTypes ? [{ label: 'loại khách hàng', promise: loadCustomerTypes() }] : []),
+        ...(canViewNegativeStock ? [{ label: 'xuất âm tồn kho', promise: loadNegativeStockFeature() }] : []),
+      ];
+
+      if (sections.length === 0) {
+        setInitialLoading(false);
+        return;
+      }
+
+      const results = await Promise.allSettled(sections.map(section => section.promise));
+      if (cancelled || !mountedRef.current) return;
+
+      const failures = results
+        .map((result, index) => {
+          if (result.status !== 'rejected') return '';
+          return `${sections[index].label}: ${getErrorMessage(result.reason, `Không thể tải ${sections[index].label}.`)}`;
+        })
+        .filter(Boolean);
+
+      if (failures.length > 0) {
+        setTimedNotice('page', setPageNotice, {
+          tone: 'error',
+          message: `Một số dữ liệu cài đặt chưa tải được. ${failures.join(' | ')}`,
+        }, 8000);
+      }
+
+      setInitialLoading(false);
+    };
+
+    initialize();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewStore, getErrorMessage, loadCustomerTypes, loadEmployees, loadNegativeStockFeature, loadStore, setTimedNotice]);
 
   useEffect(() => {
     if (!window.khaDesktop?.isElectron) return undefined;
-    let mounted = true;
+
+    let active = true;
     const desktop = window.khaDesktop;
 
-    desktop.getAppInfo?.().then(result => {
-      if (!mounted || !result?.ok) return;
-      setAppInfo(result.app || null);
-      if (result.state) setUpdateState(result.state);
-    }).catch(() => {});
+    desktop.getAppInfo?.()
+      ?.then(result => {
+        if (!active || !result?.ok) return;
+        setAppInfo(result.app || null);
+        if (result.state) setUpdateState(result.state);
+      })
+      .catch(() => {});
 
-    desktop.updates?.getState?.().then(result => {
-      if (!mounted || !result?.ok) return;
-      setUpdateState(result.state || null);
-    }).catch(() => {});
+    desktop.updates?.getState?.()
+      ?.then(result => {
+        if (!active || !result?.ok) return;
+        setUpdateState(result.state || null);
+      })
+      .catch(() => {});
 
     const unsubscribe = desktop.updates?.onStatus?.(payload => {
+      if (!active) return;
       setUpdateState(payload?.state || null);
       if (payload?.type === 'update-available') {
         const version = payload.updateInfo?.version || payload.state?.updateInfo?.version;
@@ -261,268 +524,253 @@ export default function Settings({ store }) {
     });
 
     return () => {
-      mounted = false;
+      active = false;
       if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, []);
 
-  const loadStore = async () => {
-    const res = await fetch(`${API}/store`);
-    const data = await res.json();
-    setStoreForm(prev => ({ ...prev, ...data }));
-  };
+  const closeEmpModal = useCallback(() => {
+    setShowEmpModal(false);
+    setEmpEdit(null);
+    setEmpForm(normalizeEmployeeForm());
+    setEmpNotice(null);
+  }, []);
 
-  const loadBot = async () => {
-    const res = await fetch(`${API}/bot/settings`);
-    const data = await res.json();
-    setBotForm({
-      telegram_bot_token: data.telegram_bot_token || '',
-      telegram_chat_id: data.telegram_chat_id || '',
-      alert_low_stock: data.alert_low_stock || 5,
-      alert_enabled: data.alert_enabled !== false,
-    });
-  };
+  const closeTypeModal = useCallback(() => {
+    setShowTypeModal(false);
+    setTypeEdit(null);
+    setTypeForm(normalizeTypeForm());
+    setTypeNotice(null);
+  }, []);
 
-  const loadEmployees = async () => {
-    const res = await fetch(`${API}/users`);
-    const data = await res.json();
-    setEmployees(Array.isArray(data) ? data : []);
-  };
+  const updateStoreField = useCallback((field, value) => {
+    setStoreDirty(true);
+    setStoreForm(current => ({ ...current, [field]: value }));
+  }, []);
 
-  const loadCustomerTypes = async () => {
-    const res = await fetch(`${API}/customer-types`);
-    const data = await res.json();
-    setCustomerTypes(Array.isArray(data) ? data : []);
-  };
-
-  const loadMobileAdmin = async () => {
-    setMobileLoading(true);
-    setMobileNotice('');
-    try {
-      const [linksData, devicesData] = await Promise.all([
-        mobileAdminApi.listInstallLinks(),
-        mobileAdminApi.listDevices(),
-      ]);
-      const urls = linksData?.urls || {};
-      setMobileInstallLinks(Array.isArray(linksData?.links) ? linksData.links : []);
-      setMobileDevices(Array.isArray(devicesData?.devices) ? devicesData.devices : []);
-      setMobileUrls(urls);
-      setInstallForm(prev => ({
-        ...prev,
-        android_url: prev.android_url || urls.android_url || '',
-        ios_url: prev.ios_url || urls.ios_url || '',
-      }));
-    } catch (err) {
-      setMobileNotice(err?.message || 'Không thể tải dữ liệu mobile.');
-    } finally {
-      setMobileLoading(false);
-    }
-  };
-
-  const buildInstallApiUrl = (link = {}) => {
-    if (!link.token) return '';
-    const rawUrl = `${API}/mobile/install/${encodeURIComponent(link.token)}`;
-    try {
-      return new URL(rawUrl, window.location.origin).toString();
-    } catch (_) {
-      return rawUrl;
-    }
-  };
-
-  const copyText = async (value, label = 'link') => {
-    const text = String(value || '').trim();
-    if (!text) {
-      setMobileNotice(`Chưa có ${label} để copy.`);
+  const handleSaveStore = async () => {
+    const payload = sanitizeStorePayload(storeForm);
+    if (payload.email && !isValidEmail(payload.email)) {
+      setTimedNotice('store', setStoreNotice, {
+        tone: 'error',
+        message: 'Email cửa hàng không hợp lệ.',
+      }, 5000);
       return;
     }
 
+    setStoreSaving(true);
+    setStoreNotice(null);
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
+      const data = await apiJson('/store', {
+        method: 'PUT',
+        body: payload,
+      }, 'Không thể lưu thông tin cửa hàng.');
+
+      if (data?.ok) {
+        setStoreForm(payload);
+        setStoreDirty(false);
+        onStoreChange?.(payload);
+        setTimedNotice('store', setStoreNotice, {
+          tone: 'success',
+          message: 'Đã lưu thông tin cửa hàng.',
+        }, 3000);
       }
-      setMobileNotice(`Đã copy ${label}.`);
-    } catch (err) {
-      setMobileNotice(`Không thể copy ${label}: ${err?.message || 'trình duyệt không cho phép'}`);
-    }
-  };
-
-  const handleCreateMobileInstallLink = async (kind = 'common') => {
-    const actionKey = `create-${kind}`;
-    const kindLabel = kind === 'android' ? 'Android' : kind === 'ios' ? 'iOS' : 'chung';
-    setMobileAction(actionKey);
-    setMobileNotice('');
-    try {
-      const payload = {
-        expires_days: Number(installForm.expires_days) || 7,
-      };
-      if (String(installForm.android_url || '').trim()) payload.android_url = String(installForm.android_url).trim();
-      if (String(installForm.ios_url || '').trim()) payload.ios_url = String(installForm.ios_url).trim();
-
-      const data = await mobileAdminApi.createInstallLink(payload);
-      if (data?.link) {
-        setMobileInstallLinks(prev => [data.link, ...prev.filter(link => String(link.id) !== String(data.link.id))]);
-      }
-      if (data?.urls) setMobileUrls(data.urls);
-      setMobileNotice(`Đã tạo link cài đặt mobile ${kindLabel}. Copy link bên dưới để gửi cho nhân viên.`);
-    } catch (err) {
-      setMobileNotice(err?.message || 'Không thể tạo link cài đặt mobile.');
+    } catch (error) {
+      setTimedNotice('store', setStoreNotice, {
+        tone: 'error',
+        message: getErrorMessage(error, 'Không thể lưu thông tin cửa hàng.'),
+      });
     } finally {
-      setMobileAction('');
-    }
-  };
-
-  const handleRevokeMobileDevice = async (device) => {
-    if (!device?.id) return;
-    const deviceLabel = device.device_name || device.device_uid || `#${device.id}`;
-    if (!confirm(`Thu hồi quyền truy cập mobile của thiết bị ${deviceLabel}?`)) return;
-    const reason = prompt('Lý do thu hồi thiết bị:', 'admin_revoke') || 'admin_revoke';
-    setMobileAction(`revoke-${device.id}`);
-    try {
-      await mobileAdminApi.revokeDevice(device.id, { reason });
-      await loadMobileAdmin();
-      setMobileNotice(`Đã thu hồi thiết bị ${deviceLabel}.`);
-    } catch (err) {
-      setMobileNotice(err?.message || 'Không thể thu hồi thiết bị mobile.');
-    } finally {
-      setMobileAction('');
-    }
-  };
-
-  // ===== STORE =====
-  const handleSaveStore = async () => {
-    const res = await fetch(`${API}/store`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(storeForm),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    }
-  };
-
-  // ===== BOT =====
-  const handleSaveBot = async () => {
-    const res = await fetch(`${API}/bot/settings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(botForm),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    }
-  };
-
-  // ===== EMPLOYEES =====
-  const handleDeleteEmp = async (id) => {
-    if (!confirm('Xóa nhân viên này?')) return;
-    await fetch(`${API}/users/${id}`, { method: 'DELETE' });
-    loadEmployees();
-  };
-
-  const handleToggleEmpMobile = async (employee) => {
-    const currentState = getMobileEnabledState(employee);
-    if (currentState === null) return;
-    const nextState = !currentState;
-    if (!confirm(`${nextState ? 'Bật' : 'Tắt'} quyền đăng nhập mobile cho ${employee.name}?`)) return;
-    try {
-      await usersApi.updateMobileEnabled(employee.id, nextState);
-      await loadEmployees();
-    } catch (err) {
-      alert(err?.message || 'Không thể cập nhật quyền mobile cho nhân viên.');
+      if (mountedRef.current) setStoreSaving(false);
     }
   };
 
   const openAddEmp = () => {
     setEmpEdit(null);
-    setEmpForm({ name: '', email: '', phone: '', password: '' });
+    setEmpForm(normalizeEmployeeForm());
+    setEmpNotice(null);
     setShowEmpModal(true);
   };
 
-  const openEditEmp = (e) => {
-    setEmpEdit(e);
-    setEmpForm({ name: e.name, email: e.email, phone: e.phone || '', password: '' });
+  const openEditEmp = (employee) => {
+    setEmpEdit(employee);
+    setEmpForm(normalizeEmployeeForm(employee));
+    setEmpNotice(null);
     setShowEmpModal(true);
+  };
+
+  const handleDeleteEmp = async (id) => {
+    if (!window.confirm('Xóa nhân viên này?')) return;
+
+    setEmployeesNotice(null);
+    try {
+      const data = await apiJson(`/users/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }, 'Không thể xóa nhân viên.');
+      await loadEmployees();
+      setTimedNotice('employees', setEmployeesNotice, {
+        tone: 'success',
+        message: data?.message || 'Đã xóa nhân viên.',
+      }, 3000);
+    } catch (error) {
+      setTimedNotice('employees', setEmployeesNotice, {
+        tone: 'error',
+        message: getErrorMessage(error, 'Không thể xóa nhân viên.'),
+      });
+    }
   };
 
   const handleSaveEmp = async () => {
-    if (!empForm.name || !empForm.email || !empForm.phone) {
-      alert('Vui lòng điền đầy đủ thông tin!'); return;
+    const payload = sanitizeEmployeePayload(empForm);
+    const isCreating = !empEdit;
+
+    if (!payload.name || !payload.email || !payload.phone) {
+      setEmpNotice({ tone: 'error', message: 'Vui lòng điền đầy đủ họ tên, email và số điện thoại.' });
+      return;
     }
-    if (!empEdit && !empForm.password) {
-      alert('Vui lòng nhập mật khẩu!'); return;
+    if (!isValidEmail(payload.email)) {
+      setEmpNotice({ tone: 'error', message: 'Email nhân viên không hợp lệ.' });
+      return;
     }
-    const payload = {
-      name: empForm.name,
-      email: empForm.email,
-      phone: empForm.phone,
-      ...(empForm.password ? { password: empForm.password } : {}),
-    };
-    if (empEdit) {
-      await fetch(`${API}/users/${empEdit.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+    if (isCreating && !payload.password) {
+      setEmpNotice({ tone: 'error', message: 'Vui lòng nhập mật khẩu cho nhân viên mới.' });
+      return;
+    }
+    if (payload.password && String(payload.password).length < 6) {
+      setEmpNotice({ tone: 'error', message: 'Mật khẩu phải có ít nhất 6 ký tự.' });
+      return;
+    }
+
+    setEmpSaving(true);
+    setEmpNotice(null);
+    try {
+      if (empEdit) {
+        await usersApi.update(empEdit.id, payload);
+      } else {
+        await apiJson('/users/register', {
+          method: 'POST',
+          body: payload,
+        }, 'Không thể tạo nhân viên mới.');
+      }
+
+      await loadEmployees();
+      closeEmpModal();
+      setTimedNotice('employees', setEmployeesNotice, {
+        tone: 'success',
+        message: empEdit ? 'Đã cập nhật nhân viên.' : 'Đã thêm nhân viên mới.',
+      }, 3000);
+    } catch (error) {
+      setEmpNotice({
+        tone: 'error',
+        message: getErrorMessage(error, empEdit ? 'Không thể cập nhật nhân viên.' : 'Không thể tạo nhân viên mới.'),
       });
-    } else {
-      await fetch(`${API}/users/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+    } finally {
+      if (mountedRef.current) setEmpSaving(false);
     }
-    setShowEmpModal(false);
-    loadEmployees();
   };
 
-  // ===== CUSTOMER TYPES =====
   const openAddType = () => {
     setTypeEdit(null);
-    setTypeForm({ name: '', color: '#3b82f6' });
+    setTypeForm(normalizeTypeForm());
+    setTypeNotice(null);
     setShowTypeModal(true);
   };
 
-  const openEditType = (t) => {
-    setTypeEdit(t);
-    setTypeForm({ name: t.name, color: t.color || '#3b82f6' });
+  const openEditType = (type) => {
+    setTypeEdit(type);
+    setTypeForm(normalizeTypeForm(type));
+    setTypeNotice(null);
     setShowTypeModal(true);
   };
 
   const handleSaveType = async () => {
-    if (!typeForm.name) { alert('Vui lòng nhập tên!'); return; }
-    if (typeEdit) {
-      await fetch(`${API}/customer-types/${typeEdit.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(typeForm),
-      });
-    } else {
-      await fetch(`${API}/customer-types`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(typeForm),
-      });
+    const payload = sanitizeTypePayload(typeForm);
+    if (!payload.name) {
+      setTypeNotice({ tone: 'error', message: 'Vui lòng nhập tên loại khách hàng.' });
+      return;
     }
-    setShowTypeModal(false);
-    loadCustomerTypes();
+
+    setTypeSaving(true);
+    setTypeNotice(null);
+    try {
+      if (typeEdit) await customerTypesApi.update(typeEdit.id, payload);
+      else await customerTypesApi.create(payload);
+
+      await loadCustomerTypes();
+      closeTypeModal();
+      setTimedNotice('customer-types', setCustomerTypesNotice, {
+        tone: 'success',
+        message: typeEdit ? 'Đã cập nhật loại khách hàng.' : 'Đã thêm loại khách hàng mới.',
+      }, 3000);
+    } catch (error) {
+      setTypeNotice({
+        tone: 'error',
+        message: getErrorMessage(error, typeEdit ? 'Không thể cập nhật loại khách hàng.' : 'Không thể tạo loại khách hàng.'),
+      });
+    } finally {
+      if (mountedRef.current) setTypeSaving(false);
+    }
   };
 
   const handleDeleteType = async (id) => {
-    if (!confirm('Xóa loại khách này?')) return;
-    await fetch(`${API}/customer-types/${id}`, { method: 'DELETE' });
-    loadCustomerTypes();
+    if (!window.confirm('Xóa loại khách này?')) return;
+
+    setCustomerTypesNotice(null);
+    try {
+      await customerTypesApi.remove(id);
+      await loadCustomerTypes();
+      setTimedNotice('customer-types', setCustomerTypesNotice, {
+        tone: 'success',
+        message: 'Đã xóa loại khách hàng.',
+      }, 3000);
+    } catch (error) {
+      setTimedNotice('customer-types', setCustomerTypesNotice, {
+        tone: 'error',
+        message: getErrorMessage(error, 'Không thể xóa loại khách hàng.'),
+      });
+    }
+  };
+
+  const handleToggleNegativeStock = async () => {
+    const nextEnabled = !negativeStockFeature.active;
+    const payload = {
+      feature_key: NEGATIVE_STOCK_FEATURE_KEY,
+      name: NEGATIVE_STOCK_FEATURE_NAME,
+      description: NEGATIVE_STOCK_FEATURE_DESCRIPTION,
+      category: NEGATIVE_STOCK_FEATURE_CATEGORY,
+      active: nextEnabled,
+      metadata: {},
+    };
+
+    setNegativeStockSaving(true);
+    setNegativeStockNotice(null);
+    try {
+      let data;
+      if (negativeStockFeature.id) {
+        data = await featuresApi.update(negativeStockFeature.id, payload);
+      } else {
+        try {
+          data = await featuresApi.create(payload);
+        } catch (error) {
+          if (error?.status !== 409) throw error;
+          data = await featuresApi.update(NEGATIVE_STOCK_FEATURE_KEY, payload);
+        }
+      }
+
+      const savedFeature = normalizeNegativeStockFeature(data?.item || data?.data || data);
+      setNegativeStockFeature(savedFeature);
+      setTimedNotice('negative-stock', setNegativeStockNotice, {
+        tone: 'success',
+        message: nextEnabled ? 'Đã bật cho phép xuất âm tồn kho.' : 'Đã tắt cho phép xuất âm tồn kho.',
+      }, 3000);
+    } catch (error) {
+      setTimedNotice('negative-stock', setNegativeStockNotice, {
+        tone: 'error',
+        message: getErrorMessage(error, 'Không thể lưu cấu hình xuất âm tồn kho.'),
+      });
+    } finally {
+      if (mountedRef.current) setNegativeStockSaving(false);
+    }
   };
 
   const runUpdateAction = async (busyKey, action) => {
@@ -537,6 +785,7 @@ export default function Settings({ store }) {
       const result = await action(window.khaDesktop.updates);
       setUpdateResult(result);
       if (result?.state) setUpdateState(result.state);
+
       if (!result?.ok) {
         setUpdateNotice(getUpdateErrorMessage(result?.error));
       } else if (busyKey === 'checking') {
@@ -547,13 +796,16 @@ export default function Settings({ store }) {
         setUpdateNotice('Đang cài đặt cập nhật. Ứng dụng sẽ restart theo electron-updater.');
       }
       return result;
-    } catch (err) {
-      const error = { code: err?.code || 'UNKNOWN_ERROR', message: err?.message || 'Đã xảy ra lỗi cập nhật.' };
-      setUpdateResult({ ok: false, error });
-      setUpdateNotice(getUpdateErrorMessage(error));
+    } catch (error) {
+      const nextError = {
+        code: error?.code || 'UNKNOWN_ERROR',
+        message: error?.message || 'Đã xảy ra lỗi cập nhật.',
+      };
+      setUpdateResult({ ok: false, error: nextError });
+      setUpdateNotice(getUpdateErrorMessage(nextError));
       return null;
     } finally {
-      setUpdateBusy('');
+      if (mountedRef.current) setUpdateBusy('');
     }
   };
 
@@ -561,26 +813,28 @@ export default function Settings({ store }) {
   const handleDownloadUpdate = () => runUpdateAction('downloading', updates => updates.download());
   const handleCancelUpdate = () => runUpdateAction('cancelling', updates => updates.cancel());
   const handleInstallUpdate = () => {
-    if (!confirm('Ứng dụng sẽ tạo backup database rồi cài đặt/restart cập nhật. Tiếp tục?')) return null;
+    if (!window.confirm('Ứng dụng sẽ tạo backup database rồi cài đặt và khởi động lại. Tiếp tục?')) return null;
     return runUpdateAction('installing', updates => updates.install());
   };
 
-  const employeeById = new Map(employees.map(employee => [Number(employee.id), employee]));
-  const mobileDefaultAndroidUrl = mobileUrls.android_url || mobileUrls.androidUrl || '';
-  const mobileDefaultIosUrl = mobileUrls.ios_url || mobileUrls.iosUrl || '';
-  const mobileServerUrl = mobileUrls.server_url || mobileUrls.serverUrl || mobileUrls.api_url || '';
-  let resolvedMobileServerUrl = mobileServerUrl;
-  if (!resolvedMobileServerUrl) {
-    try {
-      resolvedMobileServerUrl = new URL(API, window.location.origin).toString();
-    } catch (_) {
-      resolvedMobileServerUrl = API;
-    }
-  }
-  const hasMobileFields = employees.some(employee => getMobileEnabledState(employee) !== null || getMobileLastLogin(employee));
+  const tabs = useMemo(() => {
+    const nextTabs = [];
+    if (canViewStore) nextTabs.push({ key: 'store', label: 'Cửa hàng', icon: <Store size={16} /> });
+    if (canViewEmployees) nextTabs.push({ key: 'employees', label: 'Nhân viên', icon: <Users size={16} /> });
+    if (canViewCustomerTypes) nextTabs.push({ key: 'customer-types', label: 'Loại khách', icon: <Tag size={16} /> });
+    if (canViewNegativeStock) nextTabs.push({ key: 'negative-stock', label: 'Xuất âm', icon: <Package size={16} /> });
+    if (canViewUpdates) nextTabs.push({ key: 'updates', label: 'Cập nhật', icon: <Settings2 size={16} /> });
+    return nextTabs;
+  }, [canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewStore, canViewUpdates]);
+
+  useEffect(() => {
+    if (!tabs.length) return;
+    if (tabs.some(item => item.key === tab)) return;
+    setTab(tabs[0].key);
+  }, [tab, tabs]);
 
   const desktopAvailable = Boolean(window.khaDesktop?.isElectron && window.khaDesktop?.updates);
-  const currentVersion = appInfo?.version || updateState?.currentVersion || '1.2.5';
+  const currentVersion = appInfo?.version || updateState?.currentVersion || 'Không rõ';
   const updateInfo = updateState?.updateInfo || null;
   const progress = updateState?.progress || null;
   const progressPercent = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
@@ -593,194 +847,422 @@ export default function Settings({ store }) {
   const runtimeDiagnostics = updateState?.runtimeDiagnostics || null;
 
   return (
-    <div className="max-w-5xl">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 bg-blue-100 rounded-xl">
-          <Settings2 className="text-blue-600" size={28} />
+    <div className="max-w-6xl">
+      <div className="flex flex-col gap-4 mb-6 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-blue-100 rounded-xl">
+            <Settings2 className="text-blue-600" size={28} />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">Cài đặt hệ thống</h1>
+            <p className="text-sm text-gray-500">
+              Quản lý cửa hàng, nhân viên, loại khách hàng, xuất âm tồn kho và cập nhật ứng dụng.
+            </p>
+          </div>
         </div>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold">Cài đặt Hệ thống</h1>
-          <p className="text-sm text-gray-500">Quản lý cửa hàng, nhân viên, khách hàng</p>
-        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowHelp(true)}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <HelpCircle size={16} /> Hướng dẫn
+        </button>
       </div>
 
-      {/* Tab navigation */}
-      <div className="flex flex-wrap gap-2 mb-6 bg-white rounded-xl p-2 shadow-sm border">
-        {[
-          { key: 'store', icon: <Store size={16} />, label: 'Cửa hàng' },
-          { key: 'employees', icon: <Users size={16} />, label: 'Nhân viên' },
-          { key: 'customer-types', icon: <Tag size={16} />, label: 'Loại khách' },
-          { key: 'updates', icon: <Settings2 size={16} />, label: 'Cập nhật' },
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${tab === t.key ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-            {t.icon}{t.label}
+      <div className="mb-6">
+        <SectionNotice notice={pageNotice} />
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-6 rounded-xl border bg-white p-2 shadow-sm">
+        {tabs.map(item => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => setTab(item.key)}
+            className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${tab === item.key ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            {item.icon}
+            {item.label}
           </button>
         ))}
       </div>
 
-      {/* ===== STORE TAB ===== */}
-      {tab === 'store' && (
-        <div className="card">
-          <h2 className="font-bold mb-4 flex items-center gap-2"><Store size={18} /> Thông tin cửa hàng</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-sm font-medium text-gray-700">Tên cửa hàng</label>
-              <input className="input-field w-full mt-1" value={storeForm.name}
-                onChange={e => setStoreForm({ ...storeForm, name: e.target.value })} />
-            </div>
-            <div><label className="text-sm font-medium text-gray-700">Số điện thoại</label>
-              <input className="input-field w-full mt-1" value={storeForm.phone}
-                onChange={e => setStoreForm({ ...storeForm, phone: e.target.value })} />
-            </div>
-            <div className="col-span-2"><label className="text-sm font-medium text-gray-700">Địa chỉ</label>
-              <input className="input-field w-full mt-1" value={storeForm.address}
-                onChange={e => setStoreForm({ ...storeForm, address: e.target.value })} />
-            </div>
-            <div><label className="text-sm font-medium text-gray-700">Email</label>
-              <input className="input-field w-full mt-1" value={storeForm.email}
-                onChange={e => setStoreForm({ ...storeForm, email: e.target.value })} />
-            </div>
-            <div><label className="text-sm font-medium text-gray-700">Số tài khoản</label>
-              <input className="input-field w-full mt-1" value={storeForm.bank_account}
-                onChange={e => setStoreForm({ ...storeForm, bank_account: e.target.value })} />
-            </div>
-            <div><label className="text-sm font-medium text-gray-700">Tên ngân hàng</label>
-              <input className="input-field w-full mt-1" value={storeForm.bank_name}
-                onChange={e => setStoreForm({ ...storeForm, bank_name: e.target.value })} />
-            </div>
+      {initialLoading ? (
+        <div className="card flex min-h-[260px] items-center justify-center">
+          <div className="flex items-center gap-3 text-gray-600">
+            <Loader2 size={20} className="animate-spin" />
+            <span>Đang tải dữ liệu cài đặt...</span>
           </div>
-          <div className="mt-4 flex items-center gap-3">
-            <button onClick={handleSaveStore} className="btn-success flex items-center gap-1">
-              <CheckCircle size={16} /> Lưu thay đổi
+        </div>
+      ) : null}
+
+      {!initialLoading && tab === 'store' && (
+        <div className="card space-y-4">
+          <div className="flex items-center gap-2">
+            <Store size={18} />
+            <h2 className="font-bold">Thông tin cửa hàng</h2>
+          </div>
+
+          <SectionNotice notice={storeNotice} />
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <InputField
+              id="store-name"
+              label="Tên cửa hàng"
+              value={storeForm.name}
+              onChange={event => updateStoreField('name', event.target.value)}
+              placeholder="Ví dụ: Cửa hàng Vạn Kha"
+            />
+            <InputField
+              id="store-phone"
+              label="Số điện thoại"
+              value={storeForm.phone}
+              onChange={event => updateStoreField('phone', event.target.value)}
+              placeholder="0987..."
+            />
+            <InputField
+              id="store-email"
+              label="Email"
+              type="email"
+              value={storeForm.email}
+              onChange={event => updateStoreField('email', event.target.value)}
+              placeholder="contact@example.com"
+            />
+            <InputField
+              id="store-tax-code"
+              label="Mã số thuế"
+              value={storeForm.tax_code}
+              onChange={event => updateStoreField('tax_code', event.target.value)}
+            />
+            <InputField
+              id="store-bank-name"
+              label="Ngân hàng"
+              value={storeForm.bank_name}
+              onChange={event => updateStoreField('bank_name', event.target.value)}
+            />
+            <InputField
+              id="store-bank-account"
+              label="Số tài khoản"
+              value={storeForm.bank_account}
+              onChange={event => updateStoreField('bank_account', event.target.value)}
+            />
+            <InputField
+              id="store-invoice-width"
+              label="Khổ in mặc định"
+              value={storeForm.invoice_width}
+              onChange={event => updateStoreField('invoice_width', event.target.value)}
+              placeholder="80"
+            />
+            <InputField
+              id="store-invoice-logo"
+              label="Logo hóa đơn (URL)"
+              value={storeForm.invoice_logo}
+              onChange={event => updateStoreField('invoice_logo', event.target.value)}
+              placeholder="https://..."
+            />
+            <InputField
+              id="store-vietqr-logo"
+              label="Logo VietQR (URL)"
+              className="md:col-span-2"
+              value={storeForm.invoice_vietqr_logo}
+              onChange={event => updateStoreField('invoice_vietqr_logo', event.target.value)}
+              placeholder="https://..."
+            />
+            <InputField
+              id="store-address"
+              label="Địa chỉ"
+              className="md:col-span-2"
+              value={storeForm.address}
+              onChange={event => updateStoreField('address', event.target.value)}
+              placeholder="Số nhà, đường, phường/xã..."
+            />
+            <InputField
+              id="store-slogan"
+              label="Slogan hóa đơn"
+              className="md:col-span-2"
+              value={storeForm.invoice_slogan}
+              onChange={event => updateStoreField('invoice_slogan', event.target.value)}
+              placeholder="Cảm ơn quý khách"
+            />
+            <TextareaField
+              id="store-note"
+              label="Ghi chú hóa đơn"
+              className="md:col-span-2"
+              rows={4}
+              value={storeForm.invoice_note}
+              onChange={event => updateStoreField('invoice_note', event.target.value)}
+              placeholder="Ghi chú sẽ hiển thị ở cuối hóa đơn"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSaveStore}
+              disabled={storeSaving || !canManageStore}
+              className="btn-success inline-flex min-h-10 items-center gap-2 disabled:opacity-60"
+            >
+              {storeSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+              {storeSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
             </button>
-            {saved && <span className="text-green-600 text-sm font-medium">✓ Đã lưu!</span>}
+            <span className="text-xs text-gray-500">
+              Các thay đổi này ảnh hưởng trực tiếp đến thông tin hiển thị trên hóa đơn và các trang dùng dữ liệu cửa hàng.
+            </span>
           </div>
         </div>
       )}
 
-      {/* ===== EMPLOYEES TAB ===== */}
-      {tab === 'employees' && (
-        <div>
-          {/* Danh sách nhân viên */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold flex items-center gap-2"><Users size={18} /> Nhân viên ({employees.length})</h3>
-              <button onClick={openAddEmp} className="btn-primary flex items-center gap-1 text-sm">
-                <Plus size={14} /> Thêm nhân viên
+      {!initialLoading && tab === 'employees' && (
+        <div className="card space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <h2 className="font-bold flex items-center gap-2">
+              <Users size={18} /> Nhân viên ({employees.length})
+            </h2>
+            {canManageEmployees && (
+              <button
+                type="button"
+                onClick={openAddEmp}
+                className="btn-primary inline-flex min-h-10 items-center gap-2 text-sm"
+              >
+                <Plus size={14} /> Thêm nhân viên mới
               </button>
+            )}
+          </div>
+
+          <SectionNotice notice={employeesNotice} />
+
+          {employeesLoading ? (
+            <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
+              <div className="inline-flex items-center gap-2">
+                <Loader2 size={16} className="animate-spin" />
+                Đang tải danh sách nhân viên...
+              </div>
             </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-100 text-gray-600 text-xs">
-                  <th className="p-2 text-left">Họ tên</th>
-                  <th className="p-2 text-left">Email</th>
-                  <th className="p-2 text-left">SĐT</th>
-                  <th className="p-2 text-left">Vai trò</th>
-                  <th className="p-2 text-center">Hành động</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map(u => {
-                  const mobileState = getMobileEnabledState(u);
-                  const mobileLastLogin = getMobileLastLogin(u);
-                  return (
-                    <tr key={u.id} className="border-b hover:bg-gray-50">
-                      <td className="p-2 font-medium">{u.name}</td>
-                      <td className="p-2 text-gray-600">{u.email}</td>
-                      <td className="p-2">{u.phone || '—'}</td>
-                      <td className="p-2">
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {u.role === 'admin' ? 'Admin' : 'Nhân viên'}
+          ) : employees.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
+              Chưa có nhân viên nào.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-gray-600">
+                  <tr>
+                    <th className="px-3 py-3 text-left">Họ tên</th>
+                    <th className="px-3 py-3 text-left">Email</th>
+                    <th className="px-3 py-3 text-left">SĐT</th>
+                    <th className="px-3 py-3 text-left">Vai trò</th>
+                    <th className="px-3 py-3 text-left">Đăng nhập gần nhất</th>
+                    <th className="px-3 py-3 text-center">Hành động</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map(employee => (
+                    <tr key={employee.id} className="border-t hover:bg-gray-50">
+                      <td className="px-3 py-3 font-medium text-gray-800">{employee.name || '—'}</td>
+                      <td className="px-3 py-3 text-gray-600">{employee.email || '—'}</td>
+                      <td className="px-3 py-3">{employee.phone || '—'}</td>
+                      <td className="px-3 py-3">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${employee.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {employee.role === 'admin' ? 'Admin' : 'Nhân viên'}
                         </span>
                       </td>
-                      <td className="p-2">
-                        {mobileState === null ? (
-                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">Theo mặc định</span>
+                      <td className="px-3 py-3 text-gray-600">{formatDateTime(employee.last_login)}</td>
+                      <td className="px-3 py-3">
+                        {canManageEmployees ? (
+                          <div className="flex flex-wrap justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openEditEmp(employee)}
+                              className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                            >
+                              <Edit2 size={12} /> Sửa
+                            </button>
+                            {employee.role !== 'admin' && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteEmp(employee.id)}
+                                className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-100"
+                              >
+                                <Trash2 size={12} /> Xóa
+                              </button>
+                            )}
+                          </div>
                         ) : (
-                          <button
-                            onClick={() => handleToggleEmpMobile(u)}
-                            className={`px-2 py-0.5 rounded text-xs font-medium ${getMobileStatusTone(mobileState)}`}
-                            title="Bật/tắt quyền mobile nếu backend users API hỗ trợ"
-                          >
-                            {mobileState ? 'Được bật' : 'Đã tắt'}
-                          </button>
-                        )}
-                      </td>
-                      <td className="p-2 text-gray-600">{formatDateTime(mobileLastLogin)}</td>
-                      <td className="p-2 text-center flex justify-center gap-1">
-                        <button onClick={() => openEditEmp(u)} className="text-blue-600 hover:text-blue-800 text-xs px-2 py-1 border border-blue-300 rounded flex items-center gap-1">
-                          <Edit2 size={12} /> Sửa
-                        </button>
-                        {u.role !== 'admin' && (
-                          <button onClick={() => handleDeleteEmp(u.id)} className="text-red-500 hover:text-red-700 text-xs px-2 py-1 border border-red-300 rounded flex items-center gap-1">
-                            <Trash2 size={12} /> Xóa
-                          </button>
+                          <span className="block text-center text-xs text-gray-400">—</span>
                         )}
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      {/* ===== CUSTOMER TYPES TAB ===== */}
-      {tab === 'customer-types' && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold flex items-center gap-2"><Tag size={18} /> Loại khách hàng ({customerTypes.length})</h3>
-            <button onClick={openAddType} className="btn-primary flex items-center gap-1 text-sm">
-              <Plus size={14} /> Thêm loại khách
-            </button>
+      {!initialLoading && tab === 'customer-types' && (
+        <div className="card space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <h2 className="font-bold flex items-center gap-2">
+              <Tag size={18} /> Loại khách hàng ({customerTypes.length})
+            </h2>
+            {canManageCustomerTypes && (
+              <button
+                type="button"
+                onClick={openAddType}
+                className="btn-primary inline-flex min-h-10 items-center gap-2 text-sm"
+              >
+                <Plus size={14} /> Thêm loại khách
+              </button>
+            )}
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            {customerTypes.map(t => (
-              <div key={t.id} className="border rounded-xl p-4 flex items-center justify-between"
-                style={{ borderLeftColor: t.color, borderLeftWidth: 4 }}>
-                <div>
-                  <div className="font-semibold text-sm">{t.name}</div>
-                  <div className="text-xs text-gray-400">#{t.id}</div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => openEditType(t)} className="text-blue-600 hover:text-blue-800 p-1">
-                    <Edit2 size={14} />
-                  </button>
-                  <button onClick={() => handleDeleteType(t.id)} className="text-red-500 hover:text-red-700 p-1">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+
+          <SectionNotice notice={customerTypesNotice} />
+
+          {customerTypesLoading ? (
+            <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
+              <div className="inline-flex items-center gap-2">
+                <Loader2 size={16} className="animate-spin" />
+                Đang tải loại khách hàng...
               </div>
-            ))}
-          </div>
+            </div>
+          ) : customerTypes.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
+              Chưa có loại khách hàng nào.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {customerTypes.map(type => (
+                <div
+                  key={type.id}
+                  className="flex items-center justify-between rounded-xl border bg-white p-4"
+                  style={{ borderLeftColor: type.color || '#3b82f6', borderLeftWidth: 4 }}
+                >
+                  <div>
+                    <div className="font-semibold text-sm text-gray-800">{type.name}</div>
+                    <div className="text-xs text-gray-400">#{type.id}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {canManageCustomerTypes ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openEditType(type)}
+                          className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-blue-700 hover:bg-blue-100"
+                          title="Sửa loại khách"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteType(type.id)}
+                          className="rounded-lg border border-red-200 bg-red-50 p-2 text-red-600 hover:bg-red-100"
+                          title="Xóa loại khách"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* ===== UPDATES TAB ===== */}
-      {tab === 'updates' && (
+      {!initialLoading && tab === 'negative-stock' && (
+        <div className="card space-y-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="font-bold flex items-center gap-2">
+                <Package size={18} /> Xuất âm tồn kho
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Quản lý việc cho phép xuất vượt tồn kho hiện có. Giới hạn âm là cố định trong code và không chỉnh sửa từ giao diện này.
+              </p>
+            </div>
+            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${negativeStockFeature.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+              {negativeStockFeature.active ? 'Đang bật' : 'Đang tắt'}
+            </span>
+          </div>
+
+          <SectionNotice notice={negativeStockNotice} />
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-2">
+                <div className="font-semibold text-gray-800">Cho phép xuất âm tồn kho sản phẩm</div>
+                <p className="text-sm text-gray-600">
+                  Khi bật, hệ thống cho phép xuất vượt tồn kho hiện có nhưng không được thấp hơn <strong>{NEGATIVE_STOCK_LIMIT}</strong>. Khi tắt, hệ thống chặn mọi trường hợp làm tồn kho nhỏ hơn <strong>0</strong>.
+                </p>
+                <p className="text-xs text-gray-500">
+                  Giới hạn âm là hằng số cố định trong code để đảm bảo kiểm soát nghiệp vụ nhất quán giữa frontend và backend.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={negativeStockFeature.active}
+                onClick={handleToggleNegativeStock}
+                disabled={negativeStockSaving || !canManageNegativeStock}
+                className={`inline-flex min-h-11 min-w-[148px] items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${negativeStockFeature.active ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+              >
+                {negativeStockSaving ? <Loader2 size={16} className="animate-spin" /> : (negativeStockFeature.active ? 'Đang bật' : 'Đang tắt')}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+            <div className="font-semibold">Nguyên tắc áp dụng</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>Khi tắt: backend không cho xuất nếu tồn dự kiến nhỏ hơn 0.</li>
+              <li>Khi bật: backend cho phép tồn sau xuất giảm tối đa đến {NEGATIVE_STOCK_LIMIT}.</li>
+              <li>Nếu vượt giới hạn, backend trả lỗi rõ tên sản phẩm, tồn hiện tại, số lượng xuất và giới hạn tối thiểu.</li>
+              <li>Giao diện này chỉ bật/tắt tính năng, không cho chỉnh sửa mức giới hạn âm.</li>
+            </ul>
+          </div>
+
+          {!canManageNegativeStock && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Tài khoản hiện tại chỉ có quyền xem trạng thái xuất âm tồn kho và không thể thay đổi cấu hình này.
+            </div>
+          )}
+        </div>
+      )}
+
+      {!initialLoading && tab === 'updates' && (
         <div className="space-y-4">
           <div className="card">
-            <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
-                <h2 className="font-bold flex items-center gap-2"><Settings2 size={18} /> Cập nhật ứng dụng</h2>
-                <p className="text-sm text-gray-500 mt-1">Nếu feed GitHub Release truy cập công khai được, ứng dụng tự kiểm tra, tự tải gói cập nhật và chỉ cài/restart khi người dùng chọn “Cập nhật ngay”.</p>
+                <h2 className="font-bold flex items-center gap-2">
+                  <Settings2 size={18} /> Cập nhật ứng dụng
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Ứng dụng Electron có thể tự kiểm tra, tự tải và chỉ cài đặt khi bạn xác nhận cập nhật.
+                </p>
               </div>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${updateState?.status === 'error' ? 'bg-red-100 text-red-700' : hasUpdate ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+              <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${updateState?.status === 'error' ? 'bg-red-100 text-red-700' : hasUpdate ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
                 {getUpdateStatusLabel(updateState?.status)}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div className="border rounded-xl p-4 bg-gray-50">
+            <div className="mt-4 grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
+              <div className="rounded-xl border bg-gray-50 p-4">
                 <div className="text-gray-500">Phiên bản hiện tại</div>
-                <div className="text-2xl font-bold text-gray-800 mt-1">{currentVersion}</div>
-                <div className="text-xs text-gray-500 mt-2">Nền tảng: {appInfo?.platform || window.khaDesktop?.platform || 'offline'} · Kiến trúc: {appInfo?.arch || 'unknown'}</div>
+                <div className="mt-1 text-2xl font-bold text-gray-800">{currentVersion}</div>
+                <div className="mt-2 text-xs text-gray-500">
+                  Nền tảng: {appInfo?.platform || window.khaDesktop?.platform || 'web'} · Kiến trúc: {appInfo?.arch || 'unknown'}
+                </div>
               </div>
-              <div className="border rounded-xl p-4 bg-gray-50">
-                <div className="text-gray-500">Bảng cập nhật</div>
-                <div className="font-medium text-gray-800 break-all mt-1">{manifestUrl || 'Chưa nạp URL feed'}</div>
-                <div className="text-xs text-gray-500 mt-2">Nguồn: {manifestSourceLabel}</div>
+              <div className="rounded-xl border bg-gray-50 p-4">
+                <div className="text-gray-500">Feed cập nhật</div>
+                <div className="mt-1 break-all font-medium text-gray-800">{manifestUrl || 'Chưa nạp URL feed'}</div>
+                <div className="mt-2 text-xs text-gray-500">Nguồn: {manifestSourceLabel}</div>
                 {updateState?.manifestUrlDefault && (
                   <div className="mt-2 inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
                     Đang dùng GitHub Release feed mặc định
@@ -792,15 +1274,15 @@ export default function Settings({ store }) {
             {updateLogPath && (
               <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
                 <div className="font-semibold text-gray-700">Log cập nhật</div>
-                <div className="break-all mt-1">{updateLogPath}</div>
-                <div className="mt-1">File này ghi các bước check/download/dialog/backup/quitAndInstall và lỗi mạng để debug, không chứa token hay mật khẩu.</div>
+                <div className="mt-1 break-all">{updateLogPath}</div>
+                <div className="mt-1">Log này dùng để debug check/download/cài đặt và không chứa token hay mật khẩu.</div>
               </div>
             )}
 
             {runtimeDiagnostics && (
               <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
                 <div className="font-semibold text-gray-700">Chẩn đoán runtime updater</div>
-                <div className="mt-1 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                <div className="mt-1 grid grid-cols-1 gap-x-4 gap-y-1 md:grid-cols-2">
                   <div>Đã đóng gói: {runtimeDiagnostics.isPackaged ? 'Có' : 'Không'}</div>
                   <div>app-update.yml: {runtimeDiagnostics.appUpdateYmlExists ? 'Có' : 'Không thấy'}</div>
                   <div className="break-all md:col-span-2">Đường dẫn app-update.yml: {runtimeDiagnostics.appUpdateYmlPath || 'Không xác định'}</div>
@@ -815,35 +1297,43 @@ export default function Settings({ store }) {
             )}
 
             {updateNotice && (
-              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{updateNotice}</div>
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                {updateNotice}
+              </div>
             )}
 
             {updateError && (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 <div className="font-semibold">Không thể hoàn tất thao tác cập nhật</div>
                 <div>{getUpdateErrorMessage(updateError)}</div>
-                {updateError.details && <pre className="mt-2 whitespace-pre-wrap text-xs bg-white/70 rounded p-2">{formatUpdateErrorDetails(updateError.details)}</pre>}
+                {updateError.details && (
+                  <pre className="mt-2 whitespace-pre-wrap rounded bg-white/70 p-2 text-xs">
+                    {formatUpdateErrorDetails(updateError.details)}
+                  </pre>
+                )}
               </div>
             )}
 
             {hasUpdate && (
-              <div className="mt-4 border rounded-xl p-4 bg-white">
-                <div className="flex items-start justify-between gap-4">
+              <div className="mt-4 rounded-xl border bg-white p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <div className="text-sm text-gray-500">Bản mới</div>
                     <div className="text-xl font-bold text-green-700">{updateInfo.version}</div>
                   </div>
-                  <div className="text-right text-xs text-gray-500">
-                    <div>Ngày phát hành: {updateInfo.releaseDate || 'Không rõ'}</div>
+                  <div className="text-xs text-gray-500 md:text-right">
+                    <div>Ngày phát hành: {formatDateTime(updateInfo.releaseDate)}</div>
                     <div>Dung lượng: {formatBytes(updateInfo.size)}</div>
-                    {updateInfo.mandatory && <div className="text-red-600 font-semibold">Bản cập nhật bắt buộc</div>}
+                    {updateInfo.mandatory && <div className="font-semibold text-red-600">Bản cập nhật bắt buộc</div>}
                   </div>
                 </div>
                 <div className="mt-3 text-sm">
-                  <div className="font-semibold text-gray-700 mb-1">Ghi chú phát hành</div>
-                  <pre className="whitespace-pre-wrap bg-gray-50 border rounded-lg p-3 text-gray-700 text-sm">{updateInfo.releaseNotes || 'Không có ghi chú phát hành.'}</pre>
+                  <div className="mb-1 font-semibold text-gray-700">Ghi chú phát hành</div>
+                  <pre className="whitespace-pre-wrap rounded-lg border bg-gray-50 p-3 text-sm text-gray-700">
+                    {updateInfo.releaseNotes || 'Không có ghi chú phát hành.'}
+                  </pre>
                 </div>
-                <div className="mt-3 text-xs text-gray-500 break-all">
+                <div className="mt-3 break-all text-xs text-gray-500">
                   <div>Installer/feed path: {updateInfo.url || updateInfo.path || 'Theo latest.yml'}</div>
                   {updateInfo.sha512 ? <div>SHA512: {updateInfo.sha512}</div> : updateInfo.sha256 ? <div>SHA256: {updateInfo.sha256}</div> : null}
                 </div>
@@ -852,217 +1342,264 @@ export default function Settings({ store }) {
 
             {updateState?.status === 'no-update' && updateState?.lastCheckedAt && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                Ứng dụng đang ở phiên bản mới nhất. Lần kiểm tra: {new Date(updateState.lastCheckedAt).toLocaleString('vi-VN')}.
+                Ứng dụng đang ở phiên bản mới nhất. Lần kiểm tra: {formatDateTime(updateState.lastCheckedAt)}.
               </div>
             )}
 
             {updateState?.status === 'downloading' && (
               <div className="mt-4">
-                <div className="flex items-center justify-between text-sm mb-1">
+                <div className="mb-1 flex items-center justify-between text-sm">
                   <span>Tiến trình tải</span>
                   <span>{progressPercent}%</span>
                 </div>
-                <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-3 overflow-hidden rounded-full bg-gray-100">
                   <div className="h-full bg-blue-600 transition-all" style={{ width: `${progressPercent}%` }} />
                 </div>
-                <div className="text-xs text-gray-500 mt-1">{formatBytes(progress?.transferred)} / {formatBytes(progress?.total)}</div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {formatBytes(progress?.transferred)} / {formatBytes(progress?.total)}
+                </div>
               </div>
             )}
 
             {downloaded && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                electron-updater đã tải và xác thực gói cập nhật thành công. Khi bấm Cập nhật ngay, ứng dụng sẽ backup database trước rồi cài đặt/restart.
+                electron-updater đã tải và xác thực gói cập nhật thành công. Khi bấm Cập nhật ngay, ứng dụng sẽ sao lưu database trước khi cài đặt và khởi động lại.
               </div>
             )}
 
             <div className="mt-5 flex flex-wrap gap-2">
-              <button onClick={handleCheckUpdate} disabled={!desktopAvailable || updateBusy === 'checking' || updateState?.status === 'downloading'} className="btn-primary disabled:opacity-60">
+              <button
+                type="button"
+                onClick={handleCheckUpdate}
+                disabled={!desktopAvailable || updateBusy === 'checking' || updateState?.status === 'downloading'}
+                className="btn-primary disabled:opacity-60"
+              >
                 {updateBusy === 'checking' ? 'Đang kiểm tra...' : 'Kiểm tra cập nhật'}
               </button>
-              <button onClick={handleDownloadUpdate} disabled={!desktopAvailable || !hasUpdate || downloaded || updateState?.status === 'downloading'} className="btn-success disabled:opacity-60">
+              <button
+                type="button"
+                onClick={handleDownloadUpdate}
+                disabled={!desktopAvailable || !hasUpdate || downloaded || updateState?.status === 'downloading'}
+                className="btn-success disabled:opacity-60"
+              >
                 {updateBusy === 'downloading' ? 'Đang tải...' : 'Tải bản cập nhật'}
               </button>
               {updateState?.status === 'downloading' && (
-                <button onClick={handleCancelUpdate} disabled={updateBusy === 'cancelling'} className="btn-danger disabled:opacity-60">Hủy tải</button>
+                <button
+                  type="button"
+                  onClick={handleCancelUpdate}
+                  disabled={updateBusy === 'cancelling'}
+                  className="btn-danger disabled:opacity-60"
+                >
+                  {updateBusy === 'cancelling' ? 'Đang hủy...' : 'Hủy tải'}
+                </button>
               )}
-              <button onClick={handleInstallUpdate} disabled={!desktopAvailable || !downloaded || updateBusy === 'installing'} className="btn-danger disabled:opacity-60">
+              <button
+                type="button"
+                onClick={handleInstallUpdate}
+                disabled={!desktopAvailable || !downloaded || updateBusy === 'installing'}
+                className="btn-danger disabled:opacity-60"
+              >
                 {updateBusy === 'installing' ? 'Đang cập nhật...' : 'Cập nhật ngay'}
               </button>
             </div>
           </div>
 
-          <div className="card bg-blue-50 border-blue-100 text-sm text-blue-800">
-            <h3 className="font-bold mb-2">Cấu hình update feed</h3>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Mặc định app cấu hình electron-updater provider generic để đọc trực tiếp latest.yml: {updateState?.defaultManifestUrl || 'https://github.com/Vankhadev/phanmemoffline/releases/latest/download/latest.yml'}.</li>
-              <li>Cách này tránh phụ thuộc endpoint releases.atom của GitHub; latest.yml vẫn phải là asset public trong GitHub Release latest.</li>
-              <li>Khi feed và asset public, khách hàng không cần tự tải installer; app tự kiểm tra/tải gói cập nhật và chỉ cài đặt sau khi người dùng bấm “Cập nhật ngay”.</li>
-              <li>Bản development/unpacked không auto-update trừ khi bật KHA_ENABLE_ELECTRON_UPDATER=1 có chủ đích để test.</li>
-              <li>GitHub Release production cần có installer .exe, .exe.blockmap và latest.yml do electron-builder tạo.</li>
-              <li>Nếu repo GitHub hoặc release asset đang private, client không có token sẽ nhận 401/403/404 và không thể hiện dialog cập nhật; khi đó cần chuyển feed public hoặc người dùng phải tải/cài installer thủ công từ nguồn được cấp quyền.</li>
-              <li>Trước khi cài đặt, ứng dụng backup phanmienoffline.db.json trong userData/backups và không xóa userData.</li>
+          <div className="card border-blue-100 bg-blue-50 text-sm text-blue-800">
+            <h3 className="mb-2 font-bold">Ghi chú update feed</h3>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>Mặc định app dùng provider generic để đọc trực tiếp latest.yml từ GitHub Release latest.</li>
+              <li>Release production cần có installer .exe, .exe.blockmap và latest.yml do electron-builder tạo.</li>
+              <li>Khi repo hoặc release asset đang private, client Electron không thể tự cập nhật nếu không có feed public phù hợp.</li>
+              <li>Trước khi cài đặt, ứng dụng sẽ sao lưu file database trong thư mục userData/backups.</li>
             </ul>
           </div>
         </div>
       )}
 
-      {/* ===== MODALS ===== */}
-      {/* Employee modal */}
-      {showEmpModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-[480px]">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold">{empEdit ? 'Sửa nhân viên' : 'Thêm nhân viên'}</h2>
-              <button onClick={() => setShowEmpModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+      {showEmpModal && canManageEmployees && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="employee-modal-title">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 id="employee-modal-title" className="text-lg font-bold">
+                {empEdit ? 'Sửa nhân viên' : 'Thêm nhân viên'}
+              </h2>
+              <button type="button" onClick={closeEmpModal} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
             </div>
-            <div className="space-y-3 mb-4">
-              <div><label className="text-xs text-gray-500">Họ tên</label>
-                <input className="input-field w-full" value={empForm.name}
-                  onChange={e => setEmpForm({ ...empForm, name: e.target.value })} />
+
+            <div className="space-y-4">
+              <SectionNotice notice={empNotice} />
+
+              <div className="space-y-3">
+                <InputField
+                  id="emp-name"
+                  label="Họ tên"
+                  value={empForm.name}
+                  onChange={event => setEmpForm(current => ({ ...current, name: event.target.value }))}
+                />
+                <InputField
+                  id="emp-email"
+                  label="Email"
+                  type="email"
+                  value={empForm.email}
+                  onChange={event => setEmpForm(current => ({ ...current, email: event.target.value }))}
+                />
+                <InputField
+                  id="emp-phone"
+                  label="Số điện thoại"
+                  value={empForm.phone}
+                  onChange={event => setEmpForm(current => ({ ...current, phone: event.target.value }))}
+                />
+                <InputField
+                  id="emp-password"
+                  label={empEdit ? 'Mật khẩu mới (để trống nếu không đổi)' : 'Mật khẩu'}
+                  type="password"
+                  autoComplete="new-password"
+                  value={empForm.password}
+                  onChange={event => setEmpForm(current => ({ ...current, password: event.target.value }))}
+                />
               </div>
-              <div><label className="text-xs text-gray-500">Email</label>
-                <input className="input-field w-full" type="email" value={empForm.email}
-                  onChange={e => setEmpForm({ ...empForm, email: e.target.value })} />
-              </div>
-              <div><label className="text-xs text-gray-500">SĐT</label>
-                <input className="input-field w-full" value={empForm.phone}
-                  onChange={e => setEmpForm({ ...empForm, phone: e.target.value })} />
-              </div>
-              <div><label className="text-xs text-gray-500">Mật khẩu {empEdit && '(để trống nếu không đổi)'}</label>
-                <input className="input-field w-full" type="password" value={empForm.password}
-                  onChange={e => setEmpForm({ ...empForm, password: e.target.value })} />
-              </div>
-              <div className="bg-blue-50 border border-blue-200 text-blue-700 rounded-lg px-3 py-2 text-xs">
-                Server tự động gán quyền: tài khoản đầu tiên là ADMIN, các tài khoản sau là USER. Client không được chọn hoặc gửi role.
+
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                Server tự động gán quyền: tài khoản đầu tiên là ADMIN, các tài khoản sau là USER. Client không gửi role khi tạo mới.
               </div>
             </div>
-            <div className="flex gap-2">
-              <button onClick={handleSaveEmp} className="btn-success flex-1"> Lưu</button>
-              <button onClick={() => setShowEmpModal(false)} className="btn-danger flex-1">Hủy</button>
+
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={handleSaveEmp}
+                disabled={empSaving}
+                className="btn-success flex-1 disabled:opacity-60"
+              >
+                {empSaving ? 'Đang lưu...' : 'Lưu'}
+              </button>
+              <button type="button" onClick={closeEmpModal} disabled={empSaving} className="btn-danger flex-1 disabled:opacity-60">
+                Hủy
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Customer type modal */}
-      {showTypeModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-[400px]">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold">{typeEdit ? 'Sửa loại khách' : 'Thêm loại khách'}</h2>
-              <button onClick={() => setShowTypeModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+      {showTypeModal && canManageCustomerTypes && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="customer-type-modal-title">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 id="customer-type-modal-title" className="text-lg font-bold">
+                {typeEdit ? 'Sửa loại khách' : 'Thêm loại khách'}
+              </h2>
+              <button type="button" onClick={closeTypeModal} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
             </div>
-            <div className="space-y-3 mb-4">
-              <div><label className="text-xs text-gray-500">Tên loại khách</label>
-                <input className="input-field w-full" value={typeForm.name}
-                  onChange={e => setTypeForm({ ...typeForm, name: e.target.value })} placeholder="VD: Khách VIP" />
-              </div>
-              <div><label className="text-xs text-gray-500">Màu sắc</label>
-                <div className="flex gap-2 items-center mt-1">
-                  <input type="color" className="w-10 h-10 rounded cursor-pointer border"
+
+            <div className="space-y-4">
+              <SectionNotice notice={typeNotice} />
+              <InputField
+                id="customer-type-name"
+                label="Tên loại khách"
+                value={typeForm.name}
+                onChange={event => setTypeForm(current => ({ ...current, name: event.target.value }))}
+                placeholder="Ví dụ: Khách VIP"
+              />
+
+              <div>
+                <label htmlFor="customer-type-color" className="text-sm font-medium text-gray-700">
+                  Màu sắc
+                </label>
+                <div className="mt-1 flex items-center gap-3">
+                  <input
+                    id="customer-type-color"
+                    type="color"
+                    className="h-10 w-12 cursor-pointer rounded border"
                     value={typeForm.color}
-                    onChange={e => setTypeForm({ ...typeForm, color: e.target.value })} />
+                    onChange={event => setTypeForm(current => ({ ...current, color: normalizeHexColor(event.target.value) }))}
+                  />
                   <span className="text-sm text-gray-500">{typeForm.color}</span>
                 </div>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button onClick={handleSaveType} className="btn-success flex-1"> Lưu</button>
-              <button onClick={() => setShowTypeModal(false)} className="btn-danger flex-1">Hủy</button>
+
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={handleSaveType}
+                disabled={typeSaving}
+                className="btn-success flex-1 disabled:opacity-60"
+              >
+                {typeSaving ? 'Đang lưu...' : 'Lưu'}
+              </button>
+              <button type="button" onClick={closeTypeModal} disabled={typeSaving} className="btn-danger flex-1 disabled:opacity-60">
+                Hủy
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Help Modal */}
-      {showHelp && (
-        <HelpModal
-          title="Hướng dẫn sử dụng Cài đặt Hệ thống"
-          onClose={() => setShowHelp(false)}
-          content={
-            <div className="space-y-4 text-sm text-gray-700">
-              <div>
-                <h3 className="font-bold text-gray-800 mb-2">⚙️ Tổng quan</h3>
-                <p>Trang Cài đặt giúp bạn cấu hình toàn bộ hệ thống: thông tin cửa hàng, thiết lập hóa đơn, quản lý nhân viên, loại khách hàng và Telegram Bot thông báo.</p>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-gray-800 mb-2">🏪 Tab Cửa hàng</h3>
-                <ul className="list-disc pl-5 space-y-1">
-                  <li><strong>Tên cửa hàng:</strong> Hiển thị trên hóa đơn và trang chủ</li>
-                  <li><strong>SĐT, Email:</strong> Thông tin liên hệ</li>
-                  <li><strong>MST:</strong> Mã số thuế xuất hóa đơn</li>
-                  <li><strong>Ngân hàng:</strong> Tên ngân hàng và số tài khoản (dùng cho QR code)</li>
-                  <li><strong>Địa chỉ:</strong> Địa chỉ cửa hàng</li>
-                  <li><strong>Chiều rộng hóa đơn:</strong> Độ rộng khi in (mm)</li>
-                  <li><strong>Logo hóa đơn:</strong> URL hình logo (có thể để trống)</li>
-                  <li><strong>Ghi chú hóa đơn:</strong> Hiển thị dưới mỗi hóa đơn</li>
-                  <li><strong>Slogan hóa đơn:</strong> Dòng chữ cuối hóa đơn (VD: "Cảm ơn quý khách!")</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-gray-800 mb-2">🖨️ Tab Hóa đơn</h3>
-                <p>Tính năng này đang được phát triển. Mục tiêu: cấu hình mẫu hóa đơn, font chữ, header/footer.</p>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-gray-800 mb-2">👥 Tab Nhân viên</h3>
-                <ul className="list-disc pl-5 space-y-1">
-                  <li><strong>Danh sách nhân viên:</strong> Hiển thị tất cả user đang hoạt động</li>
-                  <li><strong>Thêm nhân viên:</strong> Server tự động gán ADMIN cho tài khoản đầu tiên, các tài khoản sau là USER</li>
-                  <li><strong>Chỉnh sửa:</strong> Đổi tên, email, SĐT, mật khẩu; client không được chọn role</li>
-                  <li><strong>Xóa:</strong> Xóa nhân viên (không xóa được admin đang đăng nhập)</li>
-                  <li>Mật khẩu mặc định: 123456 (nhân viên tự đổi được ở trang cá nhân)</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-gray-800 mb-2">🏷️ Tab Loại khách</h3>
-                <p>Quản lý phân loại khách hàng:</p>
-                <ul className="list-disc pl-5 mt-2 space-y-1">
-                  <li><strong>Thêm loại:</strong> Tạo loại mới (VD: VIP, Sỉ, Lẻ) với chọn màu</li>
-                  <li><strong>Sửa loại:</strong> Đổi tên/màu</li>
-                  <li><strong>Xóa loại:</strong> Chỉ xóa được nếu không có khách thuộc loại này</li>
-                  <li>Màu loại sẽ hiển thị khi chọn khách hàng trong POS</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-gray-800 mb-2">🤖 Telegram Bot</h3>
-                <p>Cài đặt bot Telegram để nhận thông báo:</p>
-                <ul className="list-disc pl-5 mt-2 space-y-1">
-                  <li><strong>Bot Token:</strong> Lấy từ @BotFather (Bot API Token)</li>
-                  <li><strong>Chat ID:</strong> ID của chat/nhóm để bot gửi thông báo</li>
-                  <li><strong>Cảnh báo tồn kho:</strong> Ngưỡng tồn kho thấp để nhận thông báo</li>
-                  <li><strong>Bật thông báo:</strong> Tắt/bật bot</li>
-                </ul>
-                <p className="mt-2">Bot sẽ gửi thông báo khi: hàng sắp hết tồn kho, có đơn hàng mới...</p>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-gray-800 mb-2"> Tab Cập nhật</h3>
-                <ul className="list-disc pl-5 space-y-1">
-                  <li>Mặc định kiểm tra GitHub Releases latest.yml bằng electron-updater.</li>
-                  <li>Tải gói cập nhật về cache người dùng và chỉ cài đặt khi người dùng chọn “Cập nhật ngay”.</li>
-                  <li>Hiển thị đường dẫn update.log để debug trạng thái check, tải, dialog, backup, quitAndInstall và lỗi mạng.</li>
-                  <li>Backup database userData trước khi cài đặt cập nhật, không xóa dữ liệu cục bộ.</li>
-                </ul>
-              </div>
-
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h3 className="font-bold text-blue-800 mb-2"> Lưu ý quan trọng</h3>
-                <ul className="list-disc pl-5 space-y-1 text-blue-700">
-                  <li><strong>Lưu cài đặt:</strong> Nhấn "Lưu thay đổi" ở mỗi tab sau khi chỉnh sửa</li>
-                  <li><strong>Xác thực:</strong> Chỉ admin mới có quyền truy cập trang Cài đặt</li>
-                  <li><strong>Telegram Bot:</strong> Cần tạo bot trước qua @BotFather và lấy token</li>
-                  <li>Thay đổi thông tin cửa hàng sẽ ảnh hưởng đến hóa đơn in</li>
-                </ul>
-              </div>
+      <HelpModal
+        show={showHelp}
+        title="Hướng dẫn sử dụng Cài đặt hệ thống"
+        onClose={() => setShowHelp(false)}
+        content={(
+          <div className="space-y-4 text-sm text-gray-700">
+            <div>
+              <h3 className="mb-2 font-bold text-gray-800">Tổng quan</h3>
+              <p>
+                Trang Cài đặt cho phép cấu hình thông tin cửa hàng, quản lý nhân viên, loại khách hàng, bật/tắt xuất âm tồn kho và cập nhật ứng dụng Electron.
+              </p>
             </div>
-          }
-        />
-      )}
+
+            <div>
+              <h3 className="mb-2 font-bold text-gray-800">Tab Cửa hàng</h3>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Cập nhật tên cửa hàng, địa chỉ, số điện thoại, email, mã số thuế và thông tin ngân hàng.</li>
+                <li>Phần logo, ghi chú và slogan ảnh hưởng trực tiếp tới nội dung in hóa đơn.</li>
+                <li>Sau khi chỉnh sửa, nhấn <strong>Lưu thay đổi</strong> để ghi xuống backend.</li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="mb-2 font-bold text-gray-800">Tab Nhân viên</h3>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Thêm, sửa hoặc vô hiệu tài khoản nhân viên.</li>
+                <li>Tài khoản đầu tiên luôn là ADMIN; các tài khoản tạo sau sẽ là USER do server tự gán.</li>
+                <li>Khi sửa nhân viên, có thể để trống mật khẩu nếu không muốn đổi.</li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="mb-2 font-bold text-gray-800">Tab Loại khách</h3>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Tạo và chỉnh màu cho từng nhóm khách hàng.</li>
+                <li>Xóa loại khách là thao tác soft-delete trên backend.</li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="mb-2 font-bold text-gray-800">Tab Xuất âm</h3>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Dùng để bật/tắt cho phép xuất âm tồn kho sản phẩm.</li>
+                <li>Khi bật, hệ thống cho xuất vượt tồn nhưng không thấp hơn giới hạn cố định {NEGATIVE_STOCK_LIMIT}.</li>
+                <li>Khi tắt, mọi thao tác làm tồn kho nhỏ hơn 0 sẽ bị backend từ chối.</li>
+                <li>Người dùng không chỉnh sửa giới hạn âm từ giao diện, chỉ xem mô tả và trạng thái bật/tắt.</li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="mb-2 font-bold text-gray-800">Tab Cập nhật</h3>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Chỉ hoạt động khi chạy bản Electron đã đóng gói.</li>
+                <li>App chỉ cài đặt sau khi người dùng xác nhận và sẽ sao lưu database trước khi cập nhật.</li>
+                <li>Khi cần debug, có thể xem đường dẫn file update.log được hiển thị trong trang.</li>
+              </ul>
+            </div>
+          </div>
+        )}
+      />
     </div>
   );
 }

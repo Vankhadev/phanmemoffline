@@ -13,9 +13,6 @@ const { requireAuth, requirePermission, requireAnyPermission } = require('../mid
 const router = express.Router();
 
 const FEATURE_TABLE = 'feature_catalog';
-const ENTITLEMENT_TABLE = 'feature_entitlements';
-const CUSTOMER_TABLE = 'license_customers';
-const LICENSE_TABLE = 'license_keys';
 
 const canReadFeatures = requireAnyPermission(['features.read', 'features.manage']);
 const canManageFeatures = requirePermission('features.manage');
@@ -60,13 +57,6 @@ function parseJsonObject(value, fallback = {}) {
   return fallback;
 }
 
-function parseIsoDateOrNull(value) {
-  const raw = cleanText(value, 80);
-  if (!raw) return null;
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
-
 function serializeFeature(row) {
   if (!row) return null;
   const featureKey = cleanText(row.feature_key || row.key || row.code, 100);
@@ -78,60 +68,6 @@ function serializeFeature(row) {
     description: cleanText(row.description, 2000),
     category: cleanText(row.category, 120),
     active: row.active === undefined ? true : row.active !== 0,
-    metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : {},
-    created_at: row.created_at || null,
-    updated_at: row.updated_at || null,
-    deleted_at: row.deleted_at || null,
-  };
-}
-
-function serializeCustomer(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    name: cleanText(row.name || row.customer_name, 200),
-    email: cleanText(row.email, 200),
-    phone: cleanText(row.phone, 80),
-    company: cleanText(row.company, 200),
-    active: row.active === undefined ? true : row.active !== 0,
-  };
-}
-
-function serializeLicense(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    customer_id: row.customer_id || null,
-    license_key: cleanText(row.license_key || row.key, 200),
-    key: cleanText(row.license_key || row.key, 200),
-    status: cleanText(row.status, 60),
-    active: row.active === undefined ? true : row.active !== 0,
-    expires_at: row.expires_at || null,
-  };
-}
-
-function serializeEntitlement(row) {
-  if (!row) return null;
-  const feature = getOne(FEATURE_TABLE, item => Number(item.id) === Number(row.feature_id), { skipAccountScope: true });
-  const customer = row.customer_id
-    ? getOne(CUSTOMER_TABLE, item => Number(item.id) === Number(row.customer_id), { skipAccountScope: true })
-    : null;
-  const license = row.license_key_id
-    ? getOne(LICENSE_TABLE, item => Number(item.id) === Number(row.license_key_id), { skipAccountScope: true })
-    : null;
-
-  return {
-    id: row.id,
-    feature_id: row.feature_id || null,
-    feature: serializeFeature(feature),
-    customer_id: row.customer_id || null,
-    customer: serializeCustomer(customer),
-    license_key_id: row.license_key_id || null,
-    license_key: serializeLicense(license),
-    enabled: row.enabled === undefined ? row.active !== 0 : row.enabled !== 0,
-    active: row.active === undefined ? true : row.active !== 0,
-    expires_at: row.expires_at || null,
-    limits: row.limits && typeof row.limits === 'object' ? row.limits : {},
     metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : {},
     created_at: row.created_at || null,
     updated_at: row.updated_at || null,
@@ -170,45 +106,6 @@ function buildFeaturePayload(body = {}, { partial = false } = {}) {
   return { value };
 }
 
-function buildEntitlementPayload(body = {}, { partial = false } = {}) {
-  const feature = body.feature_id || body.feature_key || body.key
-    ? findFeatureByIdOrKey(body.feature_id || body.feature_key || body.key)
-    : null;
-  const customerId = parseId(body.customer_id);
-  const licenseKeyId = parseId(body.license_key_id || body.license_id);
-
-  if (!partial && !feature) return { error: 'Vui lòng chọn tính năng hợp lệ.' };
-  if (!partial && !customerId && !licenseKeyId) return { error: 'Vui lòng chọn khách hàng hoặc license key.' };
-  if ((body.feature_id || body.feature_key || body.key) && !feature) return { error: 'Tính năng không tồn tại.' };
-  if ((body.customer_id !== undefined) && !customerId) return { error: 'Khách hàng không hợp lệ.' };
-  if ((body.license_key_id !== undefined || body.license_id !== undefined) && !licenseKeyId) return { error: 'License key không hợp lệ.' };
-
-  const value = {};
-  if (feature) value.feature_id = feature.id;
-  if (body.customer_id !== undefined) value.customer_id = customerId;
-  if (body.license_key_id !== undefined || body.license_id !== undefined) value.license_key_id = licenseKeyId;
-  if (body.enabled !== undefined) {
-    value.enabled = parseBooleanFlag(body.enabled, 1);
-    value.active = value.enabled;
-  }
-  if (body.active !== undefined) value.active = parseBooleanFlag(body.active, 1);
-  if (body.expires_at !== undefined) value.expires_at = parseIsoDateOrNull(body.expires_at);
-  if (body.limits !== undefined) value.limits = parseJsonObject(body.limits, {});
-  if (body.metadata !== undefined) value.metadata = parseJsonObject(body.metadata, {});
-
-  return { value };
-}
-
-function findExistingEntitlement({ feature_id, customer_id = null, license_key_id = null }) {
-  return getOne(ENTITLEMENT_TABLE, row => {
-    if (!row || row.deleted_at) return false;
-    if (Number(row.feature_id) !== Number(feature_id)) return false;
-    const rowCustomerId = Number(row.customer_id) || null;
-    const rowLicenseKeyId = Number(row.license_key_id) || null;
-    return rowCustomerId === (Number(customer_id) || null) && rowLicenseKeyId === (Number(license_key_id) || null);
-  }, { skipAccountScope: true });
-}
-
 router.use(requireAuth);
 
 router.get('/', canReadFeatures, (req, res) => {
@@ -239,131 +136,6 @@ router.post('/', canManageFeatures, (req, res) => {
   auditLog('feature_created', { userId: req.user?.id || null, featureId: id, featureKey: parsed.value.feature_key });
   const item = serializeFeature(getOne(FEATURE_TABLE, row => Number(row.id) === Number(id), { skipAccountScope: true }));
   res.status(201).json({ ok: true, item, data: item });
-});
-
-router.get('/entitlements', canReadFeatures, (req, res) => {
-  const featureId = parseId(req.query.feature_id);
-  const customerId = parseId(req.query.customer_id);
-  const licenseKeyId = parseId(req.query.license_key_id || req.query.license_id);
-  const includeInactive = parseBooleanFlag(req.query.include_inactive, 0) === 1;
-  const items = getAll(ENTITLEMENT_TABLE, row => {
-    if (!row || row.deleted_at) return false;
-    if (!includeInactive && row.active === 0) return false;
-    if (featureId && Number(row.feature_id) !== featureId) return false;
-    if (customerId && Number(row.customer_id) !== customerId) return false;
-    if (licenseKeyId && Number(row.license_key_id) !== licenseKeyId) return false;
-    return true;
-  }, { skipAccountScope: true }).map(serializeEntitlement);
-  res.json({ ok: true, items, data: items });
-});
-
-router.post('/entitlements', canManageFeatures, (req, res) => {
-  const parsed = buildEntitlementPayload(req.body || {});
-  if (parsed.error) return res.status(400).json({ ok: false, error: parsed.error });
-
-  const payload = {
-    feature_id: parsed.value.feature_id,
-    customer_id: parsed.value.customer_id || null,
-    license_key_id: parsed.value.license_key_id || null,
-    enabled: parsed.value.enabled === undefined ? 1 : parsed.value.enabled,
-    active: parsed.value.active === undefined ? (parsed.value.enabled === 0 ? 0 : 1) : parsed.value.active,
-    expires_at: parsed.value.expires_at || null,
-    limits: parsed.value.limits || {},
-    metadata: parsed.value.metadata || {},
-  };
-
-  const existing = findExistingEntitlement(payload);
-  if (existing) {
-    update(ENTITLEMENT_TABLE, existing.id, { ...payload, updated_at: now(), deleted_at: null });
-    auditLog('feature_entitlement_updated', { userId: req.user?.id || null, entitlementId: existing.id, featureId: payload.feature_id });
-    const item = serializeEntitlement(getOne(ENTITLEMENT_TABLE, row => Number(row.id) === Number(existing.id), { skipAccountScope: true }));
-    return res.json({ ok: true, item, data: item });
-  }
-
-  const id = insert(ENTITLEMENT_TABLE, { ...payload, created_at: now(), updated_at: now() });
-  auditLog('feature_entitlement_created', { userId: req.user?.id || null, entitlementId: id, featureId: payload.feature_id });
-  const item = serializeEntitlement(getOne(ENTITLEMENT_TABLE, row => Number(row.id) === Number(id), { skipAccountScope: true }));
-  return res.status(201).json({ ok: true, item, data: item });
-});
-
-router.post('/entitlements/bulk-enable', canManageFeatures, (req, res) => {
-  const feature = findFeatureByIdOrKey(req.body?.feature_id || req.body?.feature_key || req.body?.key);
-  if (!feature || feature.deleted_at || feature.active === 0) {
-    return res.status(400).json({ ok: false, error: 'Vui lòng chọn tính năng đang hoạt động.' });
-  }
-
-  const onlyActiveCustomers = parseBooleanFlag(req.body?.only_active_customers, 1) === 1;
-  const expiresAt = req.body?.expires_at !== undefined ? parseIsoDateOrNull(req.body.expires_at) : null;
-  const limits = parseJsonObject(req.body?.limits, {});
-  const metadata = parseJsonObject(req.body?.metadata, {});
-  let created = 0;
-  let updated = 0;
-
-  const customers = getAll(CUSTOMER_TABLE, row => row && !row.deleted_at && (!onlyActiveCustomers || row.active !== 0), { skipAccountScope: true });
-  for (const customer of customers) {
-    const existing = findExistingEntitlement({ feature_id: feature.id, customer_id: customer.id, license_key_id: null });
-    if (existing) {
-      update(ENTITLEMENT_TABLE, existing.id, {
-        enabled: 1,
-        active: 1,
-        expires_at: expiresAt,
-        limits,
-        metadata,
-        updated_at: now(),
-        deleted_at: null,
-      });
-      updated += 1;
-    } else {
-      insert(ENTITLEMENT_TABLE, {
-        feature_id: feature.id,
-        customer_id: customer.id,
-        license_key_id: null,
-        enabled: 1,
-        active: 1,
-        expires_at: expiresAt,
-        limits,
-        metadata,
-        created_at: now(),
-        updated_at: now(),
-      });
-      created += 1;
-    }
-  }
-
-  auditLog('feature_bulk_enabled', { userId: req.user?.id || null, featureId: feature.id, created, updated });
-  res.json({ ok: true, created, updated, total: created + updated });
-});
-
-router.get('/entitlements/:id', canReadFeatures, (req, res) => {
-  const id = parseId(req.params.id);
-  const row = id ? getOne(ENTITLEMENT_TABLE, item => Number(item.id) === id && !item.deleted_at, { skipAccountScope: true }) : null;
-  if (!row) return res.status(404).json({ ok: false, error: 'Không tìm thấy quyền tính năng.' });
-  const item = serializeEntitlement(row);
-  res.json({ ok: true, item, data: item });
-});
-
-router.patch('/entitlements/:id', canManageFeatures, (req, res) => {
-  const id = parseId(req.params.id);
-  const row = id ? getOne(ENTITLEMENT_TABLE, item => Number(item.id) === id && !item.deleted_at, { skipAccountScope: true }) : null;
-  if (!row) return res.status(404).json({ ok: false, error: 'Không tìm thấy quyền tính năng.' });
-
-  const parsed = buildEntitlementPayload(req.body || {}, { partial: true });
-  if (parsed.error) return res.status(400).json({ ok: false, error: parsed.error });
-
-  update(ENTITLEMENT_TABLE, row.id, { ...parsed.value, updated_at: now() });
-  auditLog('feature_entitlement_updated', { userId: req.user?.id || null, entitlementId: row.id, changes: parsed.value });
-  const item = serializeEntitlement(getOne(ENTITLEMENT_TABLE, itemRow => Number(itemRow.id) === Number(row.id), { skipAccountScope: true }));
-  res.json({ ok: true, item, data: item });
-});
-
-router.delete('/entitlements/:id', canManageFeatures, (req, res) => {
-  const id = parseId(req.params.id);
-  const row = id ? getOne(ENTITLEMENT_TABLE, item => Number(item.id) === id && !item.deleted_at, { skipAccountScope: true }) : null;
-  if (!row) return res.status(404).json({ ok: false, error: 'Không tìm thấy quyền tính năng.' });
-
-  update(ENTITLEMENT_TABLE, row.id, { enabled: 0, active: 0, deleted_at: now(), updated_at: now() });
-  auditLog('feature_entitlement_deleted_soft', { userId: req.user?.id || null, entitlementId: row.id });
-  res.json({ ok: true });
 });
 
 router.get('/:id', canReadFeatures, (req, res) => {

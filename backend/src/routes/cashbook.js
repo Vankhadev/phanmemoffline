@@ -6,6 +6,11 @@ const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, now } = require('../db/database');
 
+function normalizeAmount(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : NaN;
+}
+
 // ─────────────────────────────────────────────
 // GET /api/cash-book
 // → Danh sách giao dịch (có filter theo loại, ngày)
@@ -62,18 +67,22 @@ router.post('/', (req, res) => {
     const { date, time, type, category, amount, note, reference_id, reference_type } = req.body;
 
     if (!date || !type || amount === undefined) {
-      return res.status(400).json({ error: 'Ngày, loại và số tiền là bắt buộc' });
+      return res.status(400).json({ ok: false, error: 'Ngày, loại và số tiền là bắt buộc' });
     }
     if (type !== 'income' && type !== 'expense') {
-      return res.status(400).json({ error: 'Loại phải là income hoặc expense' });
+      return res.status(400).json({ ok: false, error: 'Loại phải là income hoặc expense' });
     }
-
+    const normalizedAmount = normalizeAmount(amount);
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+      return res.status(400).json({ ok: false, error: 'Số tiền phải lớn hơn 0' });
+    }
+ 
     const id = insert('cash_book', {
       date: date,
       time: time || '00:00:00',
       type: type,
       category: category || '',
-      amount: parseFloat(amount) || 0,
+      amount: normalizedAmount,
       note: note || '',
       reference_id: reference_id || null,
       reference_type: reference_type || '',
@@ -96,20 +105,24 @@ router.put('/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const record = getOne('cash_book', r => r.id === id && r.active !== 0);
-    if (!record) return res.status(404).json({ error: 'Không tìm thấy giao dịch' });
+    if (!record) return res.status(404).json({ ok: false, error: 'Không tìm thấy giao dịch' });
 
     const { date, time, type, category, amount, note, reference_id, reference_type } = req.body;
 
     if (type && type !== 'income' && type !== 'expense') {
-      return res.status(400).json({ error: 'Loại phải là income hoặc expense' });
+      return res.status(400).json({ ok: false, error: 'Loại phải là income hoặc expense' });
     }
-
+    const normalizedAmount = amount !== undefined ? normalizeAmount(amount) : record.amount;
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+      return res.status(400).json({ ok: false, error: 'Số tiền phải lớn hơn 0' });
+    }
+ 
     const changes = {
       date: date || record.date,
       time: time !== undefined ? time : record.time,
       type: type || record.type,
       category: category !== undefined ? category : record.category,
-      amount: amount !== undefined ? parseFloat(amount) : record.amount,
+      amount: normalizedAmount,
       note: note !== undefined ? note : record.note,
       reference_id: reference_id !== undefined ? reference_id : record.reference_id,
       reference_type: reference_type !== undefined ? reference_type : record.reference_type,
@@ -131,7 +144,7 @@ router.delete('/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const record = getOne('cash_book', r => r.id === id && r.active !== 0);
-    if (!record) return res.status(404).json({ error: 'Không tìm thấy giao dịch' });
+    if (!record) return res.status(404).json({ ok: false, error: 'Không tìm thấy giao dịch' });
 
     update('cash_book', id, { active: 0, updated_at: now() });
     res.json({ ok: true, message: 'Đã xóa giao dịch' });

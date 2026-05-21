@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { API } from '../App';
+import { resolveApiUrl } from '../utils/apiClient';
 import {
   BarChart3,
   Calendar,

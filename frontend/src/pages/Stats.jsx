@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { API } from '../App';
+import { resolveApiUrl } from '../utils/apiClient';
 import { FileDown, TrendingUp, Package, Calendar, HelpCircle } from 'lucide-react';
 import HelpModal from '../components/HelpModal';
+
+const API = resolveApiUrl('');
 
 export default function Stats() {
   const [summary, setSummary] = useState({ today: {}, month: {}, allTime: {} });

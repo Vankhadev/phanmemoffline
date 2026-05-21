@@ -1,12 +1,11 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { API } from '../App';
 import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown, Printer, Ban } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ProductLabelPrintModal from '../components/ProductLabelPrintModal';
 import ExcelImportPanel from '../components/ExcelImportPanel';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
 import { ensureFocusableElement } from '../utils/electronFocusGuard';
-import { SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 
 const vndFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
 const PRODUCTS_PAGE_SIZE = 80;
@@ -633,8 +632,8 @@ export default function Products({ store }) {
     };
   }, []);
 
-  const fetchCombos = () => { fetch(`${API}/combos`).then(r => r.json()).then(setCombos).catch(() => { }); };
-  const fetchSuppliers = () => { fetch(`${API}/partners`).then(r => r.json()).then(setSuppliers).catch(() => { }); };
+  const fetchCombos = () => { fetch(resolveApiUrl('/combos')).then(r => r.json()).then(setCombos).catch(() => { }); };
+  const fetchSuppliers = () => { fetch(resolveApiUrl('/partners')).then(r => r.json()).then(setSuppliers).catch(() => { }); };
   const normalizeListField = (value) => {
     if (Array.isArray(value)) return value.map(item => String(item || '').trim()).filter(Boolean);
     return String(value || '').split(/[,;\n]/).map(item => item.trim()).filter(Boolean);
@@ -662,7 +661,7 @@ export default function Products({ store }) {
   };
   const fetchCategories = async () => {
     try {
-      const data = await fetch(`${API}/product-categories`).then(r => r.json());
+      const data = await fetch(resolveApiUrl('/product-categories')).then(r => r.json());
       const nextCategories = extractCategoriesFromResponse(data).map(normalizeCategoryRecord).filter(Boolean);
       setCategories(nextCategories);
       return nextCategories;
@@ -702,7 +701,7 @@ export default function Products({ store }) {
     if (!categoryForm.name.trim()) { alert('Vui lòng nhập tên danh mục!'); return; }
 
     const method = editingCategory ? 'PUT' : 'POST';
-    const url = editingCategory ? `${API}/product-categories/${editingCategory.id}` : `${API}/product-categories`;
+    const url = editingCategory ? resolveApiUrl(`/product-categories/${editingCategory.id}`) : resolveApiUrl('/product-categories');
 
     try {
       const res = await fetch(url, {
@@ -742,7 +741,7 @@ export default function Products({ store }) {
   };
   const handleCategoryDelete = async (category) => {
     if (!confirm(`Vô hiệu danh mục "${category.name}"? Sản phẩm cũ vẫn giữ dữ liệu danh mục đã gán.`)) return;
-    await fetch(`${API}/product-categories/${category.id}`, { method: 'DELETE' });
+    await fetch(resolveApiUrl(`/product-categories/${category.id}`), { method: 'DELETE' });
     setCategories(prev => prev.filter(item => String(item.id) !== String(category.id)));
     fetchProducts();
   };
@@ -822,7 +821,7 @@ export default function Products({ store }) {
       return;
     }
     const method = editingCombo ? 'PUT' : 'POST';
-    const url = editingCombo ? `${API}/combos/${editingCombo.id}` : `${API}/combos`;
+    const url = editingCombo ? resolveApiUrl(`/combos/${editingCombo.id}`) : resolveApiUrl('/combos');
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -840,7 +839,7 @@ export default function Products({ store }) {
   };
   const handleComboDelete = async (id) => {
     if (!confirm('Xóa combo này?')) return;
-    await fetch(`${API}/combos/${id}`, { method: 'DELETE' });
+    await fetch(resolveApiUrl(`/combos/${id}`), { method: 'DELETE' });
     fetchCombos();
     const updatedAt = String(Date.now());
     localStorage.setItem('kha_combos_updated_at', updatedAt);
@@ -894,7 +893,7 @@ export default function Products({ store }) {
     productsFetchAbortRef.current = controller;
 
     try {
-      const res = await fetch(`${API}/products/all/with-variants`, { signal: controller.signal });
+      const res = await fetch(resolveApiUrl('/products/all/with-variants'), { signal: controller.signal });
       const data = await res.json();
       const nextProducts = Array.isArray(data) ? data : [];
       if (productsFetchRequestIdRef.current === requestId) setProducts(nextProducts);
@@ -975,7 +974,7 @@ export default function Products({ store }) {
     setIsBulkDeleting(true);
     try {
       const deleteResults = await Promise.allSettled(idsToDelete.map(async (id) => {
-        const res = await fetch(`${API}/products/${id}`, { method: 'DELETE' });
+        const res = await fetch(resolveApiUrl(`/products/${id}`), { method: 'DELETE' });
         const data = await res.json().catch(() => ({}));
         if (res.status === 404) return { id, alreadyDeleted: true };
         if (!res.ok || data?.ok === false) {
@@ -1018,6 +1017,7 @@ export default function Products({ store }) {
     'Giá sỉ',
     'Giá lẻ',
     'Giá VIP',
+    'Tồn kho',
     'Đơn vị',
     'Danh mục text',
     'Default category id',
@@ -1064,6 +1064,7 @@ export default function Products({ store }) {
       'Giá sỉ': product.wholesale_price ?? '',
       'Giá lẻ': product.retail_price ?? '',
       'Giá VIP': product.vip_price ?? '',
+      'Tồn kho': product.stock ?? '',
       'Đơn vị': product.unit || parent?.unit || 'cái',
       'Danh mục text': getProductCategoryText(product, parent),
       'Default category id': product.default_category_id ?? parent?.default_category_id ?? '',
@@ -1338,7 +1339,7 @@ export default function Products({ store }) {
   const handleImportExcel = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const endpoint = `${API}/products/import-excel-rows`;
+    const endpoint = resolveApiUrl('/products/import-excel-rows');
     const reader = new FileReader();
 
     reader.onerror = () => {
@@ -1475,7 +1476,7 @@ export default function Products({ store }) {
     setSaving(true);
     try {
       const method = currentEditing ? 'PUT' : 'POST';
-      const url = currentEditing ? `${API}/products/${currentEditing.id}` : `${API}/products`;
+      const url = currentEditing ? resolveApiUrl(`/products/${currentEditing.id}`) : resolveApiUrl('/products');
       const payload = {
         ...stripInventoryFields(nextForm),
         sku: nextSku,
@@ -1520,7 +1521,7 @@ export default function Products({ store }) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
-      await fetch(`${API}/products/${id}`, { method: 'DELETE', signal: controller.signal });
+      await fetch(resolveApiUrl(`/products/${id}`), { method: 'DELETE', signal: controller.signal });
       clearTimeout(timer);
       alert('✅ Đã xóa sản phẩm!');
       fetchProducts();
@@ -1566,8 +1567,8 @@ export default function Products({ store }) {
       const currentEditingVariant = editingVariant;
       const method = currentEditingVariant ? 'PUT' : 'POST';
       const url = currentEditingVariant
-        ? `${API}/products/variants/${currentEditingVariant.id}`
-        : `${API}/products/${variantParent.id}/variants`;
+        ? resolveApiUrl(`/products/variants/${currentEditingVariant.id}`)
+        : resolveApiUrl(`/products/${variantParent.id}/variants`);
       const variantPayload = stripInventoryFields(nextVariantForm);
       delete variantPayload.sku;
       const controller = new AbortController();
@@ -1601,7 +1602,7 @@ export default function Products({ store }) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
-      await fetch(`${API}/products/variants/${variantId}`, { method: 'DELETE', signal: controller.signal });
+      await fetch(resolveApiUrl(`/products/variants/${variantId}`), { method: 'DELETE', signal: controller.signal });
       clearTimeout(timer);
       alert('✅ Đã xóa biến thể!');
       fetchProducts();
@@ -1878,7 +1879,7 @@ export default function Products({ store }) {
         </div>
       )}
 
-      <input className="input-field mb-3" placeholder="🔍 Tìm tên, SKU, danh mục, nhóm, màu, size... VD: vòng led, dẻo 10cm, xanh nhạt" value={search} onChange={e => setSearch(e.target.value)} />
+      <input className="input-field mb-3" placeholder=" 🔍 Tìm tên, SKU, danh mục, nhóm, màu, size... VD: vòng led, dẻo 10cm, xanh nhạt" value={search} onChange={e => setSearch(e.target.value)} />
 
       <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-xs text-gray-500">
         <div>

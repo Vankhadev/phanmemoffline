@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { X } from 'lucide-react';
 
 export default function HelpModal({ show, onClose, title, content }) {

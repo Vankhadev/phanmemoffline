@@ -129,7 +129,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
     }
 
     if (form.name.trim().length < 2) {
-      setError('Họ và tên phải có ít nhất 8 ký tự.');
+      setError('Họ và tên phải có ít nhất 2 ký tự.');
       return false;
     }
 
@@ -149,7 +149,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
     }
 
     if (!/^0\d{9,10}$/.test(normalizePhone(form.phone))) {
-      setError('Số điện thoại phải bắt đầu bằng 0 và gồm 10 chữ số.');
+      setError('Số điện thoại phải bắt đầu bằng 0 và gồm 10-11 chữ số.');
       return false;
     }
 

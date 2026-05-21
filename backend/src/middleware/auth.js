@@ -12,7 +12,11 @@ const {
 } = require('../db/database');
 
 const DEFAULT_SESSION_TTL_DAYS = Number(process.env.KHA_SESSION_TTL_DAYS || 30);
-const TOKEN_SECRET = process.env.KHA_SESSION_SECRET || process.env.SESSION_SECRET || 'kha-local-session-secret';
+const TOKEN_SECRET = process.env.KHA_SESSION_SECRET || process.env.SESSION_SECRET || `kha-local-session-secret:${process.cwd()}`;
+const SESSION_LAST_SEEN_UPDATE_INTERVAL_MS = Math.max(
+  0,
+  Number(process.env.KHA_SESSION_LAST_SEEN_INTERVAL_MS || 5 * 60 * 1000) || 5 * 60 * 1000
+);
 
 function hashToken(token) {
   return crypto
@@ -149,10 +153,19 @@ function resolveAuth(req) {
   return { token, session, user, account, permissions };
 }
 
+function maybeTouchSessionLastSeen(session) {
+  if (!session?.id) return session;
+  const lastSeenMs = session.last_seen_at ? new Date(session.last_seen_at).getTime() : 0;
+  const shouldUpdate = !Number.isFinite(lastSeenMs) || lastSeenMs <= 0 || Date.now() - lastSeenMs >= SESSION_LAST_SEEN_UPDATE_INTERVAL_MS;
+  if (!shouldUpdate) return session;
+  return update('sessions', session.id, { last_seen_at: now() }, { skipTouch: true }) || session;
+}
+
 function requireAuth(req, res, next) {
   const auth = resolveAuth(req);
   if (auth.error) return res.status(auth.status || 401).json({ ok: false, error: auth.error, message: auth.error });
 
+  auth.session = maybeTouchSessionLastSeen(auth.session);
   req.authToken = auth.token;
   req.session = auth.session;
   req.user = auth.user;
@@ -160,7 +173,6 @@ function requireAuth(req, res, next) {
   req.accountId = auth.account.id;
   req.permissions = auth.permissions;
 
-  update('sessions', auth.session.id, { last_seen_at: now() });
   return attachContext(req, res, next, auth);
 }
 
@@ -168,13 +180,13 @@ function optionalAuth(req, res, next) {
   const auth = resolveAuth(req);
   if (auth.error) return attachContext(req, res, next);
 
+  auth.session = maybeTouchSessionLastSeen(auth.session);
   req.authToken = auth.token;
   req.session = auth.session;
   req.user = auth.user;
   req.account = auth.account;
   req.accountId = auth.account.id;
   req.permissions = auth.permissions;
-  update('sessions', auth.session.id, { last_seen_at: now() });
   return attachContext(req, res, next, auth);
 }
 

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { API } from '../App';
+import { resolveApiUrl } from '../utils/apiClient';
 import { Calendar, Download, FileText, Loader, RefreshCw, Search, Users } from 'lucide-react';
+
+const API = resolveApiUrl('');
 
 const STATUS_LABELS = {
   pending: 'Chờ xác nhận',
@@ -327,7 +329,7 @@ export default function CustomerOrderReport() {
                 <th className="px-4 py-3 text-left">Mã đơn/hóa đơn</th>
                 <th className="px-4 py-3 text-left">Ngày bán</th>
                 <th className="px-4 py-3 text-left">Tên khách hàng</th>
-                <th className="px-4 py-3 text-left">Tóm tắt sản phẩm</th>
+                <th className="px-4 py-3 text-left"> sản phẩm</th>
                 <th className="px-4 py-3 text-right">Tổng tiền</th>
                 <th className="px-4 py-3 text-left">Trạng thái</th>
               </tr>

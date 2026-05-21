@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { API } from '../App';
-import { SYNC_UPDATED_EVENT } from '../utils/apiClient';
-import { BarChart3, ShoppingCart, ShoppingBag, Layers, AlertCircle, TrendingUp, Calendar, FileText, HelpCircle, Store, Package,} from 'lucide-react';
+import { resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { BarChart3, ShoppingCart, Layers, AlertCircle, TrendingUp, Calendar, FileText, HelpCircle, Store, Package, PackageSearch } from 'lucide-react';
 import HelpModal from '../components/HelpModal';
 
-export default function Home({ user, store }) {
+export default function Home({ user }) {
   const [stats, setStats] = useState({
     todayRevenue: 0,
     todayOrders: 0,
@@ -17,29 +16,11 @@ export default function Home({ user, store }) {
   const [loading, setLoading] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
 
-  useEffect(() => {
-    fetchStats();
-    // Lắng nghe sự kiện tạo đơn thành công hoặc sync từ thiết bị khác
-    const onOrderCreated = () => {
-      fetchStats();
-    };
-    const onSyncUpdated = (event) => {
-      const changedTables = event.detail?.changedTables || [];
-      if (changedTables.some(table => ['invoices', 'invoice_details', 'products', 'daily_stats'].includes(table))) fetchStats(false);
-    };
-    window.addEventListener('kha-order-created', onOrderCreated);
-    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
-    return () => {
-      window.removeEventListener('kha-order-created', onOrderCreated);
-      window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
-    };
-  }, []);
-
-  const fetchStats = async (showSpinner = true) => {
+  const fetchStats = useCallback(async (showSpinner = true) => {
     if (showSpinner) setLoading(true);
     try {
       // Endpoint summary nhẹ: không tải toàn bộ cây sản phẩm chỉ để đếm.
-      const res = await fetch(`${API}/dashboard/summary`);
+      const res = await fetch(resolveApiUrl('/dashboard/summary'));
       if (!res.ok) throw new Error('Failed to fetch stats');
       const data = await res.json();
       const summary = data.summary || data;
@@ -57,7 +38,25 @@ export default function Home({ user, store }) {
     } finally {
       if (showSpinner) setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+    // Lắng nghe sự kiện tạo đơn thành công hoặc sync từ thiết bị khác
+    const onOrderCreated = () => {
+      fetchStats();
+    };
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      if (changedTables.some(table => ['invoices', 'invoice_details', 'products', 'daily_stats'].includes(table))) fetchStats(false);
+    };
+    window.addEventListener('kha-order-created', onOrderCreated);
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    return () => {
+      window.removeEventListener('kha-order-created', onOrderCreated);
+      window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    };
+  }, [fetchStats]);
 
   const formatVND = (n) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
@@ -68,7 +67,6 @@ export default function Home({ user, store }) {
       title: 'Doanh thu hôm nay',
       value: formatVND(stats.todayRevenue),
       icon: BarChart3,
-      color: 'bg-blue-500',
       textColor: 'text-blue-600',
       bgColor: 'bg-blue-50',
     },
@@ -77,7 +75,6 @@ export default function Home({ user, store }) {
       value: stats.todayOrders,
       sub: `${stats.paidOrders} đã thanh toán`,
       icon: ShoppingCart,
-      color: 'bg-green-500',
       textColor: 'text-green-600',
       bgColor: 'bg-green-50',
     },
@@ -86,7 +83,6 @@ export default function Home({ user, store }) {
       value: stats.totalProducts,
       sub: `${stats.outOfStock} hết hàng`,
       icon: Package,
-      color: 'bg-purple-500',
       textColor: 'text-purple-600',
       bgColor: 'bg-purple-50',
     },
@@ -95,7 +91,6 @@ export default function Home({ user, store }) {
       value: stats.outOfStock + stats.lowStock,
       sub: `${stats.lowStock} sắp hết`,
       icon: AlertCircle,
-      color: 'bg-red-500',
       textColor: 'text-red-600',
       bgColor: 'bg-red-50',
     },
@@ -140,7 +135,7 @@ export default function Home({ user, store }) {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {statCards.map((card, idx) => (
             <div
-              key={idx}
+              key={card.title}
               className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
             >
               <div className="flex items-start justify-between">
@@ -219,7 +214,7 @@ export default function Home({ user, store }) {
             className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-pink-100 hover:border-pink-500 hover:bg-pink-50 transition group"
           >
             <div className="w-12 h-12 bg-pink-100 rounded-full flex items-center justify-center group-hover:bg-pink-500 transition">
-              <Store  size={24} className="text-pink-600 group-hover:text-white" />
+              <Store size={24} className="text-pink-600 group-hover:text-white" />
             </div>
             <span className="text-sm font-medium text-gray-700 group-hover:text-pink-600">Nhà Cung Cấp</span>
           </Link>
@@ -228,7 +223,7 @@ export default function Home({ user, store }) {
             className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-yellow-100 hover:border-yellow-500 hover:bg-yellow-50 transition group"
           >
             <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center group-hover:bg-yellow-500 transition">
-              <Store  size={24} className="text-yellow-600 group-hover:text-white" />
+              <PackageSearch size={24} className="text-yellow-600 group-hover:text-white" />
             </div>
             <span className="text-sm font-medium text-gray-700 group-hover:text-yellow-600">Báo cáo sản phẩm</span>
           </Link>
@@ -255,12 +250,15 @@ export default function Home({ user, store }) {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">🚀 Truy cập nhanh</h3>
-                <p>4 nút truy cập nhanh đến các chức năng chính:</p>
+                <p>7 nút truy cập nhanh đến các chức năng chính:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li><strong>Quản lý sản phẩm:</strong> Thêm, sửa, xóa sản phẩm và biến thể</li>
                   <li><strong>Đơn hàng:</strong> Xem danh sách đơn hàng, lọc, in hóa đơn</li>
                   <li><strong>Thống kê:</strong> Xem biểu đồ doanh thu theo ngày/tuần/tháng</li>
-                  <li><strong>Báo cáo thuế:</strong> Tính lợi nhuận, doanh thu chịu thuế, thuế GTGT</li>
+                  <li><strong>Báo cáo đơn hàng:</strong> Xem báo cáo theo đơn hàng</li>
+                  <li><strong>Kho hàng:</strong> Theo dõi tồn kho và cảnh báo hàng hóa</li>
+                  <li><strong>Nhà cung cấp:</strong> Quản lý thông tin nhà cung cấp</li>
+                  <li><strong>Báo cáo sản phẩm:</strong> Xem báo cáo theo sản phẩm</li>
                 </ul>
               </div>
 
@@ -269,7 +267,7 @@ export default function Home({ user, store }) {
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
                   <li>Kiểm tra trang chủ mỗi ngày để nắm bắt tình hình kinh doanh</li>
                   <li>Click vào các số liệu để xem chi tiết (nếu có link)</li>
-                  <li>Sử dụng nút "Làm mới" để cập nhật dữ liệu mới nhất</li>
+                  <li>Dữ liệu sẽ tự cập nhật sau khi tạo đơn hoặc đồng bộ thay đổi</li>
                 </ul>
               </div>
             </div>

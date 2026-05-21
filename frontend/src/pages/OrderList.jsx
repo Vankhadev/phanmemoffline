@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API } from '../App';
+import { resolveApiUrl } from '../utils/apiClient';
 import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, Printer, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud } from 'lucide-react';
 import { getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
@@ -7,6 +7,8 @@ import { printInvoice, writePrintWindowMessage } from '../utils/printInvoice';
 import { getProductDisplayName } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
 import { SYNC_UPDATED_EVENT, requestSyncCheck } from '../utils/apiClient';
+
+const API = resolveApiUrl('');
 
 const STATUS_LABELS = {
   pending: { text: 'Chờ xác nhận', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500', icon: '⏳' },

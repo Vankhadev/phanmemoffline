@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { API } from '../App';
+import { resolveApiUrl } from '../utils/apiClient';
 import { Calculator, Edit2, Filter, Loader, Plus, RefreshCcw, Search, Trash2, Wallet, X } from 'lucide-react';
+
+const API = resolveApiUrl('');
 
 const currentDate = new Date();
 const currentMonth = currentDate.getMonth() + 1;
@@ -531,7 +533,7 @@ export default function Payroll() {
 
               <div className="flex gap-2 pt-2">
                 <button type="submit" disabled={saving} className="btn-success flex-1 disabled:opacity-50">
-                  💾 {saving ? 'Đang lưu...' : 'Lưu bảng lương'}
+                   {saving ? 'Đang lưu...' : 'Lưu bảng lương'}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)} className="btn-danger flex-1">Hủy</button>
               </div>

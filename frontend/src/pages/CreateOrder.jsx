@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API } from '../App';
+import { getApiErrorMessage, resolveApiUrl } from '../utils/apiClient';
 import {
   Search, Plus, X, ShoppingCart, Trash2, ChevronDown, ChevronRight, Barcode, Filter, Layers, UserPlus, Users, Package, Settings2
 } from 'lucide-react';
@@ -239,7 +239,7 @@ export default function CreateOrder({ user, store }) {
 
     setLoading(prev => ({ ...prev, combos: true }));
     comboFetchInFlightRef.current = Promise.race([
-      fetch(`${API}/combos`).then(r => {
+      fetch(resolveApiUrl('/combos')).then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       }),
@@ -281,7 +281,7 @@ export default function CreateOrder({ user, store }) {
   }, []);
   // Kiểm tra server online/offline
   const checkServer = () => {
-    return fetch(`${API}/store`, { signal: AbortSignal.timeout(5000) })
+    return fetch(resolveApiUrl('/store'), { signal: AbortSignal.timeout(5000) })
       .then(r => { setServerOnline(true); return true; })
       .catch(() => { setServerOnline(false); return false; });
   };
@@ -292,7 +292,7 @@ export default function CreateOrder({ user, store }) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(`${API}/customers`, {
+      const res = await fetch(resolveApiUrl('/customers'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newCustomer),
@@ -350,16 +350,16 @@ export default function CreateOrder({ user, store }) {
       }
     };
 
-    loadJson('products', `${API}/products/all/with-variants`, setProducts);
-    loadJson('customers', `${API}/customers`, setCustomers);
+    loadJson('products', resolveApiUrl('/products/all/with-variants'), setProducts);
+    loadJson('customers', resolveApiUrl('/customers'), setCustomers);
     fetchCombos({ force: true });
 
     Promise.race([
-      fetch(`${API}/partners`).then(r => r.json()).then(d => { setSuppliers(Array.isArray(d) ? d : []); }),
+      fetch(resolveApiUrl('/partners')).then(r => r.json()).then(d => { setSuppliers(Array.isArray(d) ? d : []); }),
       timeout(8000).catch(() => {})
     ]);
     Promise.race([
-      fetch(`${API}/product-categories`).then(r => r.json()).then(d => { setCategories(Array.isArray(d) ? d : []); }),
+      fetch(resolveApiUrl('/product-categories')).then(r => r.json()).then(d => { setCategories(Array.isArray(d) ? d : []); }),
       timeout(8000).catch(() => {})
     ]);
   }, []);
@@ -499,8 +499,7 @@ export default function CreateOrder({ user, store }) {
 
   // Thêm biến thể với số lượng
   const addVariantItem = (v) => {
-    if (v.stock <= 0) return;
-    const qty = clampDecimalQuantity(variantQty[v.id], v.stock, 1);
+    const qty = normalizeDecimalQuantity(variantQty[v.id], 1);
     if (qty <= 0) return;
     const unit_price = getPrice(v);
     const displayName = getProductDisplayName({
@@ -513,29 +512,28 @@ export default function CreateOrder({ user, store }) {
       const existing = prev.find(c => c.product_id === v.id && c.unit_price === unit_price && !splitLine);
       if (existing) {
         const newQty = normalizeDecimalQuantity(existing.quantity + qty, 1);
-        if (newQty > v.stock) {
-          alert(`Không đủ hàng!`);
-          return prev;
-        }
         return prev.map(c => c.product_id === v.id && c.unit_price === unit_price
           ? { ...c, quantity: newQty, line_total: newQty * c.unit_price - c.discount_amount }
           : c);
-      } else {
-        return [...prev, {
-          id: Date.now() + Math.random(),
-          product_id: v.id,
-          variant_id: v.id,
-          parent_id: showVariantPicker?.id || v.parent_id || v._parentId || null,
-          parent_name: showVariantPicker?.name || v.parent_name || v.parent?.name || '',
-          variant_name: v.name,
-          product_name: displayName,
-          product_sku: v.sku,
-          name: displayName,
-          sku: v.sku,
-          quantity: qty, unit_price, discount_amount: 0, discount_percent: 0,
-          line_total: qty * unit_price, max_stock: v.stock,
-        }];
       }
+      return [...prev, {
+        id: Date.now() + Math.random(),
+        product_id: v.id,
+        variant_id: v.id,
+        parent_id: showVariantPicker?.id || v.parent_id || v._parentId || null,
+        parent_name: showVariantPicker?.name || v.parent_name || v.parent?.name || '',
+        variant_name: v.name,
+        product_name: displayName,
+        product_sku: v.sku,
+        name: displayName,
+        sku: v.sku,
+        quantity: qty,
+        unit_price,
+        discount_amount: 0,
+        discount_percent: 0,
+        line_total: qty * unit_price,
+        max_stock: v.stock,
+      }];
     });
     setShowVariantPicker(false);
     setVariantQty({});
@@ -584,7 +582,6 @@ export default function CreateOrder({ user, store }) {
   };
 
   const addProduct = (product) => {
-    if (product.stock <= 0) return;
     const unit_price = getPrice(product);
     const isVariant = Boolean(product.is_variant || product.parent_id || product._parentId || product.parent_name || product.parent?.name);
     const parentId = product.parent_id || product._parentId || product.parent?.id || null;
@@ -593,33 +590,28 @@ export default function CreateOrder({ user, store }) {
       const existing = prev.find(c => c.product_id === product.id && c.unit_price === unit_price && !splitLine);
       if (existing) {
         const newQty = normalizeDecimalQuantity(existing.quantity + 1, 1);
-        if (newQty > product.stock) {
-          alert(`Không đủ hàng! "${product.name}" chỉ còn ${product.stock}.`);
-          return prev;
-        }
         return prev.map(c => c.product_id === product.id && c.unit_price === unit_price && !splitLine
           ? { ...c, quantity: newQty, line_total: newQty * c.unit_price - c.discount_amount }
           : c);
-      } else {
-        return [...prev, {
-          id: Date.now() + Math.random(),
-          product_id: product.id,
-          variant_id: isVariant ? product.id : null,
-          parent_id: isVariant ? parentId : null,
-          parent_name: isVariant ? (product.parent_name || product.parent?.name || '') : '',
-          variant_name: isVariant ? product.name : '',
-          product_name: displayName,
-          product_sku: product.sku,
-          name: displayName,
-          sku: product.sku,
-          quantity: 1,
-          unit_price,
-          discount_amount: 0,
-          discount_percent: 0,
-          line_total: unit_price,
-          max_stock: product.stock,
-        }];
       }
+      return [...prev, {
+        id: Date.now() + Math.random(),
+        product_id: product.id,
+        variant_id: isVariant ? product.id : null,
+        parent_id: isVariant ? parentId : null,
+        parent_name: isVariant ? (product.parent_name || product.parent?.name || '') : '',
+        variant_name: isVariant ? product.name : '',
+        product_name: displayName,
+        product_sku: product.sku,
+        name: displayName,
+        sku: product.sku,
+        quantity: 1,
+        unit_price,
+        discount_amount: 0,
+        discount_percent: 0,
+        line_total: unit_price,
+        max_stock: product.stock,
+      }];
     });
   };
 
@@ -627,10 +619,6 @@ export default function CreateOrder({ user, store }) {
     setCart(prev => prev.map(item => {
       if (item.id !== id) return item;
       if (field === 'quantity') {
-        if (!isComboOrderItem(item) && item.max_stock !== null && item.max_stock !== undefined && value > (item.max_stock || 0)) {
-          alert(`Số lượng vượt quá tồn kho! Tối đa: ${item.max_stock || 0}`);
-          return item;
-        }
         const newQty = normalizeDecimalQuantity(value, 1);
         return { ...item, quantity: newQty, line_total: newQty * item.unit_price - (item.discount_amount || 0) };
       }
@@ -665,7 +653,7 @@ export default function CreateOrder({ user, store }) {
       const timer = setTimeout(() => controller.abort(), 8000);
 
       // Tạo sản phẩm mới qua API
-      const res = await fetch(`${API}/products`, {
+      const res = await fetch(resolveApiUrl('/products'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -812,27 +800,33 @@ export default function CreateOrder({ user, store }) {
       setLastInvoice(inv);
       setEditingInvoiceId(null);
       setCreating(false);
-      fetch(`${API}/products/all/with-variants`).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
+      fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
     };
+    let timeoutId;
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(`${API}/invoices`, {
+      timeoutId = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(resolveApiUrl('/invoices'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderPayload),
         signal: controller.signal,
       });
-      clearTimeout(timeout);
-      const data = await res.json();
-      if (data.ok) {
-        showSuccess(data.invoice_code, data.invoice_id || null, false);
-        fetch(`${API}/products/all/with-variants`).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
-      } else {
-        showSuccess(`LOCAL_${Date.now().toString(36).toUpperCase()}`, null, true);
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        setCreating(false);
+        alert(getApiErrorMessage(data, 'Không thể tạo đơn hàng.'));
+        return;
       }
-    } catch {
+      showSuccess(data.invoice_code, data.invoice_id || null, false);
+      fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
+    } catch (error) {
+      if (error?.name !== 'AbortError' && error?.message) {
+        console.warn('Không thể gửi đơn hàng lên backend, chuyển sang lưu cục bộ:', error.message);
+      }
       showSuccess(`LOCAL_${Date.now().toString(36).toUpperCase()}`, null, true);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
   };
 
@@ -895,7 +889,7 @@ export default function CreateOrder({ user, store }) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(`${API}/invoices/${editingInvoiceId}`, {
+      const res = await fetch(resolveApiUrl(`/invoices/${editingInvoiceId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -934,7 +928,7 @@ export default function CreateOrder({ user, store }) {
       setLastInvoice(updatedInvoice);
       setEditingInvoiceId(null);
       setCreating(false);
-      fetch(`${API}/products/all/with-variants`).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
+      fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
       window.dispatchEvent(new CustomEvent('kha-order-created', { detail: updatedInvoice }));
       alert('✅ Đã lưu thay đổi đơn hàng!');
     } catch (err) {
@@ -1002,7 +996,7 @@ export default function CreateOrder({ user, store }) {
 
     try {
       const template = await getDefaultPrintTemplate({
-        apiBase: API,
+        apiBase: resolveApiUrl(''),
         type: option.type,
         paperSize: option.paperSize,
         fallbackPaperSize: option.paperSize,
@@ -1070,14 +1064,14 @@ export default function CreateOrder({ user, store }) {
               onClick={handleSaveEdit}
               disabled={cart.length === 0 || creating}
               className="px-3 sm:px-5 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
-              {creating ? '⏳ Đang lưu...' : 'Lưu thay đổi'}
+              {creating ? ' Đang lưu...' : 'Lưu thay đổi'}
             </button>
           ) : (
             <button
               onClick={handleCreateOrder}
               disabled={cart.length === 0 || creating}
               className="px-3 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
-              {creating ? '⏳ Đang tạo...' : 'Tạo Đơn Hàng'}
+              {creating ? ' Đang tạo...' : 'Tạo Đơn Hàng'}
             </button>
           )}
         </div>
@@ -1134,7 +1128,7 @@ export default function CreateOrder({ user, store }) {
                   </div>
                   <button onClick={handleAddCustomer}
                     className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">
-                    💾 Lưu &amp; Chọn
+                     Lưu &amp; Chọn
                   </button>
                 </div>
               )}
@@ -1387,7 +1381,6 @@ export default function CreateOrder({ user, store }) {
                 <thead>
                   <tr className="bg-gray-100 text-gray-600 text-xs border-b">
                     <th className="py-2 px-3 text-center w-10">STT</th>
-                    <th className="py-2 px-3 text-center w-10">Ảnh</th>
                     <th className="py-2 px-3 text-left">Tên sản phẩm</th>
                     <th className="py-2 px-3 text-center w-16">Số lượng</th>
                     <th className="py-2 px-3 text-right w-28">Đơn giá</th>
@@ -1707,7 +1700,7 @@ export default function CreateOrder({ user, store }) {
                 onClick={editingInvoiceId ? handleSaveEdit : handleCreateOrder}
                 disabled={cart.length === 0 || creating}
                 className={`w-full mt-2 py-2.5 disabled:bg-gray-300 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${editingInvoiceId ? 'bg-green-600 hover:bg-green-700' : 'bg-green-600 hover:bg-green-700'}`}>
-                {creating ? (editingInvoiceId ? '⏳ Đang lưu...' : '⏳ Đang tạo...') : (editingInvoiceId ? '💾 Lưu thay đổi' : '🖨️ Tạo đơn hàng')}
+                {creating ? (editingInvoiceId ? ' Đang lưu...' : ' Đang tạo...') : (editingInvoiceId ? ' Lưu thay đổi' : '🖨️ Tạo đơn hàng')}
               </button>
               {lastInvoice && (
                 <button
@@ -2031,7 +2024,7 @@ export default function CreateOrder({ user, store }) {
                 </button>
                 <button onClick={handleAddNewProduct}
                   className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold">
-                  💾 Thêm vào đơn hàng
+                   Thêm vào đơn hàng
                 </button>
               </div>
             </div>

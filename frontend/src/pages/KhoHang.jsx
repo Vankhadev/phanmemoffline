@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { API } from '../App';
+import { resolveApiUrl } from '../utils/apiClient';
 import { Package, Search, ChevronDown, ChevronRight, HelpCircle, ArrowDown, ArrowUp } from 'lucide-react';
 import HelpModal from '../components/HelpModal';
+
+const API = resolveApiUrl('');
 import {
   buildCategoriesById,
   categoryFields,
@@ -475,7 +477,7 @@ export default function KhoHang() {
             <div className="text-center text-gray-400 py-16">
               <div className="text-5xl mb-3 opacity-20">📦</div>
               <div className="font-medium text-gray-500">{emptyMessage}</div>
-              <div className="text-xs mt-2">Hãy chọn danh mục khác hoặc xóa bớt từ khóa tìm kiếm.</div>
+              <div className="text-xs mt-2">  Hãy chọn danh mục khác hoặc xóa bớt từ khóa tìm kiếm.</div>
             </div>
           )}
 

@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { API } from '../App';
+import { resolveApiUrl } from '../utils/apiClient';
 import { Plus, Edit2, Trash2, TrendingUp, TrendingDown, Calendar, Filter, Upload, Download, X, DollarSign } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
+
+const API = resolveApiUrl('');
 
 export default function CashBook() {
   const [transactions, setTransactions] = useState([]);
@@ -27,14 +29,15 @@ export default function CashBook() {
 
   useEffect(() => { fetchTransactions(); }, []);
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = async (nextFilter = filter) => {
+    const activeFilter = nextFilter && typeof nextFilter === 'object' ? nextFilter : filter;
     setLoading(true);
     try {
       let url = `${API}/cash-book`;
       const params = new URLSearchParams();
-      if (filter.type) params.append('type', filter.type);
-      if (filter.from) params.append('from', filter.from);
-      if (filter.to) params.append('to', filter.to);
+      if (activeFilter.type) params.append('type', activeFilter.type);
+      if (activeFilter.from) params.append('from', activeFilter.from);
+      if (activeFilter.to) params.append('to', activeFilter.to);
       if (params.toString()) url += `?${params.toString()}`;
 
       const res = await fetch(url);
@@ -141,12 +144,13 @@ export default function CashBook() {
   };
 
   const applyFilter = () => {
-    fetchTransactions();
+    fetchTransactions(filter);
   };
 
   const clearFilter = () => {
-    setFilter({ type: '', from: '', to: '' });
-    fetchTransactions();
+    const emptyFilter = { type: '', from: '', to: '' };
+    setFilter(emptyFilter);
+    fetchTransactions(emptyFilter);
   };
 
   const exportExcel = () => {
@@ -181,9 +185,6 @@ export default function CashBook() {
           Sổ quỹ
         </h1>
         <div className="flex gap-2">
-          <button onClick={() => setShowHelp(true)} className="px-4 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium flex items-center gap-1.5">
-            ? Hướng dẫn
-          </button>
           <button onClick={exportExcel} className="px-4 py-2 border border-green-300 text-green-600 hover:bg-green-50 rounded-lg text-sm font-medium flex items-center gap-1.5">
             <Upload size={16} /> Xuất Excel
           </button>
