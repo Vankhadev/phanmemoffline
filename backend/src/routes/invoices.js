@@ -5,10 +5,17 @@
  */
 const express = require('express');
 const router = express.Router();
-const { getAll, getOne, insert, update, remove, upsertDailyStats, today, now, getNextSeq, normalizePaymentMethod, getActiveAccountId } = require('../db/database');
+const { getAll, getOne, insert, update, remove, now, getNextSeq, normalizePaymentMethod, getActiveAccountId, withAtomicDbWrite } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
-const { createInvoiceFromPayload } = require('../services/invoiceCreationService');
+const {
+  createInvoiceFromPayload,
+  syncInvoiceAccounting,
+  deductStock: deductInvoiceStock,
+  restoreStock: restoreInvoiceStock,
+  mergeDuplicateDetails: mergeInvoiceDetails,
+  normalizeInvoiceDetail: normalizeInvoiceDetailService,
+} = require('../services/invoiceCreationService');
 const {
   getInvoiceDetailProductId,
   validateNegativeStockForDetails,
@@ -113,65 +120,11 @@ function buildDetailKey(detail = {}, index = 0) {
 }
 
 function normalizeInvoiceDetail(detail = {}, invoice_id) {
-  const comboLine = isComboDetail(detail);
-  const product_id = comboLine ? null : (detail.product_id || null);
-  const combo_id = comboLine ? (detail.combo_id || null) : null;
-  const displayFields = resolveInvoiceDetailDisplayFields(detail, id => getOne('products', p => Number(p.id) === Number(id)));
-  const product_name = displayFields.product_name;
-  const product_sku = displayFields.product_sku;
-  const quantity = +detail.quantity || 1;
-  const unit_price = +detail.unit_price || 0;
-  const discount_amount = detail.discount_amount || 0;
-
-  let import_price = 0;
-  if (product_id) {
-    const prod = getOne('products', p => p.id == product_id);
-    if (prod) import_price = prod.import_price || 0;
-  }
-
-  return {
-    invoice_id,
-    type: comboLine ? 'combo' : (detail.type || detail.item_type || 'product'),
-    item_type: comboLine ? 'combo' : (detail.item_type || detail.type || 'product'),
-    combo_id,
-    product_id,
-    variant_id: comboLine ? null : (displayFields.variant_id || detail.variant_id || null),
-    product_name,
-    product_sku,
-    name: displayFields.name || product_name,
-    sku: displayFields.sku || product_sku,
-    quantity,
-    unit_price,
-    import_price,
-    discount_amount,
-    discount_percent: detail.discount_percent || 0,
-    line_total: +detail.line_total || (quantity * unit_price - discount_amount),
-    sapo_line_item_id: detail.sapo_line_item_id || '',
-    sapo_order_id: detail.sapo_order_id || '',
-    sapo_product_id: detail.sapo_product_id || '',
-    sapo_variant_id: detail.sapo_variant_id || '',
-    sapo_sku: detail.sapo_sku || detail.product_sku || detail.sku || '',
-    sapo_barcode: detail.sapo_barcode || '',
-    created_at: detail.created_at || now(),
-  };
+  return normalizeInvoiceDetailService(detail, invoice_id);
 }
 
 function mergeDuplicateDetails(details) {
-  if (!Array.isArray(details)) return [];
-  const map = new Map();
-  for (const d of details) {
-    const key = buildDetailKey(d, map.size);
-    if (map.has(key)) {
-      const existing = map.get(key);
-      existing.quantity += d.quantity || 0;
-      existing.line_total += d.line_total || 0;
-      existing.discount_amount += d.discount_amount || 0;
-      // Giữ nguyên unit_price, discount_percent của dòng đầu (coi như áp dụng cho tổng số lượng)
-    } else {
-      map.set(key, { ...d });
-    }
-  }
-  return Array.from(map.values());
+  return mergeInvoiceDetails(details);
 }
 
 // ─────────────────────────────────────────────
@@ -380,73 +333,76 @@ router.post('/', (req, res) => {
 // ─────────────────────────────────────────────
 router.put('/:id', requireAdmin, (req, res) => {
   try {
-    const inv = getOne('invoices', i => i.id === +req.params.id);
-    if (!inv) return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
-    if (inv.status === 'cancelled') return res.status(400).json({ error: 'Không thể sửa đơn đã hủy' });
+    const result = withAtomicDbWrite(() => {
+      const inv = getOne('invoices', i => i.id === +req.params.id);
+      if (!inv) {
+        const err = new Error('Không tìm thấy đơn hàng');
+        err.status = 404;
+        throw err;
+      }
+      if (inv.status === 'cancelled') {
+        const err = new Error('Không thể sửa đơn đã hủy');
+        err.status = 400;
+        throw err;
+      }
 
-    const {
-      customer_id, payment_method, note,
-      subtotal, vat_percent, vat_amount,
-      discount_amount, discount_percent,
-      total, delivery_date,
-      paid_amount, change_amount, remaining_amount, delivery_fee,
-      invoice_writer, receiver_name,
-      details,
-    } = req.body;
+      const previousCreatedAt = inv.created_at;
+      const {
+        customer_id, payment_method, note,
+        subtotal, vat_percent, vat_amount,
+        discount_amount, discount_percent,
+        total, delivery_date,
+        paid_amount, change_amount, remaining_amount, delivery_fee,
+        invoice_writer, receiver_name,
+        details,
+      } = req.body;
 
-    const sapoInvoiceMetadata = ['sapo_order_id', 'sapo_order_number', 'sapo_customer_id', 'sapo_status', 'sapo_payment_status', 'sapo_fulfillment_status', 'sapo_updated_at', 'sapo_last_synced_at', 'sync_source']
-      .reduce((acc, field) => {
-        if (Object.prototype.hasOwnProperty.call(req.body, field)) acc[field] = req.body[field] || '';
-        return acc;
-      }, {});
 
-    // Cập nhật thông tin đơn hàng
-    update('invoices', inv.id, {
-      ...(customer_id !== undefined && { customer_id: customer_id || null }),
-      ...(payment_method && { payment_method: normalizePaymentMethod(payment_method) }),
-      ...(note !== undefined && { note }),
-      ...(subtotal !== undefined && { subtotal: +subtotal }),
-      ...(vat_percent !== undefined && { vat_percent: +vat_percent }),
-      ...(vat_amount !== undefined && { vat_amount }),
-      ...(discount_amount !== undefined && { discount_amount }),
-      ...(discount_percent !== undefined && { discount_percent }),
-      ...(total !== undefined && { total: +total }),
-      ...(paid_amount !== undefined && { paid_amount: +paid_amount || 0 }),
-      ...(change_amount !== undefined && { change_amount: +change_amount || 0 }),
-      ...(remaining_amount !== undefined && { remaining_amount: +remaining_amount || 0 }),
-      ...(delivery_fee !== undefined && { delivery_fee: +delivery_fee || 0 }),
-      ...(delivery_date !== undefined && { delivery_date: delivery_date || null }),
-      ...(invoice_writer !== undefined && { invoice_writer }),
-      ...(receiver_name !== undefined && { receiver_name }),
-      ...(req.body.created_at && { created_at: req.body.created_at }),
-      ...sapoInvoiceMetadata,
+      update('invoices', inv.id, {
+        ...(customer_id !== undefined && { customer_id: customer_id || null }),
+        ...(payment_method && { payment_method: normalizePaymentMethod(payment_method) }),
+        ...(note !== undefined && { note }),
+        ...(subtotal !== undefined && { subtotal: +subtotal }),
+        ...(vat_percent !== undefined && { vat_percent: +vat_percent }),
+        ...(vat_amount !== undefined && { vat_amount }),
+        ...(discount_amount !== undefined && { discount_amount }),
+        ...(discount_percent !== undefined && { discount_percent }),
+        ...(total !== undefined && { total: +total }),
+        ...(paid_amount !== undefined && { paid_amount: +paid_amount || 0 }),
+        ...(change_amount !== undefined && { change_amount: +change_amount || 0 }),
+        ...(remaining_amount !== undefined && { remaining_amount: +remaining_amount || 0 }),
+        ...(delivery_fee !== undefined && { delivery_fee: +delivery_fee || 0 }),
+        ...(delivery_date !== undefined && { delivery_date: delivery_date || null }),
+        ...(invoice_writer !== undefined && { invoice_writer }),
+        ...(receiver_name !== undefined && { receiver_name }),
+        ...(req.body.created_at && { created_at: req.body.created_at }),
+      }, { skipSave: true });
+
+      if (details !== undefined) {
+        const safeDetails = mergeDuplicateDetails(details);
+        const oldDetails = getAll('invoice_details', d => d.invoice_id === inv.id);
+        validateStockForInvoiceEditDetails(safeDetails, oldDetails);
+        for (const d of oldDetails) {
+          const stockProductId = getInvoiceDetailProductId(d);
+          if (stockProductId) restoreInvoiceStock(stockProductId, +d.quantity || 0, { skipSave: true });
+        }
+        for (const detail of oldDetails) {
+          remove('invoice_details', detail.id, { skipSave: true });
+        }
+        for (const d of (safeDetails || [])) {
+          const detailRow = normalizeInvoiceDetail(d, inv.id);
+          insert('invoice_details', detailRow, { skipSave: true });
+          const stockProductId = getInvoiceDetailProductId(detailRow);
+          if (stockProductId) deductInvoiceStock(stockProductId, +detailRow.quantity || 1, { skipSave: true });
+        }
+      }
+
+      const updatedInvoice = getOne('invoices', i => i.id === inv.id);
+      syncInvoiceAccounting(updatedInvoice, { skipSave: true, previousCreatedAt, timestamp: now() });
+      return { ok: true };
     });
 
-    // Cập nhật chi tiết sản phẩm (nếu có thay đổi)
-    if (details !== undefined) {
-      // Hợp nhất các sản phẩm trùng ID để tránh trừ kho nhiều lần
-      const safeDetails = mergeDuplicateDetails(details);
-
-      // ① Hoàn kho cho chi tiết cũ (dùng helper nhận diện product/variant)
-      const oldDetails = getAll('invoice_details', d => d.invoice_id === inv.id);
-      validateStockForInvoiceEditDetails(safeDetails, oldDetails);
-      for (const d of oldDetails) {
-        if (d.product_id) restoreStock(d.product_id, +d.quantity || 0);
-      }
-      // ② Xóa chi tiết cũ trong account hiện tại
-      for (const detail of oldDetails) {
-        remove('invoice_details', detail.id);
-      }
-      // ③ Thêm chi tiết mới + trừ kho
-      for (const d of (safeDetails || [])) {
-        const detailRow = normalizeInvoiceDetail(d, inv.id);
-        insert('invoice_details', detailRow);
-        // Trừ tồn kho sản phẩm lẻ; combo là dòng bán hàng riêng, không trừ kho ở đây
-        if (!isComboDetail(d) && d.product_id) deductStock(d.product_id, +d.quantity || 1);
-      }
-    }
-
-    res.json({ ok: true });
+    res.json(result);
   } catch (err) {
     const status = err.status || 500;
     res.status(status).json({ error: 'Lỗi khi sửa đơn: ' + err.message });
@@ -458,26 +414,40 @@ router.put('/:id', requireAdmin, (req, res) => {
 // ─────────────────────────────────────────────
 router.delete('/:id', requireAdmin, (req, res) => {
   try {
-    const inv = getOne('invoices', i => i.id === +req.params.id);
-    if (!inv) return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+    const result = withAtomicDbWrite(() => {
+      const inv = getOne('invoices', i => i.id === +req.params.id);
+      if (!inv) {
+        const err = new Error('Không tìm thấy đơn hàng');
+        err.status = 404;
+        throw err;
+      }
 
-    // ① Hoàn kho cho tất cả sản phẩm trong đơn (dùng helper nhận diện product/variant)
-    const details = getAll('invoice_details', d => d.invoice_id === inv.id);
-    for (const d of details) {
-      if (d.product_id) restoreStock(d.product_id, +d.quantity || 0);
-    }
+      const previousCreatedAt = inv.created_at;
+      const details = getAll('invoice_details', d => d.invoice_id === inv.id);
+      for (const d of details) {
+        const stockProductId = getInvoiceDetailProductId(d);
+        if (stockProductId) restoreInvoiceStock(stockProductId, +d.quantity || 0, { skipSave: true });
+      }
+      for (const detail of details) {
+        remove('invoice_details', detail.id, { skipSave: true });
+      }
 
-    // ② Xóa chi tiết trong account hiện tại
-    for (const detail of details) {
-      remove('invoice_details', detail.id);
-    }
+      update('invoices', inv.id, { status: 'cancelled' }, { skipSave: true });
+      const cancelledInvoice = getOne('invoices', i => i.id === inv.id);
+      syncInvoiceAccounting(cancelledInvoice, {
+        skipSave: true,
+        previousCreatedAt,
+        timestamp: now(),
+        voidReason: 'invoice_cancelled',
+      });
 
-    // ③ Đánh dấu đơn là đã hủy
-    update('invoices', inv.id, { status: 'cancelled' });
+      return { ok: true };
+    });
 
-    res.json({ ok: true });
+    res.json(result);
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi hủy đơn: ' + err.message });
+    const status = err.status || 500;
+    res.status(status).json({ error: 'Lỗi khi hủy đơn: ' + err.message });
   }
 });
 
@@ -486,45 +456,37 @@ router.delete('/:id', requireAdmin, (req, res) => {
 // ─────────────────────────────────────────────
 router.patch('/:id/confirm', requireAdmin, (req, res) => {
   try {
-    const inv = getOne('invoices', i => i.id === +req.params.id);
-    if (!inv) return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
-    if (inv.status === 'cancelled') return res.status(400).json({ error: 'Không thể xác nhận đơn đã hủy' });
-    if (inv.status === 'completed') return res.status(400).json({ error: 'Đơn đã được xác nhận trước đó' });
-    update('invoices', inv.id, { status: 'completed' });
-    // Tạo giao dịch thu vào sổ quỹ khi xác nhận đơn hàng
-    addCashBookIncome({ id: inv.id, invoice_code: inv.invoice_code, total: inv.total });
-    res.json({ ok: true, message: 'Đơn đã được xác nhận' });
+    const result = withAtomicDbWrite(() => {
+      const inv = getOne('invoices', i => i.id === +req.params.id);
+      if (!inv) {
+        const err = new Error('Không tìm thấy đơn hàng');
+        err.status = 404;
+        throw err;
+      }
+      if (inv.status === 'cancelled') {
+        const err = new Error('Không thể xác nhận đơn đã hủy');
+        err.status = 400;
+        throw err;
+      }
+      if (inv.status === 'completed') {
+        const err = new Error('Đơn đã được xác nhận trước đó');
+        err.status = 400;
+        throw err;
+      }
+
+      const previousCreatedAt = inv.created_at;
+      update('invoices', inv.id, { status: 'completed' }, { skipSave: true });
+      const completedInvoice = getOne('invoices', i => i.id === inv.id);
+      syncInvoiceAccounting(completedInvoice, { skipSave: true, previousCreatedAt, timestamp: now() });
+
+      return { ok: true, message: 'Đơn đã được xác nhận' };
+    });
+
+    res.json(result);
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi xác nhận đơn: ' + err.message });
+    const status = err.status || 500;
+    res.status(status).json({ error: 'Lỗi khi xác nhận đơn: ' + err.message });
   }
 });
-
-// ─────────────────────────────────────────────
-// Helper: tạo giao dịch thu vào sổ quỹ
-// ─────────────────────────────────────────────
-function addCashBookIncome(invoice) {
-  try {
-    const existing = getOne('cash_book', c => c.reference_type === 'invoice' && Number(c.reference_id) === Number(invoice.id) && c.active !== 0);
-    if (existing) return;
-
-    const time = new Date().toISOString();
-    insert('cash_book', {
-      account_id: getActiveAccountId(),
-      date: time.slice(0, 10),
-      time: time.slice(11, 19),
-      type: 'income',
-      category: 'Doanh thu từ đơn hàng',
-      amount: invoice.total || 0,
-      note: `Hóa đơn ${invoice.invoice_code}`,
-      reference_id: invoice.id,
-      reference_type: 'invoice',
-      active: true,
-      created_at: time,
-      updated_at: time,
-    });
-  } catch (err) {
-    console.error('Lỗi tạo giao dịch sổ quỹ:', err.message);
-  }
-}
 
 module.exports = router;

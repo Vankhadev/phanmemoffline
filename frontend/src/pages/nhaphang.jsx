@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Plus, X, Save, Package, Tag, FileText, LogOut, AlertCircle, CheckCircle, Building, Trash2, CreditCard, RotateCcw } from 'lucide-react';
 import ProductLabelPrintModal from '../components/ProductLabelPrintModal';
-import { resolveApiUrl } from '../utils/apiClient';
+import { SYNC_UPDATED_EVENT, apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
+import { broadcastSyncUpdate } from '../utils/crossTabSync';
 import { buildCategoriesById, categoryFields, getProductDisplayName, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
 
 const API = resolveApiUrl('');
@@ -776,6 +777,20 @@ const Nhaphang = ({ store }) => {
   const debounceTimeoutRef = useRef(null);
 
   useEffect(() => {
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      if (changedTables.some(table => ['products', 'imports', 'import_details', 'invoice_details', 'invoices'].includes(table))) {
+        fetchAllProducts();
+        fetchImportHistory();
+      }
+      if (changedTables.includes('product_categories')) fetchCategories();
+    };
+
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+  }, []);
+
+  useEffect(() => {
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
     }
@@ -1447,16 +1462,10 @@ const Nhaphang = ({ store }) => {
 
     try {
       const endpoint = isEditing ? `${API}/imports/${encodeURIComponent(editingImportKey)}` : `${API}/imports`;
-      const response = await fetch(endpoint, {
+      const result = await apiJsonChecked(endpoint, {
         method: isEditing ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildImportPayload(status, nextImportCode)),
-      });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || (isEditing ? 'Không thể cập nhật phiếu nhập' : 'Không thể tạo phiếu nhập'));
-      }
-      const result = await response.json();
+        body: buildImportPayload(status, nextImportCode),
+      }, isEditing ? 'Không thể cập nhật phiếu nhập.' : 'Không thể tạo phiếu nhập.');
       const savedOrder = buildLocalOrderData(status, nextImportCode, result);
       setOrderHistory(prev => [savedOrder, ...prev.filter(o => o.maDonHang !== savedOrder.maDonHang && o.id !== savedOrder.id)]);
 
@@ -1477,7 +1486,16 @@ const Nhaphang = ({ store }) => {
       setTimeout(() => {
         if (status === 'received' || result.stock_delta?.length > 0 || result.stock_mode) {
           window.dispatchEvent(new Event('kha-order-created'));
+          broadcastSyncUpdate({
+            reason: isEditing ? 'import-updated' : 'import-created',
+            changedTables: ['imports', 'import_details', 'products'],
+          });
           fetchAllProducts();
+        } else {
+          broadcastSyncUpdate({
+            reason: isEditing ? 'import-draft-updated' : 'import-draft-created',
+            changedTables: ['imports', 'import_details'],
+          });
         }
         fetchImportHistory();
       }, 1200);
@@ -1537,8 +1555,9 @@ const Nhaphang = ({ store }) => {
     try {
       setSaving(true);
       setError(null);
-      const response = await fetch(`${API}/imports/${encodeURIComponent(order.maDonHang || order.id)}`);
-      const fullOrder = response.ok ? mapImportToOrder(await response.json()) : order;
+      const fullOrder = mapImportToOrder(
+        await apiJson(`${API}/imports/${encodeURIComponent(order.maDonHang || order.id)}`, {}, 'Không thể tải chi tiết phiếu nhập.')
+      );
       setCurrentOrder(fullOrder);
       setIsEditingOrder(edit);
       setProducts((fullOrder.chiTiet || []).map((item) => {
@@ -1603,17 +1622,10 @@ const Nhaphang = ({ store }) => {
       setSaving(true);
       setError(null);
 
-      const response = await fetch(`${API}/imports/${order.maDonHang}/cancel`, {
+      const result = await apiJsonChecked(`${API}/imports/${order.maDonHang}/cancel`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lyDo: reason, rollbackStock: true })
-      });
-
-      if (!response.ok) {
-        throw new Error('Không thể hủy đơn hàng');
-      }
-
-      const result = await response.json();
+        body: { lyDo: reason, rollbackStock: true }
+      }, 'Không thể hủy đơn hàng');
       setSuccess(`Đơn hàng ${order.maDonHang} đã được hủy${result.rollback_stock ? ' và đã rollback tồn kho' : ''}.`);
 
       // Remove from local history if present
@@ -1834,7 +1846,7 @@ const Nhaphang = ({ store }) => {
 
   return (
     <div className="min-h-full w-full min-w-0 bg-gray-100">
-      {/* Header - SAPO style */}
+      {/* Header khu vực nhập hàng */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-3 sm:h-16 sm:flex-nowrap sm:py-0">

@@ -490,7 +490,7 @@ export default function KhoHang() {
             const isExpanded = isParentRow && expandedProductIds.has(row.id);
             const categoryName = getCategoryName(row);
             const rowName = firstNonEmpty(row.name, row.display_name, row.displayName, row.product_name, row.productName, row.variant_name, row.variantName, row.option_text, row.sku, 'Sản phẩm');
-            const rowSku = firstNonEmpty(row.sku, row.product_sku, row.productSku, row.variant_sku, row.variantSku, row.barcode, row.sapo_sku, row.sapo_variant_id ? `Sapo-${row.sapo_variant_id}` : '');
+            const rowSku = firstNonEmpty(row.sku, row.product_sku, row.productSku, row.variant_sku, row.variantSku, row.barcode);
             const rowKey = isParentRow ? `p-${row.id}` : `v-${row._parentId || row.parent_id || parent?.id || 'parent'}-${row.id || rowSku || idx}`;
 
             return (
@@ -553,7 +553,7 @@ export default function KhoHang() {
                       <div className="divide-y divide-orange-50">
                         {variants.map((variant, variantIndex) => {
                           const variantName = firstNonEmpty(variant.name, variant.display_name, variant.displayName, variant.product_name, variant.productName, variant.variant_name, variant.variantName, variant.option_text, variant.sku, `Biến thể ${variantIndex + 1}`);
-                          const variantSku = firstNonEmpty(variant.sku, variant.product_sku, variant.productSku, variant.variant_sku, variant.variantSku, variant.barcode, variant.sapo_sku, variant.sapo_variant_id ? `Sapo-${variant.sapo_variant_id}` : '');
+                          const variantSku = firstNonEmpty(variant.sku, variant.product_sku, variant.productSku, variant.variant_sku, variant.variantSku, variant.barcode);
                           const variantKey = `expanded-v-${row.id}-${variant.id || variantSku || variantIndex}`;
                           return (
                             <div key={variantKey} className="grid grid-cols-1 gap-2 px-3 py-2 text-xs text-gray-600 md:grid-cols-[minmax(0,1fr)_7rem_6rem_7rem_7rem_7rem] md:items-center">

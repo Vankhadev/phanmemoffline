@@ -3,32 +3,52 @@
  */
 const express = require('express');
 const router = express.Router();
-const { getAll, getOne } = require('../db/database');
+const { getAll, today, normalizeDateKey, normalizeNumber, isCompletedInvoiceStatus } = require('../db/database');
+
+function normalizeDailyStatsRow(row = {}) {
+  return {
+    ...row,
+    stat_date: normalizeDateKey(row.stat_date || row.date || row.created_at),
+    total_revenue: normalizeNumber(row.total_revenue ?? row.revenue, 0),
+    total_orders: Math.max(0, Math.round(normalizeNumber(row.total_orders ?? row.orders, 0))),
+  };
+}
+
+function getNormalizedDailyStatsRows() {
+  return getAll('daily_stats')
+    .map(normalizeDailyStatsRow)
+    .filter(row => row.stat_date);
+}
 
 router.get('/', (req, res) => {
   const { from = '1970-01-01', to = '2099-12-31' } = req.query;
-  const rows = getAll('daily_stats')
+  const rows = getNormalizedDailyStatsRows()
     .filter(r => r.stat_date >= from && r.stat_date <= to)
     .sort((a, b) => b.stat_date.localeCompare(a.stat_date));
   res.json(rows);
 });
 
 router.get('/summary', (req, res) => {
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const monthStr = new Date().getFullYear() + '-' + (new Date().getMonth() + 1).toString().padStart(2, '0') + '-01';
+  const todayStr = today();
+  const monthStr = `${todayStr.slice(0, 7)}-01`;
+  const dailyStats = getNormalizedDailyStatsRows();
 
-  const todayStats = getOne('daily_stats', s => s.stat_date === todayStr) || { total_revenue: 0, total_orders: 0 };
-  const monthStats = getAll('daily_stats')
+  const todayStats = dailyStats.find(s => s.stat_date === todayStr) || {
+    stat_date: todayStr,
+    total_revenue: 0,
+    total_orders: 0,
+  };
+  const monthStats = dailyStats
     .filter(s => s.stat_date >= monthStr)
     .reduce((acc, s) => {
       acc.revenue += s.total_revenue || 0;
-      acc.orders  += s.total_orders  || 0;
+      acc.orders += s.total_orders || 0;
       return acc;
     }, { revenue: 0, orders: 0 });
-  const allTime = getAll('daily_stats')
+  const allTime = dailyStats
     .reduce((acc, s) => {
       acc.revenue += s.total_revenue || 0;
-      acc.orders  += s.total_orders  || 0;
+      acc.orders += s.total_orders || 0;
       return acc;
     }, { revenue: 0, orders: 0 });
 
@@ -336,7 +356,7 @@ router.get('/tax-report', (req, res) => {
 
     // Lấy tất cả hóa đơn trong khoảng thời gian (chỉ lấy đơn completed)
     const invoices = getAll('invoices', inv =>
-      inv.status === 'completed' &&
+      isCompletedInvoiceStatus(inv.status) &&
       inv.created_at &&
       inv.created_at >= fromDate &&
       inv.created_at <= toDate

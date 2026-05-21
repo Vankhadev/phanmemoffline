@@ -110,7 +110,6 @@ export function getVariantIdentity(item = {}, fallbackIndex = 0) {
     item?.id,
     item?.variant_id,
     item?.variantId,
-    item?.sapo_variant_id,
     item?.sku,
     item?.barcode,
     `${item?.parent_id || item?._parentId || 'variant'}-${fallbackIndex}`,
@@ -169,8 +168,6 @@ export function getProductSku(item = {}, parent = null) {
     item?.variant_sku,
     item?.variantSku,
     item?.barcode,
-    item?.sapo_sku,
-    item?.sapo_variant_id ? `Sapo-${item.sapo_variant_id}` : '',
     item?.variant_id ? `VAR-${item.variant_id}` : '',
     parent?.sku ? `${parent.sku}-${getVariantIdentity(item)}` : '',
   );
@@ -193,7 +190,7 @@ export function normalizeInventoryVariant(variant = {}, parent = null, fallbackI
 
   return {
     ...variant,
-    id: variant?.id ?? variant?.variant_id ?? variant?.variantId ?? variant?.sapo_variant_id ?? getVariantIdentity(variant, fallbackIndex),
+    id: variant?.id ?? variant?.variant_id ?? variant?.variantId ?? getVariantIdentity(variant, fallbackIndex),
     name,
     sku: getProductSku(variant, parent),
     import_price: variant?.import_price ?? variant?.cost ?? variant?.cost_price ?? variant?.inventory_cost ?? variant?.original_price ?? 0,

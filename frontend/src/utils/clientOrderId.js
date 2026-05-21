@@ -45,7 +45,7 @@ export function getClientDeviceId() {
 export function getClientDeviceMetadata() {
   const nav = typeof navigator !== 'undefined' ? navigator : {};
   const platform = nav.userAgentData?.platform || nav.platform || '';
-  const deviceName = platform || (/Mobi|Android/i.test(nav.userAgent || '') ? 'Mobile browser' : 'Browser');
+  const deviceName = platform || 'Browser';
 
   return {
     device_id: getClientDeviceId(),

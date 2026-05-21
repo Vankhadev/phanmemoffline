@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
 const net = require('net');
 const http = require('http');
@@ -182,6 +182,7 @@ async function startBackend() {
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
+  let healthConfirmed = false;
 
   backendProcess = child;
   pipeBackendLog(child.stdout, message => console.log(message));
@@ -195,9 +196,15 @@ async function startBackend() {
     if (backendProcess === child) {
       backendProcess = null;
       backendHealth = null;
+      backendPort = null;
+      backendApiBase = '';
     }
     if (!app.isQuitting) {
-      console.warn(`[KHA Electron] Backend process exited (code=${code}, signal=${signal || 'none'})`);
+      const reason = `Backend process exited (code=${code}, signal=${signal || 'none'})`;
+      console.warn(`[KHA Electron] ${reason}`);
+      if (healthConfirmed) {
+        quitAfterBackendFatalError('Backend nội bộ đã dừng bất thường', new Error(reason));
+      }
     }
   });
 
@@ -206,6 +213,7 @@ async function startBackend() {
       waitForBackendHealth({ apiBase, expectedInstanceId: backendInstanceId, expectedPid: child.pid }),
       new Promise((_, reject) => child.once('error', reject)),
     ]);
+    healthConfirmed = true;
     console.log(`[KHA Electron] Backend ready at ${backendApiBase} (pid=${child.pid})`);
   } catch (err) {
     stopBackend();
@@ -225,6 +233,26 @@ function getBackendInfo() {
     health: backendHealth,
     running: Boolean(backendProcess && backendApiBase),
   };
+}
+
+function showBackendFatalError(title, err) {
+  const detail = err?.stack || err?.message || String(err || 'Unknown backend error');
+  console.error(`[KHA Electron] ${title}:`, err);
+  try {
+    dialog.showErrorBox(
+      'Không thể chạy backend',
+      `${title}.\n\nỨng dụng desktop cần backend nội bộ hoạt động để đọc/ghi dữ liệu. Ứng dụng sẽ dừng thay vì mở giao diện không có kết nối.\n\nChi tiết:\n${detail}`
+    );
+  } catch (_) {
+    // Ignore dialog failures in headless/test environments.
+  }
+}
+
+function quitAfterBackendFatalError(title, err) {
+  showBackendFatalError(title, err);
+  app.isQuitting = true;
+  stopBackend();
+  app.quit();
 }
 
 function registerBackendIpc() {
@@ -280,7 +308,7 @@ function getAppIconPath() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'icons', 'app-icon.png');
   }
-  return path.join(__dirname, '..', 'build', 'icon.png');
+  return path.join(__dirname, '..', 'build', 'icons', 'app-icon.png');
 }
 
 function createWindow() {
@@ -323,7 +351,8 @@ app.whenReady().then(async () => {
   try {
     await startBackend();
   } catch (err) {
-    console.error('[KHA Electron] Cannot start backend:', err);
+    quitAfterBackendFatalError('Không thể khởi động backend nội bộ', err);
+    return;
   }
   createWindow();
 

@@ -1,11 +1,12 @@
 {
   "name": "phanmienoffline-backend",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "Backend for Bán hàng offline - by Van kha mmo",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "reset-local-admin": "node scripts/reset-local-admin.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

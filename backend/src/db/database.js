@@ -21,9 +21,6 @@ const requestContext = new AsyncLocalStorage();
 const SCHEMA = {
   accounts: [],
   sessions: [],
-  mobile_devices: [],
-  mobile_install_links: [],
-  mobile_sync_events: [],
   permissions: [],
   role_permissions: [],
   sync_metadata: [],
@@ -49,8 +46,6 @@ const SCHEMA = {
   cash_book: [],
   payrolls: [],
   print_templates: [],
-  sapo_settings: [],
-  sapo_sync_runs: [],
   excel_import_runs: [],
   excel_import_details: [],
   update_releases: [],
@@ -65,8 +60,7 @@ const ACCOUNT_SCOPED_TABLES = new Set([
   'store_info', 'users', 'customers', 'products', 'product_categories', 'partners',
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
   'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book', 'payrolls', 'print_templates',
-  'sapo_settings', 'sapo_sync_runs', 'excel_import_runs', 'excel_import_details',
-  'mobile_devices', 'mobile_install_links', 'mobile_sync_events',
+  'excel_import_runs', 'excel_import_details',
   'sync_metadata', 'audit_logs',
 ]);
 
@@ -119,8 +113,7 @@ const SYNC_TRACKED_TABLES = [
   'store_info', 'users', 'customers', 'products', 'product_categories', 'partners',
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
   'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book', 'payrolls', 'print_templates',
-  'sapo_settings', 'sapo_sync_runs', 'excel_import_runs', 'excel_import_details',
-  'mobile_devices', 'mobile_install_links', 'mobile_sync_events',
+  'excel_import_runs', 'excel_import_details',
   'feature_catalog', 'update_releases',
 ];
 
@@ -129,10 +122,85 @@ const REMOVED_LEGACY_PERMISSION_KEYS = new Set([
   `${LEGACY_KEY_PREFIX}.read`,
   `${LEGACY_KEY_PREFIX}.manage`,
 ]);
-const REMOVED_LEGACY_TABLES = [
-  `${LEGACY_KEY_PREFIX}_settings`,
-  `${LEGACY_KEY_PREFIX}_alerts`,
-];
+function isCurrentSchemaTable(tableName) {
+  return Object.prototype.hasOwnProperty.call(SCHEMA, String(tableName || '').trim());
+}
+const PERMISSION_KEY_ALIASES = {
+  'sync.write': 'sync.manage',
+};
+const INVOICE_CANCELLED_STATUSES = new Set([
+  'cancelled',
+  'canceled',
+  'da_huy',
+  'da huy',
+  'đã hủy',
+  'dã hủy',
+  'huy',
+  'hủy',
+]);
+const INVOICE_COMPLETED_STATUSES = new Set([
+  'completed',
+  'complete',
+  'paid',
+  'done',
+  'da_hoan_thanh',
+  'da hoan thanh',
+  'đã hoàn thành',
+  'dã hoàn thành',
+  'da_thanh_toan',
+  'da thanh toan',
+  'đã thanh toán',
+  'dã thanh toán',
+]);
+const DB_TMP_CLEANUP_MAX_AGE_MS = 5 * 60 * 1000;
+const DB_WRITE_RETRY_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+const DB_WRITE_RETRY_ATTEMPTS = Math.max(1, Number(process.env.KHA_DB_WRITE_RETRY_ATTEMPTS) || 8);
+const DB_WRITE_RETRY_BASE_DELAY_MS = Math.max(1, Number(process.env.KHA_DB_WRITE_RETRY_BASE_DELAY_MS) || 25);
+const DB_WRITE_RETRY_MAX_DELAY_MS = Math.max(DB_WRITE_RETRY_BASE_DELAY_MS, Number(process.env.KHA_DB_WRITE_RETRY_MAX_DELAY_MS) || 250);
+let hasLoadedDb = false;
+
+function sleepSync(ms) {
+  const delayMs = Math.max(0, Number(ms) || 0);
+  if (delayMs <= 0) return;
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
+  } catch (_error) {
+    // Ignore environments where synchronous sleeping is unavailable.
+  }
+}
+
+function isRetryableDbWriteError(error) {
+  return process.platform === 'win32' && DB_WRITE_RETRY_CODES.has(String(error?.code || '').toUpperCase());
+}
+
+function getDbWriteRetryDelayMs(attempt) {
+  const safeAttempt = Math.max(1, Number(attempt) || 1);
+  return Math.min(DB_WRITE_RETRY_MAX_DELAY_MS, DB_WRITE_RETRY_BASE_DELAY_MS * (2 ** (safeAttempt - 1)));
+}
+
+function renameFileWithRetry(tmpPath, filePath) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= DB_WRITE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      fs.renameSync(tmpPath, filePath);
+      if (attempt > 1) {
+        console.warn(`[KHA DB] Recovered DB rename after retry ${attempt}/${DB_WRITE_RETRY_ATTEMPTS}: ${path.basename(filePath)}`);
+      }
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableDbWriteError(error) || attempt >= DB_WRITE_RETRY_ATTEMPTS) break;
+      const delayMs = getDbWriteRetryDelayMs(attempt);
+      console.warn(`[KHA DB] Retrying DB rename ${attempt}/${DB_WRITE_RETRY_ATTEMPTS} after ${error.code} for ${path.basename(filePath)} (${delayMs}ms)`);
+      sleepSync(delayMs);
+    }
+  }
+
+  if (lastError && isRetryableDbWriteError(lastError)) {
+    console.error(`[KHA DB] DB rename failed after ${DB_WRITE_RETRY_ATTEMPTS} attempts for ${path.basename(filePath)}: ${lastError.message}`);
+  }
+  throw lastError;
+}
 
 function now() {
   return new Date().toISOString();
@@ -185,15 +253,87 @@ function createEmptyDB() {
   return { ...Object.fromEntries(Object.keys(SCHEMA).map(table => [table, []])), nextId: { ...INITIAL_NEXT_ID } };
 }
 
+function matchesDatabaseTmpFile(fileName = '') {
+  const baseName = path.basename(DB_PATH || '');
+  const normalized = String(fileName || '').trim();
+  return Boolean(baseName) && normalized.startsWith(`${baseName}.`) && normalized.endsWith('.tmp');
+}
+
+function listDatabaseTmpFiles() {
+  ensureDBDirectoryExists();
+  const dir = path.dirname(DB_PATH);
+  return fs.readdirSync(dir)
+    .filter(matchesDatabaseTmpFile)
+    .map(name => {
+      const fullPath = path.join(dir, name);
+      try {
+        const stat = fs.statSync(fullPath);
+        return { name, path: fullPath, mtimeMs: stat.mtimeMs, size: stat.size };
+      } catch (_error) {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+}
+
+function cleanupDatabaseTempFiles(options = {}) {
+  ensureDBDirectoryExists();
+  const nowMs = Number(options.nowMs) || Date.now();
+  const maxAgeMs = options.maxAgeMs === undefined ? DB_TMP_CLEANUP_MAX_AGE_MS : Math.max(0, Number(options.maxAgeMs) || 0);
+  const recoverIfMissing = options.recoverIfMissing === true;
+  const tmpFiles = listDatabaseTmpFiles();
+
+  if (!fs.existsSync(DB_PATH) && recoverIfMissing) {
+    const recoveryCandidate = tmpFiles.find(file => {
+      try {
+        const raw = fs.readFileSync(file.path, 'utf8');
+        JSON.parse(raw);
+        return true;
+      } catch (_error) {
+        return false;
+      }
+    });
+    if (recoveryCandidate) {
+      fs.copyFileSync(recoveryCandidate.path, DB_PATH);
+    }
+  }
+
+  for (const file of tmpFiles) {
+    if (maxAgeMs > 0 && nowMs - file.mtimeMs < maxAgeMs) continue;
+    try {
+      fs.unlinkSync(file.path);
+    } catch (_error) {
+      // Best-effort cleanup only.
+    }
+  }
+}
+
 function atomicWriteJSON(filePath, data) {
   ensureDBDirectoryExists();
+  cleanupDatabaseTempFiles({ maxAgeMs: DB_TMP_CLEANUP_MAX_AGE_MS });
   const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
-  fs.renameSync(tmp, filePath);
+  let renamed = false;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+    renameFileWithRetry(tmp, filePath);
+    renamed = true;
+  } finally {
+    if (renamed && fs.existsSync(tmp)) {
+      try {
+        fs.unlinkSync(tmp);
+      } catch (_error) {
+        // Ignore best-effort tmp cleanup failure.
+      }
+    } else if (!renamed && fs.existsSync(tmp)) {
+      console.warn(`[KHA DB] Preserving temporary DB file for recovery: ${path.basename(tmp)}`);
+    }
+  }
 }
 
 function ensureDBFileExists() {
   ensureDBDirectoryExists();
+  cleanupDatabaseTempFiles({ recoverIfMissing: true, maxAgeMs: DB_TMP_CLEANUP_MAX_AGE_MS });
   if (!fs.existsSync(DB_PATH)) atomicWriteJSON(DB_PATH, createEmptyDB());
 }
 
@@ -208,6 +348,40 @@ function normalizePaymentMethod(method) {
 
 function normalizeTextKey(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, '_');
+}
+
+function normalizePermissionKey(value) {
+  const normalized = normalizeTextKey(value);
+  return PERMISSION_KEY_ALIASES[normalized] || normalized;
+}
+
+function normalizeStatusText(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFC')
+    .replace(/\s+/g, ' ');
+}
+
+function isCancelledInvoiceStatus(status) {
+  return INVOICE_CANCELLED_STATUSES.has(normalizeStatusText(status));
+}
+
+function isCompletedInvoiceStatus(status) {
+  return INVOICE_COMPLETED_STATUSES.has(normalizeStatusText(status));
+}
+
+function normalizeDateKey(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const directMatch = text.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (directMatch) return directMatch[1];
+  const isoPrefixMatch = text.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (isoPrefixMatch) return isoPrefixMatch[1];
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return '';
 }
 
 function parseList(value) {
@@ -324,32 +498,79 @@ function ensureDefaultAccount() {
 
 function seedDefaultPermissions() {
   const current = getDb();
+  const dedupedPermissions = [];
+  const seenKeys = new Set();
+
+  for (const row of current.permissions) {
+    if (!row) continue;
+    const normalizedKey = normalizePermissionKey(row.key);
+    if (!normalizedKey) continue;
+    row.key = normalizedKey;
+    row.updated_at = row.updated_at || now();
+    if (seenKeys.has(normalizedKey)) {
+      const existing = dedupedPermissions.find(item => item.key === normalizedKey);
+      if (existing) {
+        existing.name = existing.name || row.name || '';
+        existing.description = existing.description || row.description || '';
+        existing.updated_at = now();
+      }
+      continue;
+    }
+    seenKeys.add(normalizedKey);
+    dedupedPermissions.push(row);
+  }
+  current.permissions = dedupedPermissions;
+
   for (const [key, name, description] of DEFAULT_PERMISSIONS) {
-    const existing = current.permissions.find(row => row.key === key);
+    const normalizedKey = normalizePermissionKey(key);
+    const existing = current.permissions.find(row => row.key === normalizedKey);
     if (existing) {
+      existing.key = normalizedKey;
       existing.name = existing.name || name;
       existing.description = existing.description || description;
-      existing.updated_at = existing.updated_at || now();
+      existing.updated_at = now();
       continue;
     }
     const id = current.nextId.permissions || 1;
     current.nextId.permissions = id + 1;
-    current.permissions.push({ id, key, name, description, created_at: now(), updated_at: now() });
+    current.permissions.push({ id, key: normalizedKey, name, description, created_at: now(), updated_at: now() });
   }
 }
 
 function seedDefaultRolePermissions() {
   const current = getDb();
-  const allKeys = current.permissions.map(p => p.key);
+  const normalizedRolePermissions = [];
+  const seenPairs = new Set();
+
+  for (const row of current.role_permissions) {
+    if (!row) continue;
+    const role = normalizeRoleValue(row.role);
+    const permission_key = normalizePermissionKey(row.permission_key);
+    if (!permission_key) continue;
+    const pairKey = `${role}:${permission_key}`;
+    if (seenPairs.has(pairKey)) continue;
+    seenPairs.add(pairKey);
+    normalizedRolePermissions.push({
+      ...row,
+      role,
+      permission_key,
+      updated_at: row.updated_at || now(),
+    });
+  }
+  current.role_permissions = normalizedRolePermissions;
+
+  const allKeys = Array.from(new Set(current.permissions.map(p => normalizePermissionKey(p.key)).filter(Boolean)));
   const roleMap = {
     admin: allKeys,
     owner: allKeys,
     manager: allKeys.filter(key => !key.endsWith('.manage') || !['admin_panel.manage', 'features.manage', 'updates.manage', 'users.manage'].includes(key)),
-    user: DEFAULT_USER_PERMISSION_KEYS,
+    user: DEFAULT_USER_PERMISSION_KEYS.map(normalizePermissionKey),
   };
 
   for (const [role, keys] of Object.entries(roleMap)) {
-    for (const permission_key of keys) {
+    for (const rawPermissionKey of keys) {
+      const permission_key = normalizePermissionKey(rawPermissionKey);
+      if (!permission_key) continue;
       if (current.role_permissions.some(row => row.role === role && row.permission_key === permission_key)) continue;
       const id = current.nextId.role_permissions || 1;
       current.nextId.role_permissions = id + 1;
@@ -367,11 +588,11 @@ function cleanupRemovedLegacyArtifacts() {
     row => !REMOVED_LEGACY_PERMISSION_KEYS.has(String(row?.permission_key || '').trim())
   );
   current.sync_metadata = current.sync_metadata.filter(
-    row => !REMOVED_LEGACY_TABLES.includes(String(row?.table_name || '').trim())
+    row => isCurrentSchemaTable(row?.table_name)
   );
   if (current.nextId && typeof current.nextId === 'object') {
-    for (const table of REMOVED_LEGACY_TABLES) {
-      delete current.nextId[table];
+    for (const table of Object.keys(current.nextId)) {
+      if (!isCurrentSchemaTable(table)) delete current.nextId[table];
     }
   }
 }
@@ -452,8 +673,6 @@ function seedDefaultProductCategories() {
 function ensureField(row, field, valueFactory) {
   if (row && row[field] == null) row[field] = typeof valueFactory === 'function' ? valueFactory(row) : valueFactory;
 }
-function ensureSapoMetadataSchema() {}
-function ensureMobileSchema() {}
 
 function ensureAuthAndSyncSchema() {
   const defaultAccount = ensureDefaultAccount();
@@ -464,27 +683,100 @@ function ensureAuthAndSyncSchema() {
   seedDefaultAdmin(defaultAccount.id);
 }
 
+function buildDailyStatsRowsFromInvoices() {
+  const current = getDb();
+  const defaultAccount = ensureDefaultAccount();
+  const existingRowsByKey = new Map();
+
+  for (const row of current.daily_stats || []) {
+    if (!row) continue;
+    const statDate = normalizeDateKey(row.stat_date || row.date || row.created_at);
+    if (!statDate) continue;
+    const accountId = row.account_id == null ? defaultAccount.id : row.account_id;
+    const rowKey = `${accountId}:${statDate}`;
+    if (!existingRowsByKey.has(rowKey)) {
+      existingRowsByKey.set(rowKey, {
+        id: Number(row.id) || null,
+        created_at: row.created_at || null,
+      });
+    }
+  }
+
+  const rowsByKey = new Map();
+  for (const invoice of current.invoices || []) {
+    if (!invoice || !isCompletedInvoiceStatus(invoice.status)) continue;
+    const statDate = normalizeDateKey(invoice.created_at || invoice.updated_at);
+    if (!statDate) continue;
+    const accountId = invoice.account_id == null ? defaultAccount.id : invoice.account_id;
+    const rowKey = `${accountId}:${statDate}`;
+    if (!rowsByKey.has(rowKey)) {
+      const existing = existingRowsByKey.get(rowKey) || {};
+      rowsByKey.set(rowKey, {
+        id: existing.id || null,
+        account_id: accountId,
+        stat_date: statDate,
+        total_revenue: 0,
+        total_orders: 0,
+        created_at: existing.created_at || invoice.created_at || now(),
+        updated_at: now(),
+      });
+    }
+    const row = rowsByKey.get(rowKey);
+    row.total_revenue += normalizeNumber(invoice.total, 0);
+    row.total_orders += 1;
+  }
+
+  return Array.from(rowsByKey.values())
+    .map(row => ({
+      ...row,
+      total_revenue: normalizeNumber(row.total_revenue, 0),
+      total_orders: Math.max(0, Math.round(normalizeNumber(row.total_orders, 0))),
+      updated_at: row.updated_at || now(),
+      created_at: row.created_at || now(),
+    }))
+    .sort((a, b) => String(a.stat_date || '').localeCompare(String(b.stat_date || '')) || Number(a.account_id || 0) - Number(b.account_id || 0));
+}
+
+function rebuildAllDailyStatsFromInvoices() {
+  const current = getDb();
+  const rebuiltRows = buildDailyStatsRowsFromInvoices();
+  for (const row of rebuiltRows) {
+    const numericId = Number(row.id);
+    if (!Number.isFinite(numericId) || numericId <= 0) {
+      const id = current.nextId.daily_stats || 1;
+      current.nextId.daily_stats = id + 1;
+      row.id = id;
+    }
+  }
+  current.daily_stats = rebuiltRows;
+}
+
 function migrateDB() {
   normalizeDBData();
-  ensureSapoMetadataSchema();
-  ensureMobileSchema();
   cleanupRemovedLegacyArtifacts();
   seedDefaultProductCategories();
   seedDefaultPrintTemplates();
   seedDefaultFeatureCatalog();
   ensureAuthAndSyncSchema();
+  rebuildAllDailyStatsFromInvoices();
   recalculateNextIds();
 }
 
-function loadDB() {
+function loadDB(options = {}) {
+  const forceReload = options.forceReload === true;
+  if (hasLoadedDb && !forceReload) return getDb();
+
   ensureDBFileExists();
   let parsed = {};
+  let shouldPersist = options.forceSave === true;
   try {
     const raw = fs.readFileSync(DB_PATH, 'utf8');
     parsed = raw.trim() ? JSON.parse(raw) : {};
   } catch (error) {
+    console.warn(`[KHA DB] Failed to read DB file ${path.basename(DB_PATH)}: ${error.message}`);
     backupDB('corrupt');
     parsed = createEmptyDB();
+    shouldPersist = true;
   }
 
   const nextDB = createEmptyDB();
@@ -492,14 +784,41 @@ function loadDB() {
     nextDB[table] = Array.isArray(parsed[table]) ? parsed[table] : [];
   }
   nextDB.nextId = { ...INITIAL_NEXT_ID, ...(parsed.nextId || {}) };
-  replaceDB(nextDB);
-  migrateDB();
-  saveDB();
-  return getDb();
+
+  try {
+    replaceDB(nextDB);
+    const beforeMigrateSnapshot = JSON.stringify(getDb());
+    migrateDB();
+    const afterMigrateSnapshot = JSON.stringify(getDb());
+    if (shouldPersist || afterMigrateSnapshot !== beforeMigrateSnapshot) {
+      saveDB();
+    }
+    hasLoadedDb = true;
+    return getDb();
+  } catch (error) {
+    hasLoadedDb = false;
+    throw error;
+  }
 }
 
 function saveDB() {
   atomicWriteJSON(DB_PATH, getDb());
+}
+
+function cloneDbState() {
+  return JSON.parse(JSON.stringify(getDb()));
+}
+
+function withAtomicDbWrite(callback) {
+  const snapshot = cloneDbState();
+  try {
+    const result = callback();
+    saveDB();
+    return result;
+  } catch (error) {
+    replaceDB(snapshot);
+    throw error;
+  }
 }
 
 function runWithRequestContext(context, callback) {
@@ -660,15 +979,19 @@ function getAccountById(accountId) {
 
 function getRolePermissions(role) {
   const normalizedRole = normalizeRoleValue(role);
-  return getAll('role_permissions', row => row.role === normalizedRole, { skipAccountScope: true })
-    .map(row => row.permission_key)
-    .filter(Boolean);
+  return Array.from(new Set(
+    getAll('role_permissions', row => row.role === normalizedRole, { skipAccountScope: true })
+      .map(row => normalizePermissionKey(row.permission_key))
+      .filter(Boolean)
+  ));
 }
 
 function getUserPermissions(user) {
   if (!user) return [];
   if (user.role === 'admin' || user.role === 'owner') return getRolePermissions('admin');
-  const explicit = parseList(user.permission_keys || user.permissions);
+  const explicit = parseList(user.permission_keys || user.permissions)
+    .map(normalizePermissionKey)
+    .filter(Boolean);
   return Array.from(new Set([...getRolePermissions(user.role || 'user'), ...explicit]));
 }
 
@@ -703,28 +1026,79 @@ function auditLog(action, meta = {}) {
   }
 }
 
-function upsertDailyStats(date, revenue = 0) {
-  const statDate = date || today();
-  const accountId = getActiveAccountId();
-  const existing = getOne('daily_stats', row => row.date === statDate && (accountId == null || Number(row.account_id) === Number(accountId)));
-  if (existing) {
-    return update('daily_stats', existing.id, {
-      revenue: normalizeNumber(existing.revenue, 0) + normalizeNumber(revenue, 0),
-    });
+function setDailyStats(statDate, totals = {}, options = {}) {
+  const normalizedDate = normalizeDateKey(statDate || today());
+  if (!normalizedDate) return null;
+
+  const accountId = options.accountId === undefined ? getActiveAccountId() : options.accountId;
+  const total_revenue = normalizeNumber(totals.total_revenue, 0);
+  const total_orders = Math.max(0, Math.round(normalizeNumber(totals.total_orders, 0)));
+  const skipSave = options.skipSave === true;
+  const keepEmpty = options.keepEmpty !== false;
+  const readOptions = { skipAccountScope: accountId == null };
+  const existing = getOne('daily_stats', row => row.stat_date === normalizedDate && (accountId == null || Number(row.account_id) === Number(accountId)), readOptions);
+
+  if (!keepEmpty && total_revenue === 0 && total_orders === 0) {
+    if (!existing) return null;
+    return remove('daily_stats', existing.id, { ...readOptions, skipSave });
   }
-  const id = insert('daily_stats', { date: statDate, revenue: normalizeNumber(revenue, 0), account_id: accountId });
-  return getOne('daily_stats', { id });
+
+  const payload = {
+    stat_date: normalizedDate,
+    total_revenue,
+    total_orders,
+    account_id: accountId,
+    updated_at: now(),
+  };
+
+  if (existing) {
+    return update('daily_stats', existing.id, payload, { ...readOptions, skipSave });
+  }
+
+  const id = insert('daily_stats', {
+    ...payload,
+    created_at: now(),
+  }, { skipSave, accountId });
+  return getOne('daily_stats', { id }, readOptions);
 }
 
-function getNextSeq(name) {
+function rebuildDailyStatsForDate(date = today(), options = {}) {
+  const statDate = normalizeDateKey(date || today());
+  if (!statDate) return null;
+  const accountId = options.accountId === undefined ? getActiveAccountId() : options.accountId;
+  const readOptions = { skipAccountScope: accountId == null };
+  const invoices = getAll('invoices', invoice => {
+    if (!invoice || !isCompletedInvoiceStatus(invoice.status)) return false;
+    if (accountId != null && Number(invoice.account_id) !== Number(accountId)) return false;
+    return normalizeDateKey(invoice.created_at || invoice.updated_at) === statDate;
+  }, readOptions);
+
+  return setDailyStats(statDate, {
+    total_revenue: invoices.reduce((sum, invoice) => sum + normalizeNumber(invoice.total, 0), 0),
+    total_orders: invoices.length,
+  }, options);
+}
+
+function rebuildDailyStatsForDates(dates = [], options = {}) {
+  const requestedDates = Array.isArray(dates) ? dates : [dates];
+  return Array.from(new Set(requestedDates.map(item => normalizeDateKey(item)).filter(Boolean)))
+    .map(statDate => rebuildDailyStatsForDate(statDate, options));
+}
+
+function upsertDailyStats(date, _revenue = 0, options = {}) {
+  return rebuildDailyStatsForDate(date, options);
+}
+
+function getNextSeq(name, options = {}) {
   const key = normalizeTextKey(name || 'default');
+  const skipSave = options.skipSave === true;
   let counter = getOne('counters', row => row.name === key || row.key === key);
   if (!counter) {
-    const id = insert('counters', { name: key, key, value: 1, seq: 1 });
+    const id = insert('counters', { name: key, key, value: 1, seq: 1 }, { skipSave });
     return getOne('counters', { id })?.value || 1;
   }
   const nextValue = normalizeNumber(counter.value ?? counter.seq, 0) + 1;
-  update('counters', counter.id, { value: nextValue, seq: nextValue });
+  update('counters', counter.id, { value: nextValue, seq: nextValue }, { skipSave });
   return nextValue;
 }
 
@@ -769,6 +1143,9 @@ module.exports = {
   getUserPermissions,
   getSyncVersions,
   auditLog,
+  setDailyStats,
+  rebuildDailyStatsForDate,
+  rebuildDailyStatsForDates,
   upsertDailyStats,
   getNextSeq,
   ensureBaseData,
@@ -784,4 +1161,10 @@ module.exports = {
   normalizePrintTemplateConfig,
   findCategoryByText,
   ensureField,
+  normalizePermissionKey,
+  normalizeDateKey,
+  isCancelledInvoiceStatus,
+  isCompletedInvoiceStatus,
+  cleanupDatabaseTempFiles,
+  withAtomicDbWrite,
 };

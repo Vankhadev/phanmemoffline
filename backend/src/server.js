@@ -10,9 +10,8 @@ const path    = require('path');
 const { version: APP_VERSION } = require('../../package.json');
 
 // --- Load DB & helpers ---
-const { loadDB, upsertDailyStats, today, now, db, DB_PATH } = require('./db/database');
+const { upsertDailyStats, today, now, DB_PATH, isCancelledInvoiceStatus, isCompletedInvoiceStatus } = require('./db/database');
 const { requireAuth, requireAnyPermission, requirePermission } = require('./middleware/auth');
-loadDB();
 
 // --- Routes ---
 const storeRoutes     = require('./routes/store');
@@ -34,8 +33,6 @@ const printTemplatesRoutes = require('./routes/printTemplates');
 const featuresRoutes = require('./routes/features');
 const updatesRoutes = require('./routes/updates');
 const excelImportsRoutes = require('./routes/excelImports');
-const sapoSyncRoutes = require('./routes/sapoSync');
-const licenseKeysRoutes = require('./routes/licenseKeys');
 
 // ============================================================
 //  EXPRESS APP
@@ -83,22 +80,44 @@ function parseAllowedOrigins(value) {
     .filter(Boolean);
 }
 
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeLanCorsHost(value) {
+  const host = String(value || '').trim();
+  if (!host) return '';
+  if (['0.0.0.0', '::', '[::]'].includes(host)) return '';
+  return host;
+}
+
 const DEFAULT_ALLOWED_ORIGINS = [
   /^https?:\/\/localhost(?::\d+)?$/i,
   /^https?:\/\/127\.0\.0\.1(?::\d+)?$/i,
   /^https?:\/\/\[::1\](?::\d+)?$/i,
+];
+const PRIVATE_NETWORK_ALLOWED_ORIGINS = [
+  /^https?:\/\/10(?:\.\d{1,3}){3}(?::\d+)?$/i,
+  /^https?:\/\/192\.168(?:\.\d{1,3}){2}(?::\d+)?$/i,
+  /^https?:\/\/172\.(1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2}(?::\d+)?$/i,
 ];
 const configuredAllowedOrigins = parseAllowedOrigins(
   process.env.KHA_CORS_ORIGINS ||
   process.env.CORS_ORIGINS ||
   process.env.ALLOWED_ORIGINS
 );
+const derivedAllowedOrigins = Array.from(new Set([
+  HOST,
+  process.env.KHA_PUBLIC_HOST,
+  process.env.PHANMEM_PUBLIC_HOST,
+].map(normalizeLanCorsHost).filter(Boolean))).map(host => new RegExp(`^https?:\\/\\/${escapeRegex(host)}(?::\\d+)?$`, 'i'));
 
 function isAllowedCorsOrigin(origin) {
   if (!origin || origin === 'null') return true;
   if (configuredAllowedOrigins.includes('*')) return true;
   if (configuredAllowedOrigins.includes(origin)) return true;
-  return DEFAULT_ALLOWED_ORIGINS.some(pattern => pattern.test(origin));
+  return [...DEFAULT_ALLOWED_ORIGINS, ...PRIVATE_NETWORK_ALLOWED_ORIGINS, ...derivedAllowedOrigins]
+    .some(pattern => pattern.test(origin));
 }
 
 app.use(helmet({
@@ -111,8 +130,6 @@ app.use(cors({
   credentials: true,
 }));
 app.use('/api/products/import-excel-rows', express.json({ limit: '25mb' }));
-app.use('/api/sapo/import/customers', express.json({ limit: '25mb' }));
-app.use('/api/sapo/customers/import', express.json({ limit: '25mb' }));
 app.use('/api/excel-imports', express.json({ limit: '25mb' }));
 app.use(express.json());
 
@@ -121,7 +138,7 @@ app.use((err, req, res, next) => {
   const isJsonBodyError = err.type === 'entity.too.large' || err.type === 'entity.parse.failed' || err instanceof SyntaxError;
   if (!isJsonBodyError) return next(err);
 
-  const isImportRequest = req.path === '/api/products/import-excel-rows' || req.path.startsWith('/api/sapo/import/customers') || req.path.startsWith('/api/sapo/customers/import') || req.path.startsWith('/api/excel-imports');
+  const isImportRequest = req.path === '/api/products/import-excel-rows' || req.path.startsWith('/api/excel-imports');
   const status = err.type === 'entity.too.large' ? 413 : 400;
   if (isImportRequest) console.warn('[KHA IMPORT EXCEL] JSON body error:', err.message);
   res.status(status).json({
@@ -171,7 +188,6 @@ app.get('/api/health', (_req, res) => {
 // Public auth/setup endpoints remain inside usersRoutes and syncRoutes; business routes require a valid server session.
 app.use('/api/users',          usersRoutes);
 app.use('/api',                syncRoutes);
-app.use('/api/license-keys',   licenseKeysRoutes);
 app.use('/api/store',          requireAuth, requireAnyPermission(['store.read', 'store.manage']), storeRoutes);
 app.use('/api/customers',      requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customersRoutes);
 app.use('/api/products',       requireAuth, requireAnyPermission(['products.read', 'products.manage']), productsRoutes);
@@ -189,7 +205,6 @@ app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templa
 app.use('/api/features', featuresRoutes);
 app.use('/api/updates', updatesRoutes);
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);
-app.use('/api/sapo', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), sapoSyncRoutes);
 
 // ----- Dashboard -----
 function buildDashboardPayload() {
@@ -197,8 +212,8 @@ function buildDashboardPayload() {
   const todayKey = today();
   const invoices = getAll('invoices');
   const activeProducts = getAll('products', p => p.active !== 0);
-  const todayInvoices = invoices.filter(inv => String(inv.created_at || '').startsWith(todayKey) && inv.status !== 'cancelled');
-  const completedTodayInvoices = todayInvoices.filter(inv => inv.status === 'completed');
+  const todayInvoices = invoices.filter(inv => String(inv.created_at || '').startsWith(todayKey) && !isCancelledInvoiceStatus(inv.status));
+  const completedTodayInvoices = todayInvoices.filter(inv => isCompletedInvoiceStatus(inv.status));
 
   const recentInvoices = invoices
     .slice()
@@ -248,10 +263,7 @@ app.get('/api/dashboard', requireAuth, requirePermission('stats.read'), (_req, r
 cron.schedule('*/5 * * * *', () => {
   console.log('[VANKHA CRON]', new Date().toISOString());
   const t = today();
-  const { getOne } = require('./db/database');
-  if (!getOne('daily_stats', s => s.stat_date === t)) {
-    upsertDailyStats(t, 0);
-  }
+  upsertDailyStats(t, 0, { keepEmpty: true });
 });
 
 
@@ -267,7 +279,7 @@ cron.schedule('0 2 * * *', () => {
 
   let deletedCount = 0;
   invoices.forEach(inv => {
-    if (inv.status === 'cancelled' && inv.created_at) {
+    if (isCancelledInvoiceStatus(inv.status) && inv.created_at) {
       const invDate = new Date(inv.created_at);
       if (invDate < cutoffDate) {
         remove('invoices', inv.id);

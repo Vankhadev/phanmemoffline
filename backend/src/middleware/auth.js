@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const {
   getOne,
   getAll,
@@ -9,10 +11,61 @@ const {
   getUserPermissions,
   runWithRequestContext,
   auditLog,
+  DB_PATH,
 } = require('../db/database');
 
 const DEFAULT_SESSION_TTL_DAYS = Number(process.env.KHA_SESSION_TTL_DAYS || 30);
-const TOKEN_SECRET = process.env.KHA_SESSION_SECRET || process.env.SESSION_SECRET || `kha-local-session-secret:${process.cwd()}`;
+
+function resolveConfiguredSessionSecret() {
+  const explicitSecret = String(process.env.KHA_SESSION_SECRET || process.env.SESSION_SECRET || '').trim();
+  if (explicitSecret) {
+    if (explicitSecret.length < 32) {
+      console.warn('[KHA AUTH] Configured session secret is shorter than 32 characters; use a stronger secret in production.');
+    }
+    return explicitSecret;
+  }
+  return '';
+}
+
+function resolveSessionSecretFilePath() {
+  const configuredPath = String(process.env.KHA_SESSION_SECRET_FILE || '').trim();
+  if (configuredPath) return path.resolve(configuredPath);
+  return path.join(path.dirname(DB_PATH), '.kha-session-secret');
+}
+
+function readPersistedSessionSecret(secretFile) {
+  try {
+    const secret = fs.readFileSync(secretFile, 'utf8').trim();
+    return secret.length >= 32 ? secret : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function writePersistedSessionSecret(secretFile, secret) {
+  fs.mkdirSync(path.dirname(secretFile), { recursive: true });
+  fs.writeFileSync(secretFile, `${secret}\n`, { encoding: 'utf8', mode: 0o600 });
+}
+
+function resolveTokenSecret() {
+  const configuredSecret = resolveConfiguredSessionSecret();
+  if (configuredSecret) return configuredSecret;
+
+  const secretFile = resolveSessionSecretFilePath();
+  const existingSecret = readPersistedSessionSecret(secretFile);
+  if (existingSecret) return existingSecret;
+
+  const generatedSecret = crypto.randomBytes(48).toString('base64url');
+  try {
+    writePersistedSessionSecret(secretFile, generatedSecret);
+    return generatedSecret;
+  } catch (err) {
+    console.warn(`[KHA AUTH] Cannot persist generated session secret at ${secretFile}: ${err.message}`);
+    return generatedSecret;
+  }
+}
+
+const TOKEN_SECRET = resolveTokenSecret();
 const SESSION_LAST_SEEN_UPDATE_INTERVAL_MS = Math.max(
   0,
   Number(process.env.KHA_SESSION_LAST_SEEN_INTERVAL_MS || 5 * 60 * 1000) || 5 * 60 * 1000

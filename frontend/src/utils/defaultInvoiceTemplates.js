@@ -68,25 +68,25 @@ h1 { margin: 10px 0; text-align: center; font-size: 18px; }
 .signatures span { display: block; margin-top: 4px; font-size: 11px; color: #4b5563; }
 `;
 
-const sapoA4InvoiceHtml = `
-<div class="print-template sapo-a4-html sale-invoice">
-  <div class="sapo-a4-brand-row">
+const saleA4InvoiceHtml = `
+<div class="print-template sale-a4-html sale-invoice">
+  <div class="sale-a4-brand-row">
     <div>
-      <div class="sapo-a4-store-name">{store_name}</div>
-      <div class="sapo-a4-store-meta">Địa chỉ: {store_address}</div>
-      <div class="sapo-a4-store-meta">ĐT: {store_phone} - MST: {store_tax_code}</div>
+      <div class="sale-a4-store-name">{store_name}</div>
+      <div class="sale-a4-store-meta">Địa chỉ: {store_address}</div>
+      <div class="sale-a4-store-meta">ĐT: {store_phone} - MST: {store_tax_code}</div>
     </div>
-    <div class="sapo-a4-order-block">
+    <div class="sale-a4-order-block">
       <span>Mã đơn hàng</span>
       <strong>{order_code}</strong>
     </div>
-    <div class="sapo-a4-title-block">
+    <div class="sale-a4-title-block">
       <div>HOÁ ĐƠN</div>
       <div>BÁN HÀNG</div>
     </div>
   </div>
 
-  <div class="sapo-a4-customer">
+  <div class="sale-a4-customer">
     <div>
       <div><span>KHÁCH HÀNG:</span> <strong>{customer_name}</strong></div>
       <div><span>Địa chỉ:</span> {customer_address}</div>
@@ -97,7 +97,7 @@ const sapoA4InvoiceHtml = `
     </div>
   </div>
 
-  <table class="items-table sapo-a4-items">
+  <table class="items-table sale-a4-items">
     <thead>
       <tr>
         <th>STT</th>
@@ -124,7 +124,7 @@ const sapoA4InvoiceHtml = `
     </tbody>
   </table>
 
-  <div class="sapo-a4-totals">
+  <div class="sale-a4-totals">
     <div><span>THÀNH TIỀN</span><strong>{subtotal}</strong></div>
     <div><span>CHIẾT KHẤU</span><strong>{discount}</strong></div>
     <div><span>TỔNG</span><strong>{total}</strong></div>
@@ -132,55 +132,55 @@ const sapoA4InvoiceHtml = `
     <div><span>THÀNH TIỀN</span><strong>{total_amount}</strong></div>
   </div>
 
-  <div class="sapo-a4-signature-section">
-    <div class="sapo-a4-date-note">{store_name}, ngày {invoice_date}</div>
-    <div class="sapo-a4-signature"><strong>NGƯỜI NHẬN HÀNG.</strong><span>(Ký, ghi rõ họ tên)</span></div>
-    <div class="sapo-a4-signature"><strong>NGƯỜI VIẾT HÓA ĐƠN</strong><span>(Ký, ghi rõ họ tên)</span></div>
+  <div class="sale-a4-signature-section">
+    <div class="sale-a4-date-note">{store_name}, ngày {invoice_date}</div>
+    <div class="sale-a4-signature"><strong>NGƯỜI NHẬN HÀNG.</strong><span>(Ký, ghi rõ họ tên)</span></div>
+    <div class="sale-a4-signature"><strong>NGƯỜI VIẾT HÓA ĐƠN</strong><span>(Ký, ghi rõ họ tên)</span></div>
   </div>
 
-  <div class="sapo-a4-print-footer">
+  <div class="sale-a4-print-footer">
     <span>1/1</span>
   </div>
 </div>`.trim();
 
-const sapoA4LegacyCss = `
-.sapo-a4-html { min-height: 277mm; display: flex; flex-direction: column; color: #111; font-family: Arial, Roboto, Helvetica, sans-serif; font-size: 12px; line-height: 1.32; }
-.sapo-a4-html .sapo-a4-brand-row { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(42mm, 0.7fr) minmax(48mm, 0.85fr); gap: 10mm; align-items: start; border-bottom: 1.5px solid #111; padding-bottom: 5mm; margin-bottom: 5mm; }
-.sapo-a4-html .sapo-a4-store-name { font-size: 19px; font-weight: 700; line-height: 1.2; margin-bottom: 2mm; }
-.sapo-a4-html .sapo-a4-store-meta { font-size: 11px; color: #333; }
-.sapo-a4-html .sapo-a4-order-block span { display: block; margin-bottom: 1mm; color: #333; }
-.sapo-a4-html .sapo-a4-order-block strong { display: block; font-size: 17px; }
-.sapo-a4-html .sapo-a4-title-block { text-align: right; font-size: 24px; line-height: 1.08; font-weight: 800; letter-spacing: 0.04em; }
-.sapo-a4-html .sapo-a4-customer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(58mm, 0.72fr); gap: 10mm; margin: 0 0 5mm; }
-.sapo-a4-html .sapo-a4-customer div { margin: 1.2mm 0; }
-.sapo-a4-html .sapo-a4-customer span { font-weight: 700; }
-.sapo-a4-html .sapo-a4-items { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 2mm; }
-.sapo-a4-html .sapo-a4-items th, .sapo-a4-html .sapo-a4-items td { border: 1px solid #9ca3af; padding: 4px 6px; vertical-align: top; word-break: break-word; }
-.sapo-a4-html .sapo-a4-items th { font-weight: 700; text-align: center; }
-.sapo-a4-html .sapo-a4-totals { width: 76mm; margin: 4mm 0 0 auto; break-inside: avoid; page-break-inside: avoid; }
-.sapo-a4-html .sapo-a4-totals div { display: grid; grid-template-columns: 1fr 34mm; gap: 8mm; padding: 1.2mm 0; border-bottom: 1px solid #e5e7eb; }
-.sapo-a4-html .sapo-a4-totals span, .sapo-a4-html .sapo-a4-totals strong { font-weight: 700; }
-.sapo-a4-html .sapo-a4-totals strong { text-align: right; }
-.sapo-a4-html .sapo-a4-signature-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(44mm, 0.72fr) minmax(44mm, 0.72fr); gap: 8mm; align-items: start; margin-top: auto; padding-top: 11mm; break-inside: avoid; page-break-inside: avoid; }
-.sapo-a4-html .sapo-a4-signature { min-height: 31mm; text-align: center; }
-.sapo-a4-html .sapo-a4-signature span { display: block; margin-top: 1mm; font-size: 10px; color: #4b5563; }
-.sapo-a4-html .sapo-a4-print-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #d1d5db; display: flex; justify-content: flex-end; font-size: 10px; color: #374151; }
-@media print { .sapo-a4-html tr, .sapo-a4-html .sapo-a4-totals, .sapo-a4-html .sapo-a4-signature-section { break-inside: avoid; page-break-inside: avoid; } }
+const saleA4LegacyCss = `
+.sale-a4-html { min-height: 277mm; display: flex; flex-direction: column; color: #111; font-family: Arial, Roboto, Helvetica, sans-serif; font-size: 12px; line-height: 1.32; }
+.sale-a4-html .sale-a4-brand-row { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(42mm, 0.7fr) minmax(48mm, 0.85fr); gap: 10mm; align-items: start; border-bottom: 1.5px solid #111; padding-bottom: 5mm; margin-bottom: 5mm; }
+.sale-a4-html .sale-a4-store-name { font-size: 19px; font-weight: 700; line-height: 1.2; margin-bottom: 2mm; }
+.sale-a4-html .sale-a4-store-meta { font-size: 11px; color: #333; }
+.sale-a4-html .sale-a4-order-block span { display: block; margin-bottom: 1mm; color: #333; }
+.sale-a4-html .sale-a4-order-block strong { display: block; font-size: 17px; }
+.sale-a4-html .sale-a4-title-block { text-align: right; font-size: 24px; line-height: 1.08; font-weight: 800; letter-spacing: 0.04em; }
+.sale-a4-html .sale-a4-customer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(58mm, 0.72fr); gap: 10mm; margin: 0 0 5mm; }
+.sale-a4-html .sale-a4-customer div { margin: 1.2mm 0; }
+.sale-a4-html .sale-a4-customer span { font-weight: 700; }
+.sale-a4-html .sale-a4-items { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 2mm; }
+.sale-a4-html .sale-a4-items th, .sale-a4-html .sale-a4-items td { border: 1px solid #9ca3af; padding: 4px 6px; vertical-align: top; word-break: break-word; }
+.sale-a4-html .sale-a4-items th { font-weight: 700; text-align: center; }
+.sale-a4-html .sale-a4-totals { width: 76mm; margin: 4mm 0 0 auto; break-inside: avoid; page-break-inside: avoid; }
+.sale-a4-html .sale-a4-totals div { display: grid; grid-template-columns: 1fr 34mm; gap: 8mm; padding: 1.2mm 0; border-bottom: 1px solid #e5e7eb; }
+.sale-a4-html .sale-a4-totals span, .sale-a4-html .sale-a4-totals strong { font-weight: 700; }
+.sale-a4-html .sale-a4-totals strong { text-align: right; }
+.sale-a4-html .sale-a4-signature-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(44mm, 0.72fr) minmax(44mm, 0.72fr); gap: 8mm; align-items: start; margin-top: auto; padding-top: 11mm; break-inside: avoid; page-break-inside: avoid; }
+.sale-a4-html .sale-a4-signature { min-height: 31mm; text-align: center; }
+.sale-a4-html .sale-a4-signature span { display: block; margin-top: 1mm; font-size: 10px; color: #4b5563; }
+.sale-a4-html .sale-a4-print-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #d1d5db; display: flex; justify-content: flex-end; font-size: 10px; color: #374151; }
+@media print { .sale-a4-html tr, .sale-a4-html .sale-a4-totals, .sale-a4-html .sale-a4-signature-section { break-inside: avoid; page-break-inside: avoid; } }
 `.trim();
 
 export const DEFAULT_PRINT_TEMPLATES = [
   {
     id: 'fallback-sale_invoice-A4',
-    code: 'sale_invoice_a4_sapo_frontend',
-    name: 'Mẫu mặc định - Đơn bán hàng A4 SAPO',
+    code: 'sale_invoice_a4_frontend',
+    name: 'Mẫu mặc định - Đơn bán hàng A4',
     type: 'sale_invoice',
     paper_size: 'A4',
     width_mm: 210,
     is_default: true,
     is_fallback: true,
     active: true,
-    html: sapoA4InvoiceHtml,
-    css: sapoA4LegacyCss,
+    html: saleA4InvoiceHtml,
+    css: saleA4LegacyCss,
     config: createDefaultInvoiceVisualConfig('sale_invoice', 'A4', 210),
   },
   {

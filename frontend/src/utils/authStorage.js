@@ -211,6 +211,19 @@ export function getPendingLocalData() {
   };
 }
 
+export function replacePendingLocalData(nextPending = {}) {
+  const storage = getBrowserStorage('localStorage');
+  if (!storage) return [];
+
+  const orders = Array.isArray(nextPending.orders) ? nextPending.orders : [];
+  const customers = Array.isArray(nextPending.customers) ? nextPending.customers : [];
+
+  setStorageKey(storage, PENDING_ORDERS_KEY, safeStringify(orders));
+  setStorageKey(storage, OFFLINE_CUSTOMERS_KEY, safeStringify(customers));
+
+  return [PENDING_ORDERS_KEY, OFFLINE_CUSTOMERS_KEY];
+}
+
 export function clearVolatileCache({ includePending = true } = {}) {
   const storage = getBrowserStorage('localStorage');
   if (!storage) return [];

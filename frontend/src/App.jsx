@@ -11,7 +11,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import OrderList from './pages/OrderList';
 import KhoHang from './pages/KhoHang';
-import Nhaphang from './pages/Nhaphang';
+import Nhaphang from './pages/nhaphang';
 import CustomerOrderReport from './pages/CustomerOrderReport';
 import ProductReport from './pages/ProductReport';
 import CashBook from './pages/CashBook';
@@ -53,15 +53,6 @@ import {
 import { clearAuthSession, clearVolatileCache, getAuthToken, normalizePermissions } from './utils/authStorage';
 
 
-function isCapacitorNativeRuntime() {
-  try {
-    return Boolean(window.Capacitor?.isNativePlatform?.() || ['android', 'ios'].includes(window.Capacitor?.getPlatform?.()));
-  } catch (_) {
-    return false;
-  }
-}
-
-
 const ROUTE_ALIASES = {
   '/settings': '/cai-dat',
   '/admin': '/cai-dat',
@@ -73,7 +64,7 @@ const ROUTE_ALIASES = {
 const HOME_ROUTE = '/';
 const LOGIN_REGISTER_ROUTE = '/dang-ky';
 const DESKTOP_SIDEBAR_QUERY = '(min-width: 768px)';
-const MOBILE_SIDEBAR_QUERY = '(max-width: 767px)';
+const COMPACT_SIDEBAR_QUERY = '(max-width: 767px)';
 const NAV_ICON_CLASS = 'h-5 w-5 shrink-0';
 const NAV_CHILD_ICON_CLASS = 'h-4 w-4 shrink-0';
 const SYNC_POLL_ACTIVE_INTERVAL_MS = 4000;
@@ -88,9 +79,9 @@ function matchesMediaQuery(query, fallback = false) {
   return window.matchMedia(query).matches;
 }
 
-function isMobileSidebarViewport() {
+function isCompactSidebarViewport() {
   if (typeof window === 'undefined') return false;
-  if (typeof window.matchMedia === 'function') return window.matchMedia(MOBILE_SIDEBAR_QUERY).matches;
+  if (typeof window.matchMedia === 'function') return window.matchMedia(COMPACT_SIDEBAR_QUERY).matches;
   return window.innerWidth < 768;
 }
 
@@ -256,8 +247,8 @@ function AppLayout({
   const [openMenus, setOpenMenus] = useState({ don_hang: true });
   const [updateToast, setUpdateToast] = useState(null);
   const [updateToastVisible, setUpdateToastVisible] = useState(false);
-  const [mobileSidebarVisible, setMobileSidebarVisible] = useState(() => isMobileSidebarViewport());
-  const [mobileSidebarAnimating, setMobileSidebarAnimating] = useState(false);
+  const [compactSidebarVisible, setCompactSidebarVisible] = useState(() => isCompactSidebarViewport());
+  const [compactSidebarAnimating, setCompactSidebarAnimating] = useState(false);
   const user = authState.user;
   const permissions = authState.permissions;
   const canAccess = useCallback((route) => canAccessRoute(route, user, permissions), [permissions, user]);
@@ -282,7 +273,7 @@ function AppLayout({
   }, []);
 
   useEffect(() => {
-    const handleResize = () => setMobileSidebarVisible(isMobileSidebarViewport());
+    const handleResize = () => setCompactSidebarVisible(isCompactSidebarViewport());
     window.addEventListener('resize', handleResize);
     handleResize();
     return () => window.removeEventListener('resize', handleResize);

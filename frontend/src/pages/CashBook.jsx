@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { resolveApiUrl } from '../utils/apiClient';
+import { apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
 import { Plus, Edit2, Trash2, TrendingUp, TrendingDown, Calendar, Filter, Upload, Download, X, DollarSign } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
@@ -40,9 +40,8 @@ export default function CashBook() {
       if (activeFilter.to) params.append('to', activeFilter.to);
       if (params.toString()) url += `?${params.toString()}`;
 
-      const res = await fetch(url);
-      const data = await res.json();
-      setTransactions(data);
+      const data = await apiJson(url, {}, 'Không thể tải sổ quỹ.');
+      setTransactions(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Lỗi tải sổ quỹ:', err);
     } finally {
@@ -59,8 +58,7 @@ export default function CashBook() {
         if (filter.to) params.append('to', filter.to);
         url += `?${params.toString()}`;
       }
-      const res = await fetch(url);
-      return await res.json();
+      return await apiJson(url, {}, 'Không thể tải tổng hợp sổ quỹ.');
     } catch (err) {
       console.error('Lỗi tải tổng hợp:', err);
       return null;
@@ -107,19 +105,13 @@ export default function CashBook() {
     try {
       const method = editing ? 'PUT' : 'POST';
       const url = editing ? `${API}/cash-book/${editing.id}` : `${API}/cash-book`;
-      const res = await fetch(url, {
+      await apiJsonChecked(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        alert(editing ? '✅ Đã cập nhật!' : '✅ Đã thêm giao dịch!');
-        setShowForm(false);
-        fetchTransactions();
-      } else {
-        alert('Lỗi: ' + (data.error || 'Không rõ lỗi'));
-      }
+        body: form,
+      }, editing ? 'Không thể cập nhật giao dịch.' : 'Không thể thêm giao dịch.');
+      alert(editing ? '✅ Đã cập nhật!' : '✅ Đã thêm giao dịch!');
+      setShowForm(false);
+      fetchTransactions();
     } catch (err) {
       alert('Lỗi kết nối: ' + err.message);
     } finally {
@@ -130,14 +122,9 @@ export default function CashBook() {
   const handleDelete = async (id) => {
     if (!confirm('Xóa giao dịch này?')) return;
     try {
-      const res = await fetch(`${API}/cash-book/${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.ok) {
-        alert('✅ Đã xóa!');
-        fetchTransactions();
-      } else {
-        alert('Xóa thất bại: ' + (data.error || 'Không rõ lỗi'));
-      }
+      await apiJsonChecked(`${API}/cash-book/${id}`, { method: 'DELETE' }, 'Không thể xóa giao dịch.');
+      alert('✅ Đã xóa!');
+      fetchTransactions();
     } catch (err) {
       alert('Lỗi kết nối: ' + err.message);
     }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getApiErrorMessage, resolveApiUrl } from '../utils/apiClient';
+import { ApiError, SYNC_UPDATED_EVENT, apiJsonChecked, getApiErrorMessage, resolveApiUrl } from '../utils/apiClient';
 import {
   Search, Plus, X, ShoppingCart, Trash2, ChevronDown, ChevronRight, Barcode, Filter, Layers, UserPlus, Users, Package, Settings2
 } from 'lucide-react';
@@ -9,6 +9,7 @@ import InvoicePrintPreviewModal from '../components/InvoicePrintPreviewModal';
 import { getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
 import { attachClientOrderMetadata, generateClientOrderId } from '../utils/clientOrderId';
+import { broadcastSyncUpdate } from '../utils/crossTabSync';
 
 const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
 const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
@@ -292,25 +293,29 @@ export default function CreateOrder({ user, store }) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(resolveApiUrl('/customers'), {
+      const data = await apiJsonChecked('/customers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCustomer),
+        body: newCustomer,
         signal: controller.signal,
-      });
+      }, 'Không thể thêm khách hàng.');
       clearTimeout(timer);
-      const data = await res.json();
-      if (data.ok) {
-        const full = { ...newCustomer, id: data.id };
-        setCustomers(prev => [...prev, full]);
-        setSelectedCustomer(full);
-        setCustomerSearch('');
-        setShowCustomerForm(false);
-        setNewCustomer({ name: '', phone: '', email: '', tax_code: '', customer_type: 'Khách lẻ' });
-      } else {
-        alert(data.message || data.error || 'Lỗi khi thêm khách hàng!');
+      const full = { ...newCustomer, id: data.id };
+      setCustomers(prev => [...prev, full]);
+      setSelectedCustomer(full);
+      setCustomerSearch('');
+      setShowCustomerForm(false);
+      setNewCustomer({ name: '', phone: '', email: '', tax_code: '', customer_type: 'Khách lẻ' });
+      broadcastSyncUpdate({
+        reason: 'customer-created',
+        changedTables: ['customers'],
+      });
+    } catch (error) {
+      if (error instanceof ApiError || error?.name === 'AbortError') {
+        alert(error?.name === 'AbortError'
+          ? '⏱️ Server không phản hồi khi thêm khách hàng.'
+          : getApiErrorMessage(error?.data, error?.message || 'Không thể thêm khách hàng.'));
+        return;
       }
-    } catch {
       // ── OFFLINE: lưu local ──
       const offlineId = `OFF_CUST_${Date.now().toString(36).toUpperCase()}`;
       const offlineCust = { ...newCustomer, id: offlineId, _isOffline: true };
@@ -382,6 +387,43 @@ export default function CreateOrder({ user, store }) {
       document.removeEventListener('visibilitychange', refreshCombosIfStale);
       window.removeEventListener('kha-combos-changed', refreshCombos);
       window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    const refreshProducts = () => {
+      fetch(resolveApiUrl('/products/all/with-variants'))
+        .then(r => r.json())
+        .then(d => setProducts(Array.isArray(d) ? d : []))
+        .catch(() => { });
+    };
+    const refreshCustomers = () => {
+      fetch(resolveApiUrl('/customers'))
+        .then(r => r.json())
+        .then(d => setCustomers(Array.isArray(d) ? d : []))
+        .catch(() => { });
+    };
+    const refreshCategories = () => {
+      fetch(resolveApiUrl('/product-categories'))
+        .then(r => r.json())
+        .then(d => setCategories(Array.isArray(d) ? d : []))
+        .catch(() => { });
+    };
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      if (changedTables.some(table => ['products', 'invoices', 'invoice_details', 'imports', 'import_details'].includes(table))) {
+        refreshProducts();
+      }
+      if (changedTables.includes('customers')) refreshCustomers();
+      if (changedTables.includes('product_categories')) refreshCategories();
+      if (changedTables.includes('combos')) fetchCombos({ force: true });
+    };
+
+    window.addEventListener('kha-order-created', refreshProducts);
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    return () => {
+      window.removeEventListener('kha-order-created', refreshProducts);
+      window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
     };
   }, []);
 
@@ -652,11 +694,9 @@ export default function CreateOrder({ user, store }) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
 
-      // Tạo sản phẩm mới qua API
-      const res = await fetch(resolveApiUrl('/products'), {
+      const data = await apiJsonChecked('/products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           name: newProduct.name.trim(),
           sku: newProduct.sku?.trim() || '',
           import_price: parseFloat(newProduct.import_price) || 0,
@@ -668,54 +708,52 @@ export default function CreateOrder({ user, store }) {
           category: newProduct.category?.trim() || '',
           default_category_id: newProduct.default_category_id || null,
           supplier_id: newProduct.supplier_id ? parseInt(newProduct.supplier_id) : null,
-        }),
+        },
         signal: controller.signal,
-      });
+      }, 'Không thể tạo sản phẩm mới.');
       clearTimeout(timer);
-      const data = await res.json();
 
-      if (data.ok) {
-        // Thêm vào giỏ hàng ngay
-        const productToAdd = {
-          id: data.id,
-          name: newProduct.name.trim(),
-          sku: newProduct.sku?.trim() || '',
-          import_price: parseFloat(newProduct.import_price) || 0,
-          wholesale_price: parseFloat(newProduct.wholesale_price) || 0,
-          retail_price: parseFloat(newProduct.retail_price) || 0,
-          vip_price: parseFloat(newProduct.vip_price) || 0,
-          stock: parseInt(newProduct.stock) || 0,
-          unit: newProduct.unit || 'cái',
-          category: newProduct.category?.trim() || '',
-          default_category_id: newProduct.default_category_id || null,
-          default_category: categories.find(c => String(c.id) === String(newProduct.default_category_id)) || null,
-          supplier_id: newProduct.supplier_id ? parseInt(newProduct.supplier_id) : null,
-        };
-        const unit_price = getPrice(productToAdd);
-        setCart(prev => [...prev, {
-          id: Date.now() + Math.random(),
-          product_id: data.id,
-          product_name: productToAdd.name,
-          product_sku: productToAdd.sku,
-          quantity: 1,
-          unit_price,
-          discount_amount: 0,
-          discount_percent: 0,
-          line_total: unit_price,
-          max_stock: productToAdd.stock,
-        }]);
-        // Reset form và đóng modal
-        setShowNewProductForm(false);
-        setNewProduct({
-          name: '', sku: '', import_price: '', wholesale_price: '', retail_price: '', vip_price: '',
-          stock: '', unit: 'cái', category: '', default_category_id: '', supplier_id: ''
-        });
-        alert('✅ Đã thêm sản phẩm mới vào đơn hàng!');
-      } else {
-        alert('Lỗi: ' + (data.error || 'Không rõ lỗi'));
-      }
+      const productToAdd = {
+        id: data.id,
+        name: newProduct.name.trim(),
+        sku: newProduct.sku?.trim() || '',
+        import_price: parseFloat(newProduct.import_price) || 0,
+        wholesale_price: parseFloat(newProduct.wholesale_price) || 0,
+        retail_price: parseFloat(newProduct.retail_price) || 0,
+        vip_price: parseFloat(newProduct.vip_price) || 0,
+        stock: parseInt(newProduct.stock) || 0,
+        unit: newProduct.unit || 'cái',
+        category: newProduct.category?.trim() || '',
+        default_category_id: newProduct.default_category_id || null,
+        default_category: categories.find(c => String(c.id) === String(newProduct.default_category_id)) || null,
+        supplier_id: newProduct.supplier_id ? parseInt(newProduct.supplier_id) : null,
+      };
+      const unit_price = getPrice(productToAdd);
+      setCart(prev => [...prev, {
+        id: Date.now() + Math.random(),
+        product_id: data.id,
+        product_name: productToAdd.name,
+        product_sku: productToAdd.sku,
+        quantity: 1,
+        unit_price,
+        discount_amount: 0,
+        discount_percent: 0,
+        line_total: unit_price,
+        max_stock: productToAdd.stock,
+      }]);
+      setShowNewProductForm(false);
+      setNewProduct({
+        name: '', sku: '', import_price: '', wholesale_price: '', retail_price: '', vip_price: '',
+        stock: '', unit: 'cái', category: '', default_category_id: '', supplier_id: ''
+      });
+      fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(Array.isArray(d) ? d : [])).catch(() => { });
+      broadcastSyncUpdate({
+        reason: 'product-created-from-order',
+        changedTables: ['products'],
+      });
+      alert('✅ Đã thêm sản phẩm mới vào đơn hàng!');
     } catch (err) {
-      alert('Lỗi kết nối: ' + err.message);
+      alert(err?.name === 'AbortError' ? '⏱️ Server không phản hồi khi tạo sản phẩm.' : getApiErrorMessage(err?.data, err?.message || 'Lỗi kết nối khi tạo sản phẩm.'));
     }
   };
 
@@ -796,6 +834,10 @@ export default function CreateOrder({ user, store }) {
       } catch (_) { }
 
       window.dispatchEvent(new CustomEvent('kha-order-created', { detail: inv }));
+      broadcastSyncUpdate({
+        reason: saveToPending ? 'order-created-offline' : 'order-created',
+        changedTables: ['invoices', 'invoice_details', 'products'],
+      });
 
       setLastInvoice(inv);
       setEditingInvoiceId(null);
@@ -806,21 +848,19 @@ export default function CreateOrder({ user, store }) {
     try {
       const controller = new AbortController();
       timeoutId = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(resolveApiUrl('/invoices'), {
+      const data = await apiJsonChecked('/invoices', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderPayload),
+        body: orderPayload,
         signal: controller.signal,
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.ok) {
-        setCreating(false);
-        alert(getApiErrorMessage(data, 'Không thể tạo đơn hàng.'));
-        return;
-      }
+      }, 'Không thể tạo đơn hàng.');
       showSuccess(data.invoice_code, data.invoice_id || null, false);
       fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
     } catch (error) {
+      if (error instanceof ApiError) {
+        setCreating(false);
+        alert(getApiErrorMessage(error.data, error.message || 'Không thể tạo đơn hàng.'));
+        return;
+      }
       if (error?.name !== 'AbortError' && error?.message) {
         console.warn('Không thể gửi đơn hàng lên backend, chuyển sang lưu cục bộ:', error.message);
       }
@@ -889,17 +929,12 @@ export default function CreateOrder({ user, store }) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(resolveApiUrl(`/invoices/${editingInvoiceId}`), {
+      await apiJsonChecked(resolveApiUrl(`/invoices/${editingInvoiceId}`), {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: payload,
         signal: controller.signal,
-      });
+      }, 'Không thể cập nhật đơn hàng.');
       clearTimeout(timeout);
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || 'Không thể cập nhật đơn hàng');
-      }
 
       const updatedInvoice = {
         id: editingInvoiceId,
@@ -930,10 +965,14 @@ export default function CreateOrder({ user, store }) {
       setCreating(false);
       fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
       window.dispatchEvent(new CustomEvent('kha-order-created', { detail: updatedInvoice }));
+      broadcastSyncUpdate({
+        reason: 'order-updated',
+        changedTables: ['invoices', 'invoice_details', 'products'],
+      });
       alert('✅ Đã lưu thay đổi đơn hàng!');
     } catch (err) {
       setCreating(false);
-      alert(err.message || 'Lỗi khi cập nhật đơn hàng');
+      alert(getApiErrorMessage(err?.data, err?.message || 'Lỗi khi cập nhật đơn hàng'));
     }
   };
 

@@ -251,7 +251,7 @@ export default function Customers() {
 
     const rows = filtered.map((customer, index) => ({
       'STT': index + 1,
-      'Mã khách hàng': customer.customer_code || customer.sapo_customer_id || customer.id || '',
+      'Mã khách hàng': customer.customer_code || customer.id || '',
       'Tên khách hàng': customer.name || '',
       'Số điện thoại': customer.phone || '',
       'Email': customer.email || '',
@@ -260,7 +260,7 @@ export default function Customers() {
       'Nhóm/Loại': getTypeLabel(customer.customer_type),
       'Ghi chú': customer.note || '',
       'Ngày tạo': formatExcelDateTime(customer.created_at),
-      'Ngày cập nhật': formatExcelDateTime(customer.updated_at || customer.sapo_updated_at || customer.sapo_last_synced_at),
+      'Ngày cập nhật': formatExcelDateTime(customer.updated_at),
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -430,7 +430,7 @@ export default function Customers() {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-gray-900">{c.name}</div>
-                  {(c.customer_code || c.sapo_customer_id) && <div className="text-[11px] text-gray-400">Mã: {c.customer_code || c.sapo_customer_id}</div>}
+                  {c.customer_code && <div className="text-[11px] text-gray-400">Mã: {c.customer_code}</div>}
                   <div className="mt-2 grid grid-cols-1 gap-1 text-sm text-gray-600">
                     <div><span className="text-gray-400">SĐT:</span> {c.phone || '—'}</div>
                     <div><span className="text-gray-400">Email:</span> {c.email || '—'}</div>
@@ -496,7 +496,7 @@ export default function Customers() {
                   </td>
                   <td className="p-2 font-medium">
                     <div>{c.name}</div>
-                    {(c.customer_code || c.sapo_customer_id) && <div className="text-[11px] text-gray-400 font-normal">Mã: {c.customer_code || c.sapo_customer_id}</div>}
+                    {c.customer_code && <div className="text-[11px] text-gray-400 font-normal">Mã: {c.customer_code}</div>}
                   </td>
                   <td className="p-2">{c.phone || '—'}</td>
                   <td className="p-2 text-gray-600">{c.email || '—'}</td>

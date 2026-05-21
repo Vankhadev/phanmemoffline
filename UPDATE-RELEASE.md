@@ -77,4 +77,3 @@ gh release create v1.2.8 release/banhangoffline-setup-v1.2.8.exe release/banhang
 - [`release/update-manifest.example.json`](release/update-manifest.example.json:1)
 - [`frontend/src/App.jsx`](frontend/src/App.jsx:434)
 - [`frontend/src/pages/Settings.jsx`](frontend/src/pages/Settings.jsx:583)
-- [`backend/src/routes/sapoSync.js`](backend/src/routes/sapoSync.js:70)

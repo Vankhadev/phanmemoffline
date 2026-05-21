@@ -1,31 +1,14 @@
 {
   "name": "phanmienoffline-frontend",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "mobile:build": "vite build && npx cap sync",
-    "mobile:sync": "npx cap sync",
-    "mobile:add:android": "npx cap add android",
-    "mobile:add:ios": "npx cap add ios",
-    "mobile:open:android": "npx cap open android",
-    "mobile:open:ios": "npx cap open ios"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@capacitor/android": "^6.0.0",
-    "@capacitor/app": "^6.0.0",
-    "@capacitor/cli": "^6.0.0",
-    "@capacitor/core": "^6.0.0",
-    "@capacitor/device": "^6.0.0",
-    "@capacitor/filesystem": "^6.0.0",
-    "@capacitor/ios": "^6.0.0",
-    "@capacitor/network": "^6.0.0",
-    "@capacitor/preferences": "^6.0.0",
-    "@capacitor/share": "^6.0.0",
-    "@capacitor/status-bar": "^6.0.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.2",
     "lucide-react": "^0.514.0",

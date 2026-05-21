@@ -1,8 +1,8 @@
-version: 1.2.8
+version: 1.2.9
 files:
-  - url: banhangoffline-setup-v1.2.8.exe
-    sha512: rByDOpPNYVPiBoyFPN/xhPuEE81pc/uRoqOjYRZ3H+HiOHrL6YuRNgLRVIyQW1eO4LsILcSZiBoCWIVH+qd94g==
-    size: 77329694
-path: banhangoffline-setup-v1.2.8.exe
-sha512: rByDOpPNYVPiBoyFPN/xhPuEE81pc/uRoqOjYRZ3H+HiOHrL6YuRNgLRVIyQW1eO4LsILcSZiBoCWIVH+qd94g==
-releaseDate: '2026-05-21T04:42:11.026Z'
+  - url: banhangoffline-setup-v1.2.9.exe
+    sha512: 7cbxkimBUUWuZr0Du4H8t0R/vOJ/IXEAmwfTtHhvMW1ufkim3Y1EHo8yKBsiKS0dkwCcQxZzXLxSLPl8GIS4vQ==
+    size: 83948474
+path: banhangoffline-setup-v1.2.9.exe
+sha512: 7cbxkimBUUWuZr0Du4H8t0R/vOJ/IXEAmwfTtHhvMW1ufkim3Y1EHo8yKBsiKS0dkwCcQxZzXLxSLPl8GIS4vQ==
+releaseDate: '2026-05-21T10:28:48.683Z'

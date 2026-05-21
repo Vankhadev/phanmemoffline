@@ -935,65 +935,6 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
               value={storeForm.tax_code}
               onChange={event => updateStoreField('tax_code', event.target.value)}
             />
-            <InputField
-              id="store-bank-name"
-              label="Ngân hàng"
-              value={storeForm.bank_name}
-              onChange={event => updateStoreField('bank_name', event.target.value)}
-            />
-            <InputField
-              id="store-bank-account"
-              label="Số tài khoản"
-              value={storeForm.bank_account}
-              onChange={event => updateStoreField('bank_account', event.target.value)}
-            />
-            <InputField
-              id="store-invoice-width"
-              label="Khổ in mặc định"
-              value={storeForm.invoice_width}
-              onChange={event => updateStoreField('invoice_width', event.target.value)}
-              placeholder="80"
-            />
-            <InputField
-              id="store-invoice-logo"
-              label="Logo hóa đơn (URL)"
-              value={storeForm.invoice_logo}
-              onChange={event => updateStoreField('invoice_logo', event.target.value)}
-              placeholder="https://..."
-            />
-            <InputField
-              id="store-vietqr-logo"
-              label="Logo VietQR (URL)"
-              className="md:col-span-2"
-              value={storeForm.invoice_vietqr_logo}
-              onChange={event => updateStoreField('invoice_vietqr_logo', event.target.value)}
-              placeholder="https://..."
-            />
-            <InputField
-              id="store-address"
-              label="Địa chỉ"
-              className="md:col-span-2"
-              value={storeForm.address}
-              onChange={event => updateStoreField('address', event.target.value)}
-              placeholder="Số nhà, đường, phường/xã..."
-            />
-            <InputField
-              id="store-slogan"
-              label="Slogan hóa đơn"
-              className="md:col-span-2"
-              value={storeForm.invoice_slogan}
-              onChange={event => updateStoreField('invoice_slogan', event.target.value)}
-              placeholder="Cảm ơn quý khách"
-            />
-            <TextareaField
-              id="store-note"
-              label="Ghi chú hóa đơn"
-              className="md:col-span-2"
-              rows={4}
-              value={storeForm.invoice_note}
-              onChange={event => updateStoreField('invoice_note', event.target.value)}
-              placeholder="Ghi chú sẽ hiển thị ở cuối hóa đơn"
-            />
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -1185,14 +1126,15 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                 Quản lý việc cho phép xuất vượt tồn kho hiện có. Giới hạn âm là cố định trong code và không chỉnh sửa từ giao diện này.
               </p>
             </div>
-            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${negativeStockFeature.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+            <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${negativeStockFeature.active ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>
+              <span className={`h-2 w-2 rounded-full ${negativeStockFeature.active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
               {negativeStockFeature.active ? 'Đang bật' : 'Đang tắt'}
             </span>
           </div>
 
           <SectionNotice notice={negativeStockNotice} />
 
-          <div className="rounded-xl border bg-white p-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="space-y-2">
                 <div className="font-semibold text-gray-800">Cho phép xuất âm tồn kho sản phẩm</div>
@@ -1207,11 +1149,34 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                 type="button"
                 role="switch"
                 aria-checked={negativeStockFeature.active}
+                aria-label={negativeStockFeature.active ? 'Tắt cho phép xuất âm tồn kho' : 'Bật cho phép xuất âm tồn kho'}
+                aria-busy={negativeStockSaving}
                 onClick={handleToggleNegativeStock}
                 disabled={negativeStockSaving || !canManageNegativeStock}
-                className={`inline-flex min-h-11 min-w-[148px] items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${negativeStockFeature.active ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                className={`inline-flex min-h-14 w-full items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left shadow-sm transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 md:w-[280px] ${negativeStockFeature.active ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'} disabled:cursor-not-allowed disabled:opacity-60`}
               >
-                {negativeStockSaving ? <Loader2 size={16} className="animate-spin" /> : (negativeStockFeature.active ? 'Đang bật' : 'Đang tắt')}
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">
+                      {negativeStockFeature.active ? 'Đang bật' : 'Đang tắt'}
+                    </span>
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${negativeStockFeature.active ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                      {negativeStockFeature.active ? 'ON' : 'OFF'}
+                    </span>
+                  </span>
+                  <span className="mt-1 block text-xs font-medium opacity-80">
+                    {negativeStockSaving ? 'Đang lưu thay đổi...' : 'Chạm để bật/tắt nhanh'}
+                  </span>
+                </span>
+
+                <span className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition-colors duration-200 ease-out ${negativeStockFeature.active ? 'bg-emerald-500' : 'bg-slate-300'} ${negativeStockSaving ? 'opacity-90' : ''}`}>
+                  <span className={`h-6 w-6 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-all duration-200 ease-out ${negativeStockFeature.active ? 'translate-x-6' : 'translate-x-0'} ${negativeStockSaving ? 'scale-95' : ''}`} />
+                  {negativeStockSaving && (
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <Loader2 size={14} className="animate-spin text-white/90" />
+                    </span>
+                  )}
+                </span>
               </button>
             </div>
           </div>

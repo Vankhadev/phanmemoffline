@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { resolveApiUrl } from '../utils/apiClient';
+import { apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
 import { Plus, Edit2, Trash2, Search, Loader, FileDown, Upload, X, HelpCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
@@ -109,9 +109,8 @@ export default function NhaCungCap() {
   const fetchSuppliers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(resolveApiUrl('/partners'));
-      const data = await res.json();
-      setSuppliers(data);
+      const data = await apiJson('/partners', {}, 'Không thể tải danh sách nhà cung cấp.');
+      setSuppliers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Lỗi tải nhà cung cấp:', err);
     } finally {
@@ -122,9 +121,7 @@ export default function NhaCungCap() {
   const fetchSupplierPaymentSummaries = async () => {
     setPaymentLoading(true);
     try {
-      const res = await fetch(resolveApiUrl('/imports'));
-      if (!res.ok) throw new Error('Không thể tải lịch sử nhập hàng để tổng hợp thanh toán');
-      const data = await res.json();
+      const data = await apiJson('/imports', {}, 'Không thể tải lịch sử nhập hàng để tổng hợp thanh toán');
       const summaries = {};
 
       (Array.isArray(data) ? data : []).forEach(imp => {
@@ -203,19 +200,13 @@ export default function NhaCungCap() {
     try {
       const method = editing ? 'PUT' : 'POST';
       const url = editing ? resolveApiUrl(`/partners/${editing.id}`) : resolveApiUrl('/partners');
-      const res = await fetch(url, {
+      await apiJsonChecked(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        alert(editing ? '✅ Đã cập nhật nhà cung cấp!' : '✅ Đã thêm nhà cung cấp thành công!');
-        setShowForm(false);
-        fetchSuppliers();
-      } else {
-        alert('Lỗi: ' + (data.error || 'Không rõ lỗi'));
-      }
+        body: form,
+      }, editing ? 'Không thể cập nhật nhà cung cấp.' : 'Không thể thêm nhà cung cấp.');
+      alert(editing ? '✅ Đã cập nhật nhà cung cấp!' : '✅ Đã thêm nhà cung cấp thành công!');
+      setShowForm(false);
+      fetchSuppliers();
     } catch (err) {
       alert('Lỗi kết nối: ' + err.message);
     } finally {
@@ -226,14 +217,9 @@ export default function NhaCungCap() {
   const handleDelete = async (id) => {
     if (!confirm('Xóa nhà cung cấp này?')) return;
     try {
-      const res = await fetch(resolveApiUrl(`/partners/${id}`), { method: 'DELETE' });
-      const data = await res.json();
-      if (data.ok) {
-        alert('✅ Đã xóa nhà cung cấp!');
-        fetchSuppliers();
-      } else {
-        alert('Xóa thất bại: ' + (data.error || 'Không rõ lỗi'));
-      }
+      await apiJsonChecked(resolveApiUrl(`/partners/${id}`), { method: 'DELETE' }, 'Không thể xóa nhà cung cấp.');
+      alert('✅ Đã xóa nhà cung cấp!');
+      fetchSuppliers();
     } catch (err) {
       alert('Lỗi kết nối: ' + err.message);
     }
@@ -331,17 +317,11 @@ export default function NhaCungCap() {
 
       for (const supplier of validSuppliers) {
         try {
-          const res = await fetch(resolveApiUrl('/partners'), {
+          await apiJsonChecked('/partners', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(supplier),
-          });
-          const data = await res.json();
-          if (res.ok && data.ok) {
-            success += 1;
-          } else {
-            failed += 1;
-          }
+            body: supplier,
+          }, 'Không thể nhập nhà cung cấp từ Excel.');
+          success += 1;
         } catch (err) {
           console.error('Lỗi nhập nhà cung cấp:', err);
           failed += 1;

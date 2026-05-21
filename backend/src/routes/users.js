@@ -31,9 +31,16 @@ const {
 
 const ROLE_ADMIN = 'admin';
 const ROLE_USER = 'user';
+const ADMIN_DEFAULT_ROUTE = '/cai-dat';
 const AUTH_RATE_LIMIT_WINDOW_MS = Number(process.env.KHA_AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
 const AUTH_RATE_LIMIT_MAX = Number(process.env.KHA_AUTH_RATE_LIMIT_MAX || 60);
 const AUTH_SENSITIVE_RATE_LIMIT_MAX = Number(process.env.KHA_AUTH_SENSITIVE_RATE_LIMIT_MAX || 20);
+const AUTH_DEBUG_ENABLED = String(process.env.KHA_DEBUG_AUTH || process.env.DEBUG_AUTH || '').trim().toLowerCase() === 'true';
+
+function debugAuthLog(event, payload = {}) {
+  if (!AUTH_DEBUG_ENABLED || typeof console === 'undefined' || typeof console.info !== 'function') return;
+  console.info(`[KHA AUTH] ${event}`, payload);
+}
 
 const authPublicLimiter = rateLimit({
   windowMs: Number.isFinite(AUTH_RATE_LIMIT_WINDOW_MS) && AUTH_RATE_LIMIT_WINDOW_MS > 0 ? AUTH_RATE_LIMIT_WINDOW_MS : 15 * 60 * 1000,
@@ -66,6 +73,10 @@ function isAdminRole(role) {
 
 function normalizeEmail(email) {
   return String(email || '').toLowerCase().trim();
+}
+
+function getDefaultRouteForUser(user) {
+  return user?.role === ROLE_ADMIN ? ADMIN_DEFAULT_ROUTE : '/';
 }
 
 function getBootstrapInfo() {
@@ -148,18 +159,24 @@ function validateUserPayload({ name, email, phone, password }, { requirePassword
 
 function buildAuthPayload({ token, user, account, session }) {
   const permissions = getUserPermissions(user);
+  const resolvedAccount = account || getAccountById(user.account_id);
+  const syncVersions = getSyncVersions(user.account_id);
+  const defaultRoute = getDefaultRouteForUser(user);
+
   return {
     ok: true,
     token,
     user: publicUser(user),
-    account: publicAccount(account || getAccountById(user.account_id)),
+    account: publicAccount(resolvedAccount),
     permissions,
     session: publicSession(session),
-    syncVersions: getSyncVersions(user.account_id),
+    syncVersions,
+    defaultRoute,
     bootstrap: {
-      defaultRoute: user.role === ROLE_ADMIN ? '/settings' : '/',
-      syncVersions: getSyncVersions(user.account_id),
+      defaultRoute,
+      syncVersions,
     },
+    serverTime: now(),
   };
 }
 
@@ -227,6 +244,14 @@ function createAccountWithAutomaticRole(req, res) {
 // ===== Public: bootstrap/setup status =====
 router.get('/bootstrap-status', authPublicLimiter, (req, res) => {
   const info = getBootstrapInfo();
+  debugAuthLog('bootstrap-status', {
+    totalUsers: info.totalUsers,
+    activeUsers: info.activeUsers,
+    hasAdmin: info.hasAdmin,
+    needsSetup: info.needsSetup,
+    canCreateAdmin: info.canCreateAdmin,
+    ip: req.ip,
+  });
   res.json({
     needsSetup: info.needsSetup,
     canCreateAdmin: info.canCreateAdmin,
@@ -243,6 +268,13 @@ router.get('/bootstrap-status', authPublicLimiter, (req, res) => {
 router.post('/bootstrap-admin', authSensitiveLimiter, (req, res) => {
   const info = getBootstrapInfo();
   if (!info.canCreateAdmin) {
+    debugAuthLog('bootstrap-admin-blocked', {
+      totalUsers: info.totalUsers,
+      activeUsers: info.activeUsers,
+      hasAdmin: info.hasAdmin,
+      needsSetup: info.needsSetup,
+      ip: req.ip,
+    });
     return res.status(400).json({
       ok: false,
       message: info.hasAdmin
@@ -271,7 +303,22 @@ router.post('/login', authSensitiveLimiter, (req, res) => {
     isActiveUser(currentUser)
   , { skipAccountScope: true });
 
+  debugAuthLog('login-attempt', {
+    email: normalizedEmail,
+    hasUser: Boolean(user),
+    userId: user?.id || null,
+    accountId: user?.account_id || null,
+    hasPasswordHash: Boolean(user?.password && isPasswordHash(user.password)),
+    ip: req.ip,
+  });
+
   if (!user || !verifyPassword(password, user.password)) {
+    debugAuthLog('login-failed', {
+      email: normalizedEmail,
+      reason: user ? 'password_mismatch' : 'user_not_found_or_inactive',
+      userId: user?.id || null,
+      ip: req.ip,
+    });
     return res.status(401).json({ ok: false, message: 'Email hoặc mật khẩu không đúng' });
   }
 
@@ -281,6 +328,14 @@ router.post('/login', authSensitiveLimiter, (req, res) => {
   const lastLogin = now();
   update('users', user.id, { ...passwordChanges, session_token: null, last_login: lastLogin });
   logAuthEvent('auth.login', req, { user_id: user.id, account_id: account.id, session_id: session.id });
+  debugAuthLog('login-succeeded', {
+    email: normalizedEmail,
+    userId: user.id,
+    accountId: account.id,
+    sessionId: session.id,
+    migratedLegacyPassword: Boolean(passwordChanges.password),
+    ip: req.ip,
+  });
 
   res.json(buildAuthPayload({ token, user: { ...user, account_id: account.id, last_login: lastLogin }, account, session }));
 });
@@ -288,22 +343,7 @@ router.post('/login', authSensitiveLimiter, (req, res) => {
 // ===== Profile/session =====
 router.get('/profile', requireAuth, (req, res) => {
   const account = getAccountById(req.accountId);
-  const permissions = req.permissions || getUserPermissions(req.user);
-  const syncVersions = getSyncVersions(req.accountId);
-  const defaultRoute = req.user.role === ROLE_ADMIN ? '/cai-dat' : '/';
-  res.json({
-    ok: true,
-    user: publicUser(req.user),
-    account: publicAccount(account),
-    permissions,
-    session: publicSession(req.session),
-    syncVersions,
-    bootstrap: {
-      defaultRoute,
-      syncVersions,
-    },
-    serverTime: new Date().toISOString(),
-  });
+  res.json(buildAuthPayload({ user: req.user, account, session: req.session }));
 });
 
 // ===== Đăng xuất =====

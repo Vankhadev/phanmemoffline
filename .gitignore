@@ -51,6 +51,8 @@ coverage/
 .env.*
 !.env.example
 *.local
+.kha-session-secret
+**/.kha-session-secret
 .vscode/
 .idea/
 .DS_Store

@@ -30,8 +30,7 @@ const SIMPLE_PUSH_FIELDS = {
   products: [
     'parent_id', 'sku', 'name', 'import_price', 'wholesale_price', 'retail_price', 'vip_price',
     'stock', 'unit', 'category', 'default_category_id', 'supplier_id', 'barcode', 'image_url',
-    'description', 'option1', 'option2', 'option3', 'sapo_product_id', 'sapo_variant_id',
-    'sapo_parent_product_id', 'sapo_status', 'sapo_updated_at', 'sapo_last_synced_at',
+    'description', 'option1', 'option2', 'option3',
     'sync_source', 'active', 'created_at', 'updated_at',
   ],
   import_logs: [
@@ -92,6 +91,8 @@ function recentInvoices(limit = 200) {
 
 function buildBootstrapPayload(req) {
   const storeInfo = getAll('store_info')[0] || {};
+  const syncVersions = getSyncVersions(req.accountId);
+  const defaultRoute = req.user?.role === 'admin' ? '/cai-dat' : '/';
   return {
     ok: true,
     user: publicUser(req.user),
@@ -99,8 +100,12 @@ function buildBootstrapPayload(req) {
     permissions: req.permissions || [],
     session: publicSession(req.session),
     store_info: storeInfo,
-    syncVersions: getSyncVersions(req.accountId),
-    defaultRoute: req.user?.role === 'admin' ? '/settings' : '/',
+    syncVersions,
+    defaultRoute,
+    bootstrap: {
+      defaultRoute,
+      syncVersions,
+    },
     serverTime: now(),
   };
 }
@@ -406,7 +411,7 @@ router.post('/sync/pull', requireAuth, requirePermission('sync.read'), (req, res
   });
 });
 
-router.post('/sync/push', requireAuth, requireAnyPermission(['sync.write', 'sync.manage']), (req, res) => {
+router.post('/sync/push', requireAuth, requirePermission('sync.manage'), (req, res) => {
   const body = req.body || {};
   const pending = body.pending || body;
   const customerInputs = Array.isArray(pending.customers) ? pending.customers : [];

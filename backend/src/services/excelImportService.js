@@ -43,7 +43,7 @@ const FIELD_ALIASES = Object.freeze({
   customers: {
     customer_code: ['customer_code', 'Mã khách hàng', 'Ma khach hang', 'Mã KH', 'Ma KH', 'Code', 'Customer code'],
     name: ['name', 'Tên khách hàng', 'Ten khach hang', 'Họ tên', 'Ho ten', 'Khách hàng', 'Khach hang', 'Customer name'],
-    phone: ['phone', 'Điện thoại', 'Dien thoai', 'SĐT', 'SDT', 'Số điện thoại', 'So dien thoai', 'Mobile'],
+    phone: ['phone', 'Điện thoại', 'Dien thoai', 'SĐT', 'SDT', 'Số điện thoại', 'So dien thoai', 'Điện thoại di động'],
     email: ['email', 'mail', 'E-mail'],
     address: ['address', 'Địa chỉ', 'Dia chi'],
     note: ['note', 'Ghi chú', 'Ghi chu', 'Notes'],

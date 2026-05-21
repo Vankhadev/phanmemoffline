@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { authApi, getApiErrorMessage } from '../utils/apiClient';
 import {
   AlertTriangle,
@@ -30,6 +30,7 @@ const normalizeEmail = (email) => email.trim().toLowerCase();
 const normalizePhone = (phone) => phone.replace(/\s/g, '');
 
 export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState(initialForm);
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -95,13 +96,14 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [bootstrapStatus, onBootstrapStatus]);
 
   const completeLogin = async (payload) => {
     if (!payload?.token || !payload?.user) {
       throw new Error('Server không trả đủ thông tin đăng nhập.');
     }
-    await onLogin?.(payload);
+    const result = await onLogin?.(payload);
+    navigate(result?.defaultRoute || '/', { replace: true });
   };
 
   const validateLogin = () => {
@@ -182,6 +184,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     setLoading(true);
     try {
       const data = await loginWithCredentials(form.email, form.password);
+      setSuccess('Đăng nhập thành công. Đang khôi phục phiên từ server...');
       await completeLogin(data);
     } catch (err) {
       setError(getApiErrorMessage(err?.data, err.message || 'Không thể kết nối server để đăng nhập.'));

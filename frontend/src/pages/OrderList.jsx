@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { resolveApiUrl } from '../utils/apiClient';
-import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, Printer, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud } from 'lucide-react';
+import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, Printer, HelpCircle, RefreshCw, Receipt, Clock3, Wallet } from 'lucide-react';
 import { getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
-import { printInvoice, writePrintWindowMessage } from '../utils/printInvoice';
+import InvoicePrintPreviewModal from '../components/InvoicePrintPreviewModal';
 import { getProductDisplayName } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
 import { SYNC_UPDATED_EVENT, requestSyncCheck } from '../utils/apiClient';
@@ -18,24 +18,9 @@ const STATUS_LABELS = {
 };
 const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
 const SOURCE_BADGES = {
-  web: { text: 'Web', color: 'bg-gray-100 text-gray-600' },
-  direct: { text: 'Web', color: 'bg-gray-100 text-gray-600' },
-  mobile: { text: 'Mobile', color: 'bg-indigo-100 text-indigo-700' },
-  sync: { text: 'Sync', color: 'bg-cyan-100 text-cyan-700' },
-  sapo: { text: 'Sapo Sync', color: 'bg-violet-100 text-violet-700' },
-  offline: { text: 'Offline mobile', color: 'bg-blue-100 text-blue-700' },
+  app: { text: 'app', color: 'bg-gray-100 text-gray-600' },
+  direct: { text: 'app', color: 'bg-gray-100 text-gray-600' },
 };
-const MOBILE_SYNC_BADGES = {
-  applied: { text: 'Đã đồng bộ', color: 'bg-green-100 text-green-700' },
-  idempotent: { text: 'Đã có trên server', color: 'bg-emerald-100 text-emerald-700' },
-  received: { text: 'Đã nhận', color: 'bg-blue-100 text-blue-700' },
-  retry_later: { text: 'Chờ thử lại', color: 'bg-amber-100 text-amber-700' },
-  conflict: { text: 'Xung đột', color: 'bg-red-100 text-red-700' },
-  failed: { text: 'Lỗi sync', color: 'bg-red-100 text-red-700' },
-  pending: { text: 'Chờ sync', color: 'bg-amber-100 text-amber-700' },
-  pending_local: { text: 'Offline chưa sync', color: 'bg-orange-100 text-orange-700' },
-};
-
 function formatPaymentMethod(method) {
   return PAYMENT_LABELS[method] || method || 'Tiền mặt';
 }
@@ -64,8 +49,6 @@ function normalizeSourceValue(value) {
 function getOrderSourceKey(inv = {}) {
   if (inv._isOffline) return 'offline';
   const raw = normalizeSourceValue(inv.order_source || inv.source || inv.created_by_platform || inv.sync_source);
-  if (raw.includes('mobile') || inv.mobile_device_id) return 'mobile';
-  if (raw.includes('sapo')) return 'sapo';
   if (raw.includes('sync')) return 'sync';
   if (raw.includes('direct') || raw.includes('web')) return 'web';
   return raw || 'web';
@@ -74,25 +57,6 @@ function getOrderSourceKey(inv = {}) {
 function getOrderSourceBadge(inv = {}) {
   const key = getOrderSourceKey(inv);
   return SOURCE_BADGES[key] || { text: key || 'Web', color: 'bg-gray-100 text-gray-600' };
-}
-
-function getMobileSyncStatusKey(inv = {}) {
-  if (inv._isOffline) return 'pending_local';
-  const raw = normalizeSourceValue(inv.mobile_sync_status || inv.sync_status || '');
-  if (raw) return raw;
-  if (getOrderSourceKey(inv) === 'mobile' && inv.mobile_synced_at) return 'applied';
-  return '';
-}
-
-function getMobileSyncBadge(inv = {}) {
-  const key = getMobileSyncStatusKey(inv);
-  if (!key) return null;
-  return MOBILE_SYNC_BADGES[key] || { text: key, color: 'bg-gray-100 text-gray-600' };
-}
-
-function isMobileLikeOrder(inv = {}) {
-  const sourceKey = getOrderSourceKey(inv);
-  return sourceKey === 'mobile' || sourceKey === 'offline' || Boolean(getMobileSyncStatusKey(inv));
 }
 
 // Hợp nhất các sản phẩm trùng ID (để tránh duplicate khi edit)
@@ -150,6 +114,18 @@ function dedupeOrdersByInvoiceCode(orders) {
   return Array.from(map.values());
 }
 
+function createEmptyPrintPreviewState() {
+  return {
+    open: false,
+    title: '',
+    subtitle: '',
+    data: null,
+    template: null,
+    loading: false,
+    error: '',
+  };
+}
+
 export default function OrderList({ store = {} }) {
   const [invoices, setInvoices] = useState([]);
   const [invoiceDetails, setInvoiceDetails] = useState([]);
@@ -158,7 +134,6 @@ export default function OrderList({ store = {} }) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterSource, setFilterSource] = useState('all');
-  const [filterMobileSync, setFilterMobileSync] = useState('all');
   const [loading, setLoading] = useState(true);
   const [serverOnline, setServerOnline] = useState(false);
   const [allOrders, setAllOrders] = useState([]);
@@ -166,6 +141,7 @@ export default function OrderList({ store = {} }) {
   const [showView, setShowView] = useState(null);
   const [showEdit, setShowEdit] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [printPreview, setPrintPreview] = useState(() => createEmptyPrintPreviewState());
   const [editDetails, setEditDetails] = useState([]);
   const [editProducts, setEditProducts] = useState([]);
   const [editProductSearch, setEditProductSearch] = useState('');
@@ -186,6 +162,10 @@ export default function OrderList({ store = {} }) {
       reason: detail.reason || 'order-mutated',
       tables: ['invoices', 'invoice_details', 'products', 'customers'],
     });
+  };
+
+  const closePrintPreview = () => {
+    setPrintPreview(createEmptyPrintPreviewState());
   };
 
   // Load products for picker
@@ -298,16 +278,13 @@ export default function OrderList({ store = {} }) {
       displayOrderCode(inv.invoice_code).toLowerCase().includes(normalizedSearch) ||
       (inv.customer_name || '').toLowerCase().includes(normalizedSearch);
     const sourceKey = getOrderSourceKey(inv);
-    const syncStatusKey = getMobileSyncStatusKey(inv);
     const matchStatus = filterStatus === 'all' ||
       inv.status === filterStatus ||
       (filterStatus === 'offline' && inv._isOffline);
     const matchSource = filterSource === 'all' ||
       sourceKey === filterSource ||
-      (filterSource === 'mobile_like' && isMobileLikeOrder(inv)) ||
-      (filterSource === 'sync' && sourceKey === 'sapo');
-    const matchMobileSync = filterMobileSync === 'all' || syncStatusKey === filterMobileSync;
-    return matchSearch && matchStatus && matchSource && matchMobileSync;
+      (filterSource === 'sync' && sourceKey === 'sync');
+    return matchSearch && matchStatus && matchSource;
   });
 
   const summaryCards = [
@@ -339,13 +316,6 @@ export default function OrderList({ store = {} }) {
       icon: Wallet,
       tone: 'bg-purple-50 text-purple-700 border-purple-100',
     },
-    {
-      key: 'mobile',
-      label: 'Mobile/offline',
-      value: displayOrders.filter(isMobileLikeOrder).length,
-      icon: UploadCloud,
-      tone: 'bg-indigo-50 text-indigo-700 border-indigo-100',
-    },
   ];
 
   const statusTabs = [
@@ -359,23 +329,11 @@ export default function OrderList({ store = {} }) {
 
   const sourceOptions = [
     { key: 'all', label: 'Tất cả nguồn', count: displayOrders.length },
-    { key: 'mobile_like', label: 'Mobile/offline', count: displayOrders.filter(isMobileLikeOrder).length },
-    { key: 'mobile', label: 'Mobile', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'mobile').length },
     { key: 'offline', label: 'Offline local', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'offline').length },
     { key: 'web', label: 'Web', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'web').length },
-    { key: 'sync', label: 'Sync', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'sync' || getOrderSourceKey(inv) === 'sapo').length },
+    { key: 'sync', label: 'Sync', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'sync').length },
   ];
 
-  const mobileSyncOptions = [
-    { key: 'all', label: 'Tất cả sync' },
-    { key: 'pending_local', label: 'Offline chưa sync' },
-    { key: 'applied', label: 'Đã đồng bộ' },
-    { key: 'idempotent', label: 'Đã có trên server' },
-    { key: 'received', label: 'Đã nhận' },
-    { key: 'retry_later', label: 'Chờ thử lại' },
-    { key: 'conflict', label: 'Xung đột' },
-    { key: 'failed', label: 'Lỗi sync' },
-  ];
 
   const selectedAll = filtered.length > 0 && filtered.every(inv => selectedOrders.includes(inv.id || inv.invoice_code));
 
@@ -883,19 +841,36 @@ export default function OrderList({ store = {} }) {
   };
 
   const handlePrint = async (invoice) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup và thử lại.');
+    if (!invoice) {
+      alert('Không có dữ liệu hóa đơn để in.');
       return;
     }
 
+    const inv = invoice._isOffline ? { ...invoice, details: invoice.cart || invoice.details || [] } : invoice;
+    const items = inv.cart || inv.details || [];
+    if (!Array.isArray(items) || items.length === 0) {
+      alert('Hóa đơn chưa có chi tiết sản phẩm để in.');
+      return;
+    }
+
+    const customer = inv.customer
+      || inv.selectedCustomer
+      || customers.find(c => String(c.id) === String(inv.customer_id))
+      || { name: inv.customer_name, phone: inv.customer_phone, address: inv.customer_address };
+    const user = { id: inv.user_id || null, name: inv.user_name || inv.invoice_writer || '' };
+    const previewTitle = `Hóa đơn bán hàng ${inv.invoice_code || ''}`.trim();
+
+    setPrintPreview({
+      ...createEmptyPrintPreviewState(),
+      open: true,
+      title: previewTitle,
+      subtitle: 'Kiểm tra đầy đủ thông tin đơn hàng, sản phẩm và tổng tiền trước khi bấm In.',
+      loading: true,
+    });
+
     try {
-      writePrintWindowMessage(printWindow, { title: 'Đang chuẩn bị in hóa đơn', message: 'Đang tải chi tiết đơn hàng và mẫu in mặc định...' });
-      const inv = await ensureInvoiceForPrint(invoice);
-      const items = inv.cart || inv.details || [];
-      if (!Array.isArray(items) || items.length === 0) throw new Error('Hóa đơn chưa có chi tiết sản phẩm để in.');
       const template = await getDefaultPrintTemplate({
-        apiBase: inv._isOffline ? '' : API,
+        apiBase: inv._isOffline ? '' : resolveApiUrl(''),
         type: 'sale_invoice',
         paperSize: 'A4',
         fallbackPaperSize: 'A4',
@@ -903,22 +878,28 @@ export default function OrderList({ store = {} }) {
       const printData = createInvoicePrintData({
         store,
         invoice: inv,
-        customer: inv.customer || inv.selectedCustomer || { name: inv.customer_name, phone: inv.customer_phone, address: inv.customer_address },
-        user: { name: inv.user_name || inv.invoice_writer || '' },
+        customer,
+        user,
         items,
+        type: 'sale_invoice',
       });
-      printInvoice({
+      setPrintPreview({
+        open: true,
+        subtitle: 'Xem trước hóa đơn, kiểm tra thông tin và điều chỉnh thiết lập in trước khi gửi lệnh in hệ thống.',
+        title: previewTitle,
         data: printData,
         template,
-        title: `Hóa đơn ${inv.invoice_code || ''}`.trim(),
-        targetWindow: printWindow,
+        loading: false,
+        error: '',
       });
     } catch (err) {
-      writePrintWindowMessage(printWindow, { title: 'Không thể in hóa đơn', message: err.message || 'Không thể render hóa đơn. Vui lòng thử lại.', tone: 'error' });
-      alert(err.message || 'Không thể in hóa đơn.');
+      setPrintPreview(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Không thể dựng bản xem trước phiếu in. Vui lòng thử lại.',
+      }));
     }
   };
-
   return (
     <div className="min-w-0 space-y-4">
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -1057,11 +1038,6 @@ export default function OrderList({ store = {} }) {
                 <option key={option.key} value={option.key}>{option.label}{option.count !== undefined ? ` (${option.count})` : ''}</option>
               ))}
             </select>
-            <select className="input-field" value={filterMobileSync} onChange={e => setFilterMobileSync(e.target.value)}>
-              {mobileSyncOptions.map(option => (
-                <option key={option.key} value={option.key}>{option.label}</option>
-              ))}
-            </select>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -1131,7 +1107,6 @@ export default function OrderList({ store = {} }) {
                 const orderKey = inv.id || inv.invoice_code;
                 const isSelected = selectedOrders.includes(orderKey);
                 const sourceBadge = getOrderSourceBadge(inv);
-                const syncBadge = getMobileSyncBadge(inv);
                 const creatorName = inv.user_name || inv.invoice_writer || inv.created_by_user_name || '';
                 const rowBg = inv.status === 'cancelled'
                   ? 'opacity-70 bg-gray-50'
@@ -1157,7 +1132,6 @@ export default function OrderList({ store = {} }) {
                           <div className="mt-1 truncate text-sm font-medium text-gray-800">{inv.customer_name || 'Khách lẻ'}</div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
                             <span className={`rounded-full px-2 py-0.5 font-medium ${sourceBadge.color}`}>{sourceBadge.text}</span>
-                            {syncBadge && <span className={`rounded-full px-2 py-0.5 font-medium ${syncBadge.color}`}>{syncBadge.text}</span>}
                             <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${st.color}`}>
                               <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`}></span>
                               {st.text}
@@ -1193,10 +1167,6 @@ export default function OrderList({ store = {} }) {
                       <div className="rounded-xl bg-white/70 p-2">
                         <div className="text-gray-400">Nguồn tạo</div>
                         <div className="font-semibold text-gray-700">{sourceBadge.text}</div>
-                      </div>
-                      <div className="rounded-xl bg-white/70 p-2">
-                        <div className="text-gray-400">Mobile sync</div>
-                        <div className="font-semibold text-gray-700">{syncBadge?.text || '—'}</div>
                       </div>
                     </div>
 
@@ -1244,7 +1214,6 @@ export default function OrderList({ store = {} }) {
                 </th>
                 <th className="px-4 py-3 text-left">Đơn hàng</th>
                 <th className="px-4 py-3 text-left">Nguồn</th>
-                <th className="px-4 py-3 text-left">Mobile sync</th>
                 <th className="px-4 py-3 text-left">Khách hàng</th>
                 <th className="px-4 py-3 text-right">Giá trị đơn</th>
                 <th className="px-4 py-3 text-left">Thanh toán</th>
@@ -1269,7 +1238,6 @@ export default function OrderList({ store = {} }) {
                   ? <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-500">Chưa thanh toán</span>
                   : <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700">{formatPaymentMethod(inv.payment_method)}</span>;
                 const sourceBadge = getOrderSourceBadge(inv);
-                const syncBadge = getMobileSyncBadge(inv);
                 const creatorName = inv.user_name || inv.invoice_writer || inv.created_by_user_name || '';
                 const rowBg = inv.status === 'cancelled'
                   ? 'opacity-60 bg-gray-50'
@@ -1307,15 +1275,9 @@ export default function OrderList({ store = {} }) {
                     </td>
                     <td className="px-4 py-4">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${sourceBadge.color}`}>{sourceBadge.text}</span>
-                      {inv.mobile_device_id && <div className="mt-1 text-xs text-gray-400">Device #{inv.mobile_device_id}</div>}
                     </td>
                     <td className="px-4 py-4">
-                      {syncBadge ? (
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${syncBadge.color}`}>{syncBadge.text}</span>
-                      ) : (
-                        <span className="text-xs text-gray-300">—</span>
-                      )}
-                      {inv.mobile_synced_at && <div className="mt-1 text-xs text-gray-400">{formatDate(inv.mobile_synced_at)}</div>}
+                      <span className="text-xs text-gray-300">—</span>
                     </td>
                     <td className="px-4 py-4">
                       <div className="font-medium text-gray-800">{inv.customer_name || 'Khách lẻ'}</div>
@@ -1420,9 +1382,7 @@ export default function OrderList({ store = {} }) {
               <div><span className="text-gray-500">Thanh toán:</span> <b>{formatPaymentMethod(showView.payment_method)}</b></div>
               <div><span className="text-gray-500">Trạng thái:</span> <b>{STATUS_LABELS[showView.status]?.text}</b></div>
               <div><span className="text-gray-500">Nguồn tạo:</span> <b>{getOrderSourceBadge(showView).text}</b></div>
-              <div><span className="text-gray-500">Mobile sync:</span> <b>{getMobileSyncBadge(showView)?.text || '—'}</b></div>
               <div><span className="text-gray-500">Người tạo:</span> <b>{showView.user_name || showView.invoice_writer || '—'}</b></div>
-              {showView.mobile_synced_at && <div><span className="text-gray-500">Đồng bộ lúc:</span> <b>{formatDate(showView.mobile_synced_at)}</b></div>}
               {showView.note && <div className="sm:col-span-2"><span className="text-gray-500">Ghi chú:</span> {showView.note}</div>}
             </div>
 
@@ -1810,6 +1770,18 @@ export default function OrderList({ store = {} }) {
           </div>
         </div>
       )}
+
+      <InvoicePrintPreviewModal
+        open={printPreview.open}
+        data={printPreview.data}
+        template={printPreview.template}
+        title={printPreview.title}
+        subtitle={printPreview.subtitle}
+        loading={printPreview.loading}
+        error={printPreview.error}
+        onBack={closePrintPreview}
+        onClose={closePrintPreview}
+      />
 
       {/* Help Modal */}
       {showHelp && (

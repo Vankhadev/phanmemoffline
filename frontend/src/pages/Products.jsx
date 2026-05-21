@@ -5,7 +5,8 @@ import ProductLabelPrintModal from '../components/ProductLabelPrintModal';
 import ExcelImportPanel from '../components/ExcelImportPanel';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
 import { ensureFocusableElement } from '../utils/electronFocusGuard';
-import { resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { broadcastSyncUpdate } from '../utils/crossTabSync';
 
 const vndFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
 const PRODUCTS_PAGE_SIZE = 80;
@@ -704,16 +705,10 @@ export default function Products({ store }) {
     const url = editingCategory ? resolveApiUrl(`/product-categories/${editingCategory.id}`) : resolveApiUrl('/product-categories');
 
     try {
-      const res = await fetch(url, {
+      const data = await apiJsonChecked(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(categoryForm),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.ok === false) {
-        alert(`⚠️ Lỗi: ${data.error || data.detail || 'Không lưu được danh mục'}`);
-        return;
-      }
+        body: categoryForm,
+      }, 'Không lưu được danh mục.');
 
       const responseList = extractCategoriesFromResponse(data);
       const responseCategory = (data?.category && !Array.isArray(data.category) ? data.category : null)
@@ -735,15 +730,23 @@ export default function Products({ store }) {
       setEditingCategory(null);
       setCategoryForm({ name: '', group_name: '', keywords: '', aliases: '' });
       fetchProducts();
+      broadcastSyncUpdate({
+        reason: editingCategory ? 'product-category-updated' : 'product-category-created',
+        changedTables: ['product_categories', 'products'],
+      });
     } catch (err) {
       alert(`📡 Lỗi kết nối khi lưu danh mục: ${err.message}`);
     }
   };
   const handleCategoryDelete = async (category) => {
     if (!confirm(`Vô hiệu danh mục "${category.name}"? Sản phẩm cũ vẫn giữ dữ liệu danh mục đã gán.`)) return;
-    await fetch(resolveApiUrl(`/product-categories/${category.id}`), { method: 'DELETE' });
+    await apiJsonChecked(resolveApiUrl(`/product-categories/${category.id}`), { method: 'DELETE' }, 'Không thể vô hiệu danh mục.');
     setCategories(prev => prev.filter(item => String(item.id) !== String(category.id)));
     fetchProducts();
+    broadcastSyncUpdate({
+      reason: 'product-category-deleted',
+      changedTables: ['product_categories', 'products'],
+    });
   };
   const getCategoryName = useCallback((product) => product?.default_category?.name || categoryNameById.get(String(product?.default_category_id)) || product?.category || '—', [categoryNameById]);
   const getComboItemKey = (item) => item?.variant_id ? `variant-${item.variant_id}` : `product-${item?.product_id}`;
@@ -822,24 +825,19 @@ export default function Products({ store }) {
     }
     const method = editingCombo ? 'PUT' : 'POST';
     const url = editingCombo ? resolveApiUrl(`/combos/${editingCombo.id}`) : resolveApiUrl('/combos');
-    const res = await fetch(url, {
+    const data = await apiJsonChecked(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...comboForm, name: comboForm.name.trim(), items: payloadItems }),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      setShowComboForm(false);
-      fetchCombos();
-      const updatedAt = String(Date.now());
-      localStorage.setItem('kha_combos_updated_at', updatedAt);
-      window.dispatchEvent(new CustomEvent('kha-combos-changed', { detail: { updatedAt, comboId: data.id || editingCombo?.id || null } }));
-    }
-    else alert(`⚠️ Lỗi: ${data.error || data.detail || 'Không lưu được combo'}`);
+      body: { ...comboForm, name: comboForm.name.trim(), items: payloadItems },
+    }, 'Không lưu được combo.');
+    setShowComboForm(false);
+    fetchCombos();
+    const updatedAt = String(Date.now());
+    localStorage.setItem('kha_combos_updated_at', updatedAt);
+    window.dispatchEvent(new CustomEvent('kha-combos-changed', { detail: { updatedAt, comboId: data.combo_id || data.id || editingCombo?.id || null } }));
   };
   const handleComboDelete = async (id) => {
     if (!confirm('Xóa combo này?')) return;
-    await fetch(resolveApiUrl(`/combos/${id}`), { method: 'DELETE' });
+    await apiJsonChecked(resolveApiUrl(`/combos/${id}`), { method: 'DELETE' }, 'Không thể xóa combo.');
     fetchCombos();
     const updatedAt = String(Date.now());
     localStorage.setItem('kha_combos_updated_at', updatedAt);
@@ -989,6 +987,12 @@ export default function Products({ store }) {
 
       if (deletedIdKeys.size > 0) removeDeletedProductsFromState(deletedIdKeys);
       await fetchProducts();
+      if (deletedIds.length > 0) {
+        broadcastSyncUpdate({
+          reason: 'products-bulk-deleted',
+          changedTables: ['products'],
+        });
+      }
 
       if (deletedIds.length === idsToDelete.length) {
         alert(`✅ Đã xóa ${deletedIds.length} sản phẩm!`);
@@ -1409,6 +1413,10 @@ export default function Products({ store }) {
 
         alert(formatImportSuccessMessage(data));
         fetchProducts();
+        broadcastSyncUpdate({
+          reason: 'products-imported-excel',
+          changedTables: ['products', 'product_categories'],
+        });
       } catch (err) {
         const detail = err.name === 'AbortError'
           ? 'Backend không phản hồi sau 30 giây.'
@@ -1484,29 +1492,27 @@ export default function Products({ store }) {
       };
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(url, {
+      const data = await apiJsonChecked(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: payload,
         signal: controller.signal,
-      });
+      }, currentEditing ? 'Không thể cập nhật sản phẩm.' : 'Không thể tạo sản phẩm.');
       clearTimeout(timer);
-      const data = await res.json();
-      if (data.ok) {
-        const savedProductForLabel = {
-          id: currentEditing?.id || data.id,
-          ...payload,
-          quantity: 1,
-        };
-        alert(currentEditing ? '✅ Đã cập nhật sản phẩm!' : `✅ Tạo sản phẩm thành công!\nMã: ${data.id}`);
-        closeProductForm();
-        setProductFormInitial(createProductFormInitial());
-        fetchProducts();
-        if (!currentEditing) {
-          openProductLabelModal(savedProductForLabel, { quantity: 1, source: 'created-product' });
-        }
-      } else {
-        alert(`⚠️ Lỗi: ${data.error || 'Không rõ lỗi!'}`);
+      const savedProductForLabel = {
+        id: currentEditing?.id || data.id,
+        ...payload,
+        quantity: 1,
+      };
+      alert(currentEditing ? '✅ Đã cập nhật sản phẩm!' : `✅ Tạo sản phẩm thành công!\nMã: ${data.id}`);
+      closeProductForm();
+      setProductFormInitial(createProductFormInitial());
+      fetchProducts();
+      broadcastSyncUpdate({
+        reason: currentEditing ? 'product-updated' : 'product-created',
+        changedTables: ['products'],
+      });
+      if (!currentEditing) {
+        openProductLabelModal(savedProductForLabel, { quantity: 1, source: 'created-product' });
       }
     } catch (err) {
       if (err.name === 'AbortError') alert('⏱️ Server không phản hồi sau 10 giây.');
@@ -1521,10 +1527,14 @@ export default function Products({ store }) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
-      await fetch(resolveApiUrl(`/products/${id}`), { method: 'DELETE', signal: controller.signal });
+      await apiJsonChecked(resolveApiUrl(`/products/${id}`), { method: 'DELETE', signal: controller.signal }, 'Không thể xóa sản phẩm.');
       clearTimeout(timer);
       alert('✅ Đã xóa sản phẩm!');
       fetchProducts();
+      broadcastSyncUpdate({
+        reason: 'product-deleted',
+        changedTables: ['products'],
+      });
     } catch (err) {
       if (err.name === 'AbortError') alert('⏱️ Server không phản hồi.');
       else alert(`📡 Lỗi kết nối: ${err.message}`);
@@ -1573,22 +1583,20 @@ export default function Products({ store }) {
       delete variantPayload.sku;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(url, {
+      const data = await apiJsonChecked(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(variantPayload),
+        body: variantPayload,
         signal: controller.signal,
-      });
+      }, currentEditingVariant ? 'Không thể cập nhật biến thể.' : 'Không thể tạo biến thể.');
       clearTimeout(timer);
-      const data = await res.json();
-      if (data.ok) {
-        alert(currentEditingVariant ? '✅ Đã cập nhật biến thể!' : `✅ Tạo biến thể thành công!\nSKU: ${data.sku || 'hệ thống tự sinh'}`);
-        closeVariantForm();
-        setVariantFormInitial(createVariantFormInitial());
-        fetchProducts();
-      } else {
-        alert(`⚠️ Lỗi: ${data.detail || data.error || 'Không rõ lỗi!'}`);
-      }
+      alert(currentEditingVariant ? '✅ Đã cập nhật biến thể!' : `✅ Tạo biến thể thành công!\nSKU: ${data.sku || 'hệ thống tự sinh'}`);
+      closeVariantForm();
+      setVariantFormInitial(createVariantFormInitial());
+      fetchProducts();
+      broadcastSyncUpdate({
+        reason: currentEditingVariant ? 'product-variant-updated' : 'product-variant-created',
+        changedTables: ['products'],
+      });
     } catch (err) {
       if (err.name === 'AbortError') alert('⏱️ Server không phản hồi!');
       else alert(`📡 Lỗi kết nối: ${err.message}`);
@@ -1602,10 +1610,14 @@ export default function Products({ store }) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
-      await fetch(resolveApiUrl(`/products/variants/${variantId}`), { method: 'DELETE', signal: controller.signal });
+      await apiJsonChecked(resolveApiUrl(`/products/variants/${variantId}`), { method: 'DELETE', signal: controller.signal }, 'Không thể xóa biến thể.');
       clearTimeout(timer);
       alert('✅ Đã xóa biến thể!');
       fetchProducts();
+      broadcastSyncUpdate({
+        reason: 'product-variant-deleted',
+        changedTables: ['products'],
+      });
     } catch (err) {
       if (err.name === 'AbortError') alert('⏱️ Server không phản hồi.');
       else alert(`📡 Lỗi kết nối: ${err.message}`);

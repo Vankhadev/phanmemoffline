@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-electron",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "Bán hàng offline ",
   "repository": {
     "type": "git",
@@ -13,21 +13,19 @@
   "main": "src/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd backend && npm start",
-    "dev:frontend": "cd frontend && npm run dev",
-    "dev:electron": "set ELECTRON_DEV_URL=http://localhost:5173&& electron .",
+    "dev:backend": "set KHA_BACKEND_HOST=127.0.0.1&& npm --prefix backend start",
+    "dev:frontend": "set VITE_BACKEND_HOST=127.0.0.1&& set VITE_BACKEND_PORT=%KHA_BACKEND_PORT%&& npm --prefix frontend run dev -- --host 127.0.0.1 --port 5174 --strictPort",
+    "dev:electron": "set ELECTRON_DEV_URL=http://127.0.0.1:5174&& electron .",
+    "reset-local-admin": "npm --prefix backend run reset-local-admin --",
+    "sync:desktop-icon": "node scripts/sync-desktop-icon.js",
     "build:frontend": "cd frontend && npm run build",
-    "mobile:build": "cd frontend && npm run mobile:build",
-    "mobile:sync": "cd frontend && npm run mobile:sync",
-    "mobile:add:android": "cd frontend && npm run mobile:add:android",
-    "mobile:add:ios": "cd frontend && npm run mobile:add:ios",
-    "mobile:open:android": "cd frontend && npm run mobile:open:android",
-    "mobile:open:ios": "cd frontend && npm run mobile:open:ios",
-    "build:portable": "electron-builder --win portable --publish never",
-    "build:installer": "electron-builder --win nsis --publish never",
+    "package:portable": "npm run sync:desktop-icon && electron-builder --win portable --publish never",
+    "package:installer": "npm run sync:desktop-icon && electron-builder --win nsis --publish never",
+    "build:portable": "npm run build:frontend && npm run package:portable",
+    "build:installer": "npm run build:frontend && npm run package:installer",
     "build:electron": "npm run build:installer",
-    "build": "npm run build:frontend && npm run build:installer",
-    "build:all": "npm run build:frontend && electron-builder --win portable nsis --publish never",
+    "build": "npm run build:installer",
+    "build:all": "npm run build:frontend && npm run sync:desktop-icon && electron-builder --win portable nsis --publish never",
     "generate:update-manifest": "node scripts/generate-update-manifest.js"
   },
   "build": {
@@ -48,7 +46,7 @@
     ],
     "extraResources": [
       {
-        "from": "build/icon.png",
+        "from": "build/icons/app-icon.png",
         "to": "icons/app-icon.png"
       }
     ],
@@ -61,13 +59,13 @@
           ]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icons/app-icon.ico"
     },
     "mac": {
-      "icon": "build/icon.icns"
+      "icon": "build/icons/app-icon.icns"
     },
     "linux": {
-      "icon": "build/icon.png"
+      "icon": "build/icons/app-icon.png"
     },
     "portable": {
       "artifactName": "BanHangOffline_v${version}.exe"
@@ -101,13 +99,21 @@
     "assetBaseUrl": "https://github.com/Vankhadev/phanmemoffline/releases/download"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.4.5",
     "electron-updater": "^6.8.3",
+    "exceljs": "^4.4.0",
     "express": "^5.0.1",
     "express-rate-limit": "^7.4.1",
     "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.1",
     "node-cron": "^3.0.3",
-    "uuid": "^9.0.1"
+    "nodemailer": "^6.10.1",
+    "pdfkit": "^0.17.1",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

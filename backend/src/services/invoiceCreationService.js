@@ -2,30 +2,20 @@ const {
   getOne,
   insert,
   update,
-  upsertDailyStats,
-  today,
+  rebuildDailyStatsForDates,
   now,
   getNextSeq,
   normalizePaymentMethod,
   getActiveAccountId,
+  normalizeDateKey,
+  isCompletedInvoiceStatus,
+  withAtomicDbWrite,
 } = require('../db/database');
 const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
 const {
   getInvoiceDetailProductId,
   validateNegativeStockForDetails,
 } = require('../utils/negativeStock');
-
-const SAPO_INVOICE_METADATA_FIELDS = [
-  'sapo_order_id',
-  'sapo_order_number',
-  'sapo_customer_id',
-  'sapo_status',
-  'sapo_payment_status',
-  'sapo_fulfillment_status',
-  'sapo_updated_at',
-  'sapo_last_synced_at',
-  'sync_source',
-];
 
 function createHttpError(message, status = 400) {
   const err = new Error(message);
@@ -74,8 +64,8 @@ function createIdempotencyConflict(existing, clientOrderId, payloadHash, existin
   return err;
 }
 
-function genInvoiceCode() {
-  return `HD${String(getNextSeq('invoice_seq')).padStart(5, '0')}`;
+function genInvoiceCode(options = {}) {
+  return `HD${String(getNextSeq('invoice_seq', options)).padStart(5, '0')}`;
 }
 
 function isComboDetail(detail = {}) {
@@ -84,7 +74,7 @@ function isComboDetail(detail = {}) {
 
 function buildDetailKey(detail = {}, index = 0) {
   if (isComboDetail(detail)) return `combo:${detail.combo_id || detail.id || index}:${detail.unit_price || 0}`;
-  return `product:${detail.product_id || detail.id || index}:${detail.unit_price || 0}`;
+  return `product:${detail.product_id || detail.variant_id || detail.id || index}:${detail.unit_price || 0}`;
 }
 
 function normalizeInvoiceDetail(detail = {}, invoice_id) {
@@ -124,12 +114,6 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
     discount_amount,
     discount_percent: +detail.discount_percent || 0,
     line_total: +detail.line_total || (quantity * unit_price - discount_amount),
-    sapo_line_item_id: detail.sapo_line_item_id || '',
-    sapo_order_id: detail.sapo_order_id || '',
-    sapo_product_id: detail.sapo_product_id || '',
-    sapo_variant_id: detail.sapo_variant_id || '',
-    sapo_sku: detail.sapo_sku || detail.product_sku || detail.sku || '',
-    sapo_barcode: detail.sapo_barcode || '',
     created_at: detail.created_at || now(),
   };
 }
@@ -151,12 +135,13 @@ function mergeDuplicateDetails(details) {
   return Array.from(map.values());
 }
 
-function deductStock(productOrVariantId, quantity) {
+function deductStock(productOrVariantId, quantity, options = {}) {
+  const writeOptions = options.skipSave === true ? { skipSave: true } : {};
   const variant = getOne('products', v => Number(v.id) === Number(productOrVariantId) && v.parent_id != null);
   if (variant) {
     update('products', variant.id, {
       stock: (Number(variant.stock) || 0) - quantity,
-    });
+    }, writeOptions);
     return;
   }
 
@@ -164,16 +149,17 @@ function deductStock(productOrVariantId, quantity) {
   if (product) {
     update('products', product.id, {
       stock: (Number(product.stock) || 0) - quantity,
-    });
+    }, writeOptions);
   }
 }
 
-function restoreStock(productOrVariantId, quantity) {
+function restoreStock(productOrVariantId, quantity, options = {}) {
+  const writeOptions = options.skipSave === true ? { skipSave: true } : {};
   const variant = getOne('products', v => Number(v.id) === Number(productOrVariantId) && v.parent_id != null);
   if (variant) {
     update('products', variant.id, {
       stock: (variant.stock || 0) + quantity,
-    });
+    }, writeOptions);
     return;
   }
 
@@ -181,7 +167,7 @@ function restoreStock(productOrVariantId, quantity) {
   if (product) {
     update('products', product.id, {
       stock: (product.stock || 0) + quantity,
-    });
+    }, writeOptions);
   }
 }
 
@@ -205,13 +191,6 @@ function buildExistingInvoiceResult(existing, clientOrderId, payloadHash = '', i
     idempotency_key: existing.idempotency_key || idempotencyKey || '',
     invoice: existing,
   };
-}
-
-function collectSapoInvoiceMetadata(payload = {}) {
-  return SAPO_INVOICE_METADATA_FIELDS.reduce((acc, field) => {
-    if (Object.prototype.hasOwnProperty.call(payload, field)) acc[field] = payload[field] || '';
-    return acc;
-  }, {});
 }
 
 function buildCreatorMetadata(payload = {}, req = null, options = {}) {
@@ -248,7 +227,7 @@ function resolveInvoiceCode(payload = {}, options = {}) {
     const providedCode = normalizeProvidedInvoiceCode(payload.invoice_code);
     if (providedCode) return providedCode;
   }
-  return genInvoiceCode();
+  return genInvoiceCode(options);
 }
 
 function getDetailProductId(detail = {}) {
@@ -303,29 +282,93 @@ function buildInvoiceMoneyFields(payload = {}, details = []) {
   };
 }
 
-function addCashBookIncome(invoice) {
-  try {
-    const existing = getOne('cash_book', c => c.reference_type === 'invoice' && Number(c.reference_id) === Number(invoice.id) && c.active !== 0);
-    if (existing) return;
+function resolveEventTimestamp(value, fallback = now()) {
+  const parsed = new Date(value || fallback);
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed.toISOString();
+}
 
-    const time = new Date().toISOString();
-    insert('cash_book', {
-      account_id: getActiveAccountId(),
-      date: time.slice(0, 10),
+function addCashBookIncome(invoice, options = {}) {
+  try {
+    const skipSave = options.skipSave === true;
+    const accountId = invoice?.account_id || getActiveAccountId();
+    const time = resolveEventTimestamp(options.timestamp || invoice?.created_at, now());
+    const date = normalizeDateKey(invoice?.created_at || time) || time.slice(0, 10);
+    const existing = getOne('cash_book', c => c.reference_type === 'invoice' && Number(c.reference_id) === Number(invoice.id) && c.active !== 0);
+
+    const payload = {
+      account_id: accountId,
+      date,
       time: time.slice(11, 19),
       type: 'income',
       category: 'Doanh thu từ đơn hàng',
-      amount: invoice.total || 0,
-      note: `Hóa đơn ${invoice.invoice_code}`,
+      amount: Number(invoice?.total) || 0,
+      payment_method: normalizePaymentMethod(invoice?.payment_method),
+      note: `Hóa đơn ${invoice?.invoice_code || invoice?.id || ''}`.trim(),
       reference_id: invoice.id,
       reference_type: 'invoice',
       active: true,
-      created_at: time,
       updated_at: time,
-    });
+    };
+
+    if (existing) {
+      return update('cash_book', existing.id, payload, { skipSave });
+    }
+
+    const id = insert('cash_book', {
+      ...payload,
+      created_at: time,
+    }, { skipSave, accountId });
+    return getOne('cash_book', cb => Number(cb.id) === Number(id));
   } catch (err) {
-    console.error('Lỗi tạo giao dịch sổ quỹ:', err.message);
+    console.error('Lỗi tạo/cập nhật giao dịch sổ quỹ:', err.message);
+    if (options.rethrowOnError === true) throw err;
+    return null;
   }
+}
+
+function voidCashBookIncome(invoiceId, options = {}) {
+  try {
+    const skipSave = options.skipSave === true;
+    const time = resolveEventTimestamp(options.timestamp, now());
+    const existing = getOne('cash_book', c => c.reference_type === 'invoice' && Number(c.reference_id) === Number(invoiceId) && c.active !== 0);
+    if (!existing) return null;
+    return update('cash_book', existing.id, {
+      active: 0,
+      voided_at: time,
+      void_reason: options.reason || 'invoice_not_completed',
+      updated_at: time,
+    }, { skipSave });
+  } catch (err) {
+    console.error('Lỗi vô hiệu giao dịch sổ quỹ:', err.message);
+    if (options.rethrowOnError === true) throw err;
+    return null;
+  }
+}
+
+function syncInvoiceAccounting(invoice, options = {}) {
+  if (!invoice || invoice.id == null) return null;
+  const skipSave = options.skipSave === true;
+  const affectedDates = Array.from(new Set([
+    options.previousCreatedAt,
+    invoice.created_at,
+  ].map(value => normalizeDateKey(value)).filter(Boolean)));
+
+  if (isCompletedInvoiceStatus(invoice.status)) {
+    addCashBookIncome(invoice, { ...options, rethrowOnError: true });
+  } else {
+    voidCashBookIncome(invoice.id, {
+      skipSave,
+      timestamp: options.timestamp,
+      reason: options.voidReason || 'invoice_not_completed',
+      rethrowOnError: true,
+    });
+  }
+
+  if (affectedDates.length > 0) {
+    rebuildDailyStatsForDates(affectedDates, { skipSave });
+  }
+
+  return invoice;
 }
 
 function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
@@ -333,11 +376,14 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
   const details = Array.isArray(payload.details) ? payload.details : [];
   if (details.length === 0) throw createHttpError('Đơn hàng chưa có sản phẩm', 400);
 
+  const safeDetails = mergeDuplicateDetails(details);
+  if (safeDetails.length === 0) throw createHttpError('Đơn hàng chưa có sản phẩm', 400);
+
   const accountId = req?.accountId || req?.account?.id || payload.account_id || getActiveAccountId();
   const client_order_id = normalizeClientOrderId(payload.client_order_id || payload.clientOrderId || payload.order_uuid || payload.local_order_id || '');
   const payload_hash = resolvePayloadHash(payload, options);
   if (options.requirePayloadHash && !payload_hash) {
-    throw createHttpError('Thiếu payload_hash cho yêu cầu idempotency mobile', 400);
+    throw createHttpError('Thiếu payload_hash cho yêu cầu idempotency đồng bộ', 400);
   }
   const idempotency_key = buildIdempotencyKey(accountId, client_order_id, payload_hash, payload, options);
 
@@ -350,67 +396,73 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
     return buildExistingInvoiceResult(existing, client_order_id, payload_hash, idempotency_key);
   }
 
-  validateStockForDetails(details);
+  validateStockForDetails(safeDetails);
 
-  const money = buildInvoiceMoneyFields(payload, details);
-  const invoice_code = resolveInvoiceCode(payload, options);
+  const money = buildInvoiceMoneyFields(payload, safeDetails);
   const creatorMetadata = buildCreatorMetadata(payload, req, options);
-  const sapoInvoiceMetadata = collectSapoInvoiceMetadata(payload);
   const status = payload.status || options.defaultStatus || 'pending';
   const invoiceCreatedAt = payload.created_at || now();
 
-  const invoice_id = insert('invoices', {
-    account_id: accountId,
-    invoice_code,
-    client_order_id,
-    payload_hash,
-    mobile_sync_status: payload.mobile_sync_status || (payload_hash ? 'applied' : ''),
-    mobile_synced_at: payload.mobile_synced_at || (payload_hash ? now() : null),
-    mobile_device_id: payload.mobile_device_id || null,
-    store_info_snapshot: payload.store_info_snapshot || null,
-    idempotency_key,
-    client_created_at: payload.client_created_at || null,
-    customer_id: payload.customer_id || null,
-    user_id: payload.user_id || req?.user?.id || null,
-    ...money,
-    payment_method: normalizePaymentMethod(payload.payment_method),
-    note: payload.note || '',
-    invoice_writer: payload.invoice_writer || req?.user?.name || '',
-    receiver_name: payload.receiver_name || '',
-    delivery_date: payload.delivery_date || null,
-    status,
-    ...creatorMetadata,
-    source: normalizeText(payload.source || creatorMetadata.order_source || '', 80),
-    ...sapoInvoiceMetadata,
-    created_at: invoiceCreatedAt,
-  });
+  const runCreation = () => {
+    const invoice_code = resolveInvoiceCode(payload, { ...options, skipSave: true });
+    const sync_status = payload.sync_status || (payload_hash ? 'applied' : '');
+    const synced_at = payload.synced_at || (payload_hash ? now() : null);
+    const sync_device_id = payload.sync_device_id || null;
+    const invoice_id = insert('invoices', {
+      account_id: accountId,
+      invoice_code,
+      client_order_id,
+      payload_hash,
+      sync_status,
+      synced_at,
+      sync_device_id,
+      store_info_snapshot: payload.store_info_snapshot || null,
+      idempotency_key,
+      client_created_at: payload.client_created_at || null,
+      customer_id: payload.customer_id || null,
+      user_id: payload.user_id || req?.user?.id || null,
+      ...money,
+      payment_method: normalizePaymentMethod(payload.payment_method),
+      note: payload.note || '',
+      invoice_writer: payload.invoice_writer || req?.user?.name || '',
+      receiver_name: payload.receiver_name || '',
+      delivery_date: payload.delivery_date || null,
+      status,
+      ...creatorMetadata,
+      source: normalizeText(payload.source || creatorMetadata.order_source || '', 80),
+      created_at: invoiceCreatedAt,
+    }, { skipSave: true, accountId });
 
-  for (const detail of details) {
-    const detailRow = normalizeInvoiceDetail(detail, invoice_id);
-    insert('invoice_details', detailRow);
-    const productId = getDetailProductId(detail);
-    if (productId) deductStock(productId, +detail.quantity || 1);
-  }
+    for (const detail of safeDetails) {
+      const detailRow = normalizeInvoiceDetail(detail, invoice_id);
+      insert('invoice_details', detailRow, { skipSave: true, accountId });
+      const productId = getDetailProductId(detailRow);
+      if (productId) deductStock(productId, +detailRow.quantity || 1, { skipSave: true });
+    }
 
-  upsertDailyStats(today(), money.total);
-  if (status === 'completed') addCashBookIncome({ id: invoice_id, invoice_code, total: money.total });
+    const invoice = getOne('invoices', invoiceRow => Number(invoiceRow.id) === Number(invoice_id));
+    syncInvoiceAccounting(invoice, { skipSave: true, timestamp: invoiceCreatedAt });
 
-  const invoice = getOne('invoices', invoiceRow => Number(invoiceRow.id) === Number(invoice_id));
-  return {
-    ok: true,
-    idempotent: false,
-    created: true,
-    invoice_id,
-    invoice_code,
-    client_order_id,
-    payload_hash,
-    idempotency_key,
-    invoice,
+    return {
+      ok: true,
+      idempotent: false,
+      created: true,
+      invoice_id,
+      invoice_code,
+      client_order_id,
+      payload_hash,
+      idempotency_key,
+      invoice,
+    };
   };
+
+  return options.skipAtomic === true ? runCreation() : withAtomicDbWrite(runCreation);
 }
 
 module.exports = {
   addCashBookIncome,
+  voidCashBookIncome,
+  syncInvoiceAccounting,
   createInvoiceFromPayload,
   deductStock,
   restoreStock,

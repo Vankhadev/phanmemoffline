@@ -80,10 +80,8 @@ flowchart TB
   AppSvc --> Domain[Domain Layer]
   AppSvc --> LocalDB[Local Storage Layer]
   AppSvc --> Sync[Sync Layer]
-  AppSvc --> License[Licensing Layer]
   Sync --> Connector[Source Connector or Importer]
   LocalDB --> DB[(SQLite or embedded local DB)]
-  License --> LicenseState[(Local activation state)]
   Connector --> Ext[External sales system or file source]
 ```
 
@@ -92,18 +90,18 @@ flowchart TB
 #### Frontend desktop
 
 - Giao diện tiếng Việt, điều hướng rõ ràng.
-- Màn hình khách hàng, lịch sử mua hàng, thống kê, import/export, bản quyền, cài đặt.
+- Màn hình khách hàng, lịch sử mua hàng, thống kê, import/export, cài đặt.
 - Chỉ gọi service qua lớp ứng dụng, không truy cập trực tiếp database từ UI.
 
 #### Service layer
 
 - Xử lý nghiệp vụ: CRUD khách hàng, chuẩn hóa dữ liệu, tìm kiếm, phân loại, trạng thái, thống kê.
 - Orchestrate import/export, sync, validate dữ liệu, audit log.
-- Chứa các use-case như `CreateCustomer`, `UpdateCustomer`, `MergeCustomer`, `ImportCustomers`, `ActivateLicense`.
+- Chứa các use-case như `CreateCustomer`, `UpdateCustomer`, `MergeCustomer`, `ImportCustomers`.
 
 #### Storage local
 
-- Lưu khách hàng, lịch sử mua hàng cache, nhật ký thay đổi, cấu hình, trạng thái kích hoạt.
+- Lưu khách hàng, lịch sử mua hàng cache, nhật ký thay đổi, cấu hình vận hành.
 - Ưu tiên DB nhúng bền vững, dễ sao lưu, dễ migrate.
 
 #### Sync layer
@@ -112,12 +110,6 @@ flowchart TB
 - Dùng khi có nguồn dữ liệu từ hệ thống bán hàng hiện tại.
 - Hỗ trợ import ban đầu, đồng bộ định kỳ, đồng bộ thủ công, và mapping trường dữ liệu.
 
-#### Licensing layer
-
-- Kiểm tra key `vankhadev`.
-- Lưu trạng thái kích hoạt trên máy.
-- Hoạt động offline sau khi đã kích hoạt.
-- Có thể dùng token/response được ký số để tránh sửa tay trạng thái.
 
 ---
 
@@ -127,12 +119,8 @@ flowchart TB
 
 1. App khởi động.
 2. Kiểm tra file cấu hình và DB local.
-3. Kiểm tra trạng thái license đã kích hoạt chưa.
-4. Tải dữ liệu cache cần thiết cho dashboard và danh sách khách hàng.
-5. Nếu chưa kích hoạt:
-   - cho vào chế độ giới hạn chức năng hoặc màn hình kích hoạt.
-6. Nếu đã kích hoạt:
-   - vào dashboard chính.
+3. Tải dữ liệu cache cần thiết cho dashboard và danh sách khách hàng.
+4. Vào dashboard chính.
 
 ### 3.2 Luồng CRUD khách hàng
 
@@ -243,14 +231,7 @@ Mục đích:
 - map sang model khách hàng của app
 - xem trạng thái sync và lỗi
 
-### 4.10 Kích hoạt bản quyền
-
-Mục đích:
-- nhập key `vankhadev`
-- xác minh kích hoạt
-- hiển thị trạng thái license
-
-### 4.11 Cài đặt
+### 4.10 Cài đặt
 
 Mục đích:
 - cấu hình đường dẫn backup
@@ -437,48 +418,38 @@ Trường tối thiểu:
 
 ---
 
-## 8) Quản lý trạng thái kích hoạt bản quyền cho key `vankhadev`
+## 8) Vận hành ứng dụng ở môi trường offline-first
 
 ### 8.1 Mô hình tổng quát
 
-- Key `vankhadev` là **activation key** hoặc prefix/sku chính.
-- App phải xác minh key hợp lệ rồi lưu trạng thái kích hoạt local.
-- Sau khi kích hoạt, app chạy offline bình thường.
+- Ứng dụng ưu tiên chạy cục bộ với dữ liệu lưu trên máy.
+- Khi có nguồn dữ liệu ngoài, đồng bộ là tùy chọn chứ không phải điều kiện bắt buộc.
+- Trạng thái người dùng và cấu hình vận hành được lưu local để app khởi động ổn định.
 
-### 8.2 Luồng kích hoạt đề xuất
+### 8.2 Luồng vận hành đề xuất
 
-1. Người dùng mở màn hình kích hoạt.
-2. Nhập key `vankhadev`.
-3. App kiểm tra định dạng key.
-4. Nếu có kênh xác minh nội bộ:
-   - kiểm tra với dữ liệu license được đóng gói hoặc từ file ký số.
-5. Tạo activation record local:
-   - key
-   - ngày kích hoạt
-   - device fingerprint
-   - trạng thái
-   - signature hoặc token
-6. Lưu vào storage local an toàn.
-7. Mở khóa toàn bộ chức năng.
+1. Người dùng mở ứng dụng.
+2. App nạp cấu hình và dữ liệu local.
+3. Nếu có nguồn ngoài phù hợp:
+   - cho phép đồng bộ hoặc import thủ công.
+4. Lưu thay đổi vào storage local an toàn.
+5. Mở toàn bộ chức năng nghiệp vụ cần thiết.
 
 ### 8.3 Lưu trạng thái trên máy
 
 Nên lưu ở hai lớp:
 
-- `license_state` trong SQLite
-- file token/manifest được ký, lưu thêm trong thư mục app data
+- dữ liệu nghiệp vụ trong SQLite
+- cấu hình/manifest vận hành trong thư mục app data
 
 Trường tối thiểu:
-- `license_key`
-- `activated_at`
+- `user_id`
+- `last_opened_at`
 - `status`
 - `device_id`
-- `device_hash`
-- `signature`
-- `last_verified_at`
-- `expires_at` nếu có
+- `last_synced_at`
 
-### 8.4 Hành vi khi chưa kích hoạt
+### 8.4 Hành vi khi khởi động offline
 
 - Cho phép mở app và xem giới hạn.
 - Chỉ cho dùng một số màn hình tối thiểu, ví dụ:
@@ -569,7 +540,6 @@ Tùy hệ thống hiện tại, connector có thể là:
 - Chi tiết khách hàng với lịch sử mua read-only cache.
 - Import/export CSV/XLSX.
 - Backup/restore.
-- Kích hoạt `vankhadev` offline.
 - Audit log cơ bản.
 
 ### Giai đoạn 2
@@ -595,7 +565,6 @@ Tùy hệ thống hiện tại, connector có thể là:
 - **Export/import**: CSV/XLSX/JSON.
 - **Validation**: schema-based validation.
 - **Sync**: connector/service tách rời.
-- **License**: local token + signature.
 
 ### Lý do chọn phương án này
 
@@ -608,7 +577,7 @@ Tùy hệ thống hiện tại, connector có thể là:
 
 ## 12) Kết luận kiến trúc
 
-Phương án phù hợp nhất cho bài toán này là một ứng dụng desktop **local-first** với **SQLite**, UI tiếng Việt, service layer rõ ràng, import/export an toàn, đồng bộ tùy chọn từ nguồn bán hàng hiện tại, và lớp license offline cho key `vankhadev`.
+Phương án phù hợp nhất cho bài toán này là một ứng dụng desktop **local-first** với **SQLite**, UI tiếng Việt, service layer rõ ràng, import/export an toàn, và đồng bộ tùy chọn từ nguồn bán hàng hiện tại.
 
 Điểm quan trọng nhất:
 

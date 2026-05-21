@@ -16,13 +16,6 @@ router.get('/', (req, res) => {
   res.json(result);
 });
 
-function pickCustomerMetadata(body = {}) {
-  const fields = ['sapo_customer_id', 'customer_code', 'sapo_updated_at', 'sapo_last_synced_at', 'sync_source'];
-  return fields.reduce((acc, field) => {
-    if (Object.prototype.hasOwnProperty.call(body, field)) acc[field] = body[field] || '';
-    return acc;
-  }, {});
-}
 
 router.post('/', (req, res) => {
   const { name, phone, email, tax_code, customer_type, invoice_type, address, note } = req.body;
@@ -37,12 +30,7 @@ router.post('/', (req, res) => {
     invoice_type: invoice_type || 'non_electronic', // 'electronic' | 'non_electronic'
     address: address || '',
     note: note || '',
-    sapo_customer_id: '',
     customer_code: req.body.customer_code || '',
-    sapo_updated_at: '',
-    sapo_last_synced_at: '',
-    sync_source: '',
-    ...pickCustomerMetadata(req.body),
     created_at: now(),
   });
   res.json({ id, ok: true });
@@ -60,7 +48,7 @@ router.put('/:id', (req, res) => {
     invoice_type: invoice_type || undefined,
     ...(address !== undefined && { address: address || '' }),
     ...(note !== undefined && { note: note || '' }),
-    ...pickCustomerMetadata(req.body),
+    ...(Object.prototype.hasOwnProperty.call(req.body, 'customer_code') && { customer_code: req.body.customer_code || '' }),
   });
   res.json({ ok: true });
 });

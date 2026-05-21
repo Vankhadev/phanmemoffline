@@ -97,7 +97,7 @@ function dedupeVariants(variants = []) {
   const result = [];
   for (const variant of variants) {
     if (!variant || typeof variant !== 'object') continue;
-    const key = String(variant.id ?? variant.sku ?? variant.sapo_variant_id ?? variant.variant_id ?? result.length);
+    const key = String(variant.id ?? variant.sku ?? variant.variant_id ?? result.length);
     if (seen.has(key)) continue;
     seen.add(key);
     result.push(variant);
@@ -172,14 +172,12 @@ function productPayload(body, existing = {}, parent = null) {
   };
 
   const optionalFields = [
-    'barcode', 'image_url', 'description', 'option1', 'option2', 'option3',
-    'sapo_product_id', 'sapo_variant_id', 'sapo_parent_product_id', 'sapo_status',
-    'sapo_updated_at', 'sapo_last_synced_at', 'sync_source',
+    'barcode', 'image_url', 'description', 'option1', 'option2', 'option3', 'sync_source',
   ];
   for (const field of optionalFields) {
     if (Object.prototype.hasOwnProperty.call(body, field)) payload[field] = body[field] || '';
     else if (Object.prototype.hasOwnProperty.call(existing, field)) payload[field] = existing[field];
-    else if (parent && ['sapo_product_id', 'sapo_parent_product_id', 'sapo_status', 'sync_source'].includes(field) && Object.prototype.hasOwnProperty.call(parent, field)) payload[field] = parent[field] || '';
+    else if (parent && ['sync_source'].includes(field) && Object.prototype.hasOwnProperty.call(parent, field)) payload[field] = parent[field] || '';
   }
   return payload;
 }

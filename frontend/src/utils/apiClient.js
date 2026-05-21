@@ -1,9 +1,9 @@
 import {
   clearAuthSession,
-  clearPendingLocalData,
   getAuthToken,
   getPendingLocalData,
   prepareForAuthenticatedPayload,
+  replacePendingLocalData,
   saveAuthSession,
 } from './authStorage';
 import { getProductDisplayName } from './productSearch';
@@ -36,6 +36,8 @@ function stripTrailingSlash(value) {
   return String(value || '').replace(/\/+$/, '');
 }
 
+const LOCAL_API_BASE_OVERRIDE_KEY = 'kha.localApiBaseOverride';
+
 function readEnvApiBase() {
   try {
     return import.meta?.env?.VITE_API_BASE_URL || import.meta?.env?.VITE_API_BASE || '';
@@ -52,6 +54,17 @@ function readEnvValue(name, fallback = '') {
   }
 }
 
+function isDebugApiEnabled() {
+  return String(readEnvValue('VITE_DEBUG_AUTH', readEnvValue('DEV', 'false'))).trim().toLowerCase() === 'true';
+}
+
+let lastLoggedApiBaseSignature = '';
+
+function debugApiLog(event, payload = {}) {
+  if (!isDebugApiEnabled() || typeof console === 'undefined' || typeof console.info !== 'function') return;
+  console.info(`[KHA AUTH API] ${event}`, payload);
+}
+
 function readElectronApiBase() {
   try {
     if (typeof window === 'undefined') return '';
@@ -61,28 +74,163 @@ function readElectronApiBase() {
   }
 }
 
+function readStorageValue(key) {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return '';
+    return window.localStorage.getItem(key) || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function writeStorageValue(key, value) {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    window.localStorage.setItem(key, value);
+  } catch (_) {
+    // Ignore storage write failures in private/locked-down browser contexts.
+  }
+}
+
+function removeStorageValue(key) {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    window.localStorage.removeItem(key);
+  } catch (_) {
+    // Ignore storage removal failures in private/locked-down browser contexts.
+  }
+}
+
+function parseUrl(value) {
+  try {
+    const baseHref = typeof window !== 'undefined' && window.location?.href
+      ? window.location.href
+      : 'http://127.0.0.1';
+    return new URL(String(value || ''), baseHref);
+  } catch (_) {
+    return null;
+  }
+}
+
 function isLoopbackHost(hostname) {
   const value = String(hostname || '').trim().toLowerCase();
   return value === 'localhost' || value === '127.0.0.1' || value === '::1' || value === '[::1]';
 }
 
+function isLoopbackApiBase(value) {
+  const parsed = parseUrl(value);
+  return Boolean(parsed && isLoopbackHost(parsed.hostname));
+}
+
+function extractApiBaseFromUrl(value) {
+  const parsed = parseUrl(value);
+  if (!parsed) return '';
+  const pathname = String(parsed.pathname || '');
+  const apiMatch = pathname.match(/^(.*?\/api)(?:\/|$)/i);
+  if (!apiMatch?.[1]) return '';
+  return stripTrailingSlash(`${parsed.protocol}//${parsed.host}${apiMatch[1]}`);
+}
+
+function readLocalApiBaseOverride() {
+  const stored = stripTrailingSlash(readStorageValue(LOCAL_API_BASE_OVERRIDE_KEY));
+  if (!stored) return '';
+  if (isLoopbackApiBase(stored)) return stored;
+  removeStorageValue(LOCAL_API_BASE_OVERRIDE_KEY);
+  return '';
+}
+
+function persistLocalApiBaseOverride(value) {
+  const resolvedBase = stripTrailingSlash(extractApiBaseFromUrl(value) || value);
+  if (!resolvedBase || !isLoopbackApiBase(resolvedBase)) return '';
+  writeStorageValue(LOCAL_API_BASE_OVERRIDE_KEY, resolvedBase);
+  return resolvedBase;
+}
+
+function clearLocalApiBaseOverride() {
+  removeStorageValue(LOCAL_API_BASE_OVERRIDE_KEY);
+}
+
+function getConfiguredBackendConnection() {
+  const host = String(readEnvValue('VITE_BACKEND_HOST') || readEnvValue('VITE_API_HOST') || '').trim();
+  const port = String(readEnvValue('VITE_BACKEND_PORT') || readEnvValue('VITE_API_PORT') || '3001').trim() || '3001';
+  return { host, port };
+}
+
+function getLocalOverrideConnection() {
+  const parsed = parseUrl(readLocalApiBaseOverride());
+  if (!parsed) return { base: '', host: '', port: '' };
+  return {
+    base: stripTrailingSlash(parsed.toString()),
+    host: parsed.hostname,
+    port: String(parsed.port || (parsed.protocol === 'https:' ? '443' : '80')).trim(),
+  };
+}
+
+function buildHttpApiBase(host, port, protocol = 'http:') {
+  const normalizedHost = String(host || '').trim();
+  const normalizedPort = String(port || '').trim();
+  if (!normalizedHost || !normalizedPort) return '';
+  return `${protocol}//${normalizedHost}:${normalizedPort}/api`;
+}
+
 function getBrowserLanApiBase() {
   if (typeof window === 'undefined' || !window.location) return '';
-  const protocol = window.location.protocol || '';
-  if (protocol !== 'http:') return '';
-
-  const configuredHost = readEnvValue('VITE_BACKEND_HOST') || readEnvValue('VITE_API_HOST');
-  const configuredPort = readEnvValue('VITE_BACKEND_PORT') || readEnvValue('VITE_API_PORT') || '3001';
+  const locationProtocol = window.location.protocol || '';
   const currentHost = String(window.location.hostname || '').trim();
-  const host = configuredHost || (isLoopbackHost(currentHost) ? '' : currentHost);
-  if (!host) return '';
-  return `${protocol}//${host}:${configuredPort}/api`;
+  const { host: configuredHost, port: configuredPort } = getConfiguredBackendConnection();
+
+  if (locationProtocol === 'file:') {
+    return buildHttpApiBase(configuredHost || '127.0.0.1', configuredPort, 'http:');
+  }
+
+  if (locationProtocol !== 'http:' && locationProtocol !== 'https:') return '';
+
+  if (configuredHost) {
+    const protocol = isLoopbackHost(configuredHost) ? 'http:' : locationProtocol;
+    return buildHttpApiBase(configuredHost, configuredPort, protocol);
+  }
+
+  if (isLoopbackHost(currentHost)) {
+    return buildHttpApiBase('127.0.0.1', configuredPort, 'http:');
+  }
+
+  return buildHttpApiBase(currentHost, configuredPort, locationProtocol);
+}
+
+function resolveApiBaseDetails() {
+  const envApiBase = stripTrailingSlash(readEnvApiBase());
+  if (envApiBase) return { base: envApiBase, source: 'env' };
+
+  const electronApiBase = stripTrailingSlash(readElectronApiBase());
+  if (electronApiBase) return { base: electronApiBase, source: 'electron' };
+
+  const localOverrideApiBase = readLocalApiBaseOverride();
+  if (localOverrideApiBase) return { base: localOverrideApiBase, source: 'local-override' };
+
+  const browserApiBase = stripTrailingSlash(getBrowserLanApiBase());
+  if (browserApiBase) return { base: browserApiBase, source: 'browser-fallback' };
+
+  return { base: '', source: 'relative-proxy' };
+}
+
+function logResolvedApiBase(details) {
+  const signature = `${details?.source || 'unknown'}:${details?.base || ''}`;
+  if (!signature || signature === lastLoggedApiBaseSignature) return;
+  lastLoggedApiBaseSignature = signature;
+  const backend = getConfiguredBackendConnection();
+  debugApiLog('Resolved API base', {
+    source: details?.source || 'unknown',
+    base: details?.base || '',
+    origin: typeof window !== 'undefined' ? window.location?.origin || window.location?.href || '' : '',
+    backendHost: backend.host || '(auto)',
+    backendPort: backend.port,
+  });
 }
 
 function shouldUseDevApiProxyPath(pathname) {
   if (!pathname || !pathname.startsWith('/')) return false;
   if (pathname === '/api' || pathname.startsWith('/api/')) return false;
-  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|excel-imports|store|stats|cash-book|cashbook|payrolls|partners|combos|print-templates|sapo|sync|mobile|features|updates|dashboard|license-keys)(\/|\?|$)/i.test(pathname);
+  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|excel-imports|store|stats|cash-book|cashbook|payrolls|partners|combos|print-templates|sync|features|updates|dashboard)(\/|\?|$)/i.test(pathname);
 }
 
 function normalizeDevApiProxyPath(input) {
@@ -116,7 +264,9 @@ function normalizeRequestPathForBase(input, base) {
 }
 
 export function getApiBase() {
-  return stripTrailingSlash(readEnvApiBase() || readElectronApiBase() || getBrowserLanApiBase() || '');
+  const resolved = resolveApiBaseDetails();
+  logResolvedApiBase(resolved);
+  return resolved.base;
 }
 
 export function resolveApiUrl(input) {
@@ -186,15 +336,29 @@ export async function readApiJson(response, options = {}) {
   }
 }
 
+function collectApiErrorMessages(errors = []) {
+  if (!Array.isArray(errors)) return [];
+  return errors
+    .map(item => {
+      if (typeof item === 'string') return item.trim();
+      if (item && typeof item === 'object') {
+        return String(item.message || item.error || item.detail || '').trim();
+      }
+      return '';
+    })
+    .filter(Boolean);
+}
+
 export function getApiErrorMessage(data, fallback = 'Yêu cầu API thất bại.') {
   if (!data) return fallback;
   if (typeof data === 'string') return data || fallback;
-  if (Array.isArray(data.errors) && data.errors.length) return data.errors.join(', ');
-  return data.message || data.error || fallback;
+  const messages = collectApiErrorMessages(data.errors);
+  if (messages.length) return messages.join(', ');
+  return data.message || data.error || data.detail || (typeof data.details === 'string' ? data.details : '') || fallback;
 }
 
 function isPublicAuthEndpoint(url) {
-  return typeof url === 'string' && (/\/users\/(login|register|bootstrap-status|bootstrap-admin)(\?|$)/i.test(url) || /\/license-keys\/status(\?|$)/i.test(url));
+  return typeof url === 'string' && /\/users\/(login|register|bootstrap-status|bootstrap-admin)(\?|$)/i.test(url);
 }
 
 function isApiRequestUrl(url) {
@@ -240,25 +404,130 @@ function shouldTreatAsExpiredSession(url, requestInit = {}) {
 export function installAuthenticatedFetch() {
   if (typeof window === 'undefined' || typeof window.fetch !== 'function' || window.__vankhaFetchPatched) return;
   const originalFetch = window.fetch.bind(window);
+  window.__vankhaOriginalFetch = originalFetch;
   window.fetch = async (input, init = {}) => {
     const rawUrl = typeof input === 'string' ? input : String(input?.url || '');
     if (!isApiRequestUrl(rawUrl) && !String(rawUrl || '').startsWith('/')) return originalFetch(input, init);
     const [url, requestInit] = buildInterceptedRequest(input, init);
-    return originalFetch(url, requestInit);
+    const response = await executeApiRequest(originalFetch, url, requestInit);
+    if (response.status === 401 && shouldTreatAsExpiredSession(url, requestInit)) {
+      handleUnauthorizedResponse({ status: response.status, url });
+    }
+    return response;
   };
   window.__vankhaFetchPatched = true;
 }
 
 function getFetchImplementation() {
-  if (typeof window !== 'undefined' && typeof window.fetch === 'function') return window.fetch.bind(window);
+  if (typeof window !== 'undefined') {
+    if (typeof window.__vankhaOriginalFetch === 'function') return window.__vankhaOriginalFetch;
+    if (typeof window.fetch === 'function') return window.fetch.bind(window);
+  }
   if (typeof fetch === 'function') return fetch.bind(globalThis);
   throw new Error('Fetch is not available in this environment.');
+}
+
+function buildApiNetworkError(url, error) {
+  const resolved = resolveApiBaseDetails();
+  const endpoint = String(url || '').trim() || resolved.base || '/api';
+  const message = `Không thể kết nối tới máy chủ API (${endpoint}). Kiểm tra backend local hoặc cấu hình VITE_API_BASE_URL/VITE_BACKEND_PORT.`;
+  debugApiLog('API request failed before response', {
+    url: endpoint,
+    apiBase: resolved.base,
+    source: resolved.source,
+    error: error?.message || String(error || ''),
+  });
+  return new ApiError(message, {
+    cause: error,
+    data: {
+      ok: false,
+      code: 'NETWORK_ERROR',
+      message,
+      detail: error?.message || String(error || ''),
+      url: endpoint,
+      apiBase: resolved.base,
+      apiBaseSource: resolved.source,
+      isNetworkError: true,
+    },
+  });
+}
+
+function buildLoopbackRetryUrls(url) {
+  const parsed = parseUrl(url);
+  if (!parsed || !/^https?:$/i.test(parsed.protocol) || !isLoopbackHost(parsed.hostname)) return [];
+
+  const configured = getConfiguredBackendConnection();
+  const localOverride = getLocalOverrideConnection();
+  const currentPort = String(parsed.port || (parsed.protocol === 'https:' ? '443' : '80')).trim();
+  const retryHost = isLoopbackHost(localOverride.host)
+    ? localOverride.host
+    : (isLoopbackHost(configured.host) ? configured.host : parsed.hostname);
+  const retryPorts = [];
+  const addPort = (value) => {
+    const port = String(value || '').trim();
+    if (!port || retryPorts.includes(port)) return;
+    retryPorts.push(port);
+  };
+
+  addPort(localOverride.port);
+  addPort(configured.port);
+  addPort(parsed.port);
+  addPort('3001');
+  addPort('3101');
+
+  return retryPorts
+    .filter(port => port !== currentPort)
+    .map(port => `${parsed.protocol}//${retryHost}:${port}${parsed.pathname || ''}${parsed.search || ''}`);
+}
+
+async function fetchWithLoopbackRecovery(fetchImpl, url, requestInit, originalError) {
+  const localOverrideBase = readLocalApiBaseOverride();
+  const originalBase = extractApiBaseFromUrl(url);
+  if (localOverrideBase && originalBase === localOverrideBase) {
+    clearLocalApiBaseOverride();
+  }
+
+  const retryUrls = buildLoopbackRetryUrls(url);
+  for (const retryUrl of retryUrls) {
+    debugApiLog('Retrying API request on alternate loopback port', {
+      from: url,
+      to: retryUrl,
+      method: requestInit?.method || 'GET',
+    });
+
+    try {
+      const response = await fetchImpl(retryUrl, requestInit);
+      const discoveredApiBase = persistLocalApiBaseOverride(retryUrl);
+      debugApiLog('Recovered API request on alternate loopback port', {
+        from: url,
+        to: retryUrl,
+        discoveredApiBase,
+      });
+      return response;
+    } catch (retryError) {
+      debugApiLog('Alternate loopback retry failed', {
+        from: url,
+        to: retryUrl,
+        error: retryError?.message || String(retryError || ''),
+      });
+    }
+  }
+
+  throw buildApiNetworkError(url, originalError);
+}
+
+async function executeApiRequest(fetchImpl, url, requestInit) {
+  try {
+    return await fetchImpl(url, requestInit);
+  } catch (error) {
+    return fetchWithLoopbackRecovery(fetchImpl, url, requestInit, error);
+  }
 }
 
 export async function apiFetch(input, init = {}) {
   const fetchImpl = getFetchImplementation();
   const [url, requestInit] = buildInterceptedRequest(input, init);
-  const response = await fetchImpl(url, requestInit);
+  const response = await executeApiRequest(fetchImpl, url, requestInit);
   if (response.status === 401 && shouldTreatAsExpiredSession(url, requestInit)) {
     handleUnauthorizedResponse({ status: response.status, url });
     throw new ApiError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', {
@@ -298,6 +567,22 @@ export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu AP
   return data;
 }
 
+export function assertApiSuccess(data, fallbackMessage = 'Yêu cầu API thất bại.') {
+  if (!data || Array.isArray(data) || typeof data !== 'object') return data;
+  if (Object.prototype.hasOwnProperty.call(data, 'ok') && data.ok === false) {
+    throw new ApiError(getApiErrorMessage(data, fallbackMessage), {
+      status: 200,
+      data,
+    });
+  }
+  return data;
+}
+
+export async function apiJsonChecked(input, init = {}, fallbackMessage = 'Yêu cầu API thất bại.') {
+  const data = await apiJson(input, init, fallbackMessage);
+  return assertApiSuccess(data, fallbackMessage);
+}
+
 function isOptionalEndpointError(error) {
   return error instanceof ApiError && [404, 405, 501].includes(Number(error.status));
 }
@@ -312,14 +597,6 @@ async function apiJsonOptional(input, init = {}, options = {}) {
   }
 }
 
-const MOBILE_ADMIN_UNAVAILABLE_MESSAGE = 'Tính năng quản trị mobile chưa được backend hiện tại hỗ trợ.';
-const DEFAULT_LICENSE_STATUS = {
-  ok: true,
-  licensed: false,
-  status: 'not_configured',
-  message: 'Chưa cấu hình giấy phép cho bản cài đặt này.',
-};
-
 export const excelImportApi = {
   preview(payload = {}) { return apiJson('/excel-imports/preview', { method: 'POST', body: payload }, 'Không thể preview import Excel.'); },
   commit(payloadOrId = {}, legacyPayload = {}) {
@@ -331,16 +608,6 @@ export const excelImportApi = {
   history(params = {}) { const query = new URLSearchParams(params); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/excel-imports/history${suffix}`, {}, 'Không thể tải lịch sử import Excel.'); },
   detail(id) { return apiJson(`/excel-imports/history/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết import Excel.'); },
   list(params = {}) { return this.history(params); },
-};
-
-export const sapoApi = {
-  listImports(params = {}) { const query = new URLSearchParams(params); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/sapo/imports${suffix}`, {}, 'Không thể tải danh sách import Sapo.'); },
-  createImport(payload = {}) { return apiJson('/sapo/imports', { method: 'POST', body: payload }, 'Không thể tạo import Sapo.'); },
-  getImport(id) { return apiJson(`/sapo/imports/${encodeURIComponent(id)}`, {}, 'Không thể tải import Sapo.'); },
-  commitImport(id, payload = {}) { return apiJson(`/sapo/imports/${encodeURIComponent(id)}/commit`, { method: 'POST', body: payload }, 'Không thể ghi import Sapo.'); },
-  listCustomers(params = {}) { const query = new URLSearchParams(params); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/sapo/customers${suffix}`, {}, 'Không thể tải khách hàng Sapo.'); },
-  importCustomersStart(payload = {}) { return apiJson('/sapo/import/customers', { method: 'POST', body: payload }, 'Không thể bắt đầu import khách hàng Sapo.'); },
-  importCustomersCommit(payload = {}) { return apiJson('/sapo/import/customers/commit', { method: 'POST', body: payload }, 'Không thể ghi import khách hàng Sapo.'); },
 };
 
 export const customersApi = {
@@ -387,7 +654,7 @@ export const featuresApi = {
 export const updatesApi = {
   list(params = {}) { const query = new URLSearchParams(); if (params.includeInactive) query.set('include_inactive', '1'); if (params.platform) query.set('platform', params.platform); if (params.channel) query.set('channel', params.channel); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/updates${suffix}`, {}, 'Không thể tải danh sách bản cập nhật.'); },
   latest(params = {}) { const query = new URLSearchParams(); if (params.platform) query.set('platform', params.platform); if (params.channel) query.set('channel', params.channel); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/updates/latest${suffix}`, {}, 'Không thể tải bản cập nhật mới nhất.'); },
-  check(params = {}) { const query = new URLSearchParams(); if (params.platform) query.set('platform', params.platform); if (params.channel) query.set('channel', params.channel); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/updates/check${suffix}`, {}, 'Không thể kiểm tra bản cập nhật.'); },
+  check(params = {}) { const query = new URLSearchParams(); if (params.platform) query.set('platform', params.platform); if (params.channel) query.set('channel', params.channel); const currentVersion = params.version ?? params.current_version ?? params.currentVersion; if (currentVersion !== undefined && currentVersion !== null && String(currentVersion).trim()) { query.set('version', String(currentVersion).trim()); query.set('current_version', String(currentVersion).trim()); } const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/updates/check${suffix}`, {}, 'Không thể kiểm tra bản cập nhật.'); },
   detail(id) { return apiJson(`/updates/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết bản cập nhật.'); },
   create(payload = {}) { return apiJson('/updates', { method: 'POST', body: payload }, 'Không thể tạo bản cập nhật.'); },
   update(id, payload = {}) { return apiJson(`/updates/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }, 'Không thể cập nhật bản cập nhật.'); },
@@ -396,64 +663,6 @@ export const updatesApi = {
   remove(id, params = {}) { const query = new URLSearchParams(); if (params.hard) query.set('hard', '1'); const suffix = query.toString() ? `?${query.toString()}` : ''; return apiJson(`/updates/${encodeURIComponent(id)}${suffix}`, { method: 'DELETE' }, 'Không thể xóa bản cập nhật.'); },
 };
 
-
-export const mobileAdminApi = {
-  listDevices() {
-    return apiJsonOptional('/mobile/devices', {}, {
-      fallbackMessage: 'Không thể tải danh sách thiết bị mobile.',
-      fallback: () => ({ ok: true, unsupported: true, items: [], devices: [], message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
-    });
-  },
-  createInstallLink(payload = {}) {
-    return apiJsonOptional('/mobile/install-links', { method: 'POST', body: payload }, {
-      fallbackMessage: 'Không thể tạo link cài đặt mobile.',
-      fallback: () => ({ ok: false, unsupported: true, token: '', url: '', installLink: null, message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
-    });
-  },
-  resolveInstallLink(token) {
-    return apiJsonOptional(`/mobile/install/${encodeURIComponent(token)}`, {}, {
-      fallbackMessage: 'Không thể giải mã link cài đặt mobile.',
-      fallback: () => ({ ok: false, unsupported: true, token: String(token || ''), installLink: null, message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
-    });
-  },
-  revokeDevice(id, payload = {}) {
-    return apiJsonOptional(`/mobile/devices/${encodeURIComponent(id)}/revoke`, { method: 'POST', body: payload }, {
-      fallbackMessage: 'Không thể thu hồi thiết bị mobile.',
-      fallback: () => ({ ok: false, unsupported: true, revoked: false, message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
-    });
-  },
-  updateDevice(id, payload = {}) {
-    return apiJsonOptional(`/mobile/devices/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }, {
-      fallbackMessage: 'Không thể cập nhật thiết bị mobile.',
-      fallback: () => ({ ok: false, unsupported: true, device: null, message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
-    });
-  },
-  syncStatus() {
-    return apiJsonOptional('/mobile/sync/status', {}, {
-      fallbackMessage: 'Không thể tải trạng thái đồng bộ mobile.',
-      fallback: () => ({ ok: true, unsupported: true, devices: [], summary: { total: 0, active: 0, revoked: 0 }, message: MOBILE_ADMIN_UNAVAILABLE_MESSAGE }),
-    });
-  },
-};
-
-export const licenseApi = {
-  status() {
-    return apiJsonOptional('/license-keys/status', { skipAuth: true }, {
-      fallbackMessage: 'Không thể tải trạng thái giấy phép.',
-      fallback: () => ({ ...DEFAULT_LICENSE_STATUS }),
-    });
-  },
-};
-
-async function readOptionalLicenseStatus() {
-  try {
-    const data = await licenseApi.status();
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-    return data;
-  } catch (_) {
-    return null;
-  }
-}
 
 export function persistAuthSnapshot(payload = {}) {
   return saveAuthSession(payload);
@@ -465,39 +674,101 @@ export function persistAuthenticatedPayload(payload = {}) {
 
 export async function pullServerBootstrapData(options = {}) {
   const syncPayload = options && typeof options === 'object' ? options : {};
-  const [sync, license] = await Promise.all([
-    authApi.syncPull(syncPayload),
-    readOptionalLicenseStatus(),
-  ]);
+  const sync = await authApi.syncPull(syncPayload);
 
   return {
     ...(sync && typeof sync === 'object' ? sync : {}),
-    license,
   };
 }
 
 export async function pushPendingLocalData() {
   const pending = getPendingLocalData();
+  const pendingOrders = Array.isArray(pending.orders) ? pending.orders : [];
+  const pendingCustomers = Array.isArray(pending.customers) ? pending.customers : [];
+  const normalizedOrderPairs = [];
   const result = {
     orders: [],
-    customers: [],
+    customers: pendingCustomers,
   };
 
-  for (const order of pending.orders) {
+  for (const order of pendingOrders) {
     const normalized = normalizePendingOrder(order);
-    if (normalized) result.orders.push(normalized);
+    if (normalized) {
+      normalizedOrderPairs.push({ original: order, normalized });
+      result.orders.push(normalized);
+    }
   }
-
-  result.customers = Array.isArray(pending.customers) ? pending.customers : [];
 
   const hasPendingData = result.orders.length > 0 || result.customers.length > 0;
   if (!hasPendingData) {
-    return { ...result, response: null };
+    return { ...result, response: null, retained: { orders: pendingOrders, customers: pendingCustomers } };
   }
 
   const response = await authApi.syncPush({ pending: result });
-  clearPendingLocalData();
-  return { ...result, response };
+  const retained = buildRetainedPendingLocalData({
+    pendingOrders,
+    pendingCustomers,
+    normalizedOrderPairs,
+    response,
+  });
+  replacePendingLocalData(retained);
+  return { ...result, response, retained };
+}
+
+function normalizeAction(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isSuccessfulOrderSyncResult(item = {}) {
+  if (!item || typeof item !== 'object') return false;
+  const action = normalizeAction(item.action);
+  if (action === 'created_pending') return Boolean(item.id || item.invoice_code);
+  if (action === 'existing_idempotent') return Boolean(item.id || item.invoice_code || item.idempotent === true);
+  return item.idempotent === true && Boolean(item.id || item.invoice_code || item.client_order_id);
+}
+
+function isSuccessfulCustomerSyncResult(item = {}) {
+  if (!item || typeof item !== 'object') return false;
+  const action = normalizeAction(item.action);
+  return Boolean(item.id) && (action === 'created' || action === 'updated');
+}
+
+function buildSuccessfulClientOrderIdSet(response = {}) {
+  const acceptedOrders = Array.isArray(response?.accepted?.orders) ? response.accepted.orders : [];
+  return new Set(acceptedOrders
+    .filter(isSuccessfulOrderSyncResult)
+    .map(item => String(item.client_order_id || '').trim())
+    .filter(Boolean));
+}
+
+function buildRetainedOrders({ pendingOrders = [], normalizedOrderPairs = [], response = {} } = {}) {
+  if (!response || response.ok === false) return pendingOrders;
+  const successfulClientOrderIds = buildSuccessfulClientOrderIdSet(response);
+  if (!successfulClientOrderIds.size) return pendingOrders;
+
+  const successfulOriginalOrders = new Set();
+  for (const pair of normalizedOrderPairs) {
+    const clientOrderId = String(pair?.normalized?.client_order_id || '').trim();
+    if (clientOrderId && successfulClientOrderIds.has(clientOrderId)) successfulOriginalOrders.add(pair.original);
+  }
+
+  return pendingOrders.filter(order => !successfulOriginalOrders.has(order));
+}
+
+function buildRetainedCustomers({ pendingCustomers = [], response = {} } = {}) {
+  if (!response || response.ok === false) return pendingCustomers;
+  const acceptedCustomers = Array.isArray(response?.accepted?.customers) ? response.accepted.customers : [];
+
+  if (acceptedCustomers.length !== pendingCustomers.length) return pendingCustomers;
+
+  return pendingCustomers.filter((_, index) => !isSuccessfulCustomerSyncResult(acceptedCustomers[index]));
+}
+
+function buildRetainedPendingLocalData({ pendingOrders = [], pendingCustomers = [], normalizedOrderPairs = [], response = {} } = {}) {
+  return {
+    orders: buildRetainedOrders({ pendingOrders, normalizedOrderPairs, response }),
+    customers: buildRetainedCustomers({ pendingCustomers, response }),
+  };
 }
 
 function normalizePendingOrder(order) {

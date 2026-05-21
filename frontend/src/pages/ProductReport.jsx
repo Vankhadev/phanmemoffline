@@ -18,6 +18,8 @@ import {
   X,
 } from 'lucide-react';
 
+const API = resolveApiUrl('');
+
 function pad2(value) {
   return String(value).padStart(2, '0');
 }
@@ -271,18 +273,28 @@ function DatePickerField({
   disabled = false,
   placeholder = 'Chọn ngày',
   ariaLabel = 'Chọn ngày',
+  minDate = '',
+  maxDate = '',
 }) {
   const wrapperRef = useRef(null);
-  const parsedValue = parseDateInputValue(value);
+  const normalizedValue = normalizeDateInputValue(value);
+  const normalizedMinDate = normalizeDateInputValue(minDate);
+  const normalizedMaxDate = normalizeDateInputValue(maxDate);
+  const parsedValue = parseDateInputValue(normalizedValue);
   const [isOpen, setIsOpen] = useState(false);
-  const [viewDate, setViewDate] = useState(() => startOfMonth(parsedValue || new Date()));
+  const [viewDate, setViewDate] = useState(() => startOfMonth(parsedValue || parseDateInputValue(normalizedMinDate) || new Date()));
 
   useEffect(() => {
-    const selectedDate = parseDateInputValue(value);
-    if (selectedDate && !isOpen) {
-      setViewDate(startOfMonth(selectedDate));
+    const selectedDate = parseDateInputValue(normalizedValue);
+    const minSelectableDate = parseDateInputValue(normalizedMinDate);
+    if (!isOpen) {
+      if (selectedDate) {
+        setViewDate(startOfMonth(selectedDate));
+      } else if (minSelectableDate) {
+        setViewDate(startOfMonth(minSelectableDate));
+      }
     }
-  }, [isOpen, value]);
+  }, [isOpen, normalizedMaxDate, normalizedMinDate, normalizedValue]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -303,17 +315,27 @@ function DatePickerField({
   }, [isOpen]);
 
   const calendarDays = useMemo(() => getCalendarDays(viewDate), [viewDate]);
-  const selectedValue = normalizeDateInputValue(value);
+  const selectedValue = normalizedValue;
   const todayValue = toDateInputValue(new Date());
   const displayText = selectedValue ? formatDateKey(selectedValue) : placeholder;
   const monthLabel = viewDate.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
+
+  function isDateDisabled(date) {
+    const dayValue = normalizeDateInputValue(date);
+    if (!dayValue) return true;
+    if (normalizedMinDate && dayValue < normalizedMinDate) return true;
+    if (normalizedMaxDate && dayValue > normalizedMaxDate) return true;
+    return false;
+  }
 
   function changeMonth(offset) {
     setViewDate(prev => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
   }
 
   function selectDate(date) {
-    onChange(toDateInputValue(date));
+    const normalizedDate = normalizeDateInputValue(date);
+    if (!normalizedDate || isDateDisabled(normalizedDate)) return;
+    onChange(normalizedDate);
     setIsOpen(false);
   }
 
@@ -369,15 +391,17 @@ function DatePickerField({
               const dayValue = toDateInputValue(day);
               const isSelected = dayValue === selectedValue;
               const isToday = dayValue === todayValue;
+              const isDisabled = isDateDisabled(dayValue);
 
               return (
                 <button
                   key={dayValue}
                   type="button"
-                  className={`aspect-square rounded-xl text-sm font-semibold transition ${isSelected ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700' : isToday ? 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'text-gray-700 hover:bg-gray-100'}`}
+                  className={`aspect-square rounded-xl text-sm font-semibold transition ${isDisabled ? 'cursor-not-allowed bg-gray-50 text-gray-300' : isSelected ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700' : isToday ? 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'text-gray-700 hover:bg-gray-100'}`}
                   onClick={() => selectDate(day)}
                   aria-pressed={isSelected}
                   aria-label={`Chọn ngày ${formatDateKey(dayValue)}`}
+                  disabled={isDisabled}
                 >
                   {day.getDate()}
                 </button>
@@ -388,8 +412,9 @@ function DatePickerField({
           <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 text-xs font-semibold">
             <button
               type="button"
-              className="rounded-lg px-2 py-1.5 text-blue-600 transition hover:bg-blue-50"
+              className="rounded-lg px-2 py-1.5 text-blue-600 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
               onClick={() => selectDate(new Date())}
+              disabled={isDateDisabled(todayValue)}
             >
               Hôm nay
             </button>
@@ -417,8 +442,8 @@ function DateRangePopover({ from, to, label, onApply, disabled = false }) {
 
   useEffect(() => {
     if (!isOpen) return;
-    setDraftFrom(from || '');
-    setDraftTo(to || '');
+    setDraftFrom(normalizeDateInputValue(from) || '');
+    setDraftTo(normalizeDateInputValue(to) || '');
     setDraftError('');
   }, [from, isOpen, to]);
 
@@ -441,12 +466,12 @@ function DateRangePopover({ from, to, label, onApply, disabled = false }) {
   }, [isOpen]);
 
   function updateDraftFrom(value) {
-    setDraftFrom(value);
+    setDraftFrom(normalizeDateInputValue(value));
     if (draftError) setDraftError('');
   }
 
   function updateDraftTo(value) {
-    setDraftTo(value);
+    setDraftTo(normalizeDateInputValue(value));
     if (draftError) setDraftError('');
   }
 
@@ -477,6 +502,8 @@ function DateRangePopover({ from, to, label, onApply, disabled = false }) {
   const draftToText = draftTo ? (normalizeDateInputValue(draftTo) ? formatDateKey(draftTo) : 'Không hợp lệ') : '—';
   const isRangeValid = Boolean(normalizedFrom && normalizedTo && normalizedFrom <= normalizedTo);
   const rangeStatusText = isRangeValid ? `Từ ${fromText} đến ${toText}` : label;
+  const normalizedDraftFrom = normalizeDateInputValue(draftFrom);
+  const normalizedDraftTo = normalizeDateInputValue(draftTo);
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -545,11 +572,21 @@ function DateRangePopover({ from, to, label, onApply, disabled = false }) {
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-gray-600">Từ ngày</label>
-              <DatePickerField value={draftFrom} onChange={updateDraftFrom} ariaLabel="Chọn từ ngày của khoảng ngày" />
+              <DatePickerField
+                value={draftFrom}
+                onChange={updateDraftFrom}
+                ariaLabel="Chọn từ ngày của khoảng ngày"
+                maxDate={normalizedDraftTo}
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-gray-600">Đến ngày</label>
-              <DatePickerField value={draftTo} onChange={updateDraftTo} ariaLabel="Chọn đến ngày của khoảng ngày" />
+              <DatePickerField
+                value={draftTo}
+                onChange={updateDraftTo}
+                ariaLabel="Chọn đến ngày của khoảng ngày"
+                minDate={normalizedDraftFrom}
+              />
             </div>
           </div>
 
@@ -639,7 +676,13 @@ export default function ProductReport() {
     setError('');
     setCreatedNotice('');
     try {
-      const res = await fetch(`${API}/stats/product-report?${request.params.toString()}`);
+      const endpoint = `${API}/stats/product-report?${request.params.toString()}`;
+      console.info('[ProductReport] fetchReport -> requesting', {
+        endpoint,
+        filters,
+        range: request.range,
+      });
+      const res = await fetch(endpoint);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Không lập được báo cáo sản phẩm');
       setReport(data);
@@ -669,7 +712,10 @@ export default function ProductReport() {
   }
 
   function updateReportDraft(field, value) {
-    setReportDraft(prev => ({ ...prev, [field]: value }));
+    const normalizedValue = ['selectedDate', 'from', 'to'].includes(field)
+      ? normalizeDateInputValue(value)
+      : value;
+    setReportDraft(prev => ({ ...prev, [field]: normalizedValue }));
     if (createError) setCreateError('');
   }
 
@@ -719,7 +765,13 @@ export default function ProductReport() {
     setCreateLoading(true);
     setCreateError('');
     try {
-      const res = await fetch(`${API}/stats/product-report?${request.params.toString()}`);
+      const endpoint = `${API}/stats/product-report?${request.params.toString()}`;
+      console.info('[ProductReport] createReport -> requesting', {
+        endpoint,
+        draft: reportDraft,
+        range: request.range,
+      });
+      const res = await fetch(endpoint);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Không tạo được báo cáo sản phẩm');
 
@@ -1190,6 +1242,7 @@ export default function ProductReport() {
                           onChange={value => updateReportDraft('from', value)}
                           disabled={createLoading}
                           ariaLabel="Chọn ngày bắt đầu"
+                          maxDate={normalizeDateInputValue(reportDraft.to)}
                         />
                       </div>
                       <div>
@@ -1199,6 +1252,7 @@ export default function ProductReport() {
                           onChange={value => updateReportDraft('to', value)}
                           disabled={createLoading}
                           ariaLabel="Chọn ngày kết thúc"
+                          minDate={normalizeDateInputValue(reportDraft.from)}
                         />
                       </div>
                     </div>

@@ -244,7 +244,7 @@ export function createDefaultInvoiceVisualConfig(type = 'sale_invoice', paperSiz
     layout: {
       paperSize,
       widthMm: paper.widthMm,
-      variant: isA4SaleInvoice ? 'sapo_a4' : 'standard',
+      variant: isA4SaleInvoice ? 'sale_a4' : 'standard',
       fontFamily: 'Arial, Roboto, Helvetica, sans-serif',
       baseFontSize: isReceiptPaper ? 11 : 12,
       paddingMm: isReceiptPaper ? 4 : 0,
@@ -869,7 +869,7 @@ function renderVisualFooter(config = {}, data) {
   return lines ? `<footer class="visual-footer"${styleAttr({ 'text-align': align })}>${lines}</footer>` : '';
 }
 
-function renderSapoA4Header(data = {}) {
+function renderSaleA4Header(data = {}) {
   const orderCode = getOrderCode(data);
   const storeName = textOrDash(firstPresent(data.store?.name, 'Cửa hàng'));
   const headerDate = textOrDash(firstPresent(data.invoice?.created_at, new Date().toLocaleString('vi-VN', { hour12: false })));
@@ -880,17 +880,17 @@ function renderSapoA4Header(data = {}) {
   ].filter(Boolean);
 
   return `
-    <header class="sapo-a4-header">
-      <div class="sapo-a4-brand-row">
-        <div class="sapo-a4-store-block">
-          <div class="sapo-a4-store-name">${escapeHtml(storeName)}</div>
-          ${storeMeta.map(line => `<div class="sapo-a4-store-meta">${escapeHtml(line)}</div>`).join('')}
+    <header class="sale-a4-header">
+      <div class="sale-a4-brand-row">
+        <div class="sale-a4-store-block">
+          <div class="sale-a4-store-name">${escapeHtml(storeName)}</div>
+          ${storeMeta.map(line => `<div class="sale-a4-store-meta">${escapeHtml(line)}</div>`).join('')}
         </div>
-        <div class="sapo-a4-order-block">
+        <div class="sale-a4-order-block">
           <span>Mã đơn hàng</span>
           <strong>${escapeHtml(orderCode)}</strong>
         </div>
-        <div class="sapo-a4-title-block">
+        <div class="sale-a4-title-block">
           <div>HOÁ ĐƠN</div>
           <div>BÁN HÀNG</div>
         </div>
@@ -898,104 +898,104 @@ function renderSapoA4Header(data = {}) {
     </header>`;
 }
 
-function renderSapoA4Customer(data = {}) {
+function renderSaleA4Customer(data = {}) {
   return `
-    <section class="sapo-a4-customer">
-      <div class="sapo-a4-customer-left">
+    <section class="sale-a4-customer">
+      <div class="sale-a4-customer-left">
         <div><span>KHÁCH HÀNG:</span> <strong>${escapeHtml(textOrDash(firstPresent(data.customer?.name, 'Khách lẻ')))}</strong></div>
         <div><span>Địa chỉ:</span> ${escapeHtml(textOrDash(data.customer?.address))}</div>
       </div>
-      <div class="sapo-a4-customer-right">
+      <div class="sale-a4-customer-right">
         <div><span>Điện thoại:</span> ${escapeHtml(textOrDash(data.customer?.phone))}</div>
         <div><span>Email:</span> ${escapeHtml(textOrDash(data.customer?.email))}</div>
       </div>
     </section>`;
 }
 
-function renderSapoA4Footer(data = {}) {
+function renderSaleA4Footer(data = {}) {
   const storeName = textOrDash(firstPresent(data.store?.name, 'Cửa hàng'));
   const dateText = getInvoiceDateText(data);
   const receiver = textOrDash(data.invoice?.receiver_name);
   const writer = textOrDash(firstPresent(data.invoice?.invoice_writer, data.invoice?.cashier, data.user?.name));
   const footerUrl = getFooterUrl(data);
   return `
-    <section class="sapo-a4-signature-section">
-      <div class="sapo-a4-date-note">${escapeHtml(storeName)}, ngày ${escapeHtml(dateText)}</div>
-      <div class="sapo-a4-signature">
+    <section class="sale-a4-signature-section">
+      <div class="sale-a4-date-note">${escapeHtml(storeName)}, ngày ${escapeHtml(dateText)}</div>
+      <div class="sale-a4-signature">
         <strong>NGƯỜI NHẬN HÀNG.</strong>
         <span>(Ký, ghi rõ họ tên)</span>
-        <div class="sapo-a4-signature-line">${escapeHtml(receiver)}</div>
+        <div class="sale-a4-signature-line">${escapeHtml(receiver)}</div>
       </div>
-      <div class="sapo-a4-signature">
+      <div class="sale-a4-signature">
         <strong>NGƯỜI VIẾT HÓA ĐƠN</strong>
         <span>(Ký, ghi rõ họ tên)</span>
-        <div class="sapo-a4-signature-line">${escapeHtml(writer)}</div>
+        <div class="sale-a4-signature-line">${escapeHtml(writer)}</div>
       </div>
     </section>
-    <footer class="sapo-a4-print-footer">
+    <footer class="sale-a4-print-footer">
       <span>${escapeHtml(footerUrl)}</span>
       <span>1/1</span>
     </footer>`;
 }
 
-function renderSapoA4TemplateCss(config = {}, paper = {}) {
+function renderSaleA4TemplateCss(config = {}, paper = {}) {
   const layout = config.layout || {};
   const fontFamily = safeFontFamily(layout.fontFamily);
   const baseFontSize = safeFontSize(layout.baseFontSize, 12);
   return `
-.sapo-a4-invoice { width: 100%; min-height: ${getPrintableMinHeightMm(paper)}mm; display: flex; flex-direction: column; color: #111; font-family: ${fontFamily}; font-size: ${baseFontSize}px; line-height: 1.32; }
-.sapo-a4-header { break-inside: avoid; page-break-inside: avoid; }
-.sapo-a4-brand-row { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(42mm, 0.7fr) minmax(48mm, 0.85fr); gap: 10mm; align-items: start; border-bottom: 1.5px solid #111; padding-bottom: 5mm; margin-bottom: 5mm; }
-.sapo-a4-store-name { font-size: 19px; font-weight: 700; line-height: 1.2; margin-bottom: 2mm; }
-.sapo-a4-store-meta { font-size: 11px; line-height: 1.35; color: #333; }
-.sapo-a4-order-block { padding-top: 2mm; font-size: 12px; }
-.sapo-a4-order-block span { display: block; color: #333; margin-bottom: 1mm; }
-.sapo-a4-order-block strong { display: block; font-size: 17px; letter-spacing: 0.02em; }
-.sapo-a4-title-block { text-align: right; font-size: 24px; line-height: 1.08; font-weight: 800; letter-spacing: 0.04em; }
-.sapo-a4-customer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(58mm, 0.72fr); gap: 10mm; margin: 0 0 5mm; break-inside: avoid; page-break-inside: avoid; }
-.sapo-a4-customer div { margin: 1.2mm 0; }
-.sapo-a4-customer span { font-weight: 700; }
-.sapo-a4-customer-right { text-align: left; }
-.sapo-a4-invoice .visual-items-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 2mm; font-size: 11px; }
-.sapo-a4-invoice .visual-items-table th, .sapo-a4-invoice .visual-items-table td { border: 1px solid #9ca3af; padding: 4px 6px; vertical-align: top; word-break: break-word; }
-.sapo-a4-invoice .visual-items-table th { background: #fff; color: #111; font-weight: 700; text-align: center; }
-.sapo-a4-invoice .visual-items-table tbody tr { break-inside: avoid; page-break-inside: avoid; }
-.sapo-a4-invoice .product-name { display: block; font-weight: 400; }
-.sapo-a4-invoice .product-sku { display: none; }
-.sapo-a4-invoice .visual-totals { width: 76mm; margin: 4mm 0 0 auto; border: 0; padding: 0; break-inside: avoid; page-break-inside: avoid; }
-.sapo-a4-invoice .visual-total-row { display: grid; grid-template-columns: 1fr 34mm; align-items: baseline; gap: 8mm; margin: 0; padding: 1.2mm 0; border-bottom: 1px solid #e5e7eb; }
-.sapo-a4-invoice .visual-total-row span { font-weight: 700; text-align: left; }
-.sapo-a4-invoice .visual-total-row strong { text-align: right; font-weight: 700; }
-.sapo-a4-invoice .visual-grand-total { font-weight: 800; }
-.sapo-a4-flex-spacer { flex: 1 1 auto; min-height: 8mm; }
-.sapo-a4-signature-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(44mm, 0.72fr) minmax(44mm, 0.72fr); gap: 8mm; align-items: start; margin-top: 11mm; break-inside: avoid; page-break-inside: avoid; }
-.sapo-a4-date-note { font-size: 12px; padding-top: 1mm; }
-.sapo-a4-signature { min-height: 31mm; text-align: center; font-size: 12px; }
-.sapo-a4-signature strong { display: block; font-size: 12px; }
-.sapo-a4-signature span { display: block; margin-top: 1mm; font-size: 10px; color: #4b5563; }
-.sapo-a4-signature-line { margin-top: 22mm; border-top: 1px solid #111; padding-top: 1.2mm; min-height: 6mm; }
-.sapo-a4-print-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #d1d5db; display: flex; justify-content: flex-end; gap: 8px; font-size: 10px; color: #374151; break-inside: avoid; page-break-inside: avoid; }
+.sale-a4-invoice { width: 100%; min-height: ${getPrintableMinHeightMm(paper)}mm; display: flex; flex-direction: column; color: #111; font-family: ${fontFamily}; font-size: ${baseFontSize}px; line-height: 1.32; }
+.sale-a4-header { break-inside: avoid; page-break-inside: avoid; }
+.sale-a4-brand-row { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(42mm, 0.7fr) minmax(48mm, 0.85fr); gap: 10mm; align-items: start; border-bottom: 1.5px solid #111; padding-bottom: 5mm; margin-bottom: 5mm; }
+.sale-a4-store-name { font-size: 19px; font-weight: 700; line-height: 1.2; margin-bottom: 2mm; }
+.sale-a4-store-meta { font-size: 11px; line-height: 1.35; color: #333; }
+.sale-a4-order-block { padding-top: 2mm; font-size: 12px; }
+.sale-a4-order-block span { display: block; color: #333; margin-bottom: 1mm; }
+.sale-a4-order-block strong { display: block; font-size: 17px; letter-spacing: 0.02em; }
+.sale-a4-title-block { text-align: right; font-size: 24px; line-height: 1.08; font-weight: 800; letter-spacing: 0.04em; }
+.sale-a4-customer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(58mm, 0.72fr); gap: 10mm; margin: 0 0 5mm; break-inside: avoid; page-break-inside: avoid; }
+.sale-a4-customer div { margin: 1.2mm 0; }
+.sale-a4-customer span { font-weight: 700; }
+.sale-a4-customer-right { text-align: left; }
+.sale-a4-invoice .visual-items-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 2mm; font-size: 11px; }
+.sale-a4-invoice .visual-items-table th, .sale-a4-invoice .visual-items-table td { border: 1px solid #9ca3af; padding: 4px 6px; vertical-align: top; word-break: break-word; }
+.sale-a4-invoice .visual-items-table th { background: #fff; color: #111; font-weight: 700; text-align: center; }
+.sale-a4-invoice .visual-items-table tbody tr { break-inside: avoid; page-break-inside: avoid; }
+.sale-a4-invoice .product-name { display: block; font-weight: 400; }
+.sale-a4-invoice .product-sku { display: none; }
+.sale-a4-invoice .visual-totals { width: 76mm; margin: 4mm 0 0 auto; border: 0; padding: 0; break-inside: avoid; page-break-inside: avoid; }
+.sale-a4-invoice .visual-total-row { display: grid; grid-template-columns: 1fr 34mm; align-items: baseline; gap: 8mm; margin: 0; padding: 1.2mm 0; border-bottom: 1px solid #e5e7eb; }
+.sale-a4-invoice .visual-total-row span { font-weight: 700; text-align: left; }
+.sale-a4-invoice .visual-total-row strong { text-align: right; font-weight: 700; }
+.sale-a4-invoice .visual-grand-total { font-weight: 800; }
+.sale-a4-flex-spacer { flex: 1 1 auto; min-height: 8mm; }
+.sale-a4-signature-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(44mm, 0.72fr) minmax(44mm, 0.72fr); gap: 8mm; align-items: start; margin-top: 11mm; break-inside: avoid; page-break-inside: avoid; }
+.sale-a4-date-note { font-size: 12px; padding-top: 1mm; }
+.sale-a4-signature { min-height: 31mm; text-align: center; font-size: 12px; }
+.sale-a4-signature strong { display: block; font-size: 12px; }
+.sale-a4-signature span { display: block; margin-top: 1mm; font-size: 10px; color: #4b5563; }
+.sale-a4-signature-line { margin-top: 22mm; border-top: 1px solid #111; padding-top: 1.2mm; min-height: 6mm; }
+.sale-a4-print-footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #d1d5db; display: flex; justify-content: flex-end; gap: 8px; font-size: 10px; color: #374151; break-inside: avoid; page-break-inside: avoid; }
 @media print {
-  .sapo-a4-invoice .visual-items-table thead { display: table-header-group; }
-  .sapo-a4-invoice .visual-items-table tfoot { display: table-footer-group; }
-  .sapo-a4-header, .sapo-a4-customer, .sapo-a4-invoice .visual-totals, .sapo-a4-signature-section, .sapo-a4-print-footer { break-inside: avoid; page-break-inside: avoid; }
+  .sale-a4-invoice .visual-items-table thead { display: table-header-group; }
+  .sale-a4-invoice .visual-items-table tfoot { display: table-footer-group; }
+  .sale-a4-header, .sale-a4-customer, .sale-a4-invoice .visual-totals, .sale-a4-signature-section, .sale-a4-print-footer { break-inside: avoid; page-break-inside: avoid; }
 }
 `;
 }
 
-function renderSapoA4InvoiceTemplate(config = {}, data = {}, type = 'sale_invoice', paper = {}) {
+function renderSaleA4InvoiceTemplate(config = {}, data = {}, type = 'sale_invoice', paper = {}) {
   const html = `
-<div class="visual-invoice-template sapo-a4-invoice ${escapeAttribute(type)}">
-  ${renderSapoA4Header(data)}
-  ${renderSapoA4Customer(data)}
+<div class="visual-invoice-template sale-a4-invoice ${escapeAttribute(type)}">
+  ${renderSaleA4Header(data)}
+  ${renderSaleA4Customer(data)}
   ${renderVisualItemsTable(config, data, type)}
   ${renderVisualTotals(config, data)}
-  <div class="sapo-a4-flex-spacer"></div>
-  ${renderSapoA4Footer(data)}
+  <div class="sale-a4-flex-spacer"></div>
+  ${renderSaleA4Footer(data)}
 </div>`;
   return {
     html,
-    css: renderSapoA4TemplateCss(config, paper),
+    css: renderSaleA4TemplateCss(config, paper),
     config,
   };
 }
@@ -1041,8 +1041,8 @@ function renderVisualInvoiceTemplate(config, data, options = {}) {
   const widthMm = Number(options.widthMm || config.layout?.widthMm) || inferPaperWidthMm(paperSize, 80);
   const paper = getPaperConfig(paperSize, widthMm);
   const normalizedConfig = normalizeInvoiceVisualConfig(config, type, paperSize, paper.widthMm) || createDefaultInvoiceVisualConfig(type, paperSize, paper.widthMm);
-  if (type === 'sale_invoice' && normalizedConfig.layout?.variant === 'sapo_a4') {
-    return renderSapoA4InvoiceTemplate(normalizedConfig, data, type, paper);
+  if (type === 'sale_invoice' && normalizedConfig.layout?.variant === 'sale_a4') {
+    return renderSaleA4InvoiceTemplate(normalizedConfig, data, type, paper);
   }
   const html = `
 <div class="visual-invoice-template ${escapeAttribute(type)}">

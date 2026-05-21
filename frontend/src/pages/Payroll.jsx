@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { resolveApiUrl } from '../utils/apiClient';
+import { apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
 import { Calculator, Edit2, Filter, Loader, Plus, RefreshCcw, Search, Trash2, Wallet, X } from 'lucide-react';
 
 const API = resolveApiUrl('');
@@ -148,19 +148,13 @@ export default function Payroll() {
     setError('');
     try {
       const query = buildQuery();
-      const [listRes, summaryRes] = await Promise.all([
-        fetch(`${API}/payrolls${query ? `?${query}` : ''}`),
-        fetch(`${API}/payrolls/summary${query ? `?${query}` : ''}`),
+      const [listData, summaryData] = await Promise.all([
+        apiJson(`${API}/payrolls${query ? `?${query}` : ''}`, {}, 'Không tải được danh sách bảng lương'),
+        apiJson(`${API}/payrolls/summary${query ? `?${query}` : ''}`, {}, 'Không tải được tổng hợp bảng lương'),
       ]);
 
-      const listData = await parseJsonResponse(listRes, 'Không tải được danh sách bảng lương');
-      const summaryData = await parseJsonResponse(summaryRes, 'Không tải được tổng hợp bảng lương');
-
-      if (!listRes.ok) throw new Error(listData.error || 'Không tải được danh sách bảng lương');
-      if (!summaryRes.ok) throw new Error(summaryData.error || 'Không tải được tổng hợp bảng lương');
-
       setPayrolls(Array.isArray(listData) ? listData : []);
-      setSummary(summaryData);
+      setSummary(summaryData || null);
     } catch (err) {
       setPayrolls([]);
       setSummary(null);
@@ -230,13 +224,10 @@ export default function Payroll() {
     try {
       const method = editing ? 'PUT' : 'POST';
       const url = editing ? `${API}/payrolls/${editing.id}` : `${API}/payrolls`;
-      const res = await fetch(url, {
+      await apiJsonChecked(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload()),
-      });
-      const data = await parseJsonResponse(res, 'Không lưu được bảng lương');
-      if (!res.ok || !data.ok) throw new Error(data.error || 'Không lưu được bảng lương');
+        body: buildPayload(),
+      }, 'Không lưu được bảng lương');
 
       setShowForm(false);
       setNotice(editing ? 'Đã cập nhật bảng lương thành công' : 'Đã thêm bảng lương thành công');
@@ -252,9 +243,7 @@ export default function Payroll() {
     if (!confirm(`Xóa bảng lương của ${payroll.employee_name}?`)) return;
     setError('');
     try {
-      const res = await fetch(`${API}/payrolls/${payroll.id}`, { method: 'DELETE' });
-      const data = await parseJsonResponse(res, 'Không xóa được bảng lương');
-      if (!res.ok || !data.ok) throw new Error(data.error || 'Không xóa được bảng lương');
+      await apiJsonChecked(`${API}/payrolls/${payroll.id}`, { method: 'DELETE' }, 'Không xóa được bảng lương');
 
       setNotice('Đã xóa bảng lương thành công');
       await fetchPayrolls();
@@ -270,16 +259,12 @@ export default function Payroll() {
     setError('');
     try {
       const query = new URLSearchParams({ month: String(defaultFilters.month), year: String(defaultFilters.year) }).toString();
-      const [listRes, summaryRes] = await Promise.all([
-        fetch(`${API}/payrolls?${query}`),
-        fetch(`${API}/payrolls/summary?${query}`),
+      const [listData, summaryData] = await Promise.all([
+        apiJson(`${API}/payrolls?${query}`, {}, 'Không tải được danh sách bảng lương'),
+        apiJson(`${API}/payrolls/summary?${query}`, {}, 'Không tải được tổng hợp bảng lương'),
       ]);
-      const listData = await parseJsonResponse(listRes, 'Không tải được danh sách bảng lương');
-      const summaryData = await parseJsonResponse(summaryRes, 'Không tải được tổng hợp bảng lương');
-      if (!listRes.ok) throw new Error(listData.error || 'Không tải được danh sách bảng lương');
-      if (!summaryRes.ok) throw new Error(summaryData.error || 'Không tải được tổng hợp bảng lương');
       setPayrolls(Array.isArray(listData) ? listData : []);
-      setSummary(summaryData);
+      setSummary(summaryData || null);
     } catch (err) {
       setPayrolls([]);
       setSummary(null);
