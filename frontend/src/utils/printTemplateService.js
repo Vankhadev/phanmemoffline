@@ -97,6 +97,16 @@ export function getCachedDefaultPrintTemplate(type = 'sale_invoice', paperSize =
   return getCachedTemplate(type, paperSize);
 }
 
+export function cacheDefaultPrintTemplate(template, { type = '', paperSize = '' } = {}) {
+  if (!template) return null;
+  const normalizedType = String(type || template.type || 'sale_invoice').trim() || 'sale_invoice';
+  const normalizedPaperSize = String(paperSize || template.paper_size || template.paperSize || '').trim();
+  const fallbackPaperSize = normalizedPaperSize || '80mm';
+  const normalizedTemplate = normalizeTemplateRecord(template, normalizedType, fallbackPaperSize);
+  cacheTemplate(normalizedTemplate, normalizedType, normalizedPaperSize || normalizedTemplate.paper_size || fallbackPaperSize);
+  return withSource(normalizedTemplate, normalizedTemplate._source || 'cache');
+}
+
 export async function getDefaultPrintTemplate({
   apiBase = '',
   type = 'sale_invoice',

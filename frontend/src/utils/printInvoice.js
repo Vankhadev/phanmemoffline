@@ -1,3 +1,4 @@
+import { printHtmlSilently, isSilentPrintSupported } from './desktopPrint';
 import { renderInvoiceTemplate, escapeHtml } from './invoiceTemplateRenderer';
 
 export function writePrintWindowMessage(printWindow, { title = 'Chuẩn bị in hóa đơn', message = 'Đang tải dữ liệu in...', tone = 'info' } = {}) {
@@ -50,15 +51,53 @@ export function renderInvoicePrintDocument({ data, template, title = '' } = {}) 
   return rendered;
 }
 
-export function printInvoice({
+export async function printInvoice({
   data,
   template,
   title = '',
   autoPrint = true,
   closeAfterPrint = true,
   targetWindow = null,
+  printerName = '',
+  copies = 1,
+  layout = 'portrait',
+  margins = 'default',
+  printBackground = true,
+  showHeadersFooters = false,
+  pageMode = 'all',
 } = {}) {
   const rendered = renderInvoicePrintDocument({ data, template, title });
+
+  if (isSilentPrintSupported()) {
+    const printResult = await printHtmlSilently({
+      documentHtml: rendered.documentHtml,
+      jobTitle: title || template?.name || 'Hóa đơn bán hàng',
+      printerName,
+      copies,
+      layout,
+      margins,
+      printBackground,
+      showHeadersFooters,
+      pageMode,
+      paperSize: rendered.paperSize || template?.paper_size || template?.paperSize,
+      widthMm: rendered.widthMm || template?.width_mm || template?.widthMm,
+      heightMm: rendered.paperSize === 'A3' ? 420
+        : rendered.paperSize === 'A4' ? 297
+        : rendered.paperSize === 'A5' ? 210
+        : rendered.paperSize === 'A6' ? 148
+        : rendered.paperSize === 'B5' ? 250
+        : rendered.paperSize === 'Letter' ? 279.4
+        : rendered.paperSize === 'Legal' ? 355.6
+        : ((rendered.widthMm || template?.width_mm || template?.widthMm || 0) <= 90 ? 3276 : 0),
+    });
+
+    return {
+      ...rendered,
+      printResult,
+      silent: true,
+    };
+  }
+
   const printWindow = targetWindow || window.open('', '_blank');
   if (!printWindow) throw new Error('Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup và thử lại.');
 
@@ -66,5 +105,8 @@ export function printInvoice({
   printWindow.document.write(appendPrintScript(rendered.documentHtml, { autoPrint, closeAfterPrint }));
   printWindow.document.close();
 
-  return rendered;
+  return {
+    ...rendered,
+    silent: false,
+  };
 }

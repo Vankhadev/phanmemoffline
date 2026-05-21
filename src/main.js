@@ -11,6 +11,8 @@ const BACKEND_HOST = String(process.env.KHA_BACKEND_HOST || process.env.PHANMEM_
 const BACKEND_API_BASE_CHANNEL = 'kha:backend:get-api-base';
 const BACKEND_INFO_CHANNEL = 'kha:backend:get-info';
 const WINDOW_FOCUS_CHANNEL = 'kha:window:ensure-input-focus';
+const PRINT_LIST_PRINTERS_CHANNEL = 'kha:print:list-printers';
+const PRINT_HTML_CHANNEL = 'kha:print:html';
 const APP_USER_MODEL_ID = 'com.vankhammo.phanmienoffline';
 
 let mainWindow = null;
@@ -304,6 +306,169 @@ function registerWindowFocusIpc() {
   ipcMain.handle(WINDOW_FOCUS_CHANNEL, (_event, details) => ensureMainWindowInputFocus(details));
 }
 
+function normalizePrintMargins(value) {
+  const normalized = String(value || 'default').trim().toLowerCase();
+  if (normalized === 'narrow') return 'none';
+  if (normalized === 'wide') return 'printableArea';
+  return 'default';
+}
+
+function resolveSilentPrintPageSize(paperSize, widthMm, heightMm) {
+  const normalized = String(paperSize || '').trim();
+  const normalizedWidth = Number(widthMm) || 0;
+  const normalizedHeight = Number(heightMm) || 0;
+  const mm = (value) => Math.max(1000, Math.round(Number(value) * 1000));
+  const knownSizes = {
+    A3: { width: mm(297), height: mm(420) },
+    A4: { width: mm(210), height: mm(297) },
+    A5: { width: mm(148), height: mm(210) },
+    A6: { width: mm(105), height: mm(148) },
+    B5: { width: mm(176), height: mm(250) },
+    Letter: { width: mm(215.9), height: mm(279.4) },
+    Legal: { width: mm(215.9), height: mm(355.6) },
+  };
+  const customMatch = normalized.match(/^(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)(?:mm)?$/i);
+
+  if (knownSizes[normalized]) return knownSizes[normalized];
+  if (customMatch) return { width: mm(customMatch[1]), height: mm(customMatch[2]) };
+  if (normalized === 'K57') return { width: mm(57), height: mm(3276) };
+  if (normalized === 'K80' || normalized === '80mm') return { width: mm(80), height: mm(3276) };
+  if (normalizedWidth > 0 && normalizedHeight > 0) return { width: mm(normalizedWidth), height: mm(normalizedHeight) };
+  if (normalizedWidth > 0 && normalizedWidth <= 90) return { width: mm(normalizedWidth), height: mm(3276) };
+  return null;
+}
+
+function sanitizePrintPayload(payload = {}) {
+  return {
+    html: String(payload?.html || ''),
+    jobTitle: String(payload?.jobTitle || 'In tài liệu').trim() || 'In tài liệu',
+    deviceName: String(payload?.deviceName || '').trim(),
+    copies: Math.max(1, Math.min(99, Number(payload?.copies) || 1)),
+    layout: String(payload?.layout || 'portrait').trim().toLowerCase() === 'landscape' ? 'landscape' : 'portrait',
+    margins: normalizePrintMargins(payload?.margins),
+    printBackground: payload?.printBackground !== false,
+    showHeadersFooters: Boolean(payload?.showHeadersFooters),
+    pageMode: String(payload?.pageMode || 'all').trim().toLowerCase() || 'all',
+    paperSize: String(payload?.paperSize || '').trim(),
+    widthMm: Number(payload?.widthMm) || 0,
+    heightMm: Number(payload?.heightMm) || 0,
+  };
+}
+
+async function listSystemPrinters() {
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
+    return [];
+  }
+
+  const printers = await mainWindow.webContents.getPrintersAsync();
+  return (Array.isArray(printers) ? printers : []).map(printer => ({
+    name: String(printer?.name || '').trim(),
+    displayName: String(printer?.displayName || printer?.description || printer?.name || '').trim(),
+    description: String(printer?.description || '').trim(),
+    isDefault: Boolean(printer?.isDefault),
+    status: Number(printer?.status) || 0,
+  })).filter(printer => printer.name);
+}
+
+function createSilentPrintWindow() {
+  return new BrowserWindow({
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#ffffff',
+    webPreferences: {
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+}
+
+async function printHtmlSilently(payload = {}) {
+  const printRequest = sanitizePrintPayload(payload);
+  if (!printRequest.html.trim()) throw new Error('Thiếu nội dung HTML để in.');
+
+  const printWindow = createSilentPrintWindow();
+  const cleanup = () => {
+    if (!printWindow || printWindow.isDestroyed()) return;
+    setTimeout(() => {
+      try {
+        if (!printWindow.isDestroyed()) printWindow.destroy();
+      } catch (_) {
+        // Ignore cleanup failures.
+      }
+    }, 150);
+  };
+
+  const loadPromise = new Promise((resolve, reject) => {
+    let settled = false;
+    const finishResolve = (value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+    const finishReject = (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    printWindow.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
+      finishReject(new Error(`Không thể tải nội dung in: ${errorDescription || errorCode || 'unknown'}`));
+    });
+
+    printWindow.webContents.once('render-process-gone', (_event, details) => {
+      finishReject(new Error(`Tiến trình in đã dừng: ${details?.reason || 'unknown'}`));
+    });
+
+    printWindow.webContents.once('did-finish-load', () => {
+      const printOptions = {
+        silent: true,
+        printBackground: printRequest.printBackground,
+        deviceName: printRequest.deviceName || undefined,
+        copies: printRequest.copies,
+        landscape: printRequest.layout === 'landscape',
+        margins: {
+          marginType: printRequest.margins,
+        },
+      };
+
+      const pageSize = resolveSilentPrintPageSize(printRequest.paperSize, printRequest.widthMm, printRequest.heightMm);
+      if (pageSize) printOptions.pageSize = pageSize;
+
+      printWindow.webContents.print(printOptions, (success, failureReason) => {
+        if (!success) {
+          finishReject(new Error(failureReason || 'Lệnh in bị từ chối bởi hệ điều hành hoặc máy in.'));
+          return;
+        }
+
+        finishResolve({
+          ok: true,
+          silent: true,
+          deviceName: printRequest.deviceName || '',
+          copies: printRequest.copies,
+          paperSize: printRequest.paperSize,
+          widthMm: printRequest.widthMm,
+          heightMm: printRequest.heightMm,
+          pageMode: printRequest.pageMode,
+          showHeadersFooters: printRequest.showHeadersFooters,
+          jobTitle: printRequest.jobTitle,
+        });
+      });
+    });
+  });
+
+  await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(printRequest.html)}`);
+  return loadPromise;
+}
+
+function registerPrintIpc() {
+  if (ipcMain.listenerCount(PRINT_LIST_PRINTERS_CHANNEL) > 0) return;
+  ipcMain.handle(PRINT_LIST_PRINTERS_CHANNEL, () => listSystemPrinters());
+  ipcMain.handle(PRINT_HTML_CHANNEL, (_event, payload) => printHtmlSilently(payload || {}));
+}
+
 function getAppIconPath() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'icons', 'app-icon.png');
@@ -345,6 +510,7 @@ if (process.platform === 'win32') {
 app.whenReady().then(async () => {
   registerBackendIpc();
   registerWindowFocusIpc();
+  registerPrintIpc();
   updateManager = createUpdateManager({ app, getMainWindow: () => mainWindow });
   updateManager.registerIpc(ipcMain);
 

@@ -7,6 +7,7 @@ import {
   normalizeProductLabelItems,
   printProductLabels,
 } from '../utils/productLabelPrint';
+import { isSilentPrintSupported } from '../utils/desktopPrint';
 import { formatCurrency } from '../utils/invoiceTemplateRenderer';
 
 function buildRowKey(item, index) {
@@ -62,6 +63,7 @@ export default function ProductLabelPrintModal({
   const hasAnyRow = rows.length > 0;
   const allSelected = hasAnyRow && rows.every(row => row.selected);
   const storeName = getStoreName(store);
+  const silentPrintEnabled = isSilentPrintSupported();
 
   if (!open) return null;
 
@@ -106,7 +108,7 @@ export default function ProductLabelPrintModal({
     return '';
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     const validationError = validateBeforePrint();
     if (validationError) {
       setError(validationError);
@@ -119,7 +121,7 @@ export default function ProductLabelPrintModal({
     setNotice('');
 
     try {
-      const rendered = printProductLabels(selectedRows.map(row => ({
+      const rendered = await printProductLabels(selectedRows.map(row => ({
         ...row,
         labelQuantity: toPositiveInteger(row.quantity, 1),
         quantity: toPositiveInteger(row.quantity, 1),
@@ -131,7 +133,9 @@ export default function ProductLabelPrintModal({
         storeName,
         title,
       });
-      setNotice(`Đã mở hộp thoại in ${rendered.labelCount} tem sản phẩm.`);
+      setNotice(rendered.silent
+        ? `Đã gửi lệnh in trực tiếp ${rendered.labelCount} tem sản phẩm tới máy in mặc định.`
+        : `Đã mở hộp thoại in ${rendered.labelCount} tem sản phẩm.`);
       onPrinted?.(rendered);
       onClose?.();
     } catch (err) {
@@ -150,7 +154,9 @@ export default function ProductLabelPrintModal({
               <Printer size={20} /> {title || 'In tem sản phẩm'}
             </h2>
             <p className="text-xs text-blue-600 mt-1">
-              Chọn sản phẩm, số lượng tem, khổ in và loại giấy. Cửa hàng: {storeName}
+              {silentPrintEnabled
+                ? `Chọn sản phẩm, số lượng tem, khổ in và loại giấy rồi bấm In tem để gửi lệnh in trực tiếp. Cửa hàng: ${storeName}`
+                : `Chọn sản phẩm, số lượng tem, khổ in và loại giấy. Cửa hàng: ${storeName}`}
             </p>
           </div>
           <button type="button" onClick={handleCancel} className="text-gray-400 hover:text-gray-700 p-1 rounded-lg hover:bg-white/70" title="Đóng">
@@ -270,7 +276,9 @@ export default function ProductLabelPrintModal({
 
         <div className="px-5 py-4 border-t bg-gray-50 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
           <div className="text-xs text-gray-500">
-            In thành công được hiểu là trình duyệt đã mở hộp thoại in. Việc máy in nhận lệnh phụ thuộc thiết bị/hệ điều hành.
+            {silentPrintEnabled
+              ? 'Trong ứng dụng Electron desktop, lệnh in sẽ được gửi trực tiếp tới máy in mặc định mà không hiện popup xác nhận.'
+              : 'In thành công được hiểu là trình duyệt đã mở hộp thoại in. Việc máy in nhận lệnh phụ thuộc thiết bị/hệ điều hành.'}
           </div>
           <div className="flex gap-2 justify-end shrink-0">
             <button type="button" onClick={handleSkip} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-white text-sm font-medium">

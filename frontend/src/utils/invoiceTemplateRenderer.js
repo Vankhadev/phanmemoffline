@@ -1,8 +1,13 @@
 const MM_TO_PX = 3.7795275591;
 
 export const PAPER_SIZE_CONFIG = {
+  A3: { label: 'A3', widthMm: 297, minHeightMm: 420, pageSize: 'A3 portrait', marginMm: 10 },
   A4: { label: 'A4', widthMm: 210, minHeightMm: 297, pageSize: 'A4 portrait', marginMm: 10 },
   A5: { label: 'A5', widthMm: 148, minHeightMm: 210, pageSize: 'A5 portrait', marginMm: 8 },
+  A6: { label: 'A6', widthMm: 105, minHeightMm: 148, pageSize: 'A6 portrait', marginMm: 6 },
+  B5: { label: 'B5', widthMm: 176, minHeightMm: 250, pageSize: '176mm 250mm', marginMm: 8 },
+  Letter: { label: 'Letter', widthMm: 216, minHeightMm: 279.4, pageSize: 'Letter portrait', marginMm: 8 },
+  Legal: { label: 'Legal', widthMm: 216, minHeightMm: 356, pageSize: 'Legal portrait', marginMm: 8 },
   K57: { label: 'K57 - 57mm', widthMm: 57, minHeightMm: 160, pageSize: '57mm auto', marginMm: 0 },
   K80: { label: 'K80 - 80mm', widthMm: 80, minHeightMm: 180, pageSize: '80mm auto', marginMm: 0 },
   '80mm': { label: '80mm', widthMm: 80, minHeightMm: 180, pageSize: '80mm auto', marginMm: 0 },

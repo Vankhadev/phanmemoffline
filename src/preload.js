@@ -4,6 +4,8 @@ const UPDATE_STATUS_CHANNEL = 'kha:update:status';
 const WINDOW_FOCUS_CHANNEL = 'kha:window:ensure-input-focus';
 const BACKEND_API_BASE_CHANNEL = 'kha:backend:get-api-base';
 const BACKEND_INFO_CHANNEL = 'kha:backend:get-info';
+const PRINT_LIST_PRINTERS_CHANNEL = 'kha:print:list-printers';
+const PRINT_HTML_CHANNEL = 'kha:print:html';
 
 function stripTrailingSlash(value) {
   return String(value || '').replace(/\/+$/, '');
@@ -30,6 +32,10 @@ const desktopApi = {
   window: {
     ensureInputFocus: (details = {}) => ipcRenderer.invoke(WINDOW_FOCUS_CHANNEL, details),
   },
+  print: {
+    listPrinters: () => ipcRenderer.invoke(PRINT_LIST_PRINTERS_CHANNEL),
+    printHtml: (payload = {}) => ipcRenderer.invoke(PRINT_HTML_CHANNEL, payload),
+  },
   updates: {
     getState: () => ipcRenderer.invoke('kha:update:get-state'),
     check: (options = {}) => ipcRenderer.invoke('kha:update:check', {
@@ -54,4 +60,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   apiBase: runtimeApiBase,
   getApiBase: desktopApi.getApiBase,
   getBackendInfo: desktopApi.getBackendInfo,
+  print: desktopApi.print,
 });

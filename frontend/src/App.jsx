@@ -1,4 +1,4 @@
-﻿﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate, } from 'react-router-dom';
 import Home from './pages/Home';
 import CreateOrder from './pages/CreateOrder';
@@ -22,6 +22,8 @@ import {
   BarChart3,
   Box,
   Boxes,
+  ChevronDown,
+  ChevronRight,
   ClipboardList,
   FileText,
   Home as HomeIcon,
@@ -244,7 +246,11 @@ function AppLayout({
 }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [openMenus, setOpenMenus] = useState({ don_hang: true });
+  const [openMenus, setOpenMenus] = useState(() => ({
+    don_hang: location.pathname.startsWith('/tao-don-hang') || location.pathname.startsWith('/danh-sach-don-hang'),
+    danh_muc: location.pathname.startsWith('/san-pham') || location.pathname.startsWith('/kho-hang') || location.pathname.startsWith('/khach-hang') || location.pathname.startsWith('/nhap-hang') || location.pathname.startsWith('/nha-cung-cap'),
+    quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat') || location.pathname.startsWith('/mau-in'),
+  }));
   const [updateToast, setUpdateToast] = useState(null);
   const [updateToastVisible, setUpdateToastVisible] = useState(false);
   const [compactSidebarVisible, setCompactSidebarVisible] = useState(() => isCompactSidebarViewport());
@@ -277,6 +283,34 @@ function AppLayout({
     window.addEventListener('resize', handleResize);
     handleResize();
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    setOpenMenus(prev => {
+      const next = { ...prev };
+      let changed = false;
+      const autoOpenMatchers = {
+        don_hang: ['/tao-don-hang', '/danh-sach-don-hang'],
+        danh_muc: ['/san-pham', '/kho-hang', '/khach-hang', '/nhap-hang', '/nha-cung-cap'],
+        quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/bang-luong-nhan-vien', '/cai-dat', '/mau-in'],
+      };
+
+      Object.entries(autoOpenMatchers).forEach(([key, routes]) => {
+        if (routes.some(route => location.pathname.startsWith(route)) && !prev[key]) {
+          next[key] = true;
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [location.pathname]);
+
+  const toggleMenuGroup = useCallback((groupKey) => {
+    setOpenMenus(prev => ({
+      ...prev,
+      [groupKey]: !prev[groupKey],
+    }));
   }, []);
 
   const navGroups = useMemo(() => {
@@ -323,34 +357,75 @@ function AppLayout({
   }, [canAccess]);
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="flex min-h-screen">
-        <aside className={`${sidebarOpen ? 'w-72' : 'w-0'} transition-all duration-300 ease-in-out`}>
-          <nav className="p-4">
-            {navGroups.map(group => (
-              <div key={group.key || group.to} className="mb-4">
-                <div className="flex items-center gap-2 text-gray-700 font-semibold mb-2">
-                  {group.icon && <NavMenuIcon icon={group.icon} className={NAV_ICON_CLASS} />}
-                  <span>{group.label}</span>
-                </div>
-                {group.items?.filter(item => canAccess(item.to)).map(item => (
+    <div className="h-screen overflow-hidden bg-gray-100">
+      <div className="flex h-full min-h-0">
+        <aside
+          className={`${sidebarOpen ? 'w-72' : 'w-0'} sticky top-0 z-20 h-screen shrink-0 overflow-hidden border-r border-gray-200 bg-white transition-all duration-300 ease-in-out`}
+        >
+          <nav className="flex h-full flex-col overflow-y-auto px-4 py-5">
+            {navGroups.map(group => {
+              const accessibleItems = group.items?.filter(item => canAccess(item.to)) || [];
+
+              if (accessibleItems.length === 0) {
+                return (
                   <NavLink
-                    key={item.to}
-                    to={item.to}
+                    key={group.key || group.to}
+                    to={group.to}
                     className={({ isActive }) =>
-                      `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                      `mb-4 flex items-center gap-2 rounded-xl px-3 py-2.5 font-semibold transition-colors ${
                         isActive
-                          ? 'bg-blue-500 text-white'
-                          : 'text-gray-600 hover:bg-gray-100'
+                          ? 'bg-blue-500 text-white shadow-sm'
+                          : 'text-gray-700 hover:bg-gray-100'
                       }`
                     }
                   >
-                    {item.icon && <NavMenuIcon icon={item.icon} className={NAV_CHILD_ICON_CLASS} />}
-                    <span className="text-sm">{item.label}</span>
+                    {group.icon && <NavMenuIcon icon={group.icon} className={NAV_ICON_CLASS} />}
+                    <span className="truncate">{group.label}</span>
                   </NavLink>
-                ))}
-              </div>
-            ))}
+                );
+              }
+
+              const isOpen = Boolean(openMenus[group.key]);
+              const hasActiveChild = accessibleItems.some(item => location.pathname === item.to);
+
+              return (
+                <div key={group.key || group.to} className="mb-4">
+                  <button
+                    type="button"
+                    onClick={() => toggleMenuGroup(group.key)}
+                    className={`mb-2 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left font-semibold transition-colors ${
+                      hasActiveChild
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                    aria-expanded={isOpen}
+                    aria-controls={`nav-group-${group.key}`}
+                  >
+                    {group.icon && <NavMenuIcon icon={group.icon} className={NAV_ICON_CLASS} />}
+                    <span className="min-w-0 flex-1 truncate">{group.label}</span>
+                    {isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                  </button>
+                  <div id={`nav-group-${group.key}`} className={isOpen ? 'space-y-1' : 'hidden'}>
+                    {accessibleItems.map(item => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        className={({ isActive }) =>
+                          `flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
+                            isActive
+                              ? 'bg-blue-500 text-white shadow-sm'
+                              : 'text-gray-600 hover:bg-gray-100'
+                          }`
+                        }
+                      >
+                        {item.icon && <NavMenuIcon icon={item.icon} className={NAV_CHILD_ICON_CLASS} />}
+                        <span className="min-w-0 truncate">{item.label}</span>
+                      </NavLink>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </nav>
         </aside>
         <div className="app-main-scroll flex-1 min-h-0 min-w-0 overflow-x-auto overflow-y-auto p-3 sm:p-4">

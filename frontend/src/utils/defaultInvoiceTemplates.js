@@ -11,8 +11,13 @@ export const PRINT_TEMPLATE_TYPES = [
 ];
 
 export const PAPER_SIZE_OPTIONS = [
+  { value: 'A3', label: 'A3', widthMm: 297, description: '297 × 420mm' },
   { value: 'A4', label: 'A4', widthMm: 210, description: '210 × 297mm' },
   { value: 'A5', label: 'A5', widthMm: 148, description: '148 × 210mm' },
+  { value: 'A6', label: 'A6', widthMm: 105, description: '105 × 148mm' },
+  { value: 'B5', label: 'B5', widthMm: 176, description: '176 × 250mm' },
+  { value: 'Letter', label: 'Letter', widthMm: 216, description: '216 × 279mm' },
+  { value: 'Legal', label: 'Legal', widthMm: 216, description: '216 × 356mm' },
   { value: 'K57', label: 'K57', widthMm: 57, description: 'Máy in bill 57mm' },
   { value: 'K80', label: 'K80', widthMm: 80, description: 'Máy in bill 80mm' },
   { value: '80mm', label: '80mm', widthMm: 80, description: 'Cuộn giấy 80mm phổ biến' },

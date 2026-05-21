@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowLeft,
+  Check,
   CheckCircle2,
   ChevronDown,
   FileText,
@@ -12,12 +13,14 @@ import {
   X,
 } from 'lucide-react';
 import { getPreviewFrameSize } from '../utils/invoiceTemplateRenderer';
-import { printInvoice, renderInvoicePrintDocument, writePrintWindowMessage } from '../utils/printInvoice';
+import { PAPER_SIZE_OPTIONS, getPaperWidth } from '../utils/defaultInvoiceTemplates';
+import { getAvailablePrinters, isSilentPrintSupported } from '../utils/desktopPrint';
+import { printInvoice, renderInvoicePrintDocument } from '../utils/printInvoice';
 
-const PRINTER_OPTIONS = [
-  'Canon LBP2900',
-  'HP LaserJet Pro',
-  'Microsoft Print to PDF',
+const DEFAULT_PRINTER_OPTIONS = [
+  { name: 'Canon LBP2900', displayName: 'Canon LBP2900', isDefault: false },
+  { name: 'HP LaserJet Pro', displayName: 'HP LaserJet Pro', isDefault: false },
+  { name: 'Microsoft Print to PDF', displayName: 'Microsoft Print to PDF', isDefault: false },
 ];
 
 const PAGE_OPTIONS = [
@@ -45,6 +48,35 @@ function getWidthMmLabel(rendered, template) {
   return Number(rendered?.widthMm || template?.width_mm || template?.widthMm || 210) || 210;
 }
 
+function getPaperOption(paperSize) {
+  return PAPER_SIZE_OPTIONS.find(option => option.value === paperSize) || null;
+}
+
+function buildEffectiveTemplate(template, paperSize) {
+  if (!template) return null;
+  const normalizedPaperSize = String(paperSize || getPaperSizeLabel(null, template) || 'A4').trim() || 'A4';
+  const widthMm = getPaperWidth(normalizedPaperSize);
+  const nextConfig = template?.config && typeof template.config === 'object' && !Array.isArray(template.config)
+    ? {
+        ...template.config,
+        layout: {
+          ...(template.config.layout || {}),
+          paperSize: normalizedPaperSize,
+          widthMm,
+        },
+      }
+    : template?.config;
+
+  return {
+    ...template,
+    paper_size: normalizedPaperSize,
+    paperSize: normalizedPaperSize,
+    width_mm: widthMm,
+    widthMm,
+    config: nextConfig,
+  };
+}
+
 function formatCopies(value) {
   const numberValue = Number(value);
   if (!Number.isFinite(numberValue) || numberValue < 1) return 1;
@@ -62,11 +94,13 @@ export default function InvoicePrintPreviewModal({
   onBack,
   onClose,
   onPrinted,
+  onTemplateChange,
 }) {
   const [printing, setPrinting] = useState(false);
   const [printStatus, setPrintStatus] = useState('');
   const [copies, setCopies] = useState(1);
-  const [selectedPrinter, setSelectedPrinter] = useState(PRINTER_OPTIONS[0]);
+  const [printerOptions, setPrinterOptions] = useState(DEFAULT_PRINTER_OPTIONS);
+  const [selectedPrinter, setSelectedPrinter] = useState(DEFAULT_PRINTER_OPTIONS[0]?.name || '');
   const [pageMode, setPageMode] = useState('all');
   const [layout, setLayout] = useState('portrait');
   const [margins, setMargins] = useState('default');
@@ -74,9 +108,22 @@ export default function InvoicePrintPreviewModal({
   const [showAdvanced, setShowAdvanced] = useState(true);
   const [printBackground, setPrintBackground] = useState(true);
   const [showHeadersFooters, setShowHeadersFooters] = useState(false);
+  const [selectedPaperSize, setSelectedPaperSize] = useState(() => getPaperSizeLabel(null, template));
+  const [paperMenuOpen, setPaperMenuOpen] = useState(false);
+  const paperMenuRef = useRef(null);
+  const resetKeyRef = useRef('');
+
+  const templateResetKey = `${title}:${template?.id || 'no-template'}:${template?.type || ''}`;
+  const silentPrintEnabled = isSilentPrintSupported();
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setPaperMenuOpen(false);
+      resetKeyRef.current = '';
+      return;
+    }
+    if (resetKeyRef.current === templateResetKey) return;
+    resetKeyRef.current = templateResetKey;
     setPrinting(false);
     setPrintStatus('');
     setCopies(1);
@@ -87,14 +134,61 @@ export default function InvoicePrintPreviewModal({
     setShowAdvanced(true);
     setPrintBackground(true);
     setShowHeadersFooters(false);
-    setSelectedPrinter(PRINTER_OPTIONS[0]);
-  }, [open, title, template]);
+    setPrinterOptions(DEFAULT_PRINTER_OPTIONS);
+    setSelectedPrinter(DEFAULT_PRINTER_OPTIONS[0]?.name || '');
+    setSelectedPaperSize(getPaperSizeLabel(null, template));
+    setPaperMenuOpen(false);
+  }, [open, template, templateResetKey]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    let active = true;
+    getAvailablePrinters(DEFAULT_PRINTER_OPTIONS).then((printers) => {
+      if (!active || !Array.isArray(printers) || printers.length === 0) return;
+      setPrinterOptions(printers);
+      setSelectedPrinter((current) => {
+        if (current && printers.some(printer => printer.name === current)) return current;
+        return printers.find(printer => printer.isDefault)?.name || printers[0]?.name || current;
+      });
+    }).catch(() => {
+      if (!active) return;
+      setPrinterOptions(DEFAULT_PRINTER_OPTIONS);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !paperMenuOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (paperMenuRef.current && !paperMenuRef.current.contains(event.target)) {
+        setPaperMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setPaperMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open, paperMenuOpen]);
+
+  const effectiveTemplate = useMemo(() => buildEffectiveTemplate(template, selectedPaperSize), [selectedPaperSize, template]);
 
   const renderResult = useMemo(() => {
-    if (!open || loading || error || !data || !template) return { rendered: null, error: '' };
+    if (!open || loading || error || !data || !effectiveTemplate) return { rendered: null, error: '' };
     try {
       return {
-        rendered: renderInvoicePrintDocument({ data, template, title }),
+        rendered: renderInvoicePrintDocument({ data, template: effectiveTemplate, title }),
         error: '',
       };
     } catch (err) {
@@ -103,7 +197,7 @@ export default function InvoicePrintPreviewModal({
         error: err.message || 'Không thể dựng nội dung xem trước.',
       };
     }
-  }, [data, error, loading, open, template, title]);
+  }, [data, effectiveTemplate, error, loading, open, title]);
 
   const rendered = renderResult.rendered;
   const renderError = error || renderResult.error;
@@ -116,39 +210,52 @@ export default function InvoicePrintPreviewModal({
   const previewScale = Math.max(0.6, Math.min(1.4, scalePercent / 100));
   const scaledFrameWidth = Math.max(320, Math.round(frameSize.width * previewScale));
   const scaledFrameHeight = Math.max(420, Math.round(frameSize.minHeight * previewScale));
-  const effectivePaperSize = getPaperSizeLabel(rendered, template);
-  const effectiveWidthMm = getWidthMmLabel(rendered, template);
+  const effectivePaperSize = getPaperSizeLabel(rendered, effectiveTemplate || template);
+  const effectiveWidthMm = getWidthMmLabel(rendered, effectiveTemplate || template);
   const itemCount = Array.isArray(data?.items) ? data.items.length : 0;
+  const selectedPaperOption = getPaperOption(effectivePaperSize);
 
-  const handleConfirmPrint = () => {
-    if (!data || !template || renderError || loading) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      setPrintStatus('Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup và thử lại.');
-      return;
+  const handlePaperSizeSelect = (paperSize) => {
+    const nextPaperSize = String(paperSize || '').trim() || getPaperSizeLabel(null, template);
+    const nextTemplate = buildEffectiveTemplate(template, nextPaperSize);
+    setSelectedPaperSize(nextPaperSize);
+    setPaperMenuOpen(false);
+    setPrintStatus('');
+
+    const callbackResult = onTemplateChange?.(nextTemplate);
+    if (callbackResult && typeof callbackResult.catch === 'function') {
+      callbackResult.catch((err) => {
+        setPrintStatus(err?.message || 'Không thể lưu thay đổi khổ giấy cho mẫu in.');
+      });
     }
+  };
+
+  const handleConfirmPrint = async () => {
+    if (!data || !effectiveTemplate || renderError || loading) return;
 
     setPrinting(true);
-    setPrintStatus(`Đang gửi lệnh in tới ${selectedPrinter}...`);
+    setPrintStatus(silentPrintEnabled
+      ? `Đang gửi lệnh in trực tiếp tới ${selectedPrinter || 'máy in mặc định'}...`
+      : `Đang mở hộp thoại in cho ${selectedPrinter || 'máy in mặc định'}...`);
+
     try {
-      writePrintWindowMessage(printWindow, {
-        title: 'Đang chuẩn bị in',
-        message: 'Đang dựng nội dung phiếu in từ bản xem trước...',
-      });
-      const printed = printInvoice({
+      const printed = await printInvoice({
         data,
-        template,
+        template: effectiveTemplate,
         title,
-        targetWindow: printWindow,
+        printerName: selectedPrinter,
+        copies: formatCopies(copies),
+        layout,
+        margins,
+        printBackground,
+        showHeadersFooters,
+        pageMode,
       });
-      setPrintStatus(`Đã gửi nội dung sang hộp thoại in (${formatCopies(copies)} bản).`);
+      setPrintStatus(silentPrintEnabled
+        ? `Đã gửi lệnh in trực tiếp tới ${selectedPrinter || 'máy in mặc định'} (${formatCopies(copies)} bản).`
+        : `Đã gửi nội dung sang hộp thoại in (${formatCopies(copies)} bản).`);
       onPrinted?.(printed);
     } catch (err) {
-      writePrintWindowMessage(printWindow, {
-        title: 'Không thể in',
-        message: err.message || 'Không thể render nội dung in. Vui lòng thử lại.',
-        tone: 'error',
-      });
       setPrintStatus(err.message || 'Không thể in.');
     } finally {
       setPrinting(false);
@@ -160,7 +267,7 @@ export default function InvoicePrintPreviewModal({
   return (
     <div className="fixed inset-0 z-[90] bg-slate-950/70 backdrop-blur-sm">
       <div className="flex h-full w-full items-stretch justify-center p-0 lg:p-4">
-        <div className="flex h-full w-full max-w-[1600px] overflow-hidden bg-white shadow-2xl lg:rounded-[2rem] border border-slate-200">
+        <div className="flex h-full w-full max-w-[1600px] overflow-hidden border border-slate-200 bg-white shadow-2xl lg:rounded-[2rem]">
           <div className="flex min-w-0 flex-1 flex-col bg-[#eef2f7]">
             <div className="border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -170,7 +277,9 @@ export default function InvoicePrintPreviewModal({
                     <h2 className="truncate text-base font-bold lg:text-lg">{title}</h2>
                   </div>
                   <p className="mt-1 text-xs text-slate-500 lg:text-sm">
-                    {subtitle || 'Xem trước hóa đơn trước khi mở hộp thoại in của hệ điều hành.'}
+                    {subtitle || (silentPrintEnabled
+                      ? 'Kiểm tra nhanh nội dung và bấm In ngay để gửi lệnh in trực tiếp, không mở thêm hộp thoại hệ điều hành.'
+                      : 'Xem trước hóa đơn trước khi mở hộp thoại in của hệ điều hành.')}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -248,6 +357,7 @@ export default function InvoicePrintPreviewModal({
                           <span>Preview</span>
                         </div>
                         <iframe
+                          key={`${effectivePaperSize}-${effectiveWidthMm}-${scalePercent}-${rendered.documentHtml.length}`}
                           title="invoice-print-preview"
                           srcDoc={rendered.documentHtml}
                           sandbox="allow-same-origin"
@@ -275,7 +385,9 @@ export default function InvoicePrintPreviewModal({
                       <h3 className="text-base font-bold">Thiết lập in</h3>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      Mô phỏng giao diện thiết lập in để người dùng kiểm tra nội dung trước khi mở hộp thoại in hệ điều hành.
+                      {silentPrintEnabled
+                        ? 'Thiết lập này sẽ được áp dụng trực tiếp cho lệnh in trong ứng dụng desktop mà không mở thêm popup xác nhận.'
+                        : 'Mô phỏng giao diện thiết lập in để người dùng kiểm tra nội dung trước khi mở hộp thoại in hệ điều hành.'}
                     </p>
                   </div>
 
@@ -297,7 +409,7 @@ export default function InvoicePrintPreviewModal({
                             onChange={(event) => setSelectedPrinter(event.target.value)}
                             className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-10 text-sm text-slate-700 outline-none transition focus:border-blue-400"
                           >
-                            {PRINTER_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                            {printerOptions.map(option => <option key={option.name} value={option.name}>{option.displayName || option.name}</option>)}
                           </select>
                           <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         </div>
@@ -352,12 +464,47 @@ export default function InvoicePrintPreviewModal({
                           <div className="grid grid-cols-2 gap-3">
                             <label className="block text-sm">
                               <span className="mb-1.5 block text-xs font-medium text-slate-500">Khổ giấy</span>
-                              <input
-                                type="text"
-                                value={effectivePaperSize}
-                                readOnly
-                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none"
-                              />
+                              <div className="relative" ref={paperMenuRef}>
+                                <button
+                                  type="button"
+                                  onClick={() => setPaperMenuOpen(prev => !prev)}
+                                  className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-400"
+                                  aria-haspopup="listbox"
+                                  aria-expanded={paperMenuOpen}
+                                >
+                                  <span className="min-w-0 truncate">{selectedPaperOption?.label || effectivePaperSize}</span>
+                                  <ChevronDown size={16} className={`ml-3 shrink-0 text-slate-400 transition ${paperMenuOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                <div
+                                  className={`absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 origin-top rounded-xl border border-slate-200 bg-white p-1 shadow-[0_18px_48px_rgba(15,23,42,0.14)] transition duration-150 ${paperMenuOpen ? 'pointer-events-auto scale-100 opacity-100' : 'pointer-events-none scale-95 opacity-0'}`}
+                                >
+                                  <div className="max-h-64 overflow-auto pr-1">
+                                    {PAPER_SIZE_OPTIONS.map((option) => {
+                                      const isSelected = option.value === effectivePaperSize;
+                                      return (
+                                        <button
+                                          key={option.value}
+                                          type="button"
+                                          onClick={() => handlePaperSizeSelect(option.value)}
+                                          className={`flex w-full items-start justify-between gap-3 rounded-lg px-3 py-2 text-left transition ${isSelected ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+                                          role="option"
+                                          aria-selected={isSelected}
+                                        >
+                                          <span className="min-w-0">
+                                            <span className="block text-sm font-medium">{option.label}</span>
+                                            <span className={`block text-xs ${isSelected ? 'text-blue-500' : 'text-slate-400'}`}>
+                                              {option.description}
+                                            </span>
+                                          </span>
+                                          <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                                            {isSelected ? <Check size={15} className="text-blue-600" /> : null}
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
                             </label>
                             <label className="block text-sm">
                               <span className="mb-1.5 block text-xs font-medium text-slate-500">Số trang mỗi mặt</span>
@@ -368,6 +515,10 @@ export default function InvoicePrintPreviewModal({
                                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none"
                               />
                             </label>
+                          </div>
+
+                          <div className="-mt-1 text-[11px] text-slate-400">
+                            Đang dùng {effectivePaperSize} · {effectiveWidthMm}mm{selectedPaperOption?.description ? ` · ${selectedPaperOption.description}` : ''}
                           </div>
 
                           <div className="grid grid-cols-2 gap-3">
@@ -476,7 +627,9 @@ export default function InvoicePrintPreviewModal({
                           </div>
                         </div>
                         <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-3 text-xs text-blue-700">
-                          Sau khi bấm <strong>In ngay</strong>, ứng dụng sẽ mở hộp thoại in mặc định của trình duyệt/hệ điều hành. Các mục trong panel này giúp người dùng kiểm tra nhanh trước khi gửi lệnh in.
+                          {silentPrintEnabled
+                            ? <>Sau khi bấm <strong>In ngay</strong>, ứng dụng desktop sẽ gửi lệnh in trực tiếp tới máy in đã chọn mà không hiển thị thêm popup xác nhận.</>
+                            : <>Sau khi bấm <strong>In ngay</strong>, ứng dụng sẽ mở hộp thoại in mặc định của trình duyệt/hệ điều hành. Các mục trong panel này giúp người dùng kiểm tra nhanh trước khi gửi lệnh in.</>}
                         </div>
                       </div>
                     </section>

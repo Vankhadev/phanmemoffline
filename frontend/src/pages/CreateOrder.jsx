@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, getProductDisplayName, getProductVariants, getVariantIdentity } from '../utils/productSearch';
 import InvoicePrintPreviewModal from '../components/InvoicePrintPreviewModal';
-import { getDefaultPrintTemplate } from '../utils/printTemplateService';
+import { cacheDefaultPrintTemplate, getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
 import { attachClientOrderMetadata, generateClientOrderId } from '../utils/clientOrderId';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
@@ -1013,6 +1013,43 @@ export default function CreateOrder({ user, store }) {
     setPrintPreview(createEmptyPrintPreviewState());
   };
 
+  const persistPreviewTemplate = async (nextTemplate) => {
+    if (!nextTemplate) return nextTemplate;
+
+    const normalizedPaperSize = String(nextTemplate.paper_size || nextTemplate.paperSize || '').trim() || 'A4';
+    const normalizedType = String(nextTemplate.type || printPreview.type || 'sale_invoice').trim() || 'sale_invoice';
+    const payload = {
+      paper_size: normalizedPaperSize,
+      width_mm: Number(nextTemplate.width_mm || nextTemplate.widthMm) || 210,
+      config: nextTemplate.config || null,
+    };
+
+    if (/^\d+$/.test(String(nextTemplate.id || '').trim())) {
+      const data = await apiJsonChecked(resolveApiUrl(`/print-templates/${nextTemplate.id}`), {
+        method: 'PUT',
+        body: payload,
+      }, 'Không thể cập nhật khổ giấy mẫu in.');
+      const savedTemplate = cacheDefaultPrintTemplate(data?.template || data, {
+        type: normalizedType,
+        paperSize: normalizedPaperSize,
+      }) || nextTemplate;
+      setPrintPreview(prev => ({ ...prev, template: savedTemplate }));
+      return savedTemplate;
+    }
+
+    const cachedTemplate = cacheDefaultPrintTemplate({
+      ...nextTemplate,
+      paper_size: normalizedPaperSize,
+      width_mm: payload.width_mm,
+      config: payload.config,
+    }, {
+      type: normalizedType,
+      paperSize: normalizedPaperSize,
+    }) || nextTemplate;
+    setPrintPreview(prev => ({ ...prev, template: cachedTemplate }));
+    return cachedTemplate;
+  };
+
   const handleSelectPrintType = async (type) => {
     if (!lastInvoice) {
       alert('Không có dữ liệu hóa đơn để in.');
@@ -1926,6 +1963,7 @@ export default function CreateOrder({ user, store }) {
           if (lastInvoice) setPrintChoiceOpen(true);
         }}
         onClose={closePrintPreview}
+        onTemplateChange={persistPreviewTemplate}
       />
 
       {/* ===== VARIANT PICKER MODAL ===== */}

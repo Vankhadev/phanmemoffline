@@ -18,6 +18,39 @@ const getProductVariantCount = (product) => {
   return Number.isFinite(count) && count > 0 ? count : 0;
 };
 
+const pruneDeletedProducts = (items = [], deletedIdKeys) => {
+  if (!(deletedIdKeys instanceof Set) || deletedIdKeys.size === 0) return Array.isArray(items) ? items : EMPTY_ARRAY;
+
+  let changed = false;
+  const nextItems = [];
+
+  for (const product of Array.isArray(items) ? items : EMPTY_ARRAY) {
+    if (deletedIdKeys.has(toProductIdKey(product?.id))) {
+      changed = true;
+      continue;
+    }
+
+    const variants = Array.isArray(product?.variants) ? product.variants : EMPTY_ARRAY;
+    const nextVariants = variants.filter(variant => !deletedIdKeys.has(toProductIdKey(variant?.id)));
+
+    if (nextVariants.length !== variants.length) {
+      changed = true;
+      nextItems.push({
+        ...product,
+        variants: nextVariants,
+        variant_count: nextVariants.length,
+        variants_count: nextVariants.length,
+        variantCount: nextVariants.length,
+      });
+      continue;
+    }
+
+    nextItems.push(product);
+  }
+
+  return changed ? nextItems : items;
+};
+
 function formatVND(n) {
   return vndFormatter.format(n || 0);
 }
@@ -552,6 +585,9 @@ export default function Products({ store }) {
     () => selectedProducts.filter(id => productIdKeySet.has(toProductIdKey(id))),
     [productIdKeySet, selectedProducts]
   );
+  const clearSelectedProducts = useCallback(() => {
+    setSelectedProducts([]);
+  }, []);
 
   useEffect(() => {
     setSelectedProducts(prev => {
@@ -904,18 +940,15 @@ export default function Products({ store }) {
     }
   }, []);
 
-  const removeDeletedProductsFromState = useCallback((deletedIdKeys) => {
+  const removeDeletedProductsFromState = useCallback((deletedIdKeys, { resetSelection = false } = {}) => {
     if (!(deletedIdKeys instanceof Set) || deletedIdKeys.size === 0) return;
 
-    setProducts(prev => prev
-      .filter(product => !deletedIdKeys.has(toProductIdKey(product.id)))
-      .map(product => {
-        const variants = Array.isArray(product.variants) ? product.variants : EMPTY_ARRAY;
-        const nextVariants = variants.filter(variant => !deletedIdKeys.has(toProductIdKey(variant.id)));
-        return nextVariants.length === variants.length ? product : { ...product, variants: nextVariants };
-      })
-    );
-    setSelectedProducts(prev => prev.filter(id => !deletedIdKeys.has(toProductIdKey(id))));
+    setProducts(prev => pruneDeletedProducts(prev, deletedIdKeys));
+    if (resetSelection) {
+      clearSelectedProducts();
+    } else {
+      setSelectedProducts(prev => prev.filter(id => !deletedIdKeys.has(toProductIdKey(id))));
+    }
     setExpandedParents(prev => {
       let changed = false;
       const next = { ...prev };
@@ -927,7 +960,7 @@ export default function Products({ store }) {
       }
       return changed ? next : prev;
     });
-  }, []);
+  }, [clearSelectedProducts]);
 
   // ── CHECKBOX HANDLERS ──
   const toggleSelectProduct = useCallback((productId) => {
@@ -939,7 +972,7 @@ export default function Products({ store }) {
     );
   }, []);
 
-  const toggleSelectAll = () => {
+  const toggleSelectAll = useCallback(() => {
     if (filteredProductIds.length === 0) return;
     if (allFilteredSelected) {
       setSelectedProducts(prev => prev.filter(id => !filteredProductIdSet.has(toProductIdKey(id))));
@@ -957,16 +990,17 @@ export default function Products({ store }) {
         return next;
       });
     }
-  };
+  }, [allFilteredSelected, filteredProductIdSet, filteredProductIds]);
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = useCallback(async () => {
     if (bulkDeleteInFlightRef.current) return;
 
     const idsToDelete = [...new Map(selectedProductsForBulkAction.map(id => [toProductIdKey(id), id])).values()];
     if (idsToDelete.length === 0) {
-      setSelectedProducts([]);
+      clearSelectedProducts();
       return;
     }
+    if (!confirm(`Xóa ${idsToDelete.length} sản phẩm đã chọn? Tất cả biến thể của các sản phẩm này cũng sẽ bị xóa.`)) return;
 
     bulkDeleteInFlightRef.current = true;
     setIsBulkDeleting(true);
@@ -980,25 +1014,26 @@ export default function Products({ store }) {
         }
         return { id, alreadyDeleted: false };
       }));
+
       const deletedIds = deleteResults
         .filter(result => result.status === 'fulfilled')
         .map(result => result.value.id);
+      const failedResults = deleteResults.filter(result => result.status === 'rejected');
       const deletedIdKeys = new Set(deletedIds.map(toProductIdKey));
 
-      if (deletedIdKeys.size > 0) removeDeletedProductsFromState(deletedIdKeys);
-      await fetchProducts();
-      if (deletedIds.length > 0) {
+      if (deletedIdKeys.size > 0) {
+        removeDeletedProductsFromState(deletedIdKeys, { resetSelection: true });
+        void fetchProducts();
         broadcastSyncUpdate({
           reason: 'products-bulk-deleted',
           changedTables: ['products'],
         });
       }
 
-      if (deletedIds.length === idsToDelete.length) {
+      if (failedResults.length === 0) {
         alert(`✅ Đã xóa ${deletedIds.length} sản phẩm!`);
       } else {
-        const failedReasons = deleteResults
-          .filter(result => result.status === 'rejected')
+        const failedReasons = failedResults
           .map(result => result.reason?.message || 'Không rõ lỗi')
           .join('\n');
         alert(`⚠️ Đã xóa ${deletedIds.length}/${idsToDelete.length} sản phẩm. Một số sản phẩm chưa xóa được:\n${failedReasons}`);
@@ -1009,7 +1044,7 @@ export default function Products({ store }) {
       bulkDeleteInFlightRef.current = false;
       setIsBulkDeleting(false);
     }
-  };
+  }, [clearSelectedProducts, fetchProducts, removeDeletedProductsFromState, selectedProductsForBulkAction]);
 
   const requiredExcelColumns = [
     'Loại dòng',
@@ -1524,13 +1559,13 @@ export default function Products({ store }) {
 
   const handleDelete = useCallback(async (id) => {
     if (!confirm('Xóa sản phẩm này? Tất cả biến thể sẽ bị xóa.')) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10000);
       await apiJsonChecked(resolveApiUrl(`/products/${id}`), { method: 'DELETE', signal: controller.signal }, 'Không thể xóa sản phẩm.');
-      clearTimeout(timer);
+      removeDeletedProductsFromState(new Set([toProductIdKey(id)]));
       alert('✅ Đã xóa sản phẩm!');
-      fetchProducts();
+      void fetchProducts();
       broadcastSyncUpdate({
         reason: 'product-deleted',
         changedTables: ['products'],
@@ -1538,8 +1573,10 @@ export default function Products({ store }) {
     } catch (err) {
       if (err.name === 'AbortError') alert('⏱️ Server không phản hồi.');
       else alert(`📡 Lỗi kết nối: ${err.message}`);
+    } finally {
+      clearTimeout(timer);
     }
-  }, [fetchProducts]);
+  }, [fetchProducts, removeDeletedProductsFromState]);
 
   // Variants
   const openAddVariant = useCallback((parent) => {
@@ -1607,13 +1644,13 @@ export default function Products({ store }) {
 
   const handleDeleteVariant = useCallback(async (variantId) => {
     if (!confirm('Xóa biến thể này?')) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10000);
       await apiJsonChecked(resolveApiUrl(`/products/variants/${variantId}`), { method: 'DELETE', signal: controller.signal }, 'Không thể xóa biến thể.');
-      clearTimeout(timer);
+      removeDeletedProductsFromState(new Set([toProductIdKey(variantId)]));
       alert('✅ Đã xóa biến thể!');
-      fetchProducts();
+      void fetchProducts();
       broadcastSyncUpdate({
         reason: 'product-variant-deleted',
         changedTables: ['products'],
@@ -1621,8 +1658,10 @@ export default function Products({ store }) {
     } catch (err) {
       if (err.name === 'AbortError') alert('⏱️ Server không phản hồi.');
       else alert(`📡 Lỗi kết nối: ${err.message}`);
+    } finally {
+      clearTimeout(timer);
     }
-  }, [fetchProducts]);
+  }, [fetchProducts, removeDeletedProductsFromState]);
 
   const toggleExpand = useCallback((id) => {
     setExpandedParents(prev => ({ ...prev, [id]: !prev[id] }));
@@ -2199,7 +2238,9 @@ export default function Products({ store }) {
         onClose={closeProductLabelModal}
         onSkip={() => {}}
         onPrinted={(rendered) => {
-          alert(`✅ Đã mở hộp thoại in ${rendered.labelCount} tem sản phẩm.`);
+          alert(rendered?.silent
+            ? `✅ Đã gửi lệnh in trực tiếp ${rendered.labelCount} tem sản phẩm.`
+            : `✅ Đã mở hộp thoại in ${rendered.labelCount} tem sản phẩm.`);
         }}
       />
 

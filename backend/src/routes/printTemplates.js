@@ -19,8 +19,13 @@ function normalizePaperSize(value) {
 
 function inferWidthMm(paperSize, fallback = 80) {
   const text = normalizePaperSize(paperSize).toLowerCase();
+  if (text === 'a3') return 297;
   if (text === 'a4') return 210;
   if (text === 'a5') return 148;
+  if (text === 'a6') return 105;
+  if (text === 'b5') return 176;
+  if (text === 'letter') return 216;
+  if (text === 'legal') return 216;
   const match = text.match(/(\d+(?:[.,]\d+)?)/);
   if (!match) return fallback;
   const width = Number(match[1].replace(',', '.'));

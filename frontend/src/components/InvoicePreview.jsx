@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Eye, Printer, RefreshCw } from 'lucide-react';
+import { isSilentPrintSupported, printHtmlSilently } from '../utils/desktopPrint';
 import {
   createSampleInvoiceData,
   getPreviewFrameSize,
@@ -36,7 +37,32 @@ export default function InvoicePreview({ template, store, type = 'sale_invoice',
     [rendered.paperSize, rendered.widthMm]
   );
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    if (isSilentPrintSupported()) {
+      setPrintStatus('Đang gửi lệnh in thử trực tiếp...');
+      try {
+        await printHtmlSilently({
+          documentHtml: rendered.documentHtml,
+          jobTitle: template?.name || 'In thử mẫu hóa đơn',
+          paperSize: rendered.paperSize,
+          widthMm: rendered.widthMm,
+          heightMm: rendered.paperSize === 'A3' ? 420
+            : rendered.paperSize === 'A4' ? 297
+            : rendered.paperSize === 'A5' ? 210
+            : rendered.paperSize === 'A6' ? 148
+            : rendered.paperSize === 'B5' ? 250
+            : rendered.paperSize === 'Letter' ? 279.4
+            : rendered.paperSize === 'Legal' ? 355.6
+            : (rendered.widthMm <= 90 ? 3276 : 0),
+        });
+        setPrintStatus('Đã gửi lệnh in thử trực tiếp tới máy in mặc định.');
+        return;
+      } catch (err) {
+        setPrintStatus(`Không thể in thử: ${err.message}`);
+        return;
+      }
+    }
+
     setPrintStatus('Đang mở cửa sổ in...');
     const printWindow = window.open('', '_blank', 'width=960,height=720');
     if (!printWindow) {

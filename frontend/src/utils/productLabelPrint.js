@@ -1,3 +1,4 @@
+import { printHtmlSilently, isSilentPrintSupported } from './desktopPrint';
 import { escapeHtml, formatCurrency } from './invoiceTemplateRenderer';
 
 export const PRODUCT_LABEL_SIZES = [
@@ -58,48 +59,59 @@ export const PRODUCT_LABEL_PAPERS = [
     rows: 10,
     gapXmm: 1,
     gapYmm: 0.6,
-    margin: { top: 7, right: 6, bottom: 7, left: 6 },
+    margin: { top: 7, right: 5, bottom: 7, left: 5 },
   },
 ];
 
 export const DEFAULT_PRODUCT_LABEL_CONTENT = {
-  showStoreName: true,
   showProductName: true,
   showBarcode: true,
   showPrice: true,
+  showStoreName: true,
 };
 
-const FALLBACK_STORE_NAME = 'Cửa hàng';
-
-function firstNonEmpty(...values) {
-  for (const value of values) {
-    if (value === undefined || value === null) continue;
-    const text = String(value).trim();
-    if (text) return text;
-  }
-  return '';
-}
-
-function toFiniteNumber(value, fallback = 0) {
-  if (value === undefined || value === null || value === '') return fallback;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
-  const normalized = String(value).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
-  const number = Number(normalized);
-  return Number.isFinite(number) ? number : fallback;
-}
-
 function toPositiveInteger(value, fallback = 1) {
-  const number = Math.floor(toFiniteNumber(value, fallback));
+  const number = Math.floor(Number(value));
   return Number.isFinite(number) && number > 0 ? number : fallback;
 }
 
-function normalizeBooleanFlag(value, fallback) {
-  if (value === undefined || value === null || value === '') return fallback;
-  if (typeof value === 'boolean') return value;
-  const text = String(value).trim().toLowerCase();
-  if (['false', '0', 'no', 'off'].includes(text)) return false;
-  if (['true', '1', 'yes', 'on'].includes(text)) return true;
-  return fallback;
+function toFiniteNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(String(value || '')).replace(/"/g, '"');
+}
+
+function getStoreName(store, fallback = 'Cửa hàng') {
+  return store?.name || store?.store_name || store?.shop_name || store?.business_name || fallback;
+}
+
+function normalizeBoolean(value, fallback = false) {
+  if (value === undefined) return fallback;
+  return Boolean(value);
+}
+
+function normalizeContentOptions(content = {}) {
+  return {
+    showProductName: normalizeBoolean(content.showProductName, DEFAULT_PRODUCT_LABEL_CONTENT.showProductName),
+    showBarcode: normalizeBoolean(content.showBarcode, DEFAULT_PRODUCT_LABEL_CONTENT.showBarcode),
+    showPrice: normalizeBoolean(content.showPrice, DEFAULT_PRODUCT_LABEL_CONTENT.showPrice),
+    showStoreName: normalizeBoolean(content.showStoreName, DEFAULT_PRODUCT_LABEL_CONTENT.showStoreName),
+  };
+}
+
+export function normalizeProductLabelItems(items = [], options = {}) {
+  const defaultQuantity = toPositiveInteger(options.defaultQuantity, 1);
+  return (Array.isArray(items) ? items : []).map((item, index) => ({
+    ...item,
+    id: item?.id || item?.variant_id || item?.product_id || `label-item-${index}`,
+    name: String(item?.name || item?.product_name || item?.display_name || 'Sản phẩm').trim(),
+    sku: String(item?.sku || item?.barcode || item?.product_sku || '').trim(),
+    price: item?.price ?? item?.retail_price ?? item?.sale_price ?? item?.unit_price ?? 0,
+    quantity: toPositiveInteger(item?.labelQuantity ?? item?.quantity, defaultQuantity),
+  }));
 }
 
 export function getProductLabelSizeConfig(value) {
@@ -110,215 +122,153 @@ export function getProductLabelPaperConfig(value) {
   return PRODUCT_LABEL_PAPERS.find(paper => paper.value === value) || PRODUCT_LABEL_PAPERS[0];
 }
 
-export function normalizeProductLabelItems(items = [], { defaultQuantity = 1 } = {}) {
-  const sourceItems = Array.isArray(items) ? items : (items ? [items] : []);
-  return sourceItems
-    .map((rawItem, index) => {
-      const item = rawItem && typeof rawItem === 'object' ? rawItem : { name: rawItem };
-      const sku = firstNonEmpty(item.sku, item.maSP, item.barcode, item.code, item.product_code, item.productCode);
-      const parentName = firstNonEmpty(item.parent_name, item.parentName, item.parent?.name, item.product_name_parent);
-      const variantName = firstNonEmpty(item.variant_name, item.variantName);
-      const baseName = firstNonEmpty(item.name, item.tenSP, item.product_name, variantName, item.title, sku);
-      const shouldPrefixParent = parentName && variantName && !String(baseName).includes(parentName);
-      const name = shouldPrefixParent ? `${parentName} / ${baseName}` : baseName;
-      const price = toFiniteNumber(
-        item.retail_price ?? item.price ?? item.giaBan ?? item.gia_ban ?? item.giaLe ?? item.gia_le ?? item.sale_price ?? item.wholesale_price,
-        0
-      );
-      const quantity = toPositiveInteger(
-        item.labelQuantity ?? item.label_quantity ?? item.printQuantity ?? item.print_quantity ?? item.soLuongNhap ?? item.quantity ?? item.soLuong ?? item.qty,
-        defaultQuantity
-      );
-
-      return {
-        id: item.id ?? item.product_id ?? item.variant_id ?? `${sku || name || 'label'}-${index}`,
-        product_id: item.product_id ?? item.productId ?? item.id ?? null,
-        variant_id: item.variant_id ?? item.variantId ?? null,
-        name,
-        sku,
-        price,
-        quantity,
-        unit: firstNonEmpty(item.unit, item.donVi, item.dvt),
-        raw: item,
-      };
-    })
-    .filter(item => item.name || item.sku);
-}
-
-function expandLabelItems(items) {
-  return items.flatMap(item => {
+function expandLabelItems(items = []) {
+  return items.flatMap((item) => {
     const quantity = toPositiveInteger(item.quantity, 1);
-    return Array.from({ length: quantity }, (_, copyIndex) => ({ ...item, copyIndex }));
+    return Array.from({ length: quantity }, (_, index) => ({
+      ...item,
+      _copyIndex: index + 1,
+    }));
   });
 }
 
-export function renderSkuBarcodeSvg(value, { height = 36 } = {}) {
-  const sku = String(value || '').trim();
-  if (!sku) {
-    return '<div class="label-barcode-empty">Chưa có SKU</div>';
+function chunkItems(items = [], chunkSize = 1) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const safeChunkSize = Math.max(1, Math.floor(chunkSize) || 1);
+  const result = [];
+  for (let index = 0; index < items.length; index += safeChunkSize) {
+    result.push(items.slice(index, index + safeChunkSize));
   }
-
-  const modules = [
-    { on: true, width: 2 },
-    { on: false, width: 1 },
-    { on: true, width: 1 },
-    { on: false, width: 1 },
-  ];
-
-  Array.from(sku).forEach((char, charIndex) => {
-    const code = char.charCodeAt(0);
-    for (let bit = 7; bit >= 0; bit -= 1) {
-      const on = ((code >> bit) & 1) === 1;
-      modules.push({
-        on,
-        width: on && ((code + bit + charIndex) % 3 === 0) ? 2 : 1,
-      });
-    }
-    modules.push({ on: false, width: 1 });
-  });
-
-  modules.push(
-    { on: true, width: 1 },
-    { on: false, width: 1 },
-    { on: true, width: 2 }
-  );
-
-  const totalWidth = modules.reduce((sum, module) => sum + module.width, 0);
-  let x = 0;
-  const bars = modules.map((module, index) => {
-    const currentX = x;
-    x += module.width;
-    if (!module.on) return '';
-    return `<rect key="${index}" x="${currentX}" y="0" width="${module.width}" height="${height}" />`;
-  }).join('');
-
-  return `<svg class="label-barcode-svg" viewBox="0 0 ${totalWidth} ${height}" preserveAspectRatio="none" role="img" aria-label="Barcode ${escapeHtml(sku)}"><title>${escapeHtml(sku)}</title>${bars}</svg>`;
+  return result;
 }
 
-function normalizeContentOptions(options = {}) {
-  return {
-    showStoreName: normalizeBooleanFlag(options.showStoreName ?? options.storeName, DEFAULT_PRODUCT_LABEL_CONTENT.showStoreName),
-    showProductName: normalizeBooleanFlag(options.showProductName ?? options.productName ?? options.showName, DEFAULT_PRODUCT_LABEL_CONTENT.showProductName),
-    showBarcode: normalizeBooleanFlag(options.showBarcode ?? options.barcode ?? options.showSku, DEFAULT_PRODUCT_LABEL_CONTENT.showBarcode),
-    showPrice: normalizeBooleanFlag(options.showPrice ?? options.price, DEFAULT_PRODUCT_LABEL_CONTENT.showPrice),
+function getSheetMetric(paper = {}) {
+  const columns = Math.max(1, Math.floor(paper.columns) || 1);
+  const rows = Math.max(1, Math.floor(paper.rows) || 1);
+  const pageWidthMm = toFiniteNumber(paper.pageWidthMm, 210);
+  const pageHeightMm = toFiniteNumber(paper.pageHeightMm, 297);
+  const gapXmm = Math.max(0, toFiniteNumber(paper.gapXmm, 0));
+  const gapYmm = Math.max(0, toFiniteNumber(paper.gapYmm, 0));
+  const margin = {
+    top: Math.max(0, toFiniteNumber(paper.margin?.top, 0)),
+    right: Math.max(0, toFiniteNumber(paper.margin?.right, 0)),
+    bottom: Math.max(0, toFiniteNumber(paper.margin?.bottom, 0)),
+    left: Math.max(0, toFiniteNumber(paper.margin?.left, 0)),
   };
-}
 
-function getStoreName(store, explicitName) {
-  return firstNonEmpty(explicitName, store?.name, store?.store_name, store?.shop_name, store?.business_name, FALLBACK_STORE_NAME);
-}
+  const usableWidth = Math.max(10, pageWidthMm - margin.left - margin.right - gapXmm * (columns - 1));
+  const usableHeight = Math.max(10, pageHeightMm - margin.top - margin.bottom - gapYmm * (rows - 1));
 
-function getSheetMetric(paper) {
-  const margin = paper.margin || { top: 0, right: 0, bottom: 0, left: 0 };
-  const columns = Math.max(1, Number(paper.columns) || 1);
-  const rows = Math.max(1, Number(paper.rows) || 1);
-  const gapXmm = Math.max(0, Number(paper.gapXmm) || 0);
-  const gapYmm = Math.max(0, Number(paper.gapYmm) || 0);
-  const usableWidth = Math.max(10, paper.pageWidthMm - margin.left - margin.right - gapXmm * (columns - 1));
-  const usableHeight = Math.max(10, paper.pageHeightMm - margin.top - margin.bottom - gapYmm * (rows - 1));
   return {
-    margin,
+    ...paper,
+    pageWidthMm,
+    pageHeightMm,
     columns,
     rows,
     gapXmm,
     gapYmm,
+    margin,
     labelWidthMm: usableWidth / columns,
     labelHeightMm: usableHeight / rows,
     capacity: columns * rows,
   };
 }
 
-function chunkItems(items, size) {
-  if (!size || size <= 0) return [items];
-  const chunks = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
+function renderBarcodeSvg(text = '') {
+  const value = String(text || '').trim();
+  if (!value) {
+    return '<div class="label-barcode-empty">No SKU</div>';
   }
-  return chunks;
+
+  const bars = value.split('').map((char, index) => {
+    const code = char.charCodeAt(0);
+    const width = 1 + (code % 3);
+    const x = 2 + index * 3;
+    return `<rect x="${x}" y="2" width="${width}" height="36" rx="0.4"></rect>`;
+  }).join('');
+
+  return `<svg class="label-barcode-svg" viewBox="0 0 ${Math.max(48, value.length * 3 + 4)} 40" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-label="Barcode ${escapeAttribute(value)}">${bars}</svg>`;
 }
 
-function renderLabelItem(item, index, { content, storeName }) {
-  const sku = String(item.sku || '').trim();
+function renderLabelItem(item, index, context) {
+  const { content, storeName } = context;
+  const productName = escapeHtml(item.name || 'Sản phẩm');
+  const sku = escapeHtml(item.sku || '');
+  const price = formatCurrency(item.price || 0);
+
   return `
-    <div class="product-label" data-label-index="${index + 1}">
+    <article class="product-label" data-index="${index + 1}">
       ${content.showStoreName ? `<div class="label-store">${escapeHtml(storeName)}</div>` : ''}
-      ${content.showProductName ? `<div class="label-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>` : ''}
-      ${content.showBarcode ? `<div class="label-barcode">${renderSkuBarcodeSvg(sku)}</div><div class="label-sku">${escapeHtml(sku)}</div>` : ''}
-      ${content.showPrice ? `<div class="label-price">${escapeHtml(formatCurrency(item.price))}</div>` : ''}
-    </div>
-  `;
+      ${content.showProductName ? `<div class="label-name">${productName}</div>` : ''}
+      ${content.showBarcode ? `<div class="label-barcode">${renderBarcodeSvg(item.sku)}</div>` : ''}
+      ${content.showBarcode ? `<div class="label-sku">${sku || '&nbsp;'}</div>` : ''}
+      ${content.showPrice ? `<div class="label-price">${escapeHtml(price)}</div>` : ''}
+    </article>
+  `.trim();
 }
 
-function buildPrintCss({ labelSize, paper, content }) {
-  const isRoll = paper.kind === 'roll';
-  const sheet = isRoll ? null : getSheetMetric(paper);
+function buildPrintCss(context) {
+  const { labelSize, paper, content } = context;
   const barcodeDisplay = content.showBarcode ? 'block' : 'none';
 
-  if (isRoll) {
+  if (paper.kind === 'roll') {
     return `
       @page { size: ${labelSize.widthMm}mm ${labelSize.heightMm}mm; margin: 0; }
       * { box-sizing: border-box; }
-      html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; }
+      body { margin: 0; background: #fff; color: #111827; font-family: Arial, Helvetica, sans-serif; }
       .print-meta { display: none; }
-      .label-sheet { margin: 0; padding: 0; }
+      .roll-page { width: ${labelSize.widthMm}mm; display: grid; grid-template-columns: 1fr; }
       .product-label {
         width: ${labelSize.widthMm}mm;
         height: ${labelSize.heightMm}mm;
-        padding: 1.1mm 1.8mm 0.9mm;
-        overflow: hidden;
+        padding: 1.2mm 1.6mm;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        overflow: hidden;
         border: 0;
-        break-after: page;
-        page-break-after: always;
       }
-      .product-label:last-child { break-after: auto; page-break-after: auto; }
       .label-store { max-width: 100%; font-size: 2.15mm; line-height: 1.05; font-weight: 700; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .label-name { max-width: 100%; font-size: ${labelSize.widthMm >= 100 ? '2.8mm' : '2.45mm'}; line-height: 1.05; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.35mm; }
       .label-barcode { display: ${barcodeDisplay}; width: 92%; height: 6.8mm; margin-top: 0.4mm; }
       .label-barcode-svg { width: 100%; height: 100%; fill: #111; display: block; }
-      .label-barcode-empty { height: 100%; display: flex; align-items: center; justify-content: center; border: 0.25mm dashed #999; font-size: 2mm; color: #777; }
+      .label-barcode-empty { height: 100%; display: flex; align-items: center; justify-content: center; border: 0.25mm dashed #999; font-size: 1.7mm; color: #777; }
       .label-sku { max-width: 100%; font-size: 2.05mm; line-height: 1; letter-spacing: 0.2mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.25mm; }
       .label-price { font-size: ${labelSize.widthMm >= 100 ? '3.5mm' : '3.05mm'}; line-height: 1.05; font-weight: 800; margin-top: 0.35mm; }
       @media screen {
         body { background: #f3f4f6; padding: 12px; }
-        .label-sheet { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-        .product-label { background: #fff; border: 1px dashed #cbd5e1; box-shadow: 0 1px 4px rgba(15,23,42,.12); break-after: auto; page-break-after: auto; }
+        .roll-page { background: #fff; margin: 0 auto; box-shadow: 0 8px 24px rgba(15,23,42,.14); }
+        .product-label { outline: 1px dashed #d1d5db; outline-offset: -1px; }
       }
     `;
   }
 
+  const sheet = getSheetMetric(paper);
   return `
-    @page { size: ${paper.pageSize}; margin: 0; }
+    @page { size: ${sheet.pageSize || 'A4'}; margin: ${sheet.margin.top}mm ${sheet.margin.right}mm ${sheet.margin.bottom}mm ${sheet.margin.left}mm; }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; }
+    body { margin: 0; background: #fff; color: #111827; font-family: Arial, Helvetica, sans-serif; }
     .print-meta { display: none; }
     .sheet-page {
-      width: ${paper.pageWidthMm}mm;
-      height: ${paper.pageHeightMm}mm;
-      padding: ${sheet.margin.top}mm ${sheet.margin.right}mm ${sheet.margin.bottom}mm ${sheet.margin.left}mm;
       display: grid;
       grid-template-columns: repeat(${sheet.columns}, ${sheet.labelWidthMm}mm);
       grid-auto-rows: ${sheet.labelHeightMm}mm;
       gap: ${sheet.gapYmm}mm ${sheet.gapXmm}mm;
-      align-content: start;
-      justify-content: start;
-      overflow: hidden;
-      break-after: page;
+      width: 100%;
       page-break-after: always;
+      break-after: page;
     }
-    .sheet-page:last-child { break-after: auto; page-break-after: auto; }
+    .sheet-page:last-child { page-break-after: auto; break-after: auto; }
     .product-label {
       width: ${sheet.labelWidthMm}mm;
       height: ${sheet.labelHeightMm}mm;
       padding: ${sheet.labelHeightMm < 16 ? '0.45mm 0.8mm' : '0.7mm 1mm'};
-      overflow: hidden;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
       border: 0;
     }
     .label-store { max-width: 100%; font-size: ${sheet.labelHeightMm < 16 ? '1.4mm' : '1.8mm'}; line-height: 1; font-weight: 700; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -416,8 +366,32 @@ export function renderProductLabelPrintDocument(items = [], options = {}) {
   };
 }
 
-export function printProductLabels(items = [], options = {}) {
+export async function printProductLabels(items = [], options = {}) {
   const rendered = renderProductLabelPrintDocument(items, options);
+
+  if (isSilentPrintSupported()) {
+    const printResult = await printHtmlSilently({
+      documentHtml: rendered.documentHtml,
+      jobTitle: options.title || 'In tem sản phẩm',
+      printerName: options.printerName || options.printer_name || '',
+      copies: 1,
+      layout: 'portrait',
+      margins: 'none',
+      printBackground: true,
+      showHeadersFooters: false,
+      pageMode: 'all',
+      paperSize: rendered.paper?.pageSize || `${rendered.labelSize.widthMm}x${rendered.labelSize.heightMm}`,
+      widthMm: rendered.paper?.kind === 'roll' ? rendered.labelSize.widthMm : rendered.paper?.pageWidthMm || rendered.labelSize.widthMm,
+      heightMm: rendered.paper?.kind === 'roll' ? rendered.labelSize.heightMm : rendered.paper?.pageHeightMm || rendered.labelSize.heightMm,
+    });
+
+    return {
+      ...rendered,
+      printResult,
+      silent: true,
+    };
+  }
+
   const printWindow = options.targetWindow || window.open('', '_blank');
   if (!printWindow) {
     throw new Error('Trình duyệt đã chặn cửa sổ in tem. Vui lòng cho phép popup và thử lại.');
@@ -430,5 +404,8 @@ export function printProductLabels(items = [], options = {}) {
   }));
   printWindow.document.close();
 
-  return rendered;
+  return {
+    ...rendered,
+    silent: false,
+  };
 }

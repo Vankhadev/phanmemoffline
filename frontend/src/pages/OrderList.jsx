@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { resolveApiUrl } from '../utils/apiClient';
-import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, Printer, HelpCircle, RefreshCw, Receipt, Clock3, Wallet } from 'lucide-react';
-import { getDefaultPrintTemplate } from '../utils/printTemplateService';
+import { apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT, requestSyncCheck } from '../utils/apiClient';
+import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, Printer, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud } from 'lucide-react';
+import { cacheDefaultPrintTemplate, getDefaultPrintTemplate } from '../utils/printTemplateService';
 import { createInvoicePrintData } from '../utils/invoicePrintData';
 import InvoicePrintPreviewModal from '../components/InvoicePrintPreviewModal';
 import { getProductDisplayName } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
-import { SYNC_UPDATED_EVENT, requestSyncCheck } from '../utils/apiClient';
 
 const API = resolveApiUrl('');
 
@@ -90,8 +89,12 @@ function buildVietQRUrl(store, amount, invoiceCode) {
   return `https://img.vietqr.io/image/${bankCode}-${account}-compact2.png?amount=${amount}&addInfo=${addInfo}&accountName=${accountName}`;
 }
 
+function getOrderIdentityKey(order = {}) {
+  return String(order.client_order_id || order.payload?.client_order_id || order.invoice_code || order.id || '').trim();
+}
+
 function getOrderDedupeKey(order = {}) {
-  return order.client_order_id || order.payload?.client_order_id || order.invoice_code || order.id;
+  return getOrderIdentityKey(order);
 }
 
 function sameOrderIdentity(a = {}, b = {}) {
@@ -166,6 +169,43 @@ export default function OrderList({ store = {} }) {
 
   const closePrintPreview = () => {
     setPrintPreview(createEmptyPrintPreviewState());
+  };
+
+  const persistPreviewTemplate = async (nextTemplate) => {
+    if (!nextTemplate) return nextTemplate;
+
+    const normalizedPaperSize = String(nextTemplate.paper_size || nextTemplate.paperSize || '').trim() || 'A4';
+    const normalizedType = String(nextTemplate.type || 'sale_invoice').trim() || 'sale_invoice';
+    const payload = {
+      paper_size: normalizedPaperSize,
+      width_mm: Number(nextTemplate.width_mm || nextTemplate.widthMm) || 210,
+      config: nextTemplate.config || null,
+    };
+
+    if (/^\d+$/.test(String(nextTemplate.id || '').trim())) {
+      const data = await apiJsonChecked(resolveApiUrl(`/print-templates/${nextTemplate.id}`), {
+        method: 'PUT',
+        body: payload,
+      }, 'Không thể cập nhật khổ giấy mẫu in.');
+      const savedTemplate = cacheDefaultPrintTemplate(data?.template || data, {
+        type: normalizedType,
+        paperSize: normalizedPaperSize,
+      }) || nextTemplate;
+      setPrintPreview(prev => ({ ...prev, template: savedTemplate }));
+      return savedTemplate;
+    }
+
+    const cachedTemplate = cacheDefaultPrintTemplate({
+      ...nextTemplate,
+      paper_size: normalizedPaperSize,
+      width_mm: payload.width_mm,
+      config: payload.config,
+    }, {
+      type: normalizedType,
+      paperSize: normalizedPaperSize,
+    }) || nextTemplate;
+    setPrintPreview(prev => ({ ...prev, template: cachedTemplate }));
+    return cachedTemplate;
   };
 
   // Load products for picker
@@ -287,6 +327,14 @@ export default function OrderList({ store = {} }) {
     return matchSearch && matchStatus && matchSource;
   });
 
+  useEffect(() => {
+    const orderIds = new Set(displayOrders.map(inv => getOrderIdentityKey(inv)).filter(Boolean));
+    setSelectedOrders(prev => {
+      const next = prev.filter(id => orderIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [displayOrders]);
+
   const summaryCards = [
     {
       key: 'total',
@@ -335,19 +383,20 @@ export default function OrderList({ store = {} }) {
   ];
 
 
-  const selectedAll = filtered.length > 0 && filtered.every(inv => selectedOrders.includes(inv.id || inv.invoice_code));
+  const selectedAll = filtered.length > 0 && filtered.every(inv => selectedOrders.includes(getOrderIdentityKey(inv)));
 
   // ── CHECKBOX HANDERS ──
   const toggleSelectOrder = (orderId) => {
     if (!orderId) return;
-    setSelectedOrders(prev =>
+    setSelectedOrders(prev => (
       prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
-    );
+    ));
   };
 
   const toggleSelectAll = () => {
-    const allIdentifiers = filtered.map(inv => inv.id || inv.invoice_code).filter(id => id != null);
-    if (selectedOrders.length === allIdentifiers.length) {
+    const allIdentifiers = filtered.map(inv => getOrderIdentityKey(inv)).filter(Boolean);
+    const areAllSelected = allIdentifiers.length > 0 && allIdentifiers.every(id => selectedOrders.includes(id));
+    if (areAllSelected) {
       setSelectedOrders([]);
     } else {
       setSelectedOrders(allIdentifiers);
@@ -361,7 +410,7 @@ export default function OrderList({ store = {} }) {
     setIsBulkDeleting(true);
     try {
       // Get selected order objects
-      const selectedOrdersData = filtered.filter(inv => selectedOrders.includes(inv.id || inv.invoice_code));
+      const selectedOrdersData = filtered.filter(inv => selectedOrders.includes(getOrderIdentityKey(inv)));
       const onlineOrders = selectedOrdersData.filter(inv => inv.id && !inv._isOffline);
       const offlineOrders = selectedOrdersData.filter(inv => inv._isOffline);
 
@@ -736,7 +785,7 @@ export default function OrderList({ store = {} }) {
       const timer = setTimeout(() => controller.abort(), 8000);
 
       // Determine order identifier
-      const orderId = inv.id || inv.invoice_code;
+      const orderId = getOrderIdentityKey(inv);
       const isOffline = inv._isOffline;
 
       let success = false;
@@ -1104,7 +1153,7 @@ export default function OrderList({ store = {} }) {
                   return `${day}/${mo}/${y}`;
                 };
                 const isUnpaid = inv._isOffline || inv.status === 'pending';
-                const orderKey = inv.id || inv.invoice_code;
+                const orderKey = getOrderIdentityKey(inv);
                 const isSelected = selectedOrders.includes(orderKey);
                 const sourceBadge = getOrderSourceBadge(inv);
                 const creatorName = inv.user_name || inv.invoice_writer || inv.created_by_user_name || '';
@@ -1232,7 +1281,7 @@ export default function OrderList({ store = {} }) {
                   return `${day}/${mo}/${y}`;
                 };
                 const isUnpaid = inv._isOffline || inv.status === 'pending';
-                const orderKey = inv.id || inv.invoice_code;
+                const orderKey = getOrderIdentityKey(inv);
                 const isSelected = selectedOrders.includes(orderKey);
                 const paymentLabel = isUnpaid
                   ? <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-500">Chưa thanh toán</span>
@@ -1781,6 +1830,7 @@ export default function OrderList({ store = {} }) {
         error={printPreview.error}
         onBack={closePrintPreview}
         onClose={closePrintPreview}
+        onTemplateChange={persistPreviewTemplate}
       />
 
       {/* Help Modal */}
