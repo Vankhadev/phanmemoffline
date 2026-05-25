@@ -1,6 +1,6 @@
 # Phan mem offline
 
-## Phiên bản hiện tại: 1.3.4
+## Phiên bản hiện tại: 1.3.5
 
 Ứng dụng quản lý bán hàng offline gồm:
 
@@ -66,7 +66,25 @@ npm run build:all
 
 Các script `build:installer`, `build:portable` và `build:all` luôn build lại frontend trước khi đóng gói để tránh dùng `frontend/dist` thiếu hoặc stale.
 
+Bản Windows production hiện tạo installer riêng theo kiến trúc:
+
+- `release/banhangoffline-setup-v1.3.5-x64.exe` cho Windows 64-bit.
+- `release/banhangoffline-setup-v1.3.5-ia32.exe` cho Windows 32-bit.
+
+Sau khi build installer, script sẽ sinh lại [`latest.yml`](release/latest.yml:1) và [`update-manifest.json`](release/update-manifest.json:1). Có thể kiểm tra local bằng:
+
+```cmd
+powershell -ExecutionPolicy Bypass -File scripts/verify-windows-release.ps1 -Mode local -Arch x64,ia32
+```
+
 Các script nội bộ `package:installer` và `package:portable` chỉ gọi Electron Builder trực tiếp; chỉ dùng khi đã có `frontend/dist` hợp lệ.
+
+## Tải và cài đặt trên Windows
+
+- Máy Windows 10/11 thông thường: tải file có hậu tố `-x64.exe` từ GitHub Release mới nhất.
+- Máy Windows 32-bit hoặc gặp thông báo “Ứng dụng này không thể chạy trên PC của bạn”: tải file có hậu tố `-ia32.exe`.
+- Chỉ tải từ release chính thức của [`Vankhadev/phanmemoffline`](package.json:98). Nếu file tải về rất nhỏ, không có đuôi `.exe`, hoặc mở ra trang web/HTML, hãy xóa file và tải lại.
+- Nếu SmartScreen/antivirus cảnh báo, kiểm tra đúng tên file và nguồn tải trước khi chọn tiếp tục.
 
 ## Cấu hình runtime quan trọng
 

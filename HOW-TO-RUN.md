@@ -123,9 +123,20 @@ npm run build:all
 Ý nghĩa:
 
 - `build:frontend`: tạo `frontend/dist`.
-- `build:installer`: build frontend rồi đóng gói installer NSIS.
-- `build:portable`: build frontend rồi đóng gói portable.
-- `build:all`: build frontend một lần rồi đóng gói cả portable và NSIS.
+- `build:installer`: build frontend rồi đóng gói installer NSIS cho cả `x64` và `ia32`, sau đó sinh [`latest.yml`](release/latest.yml:1) và [`update-manifest.json`](release/update-manifest.json:1).
+- `build:portable`: build frontend rồi đóng gói portable cho cả `x64` và `ia32`.
+- `build:all`: build frontend một lần rồi đóng gói cả portable và NSIS cho cả hai kiến trúc.
+
+File installer production nằm trong thư mục `release`:
+
+- `banhangoffline-setup-v1.3.5-x64.exe`: dùng cho Windows 64-bit.
+- `banhangoffline-setup-v1.3.5-ia32.exe`: dùng cho Windows 32-bit hoặc khi máy báo không chạy được bản x64.
+
+Kiểm tra installer/manifest local bằng PowerShell:
+
+```cmd
+powershell -ExecutionPolicy Bypass -File scripts/verify-windows-release.ps1 -Mode local -Arch x64,ia32
+```
 
 Nếu cần gọi Electron Builder trực tiếp mà không build frontend, chỉ dùng các script nội bộ:
 
@@ -134,7 +145,7 @@ npm run package:installer
 npm run package:portable
 ```
 
-Các script `package:*` chỉ nên dùng khi đã chắc chắn `frontend/dist` vừa được build và hợp lệ.
+Các script `package:*` chỉ nên dùng khi đã chắc chắn `frontend/dist` vừa được build và hợp lệ. Nếu gọi `package:*` trực tiếp, hãy chạy thêm [`npm run generate:latest-yml`](package.json:33) và [`npm run generate:update-manifest`](package.json:34) sau khi build đủ installer.
 
 ---
 

@@ -1,7 +1,8 @@
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('path');
 const net = require('net');
 const http = require('http');
+const https = require('https');
 const { spawn } = require('child_process');
 const { randomUUID } = require('crypto');
 const { createUpdateManager } = require('./updater');
@@ -13,7 +14,10 @@ const BACKEND_INFO_CHANNEL = 'kha:backend:get-info';
 const WINDOW_FOCUS_CHANNEL = 'kha:window:ensure-input-focus';
 const PRINT_LIST_PRINTERS_CHANNEL = 'kha:print:list-printers';
 const PRINT_HTML_CHANNEL = 'kha:print:html';
+const OPEN_EXTERNAL_CHANNEL = 'kha:shell:open-external';
+const VERIFY_DOWNLOAD_URL_CHANNEL = 'kha:shell:verify-download-url';
 const APP_USER_MODEL_ID = 'com.vankhammo.phanmienoffline';
+const MIN_INSTALLER_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 
 let mainWindow = null;
 let backendProcess = null;
@@ -471,6 +475,103 @@ function registerPrintIpc() {
   ipcMain.handle(PRINT_HTML_CHANNEL, (_event, payload) => printHtmlSilently(payload || {}));
 }
 
+function sanitizeExternalUrl(value) {
+  const text = String(value || '').trim();
+  if (!text) throw new Error('Thiếu URL cần mở.');
+  let parsed;
+  try {
+    parsed = new URL(text);
+  } catch (_) {
+    throw new Error('URL không hợp lệ.');
+  }
+  if (!['https:', 'http:'].includes(parsed.protocol)) {
+    throw new Error('Chỉ cho phép mở link http/https.');
+  }
+  return parsed.toString();
+}
+
+function requestHeadWithRedirects(url, redirectCount = 0) {
+  const parsed = new URL(url);
+  const transport = parsed.protocol === 'https:' ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const req = transport.request(parsed, {
+      method: 'HEAD',
+      headers: {
+        'User-Agent': 'kha-installer-download-check',
+        Accept: 'application/octet-stream,*/*;q=0.8',
+      },
+      timeout: 30000,
+    }, (res) => {
+      const statusCode = Number(res.statusCode) || 0;
+      const location = String(res.headers.location || '').trim();
+
+      if ([301, 302, 303, 307, 308].includes(statusCode) && location) {
+        res.resume();
+        if (redirectCount >= 5) {
+          reject(new Error('URL tải chuyển hướng quá nhiều lần.'));
+          return;
+        }
+        const nextUrl = new URL(location, parsed).toString();
+        requestHeadWithRedirects(nextUrl, redirectCount + 1).then(resolve, reject);
+        return;
+      }
+
+      res.resume();
+      resolve({
+        statusCode,
+        finalUrl: parsed.toString(),
+        contentType: String(res.headers['content-type'] || ''),
+        contentLength: Number(res.headers['content-length'] || 0) || 0,
+      });
+    });
+
+    req.on('timeout', () => req.destroy(new Error('Kiểm tra link tải quá thời gian chờ.')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+async function verifyInstallerDownloadUrl(url) {
+  const safeUrl = sanitizeExternalUrl(url);
+  const parsed = new URL(safeUrl);
+  const expectedFileName = path.basename(parsed.pathname || '');
+  if (!/^banhangoffline-setup-v\d+\.\d+\.\d+-(x64|ia32)\.exe$/i.test(expectedFileName)) {
+    throw new Error(`Tên file tải không đúng định dạng kiến trúc x64/ia32: ${expectedFileName || safeUrl}`);
+  }
+
+  const head = await requestHeadWithRedirects(safeUrl);
+  if (head.statusCode < 200 || head.statusCode >= 300) {
+    throw new Error(`Link tải trả HTTP ${head.statusCode}.`);
+  }
+  if (/text\/html|application\/xhtml\+xml/i.test(head.contentType)) {
+    throw new Error(`Link tải trả Content-Type HTML (${head.contentType}), có thể đang tải nhầm trang web thay vì installer.`);
+  }
+  if (head.contentLength > 0 && head.contentLength < MIN_INSTALLER_DOWNLOAD_BYTES) {
+    throw new Error(`File tải quá nhỏ (${head.contentLength} bytes), có thể bị rỗng hoặc bị truncate.`);
+  }
+
+  return {
+    ok: true,
+    url: safeUrl,
+    finalUrl: head.finalUrl,
+    fileName: expectedFileName,
+    statusCode: head.statusCode,
+    contentType: head.contentType,
+    contentLength: head.contentLength,
+  };
+}
+
+function registerShellIpc() {
+  if (ipcMain.listenerCount(OPEN_EXTERNAL_CHANNEL) > 0 || ipcMain.listenerCount(VERIFY_DOWNLOAD_URL_CHANNEL) > 0) return;
+  ipcMain.handle(VERIFY_DOWNLOAD_URL_CHANNEL, async (_event, url) => verifyInstallerDownloadUrl(url));
+  ipcMain.handle(OPEN_EXTERNAL_CHANNEL, async (_event, url) => {
+    const verified = await verifyInstallerDownloadUrl(url);
+    await shell.openExternal(verified.url);
+    return { ok: true, ...verified };
+  });
+}
+
 function getAppIconPath() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'icons', 'app-icon.png');
@@ -513,6 +614,7 @@ app.whenReady().then(async () => {
   registerBackendIpc();
   registerWindowFocusIpc();
   registerPrintIpc();
+  registerShellIpc();
   updateManager = createUpdateManager({ app, getMainWindow: () => mainWindow });
   updateManager.registerIpc(ipcMain);
 

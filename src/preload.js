@@ -6,6 +6,8 @@ const BACKEND_API_BASE_CHANNEL = 'kha:backend:get-api-base';
 const BACKEND_INFO_CHANNEL = 'kha:backend:get-info';
 const PRINT_LIST_PRINTERS_CHANNEL = 'kha:print:list-printers';
 const PRINT_HTML_CHANNEL = 'kha:print:html';
+const OPEN_EXTERNAL_CHANNEL = 'kha:shell:open-external';
+const VERIFY_DOWNLOAD_URL_CHANNEL = 'kha:shell:verify-download-url';
 
 function stripTrailingSlash(value) {
   return String(value || '').replace(/\/+$/, '');
@@ -24,11 +26,14 @@ const runtimeApiBase = readRuntimeApiBase();
 
 const desktopApi = {
   platform: process.platform,
+  arch: process.arch,
   isElectron: true,
   apiBase: runtimeApiBase,
   getApiBase: () => ipcRenderer.invoke(BACKEND_API_BASE_CHANNEL).then(stripTrailingSlash),
   getBackendInfo: () => ipcRenderer.invoke(BACKEND_INFO_CHANNEL),
   getAppInfo: () => ipcRenderer.invoke('kha:app:get-info'),
+  openExternal: (url) => ipcRenderer.invoke(OPEN_EXTERNAL_CHANNEL, url),
+  verifyDownloadUrl: (url) => ipcRenderer.invoke(VERIFY_DOWNLOAD_URL_CHANNEL, url),
   window: {
     ensureInputFocus: (details = {}) => ipcRenderer.invoke(WINDOW_FOCUS_CHANNEL, details),
   },

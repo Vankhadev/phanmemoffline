@@ -62,50 +62,28 @@ jobs:
       - name: Build frontend
         run: npm run build:frontend
 
-      - name: Build Windows NSIS installer
+      - name: Build Windows NSIS installers x64 and ia32
         shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder --win nsis --publish never
+        run: npm run package:installer
 
-      - name: Generate update manifest
-        run: npm run generate:update-manifest
+      - name: Generate updater metadata
+        run: |
+          npm run generate:latest-yml
+          npm run generate:update-manifest
 
-      - name: Verify release artifacts
+      - name: Verify local release artifacts
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File scripts/verify-windows-release.ps1 -Mode local -Version '${{ steps.version.outputs.version }}' -Tag '${{ steps.version.outputs.tag }}' -Arch x64,ia32
+
+      - name: Verify app-update.yml provider
         shell: pwsh
         run: |
-          $version = '${{ steps.version.outputs.version }}'
-          $tag = '${{ steps.version.outputs.tag }}'
-          $installer = "release/banhangoffline-setup-v$version.exe"
-          $blockmap = "$installer.blockmap"
-          $latest = 'release/latest.yml'
-          $manifest = 'release/update-manifest.json'
           $appUpdate = 'release/win-unpacked/resources/app-update.yml'
-          foreach ($file in @($installer, $blockmap, $latest, $manifest, $appUpdate)) {
-            if (-not (Test-Path $file)) {
-              throw "Missing release artifact: $file"
-            }
+          if (-not (Test-Path $appUpdate)) {
+            throw "Missing release artifact: $appUpdate"
           }
-
-          $latestContent = Get-Content $latest -Raw
-          if ($latestContent -notmatch "(?m)^version:\s*$([regex]::Escape($version))\s*$") {
-            throw "latest.yml does not contain expected version $version"
-          }
-          if ($latestContent -notmatch "banhangoffline-setup-v$([regex]::Escape($version))\.exe") {
-            throw "latest.yml does not reference installer for version $version"
-          }
-          if ($latestContent -notmatch "(?m)^sha512:\s*\S+") {
-            throw "latest.yml is missing sha512"
-          }
-
-          $manifestJson = Get-Content $manifest -Raw | ConvertFrom-Json
-          if ([string]$manifestJson.version -ne $version) {
-            throw "update-manifest.json version '$($manifestJson.version)' does not match package version '$version'"
-          }
-          if ([string]$manifestJson.url -notmatch "/releases/download/$([regex]::Escape($tag))/banhangoffline-setup-v$([regex]::Escape($version))\.exe$") {
-            throw "update-manifest.json URL does not point to release tag $tag and installer version $version"
-          }
-
           $appUpdateContent = Get-Content $appUpdate -Raw
           if ($appUpdateContent -notmatch "(?m)^provider:\s*generic\s*$") {
             throw "app-update.yml must use provider generic to avoid GitHub releases.atom checks"
@@ -116,10 +94,6 @@ jobs:
           if ($appUpdateContent -match "releases\.atom") {
             throw "app-update.yml must not reference releases.atom"
           }
-
-          Get-FileHash $installer -Algorithm SHA256 | Format-List
-          Get-Content $latest
-          Get-Content $manifest
           Get-Content $appUpdate
 
       - name: Publish GitHub Release assets
@@ -127,37 +101,19 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: BanHangOffline ${{ steps.version.outputs.tag }}
+          body_path: CHANGELOG.md
           generate_release_notes: true
           make_latest: true
           files: |
-            release/banhangoffline-setup-v${{ steps.version.outputs.version }}.exe
-            release/banhangoffline-setup-v${{ steps.version.outputs.version }}.exe.blockmap
+            release/banhangoffline-setup-v${{ steps.version.outputs.version }}-x64.exe
+            release/banhangoffline-setup-v${{ steps.version.outputs.version }}-x64.exe.blockmap
+            release/banhangoffline-setup-v${{ steps.version.outputs.version }}-ia32.exe
+            release/banhangoffline-setup-v${{ steps.version.outputs.version }}-ia32.exe.blockmap
             release/latest.yml
             release/update-manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify anonymous updater access
+      - name: Verify anonymous updater and installer access
         shell: pwsh
-        run: |
-          $version = '${{ steps.version.outputs.version }}'
-          $tag = '${{ steps.version.outputs.tag }}'
-          $urls = @(
-            "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/latest.yml",
-            "https://github.com/Vankhadev/phanmemoffline/releases/download/$tag/latest.yml",
-            "https://github.com/Vankhadev/phanmemoffline/releases/download/$tag/banhangoffline-setup-v$version.exe",
-            "https://github.com/Vankhadev/phanmemoffline/releases/download/$tag/banhangoffline-setup-v$version.exe.blockmap"
-          )
-
-          foreach ($url in $urls) {
-            Write-Host "Checking anonymous access: $url"
-            try {
-              $response = Invoke-WebRequest -Uri $url -UseBasicParsing -MaximumRedirection 5 -Headers @{ 'User-Agent' = 'kha-electron-updater-public-check' } -TimeoutSec 30
-              if ([int]$response.StatusCode -lt 200 -or [int]$response.StatusCode -ge 300) {
-                throw "HTTP $($response.StatusCode)"
-              }
-            } catch {
-              throw "Release asset is not anonymously accessible: $url. electron-updater clients do not have a GitHub token, so private repos/assets or missing assets will return 401/403/404 and no update dialog will appear. Make the repo/release/feed public or publish updater assets to a public channel. Original error: $($_.Exception.Message)"
-            }
-          }
-
+        run: powershell -ExecutionPolicy Bypass -File scripts/verify-windows-release.ps1 -Mode remote -Version '${{ steps.version.outputs.version }}' -Tag '${{ steps.version.outputs.tag }}' -Arch x64,ia32

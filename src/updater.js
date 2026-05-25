@@ -412,18 +412,136 @@ function normalizeReleaseNotes(releaseNotes) {
   return String(releaseNotes || '').trim();
 }
 
-function getPrimaryFileInfo(updateInfo) {
-  if (Array.isArray(updateInfo?.files) && updateInfo.files.length > 0) return updateInfo.files[0];
-  return null;
+function normalizeRuntimeArch(value = process.arch) {
+  const arch = String(value || '').trim().toLowerCase();
+  if (arch === 'x86' || arch === 'win32') return 'ia32';
+  if (arch === 'amd64') return 'x64';
+  return arch;
+}
+
+function getSupportedWindowsArchs() {
+  const packageConfig = getPackageConfig();
+  const configured = Array.isArray(packageConfig?.khaUpdate?.supportedWindowsArch)
+    ? packageConfig.khaUpdate.supportedWindowsArch
+    : ['x64', 'ia32'];
+  const normalized = configured.map(normalizeRuntimeArch).filter(Boolean);
+  return Array.from(new Set(normalized.length > 0 ? normalized : ['x64', 'ia32']));
+}
+
+function getRuntimeCompatibility() {
+  const arch = normalizeRuntimeArch(process.arch);
+  const supportedWindowsArch = getSupportedWindowsArchs();
+  const isWindows = process.platform === 'win32';
+  const supported = !isWindows || supportedWindowsArch.includes(arch) || (arch === 'arm64' && supportedWindowsArch.includes('x64'));
+  let message = 'Máy hiện tại tương thích với bộ cài/cập nhật Windows được phát hành.';
+
+  if (!isWindows) {
+    message = 'Tính năng cập nhật/cài đặt Windows chỉ dành cho máy Windows.';
+  } else if (!supported) {
+    message = `Kiến trúc Windows hiện tại (${arch}) chưa có bộ cài tương ứng. Vui lòng tải đúng bản x64 hoặc ia32, hoặc liên hệ hỗ trợ.`;
+  } else if (arch === 'ia32') {
+    message = 'Máy đang chạy Windows 32-bit; cần dùng bộ cài ia32, không dùng bộ cài x64.';
+  } else if (arch === 'x64') {
+    message = 'Máy đang chạy Windows x64; nên dùng bộ cài x64.';
+  } else if (arch === 'arm64') {
+    message = 'Máy Windows ARM64 sẽ ưu tiên bộ cài x64 nếu hệ điều hành hỗ trợ giả lập x64.';
+  }
+
+  return {
+    platform: process.platform,
+    arch,
+    supportedWindowsArch,
+    supported,
+    message,
+  };
+}
+
+function getInstallerArchAliases(arch = process.arch) {
+  const normalizedArch = normalizeRuntimeArch(arch);
+  if (normalizedArch === 'ia32') return ['ia32', 'x86'];
+  if (normalizedArch === 'x64') return ['x64', 'amd64'];
+  if (normalizedArch === 'arm64') return ['arm64', 'x64', 'amd64'];
+  return [normalizedArch].filter(Boolean);
+}
+
+function fileInfoMatchesArch(fileInfo, arch = process.arch) {
+  const aliases = getInstallerArchAliases(arch);
+  const text = `${fileInfo?.url || ''} ${fileInfo?.path || ''}`.toLowerCase();
+  if (!text) return false;
+  return aliases.some(alias => new RegExp(`(?:^|[-_.])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:[-_.]|$)`, 'i').test(text));
+}
+
+function getPrimaryFileInfo(updateInfo, arch = process.arch) {
+  if (!Array.isArray(updateInfo?.files) || updateInfo.files.length === 0) return null;
+  const runtimeArch = normalizeRuntimeArch(arch);
+  return updateInfo.files.find(fileInfo => fileInfoMatchesArch(fileInfo, runtimeArch))
+    || (runtimeArch === 'arm64' ? updateInfo.files.find(fileInfo => fileInfoMatchesArch(fileInfo, 'x64')) : null)
+    || updateInfo.files[0];
+}
+
+function getInstallerFileNameFromInfo(fileInfo) {
+  const raw = String(fileInfo?.url || fileInfo?.path || '').trim();
+  if (!raw) return '';
+  try {
+    return path.basename(new URL(raw, 'https://example.invalid/').pathname || raw);
+  } catch (_) {
+    return path.basename(raw.replace(/[#?].*$/, ''));
+  }
+}
+
+function validateUpdateInfoForRuntimeArch(normalizedInfo) {
+  const runtimeArch = normalizeRuntimeArch(process.arch);
+  const compatibility = getRuntimeCompatibility();
+  if (!normalizedInfo) {
+    throw createPublicError('UPDATE_METADATA_INVALID', 'Metadata cập nhật không hợp lệ hoặc rỗng.');
+  }
+  if (!compatibility.supported) {
+    throw createPublicError('UPDATE_RUNTIME_ARCH_UNSUPPORTED', compatibility.message, compatibility);
+  }
+
+  const files = Array.isArray(normalizedInfo.files) ? normalizedInfo.files : [];
+  const selectedFile = normalizedInfo.selectedFile || null;
+  const selectedName = getInstallerFileNameFromInfo(selectedFile) || getInstallerFileNameFromInfo({ url: normalizedInfo.path || normalizedInfo.url });
+  const hasExplicitRuntimeInstaller = files.some(fileInfo => fileInfoMatchesArch(fileInfo, runtimeArch));
+  const runtimeAliases = getInstallerArchAliases(runtimeArch).join('/');
+
+  if (!hasExplicitRuntimeInstaller) {
+    throw createPublicError(
+      'UPDATE_METADATA_MISSING_RUNTIME_INSTALLER',
+      `Metadata cập nhật trên GitHub Release chưa có installer riêng cho kiến trúc máy này (${runtimeArch}). Cần upload asset có hậu tố ${runtimeAliases}, ví dụ banhangoffline-setup-v${normalizedInfo.version}-${runtimeArch === 'ia32' ? 'ia32' : 'x64'}.exe, rồi cập nhật latest.yml.`,
+      {
+        runtimeArch,
+        supportedWindowsArch: getSupportedWindowsArchs(),
+        selectedName,
+        availableFiles: files.map(fileInfo => getInstallerFileNameFromInfo(fileInfo)).filter(Boolean),
+        feedUrl: normalizedInfo.feedUrl || '',
+      },
+    );
+  }
+
+  if (selectedFile && !fileInfoMatchesArch(selectedFile, runtimeArch)) {
+    throw createPublicError(
+      'UPDATE_METADATA_SELECTED_INSTALLER_MISMATCH',
+      `Metadata cập nhật chọn installer không khớp kiến trúc máy (${runtimeArch}): ${selectedName}.`,
+      {
+        runtimeArch,
+        selectedName,
+        availableFiles: files.map(fileInfo => getInstallerFileNameFromInfo(fileInfo)).filter(Boolean),
+      },
+    );
+  }
+
+  return true;
 }
 
 function normalizeUpdateInfo(updateInfo) {
   if (!updateInfo) return null;
-  const primaryFile = getPrimaryFileInfo(updateInfo);
+  const runtimeArch = normalizeRuntimeArch(process.arch);
+  const primaryFile = getPrimaryFileInfo(updateInfo, runtimeArch);
   const version = normalizeVersion(updateInfo.version);
   const size = Number(primaryFile?.size || updateInfo.size || 0) || 0;
   const sha512 = String(primaryFile?.sha512 || updateInfo.sha512 || '').trim();
-  const updatePath = String(updateInfo.path || primaryFile?.url || '').trim();
+  const updatePath = String(primaryFile?.url || updateInfo.path || '').trim();
 
   return {
     version,
@@ -433,6 +551,8 @@ function normalizeUpdateInfo(updateInfo) {
     stagingPercentage: updateInfo.stagingPercentage,
     path: updatePath,
     url: updatePath,
+    arch: runtimeArch,
+    selectedFile: primaryFile || null,
     sha512,
     sha256: '',
     files: Array.isArray(updateInfo.files) ? updateInfo.files : [],
@@ -530,6 +650,7 @@ function getUpdateRuntimeDiagnostics(app) {
     appUpdateYmlExists: appUpdateYmlPath ? fs.existsSync(appUpdateYmlPath) : false,
     portableExecutableDir: process.env.PORTABLE_EXECUTABLE_DIR ? '[set]' : '',
     portableExecutableFile: process.env.PORTABLE_EXECUTABLE_FILE ? '[set]' : '',
+    compatibility: getRuntimeCompatibility(),
   };
 }
 
@@ -638,6 +759,8 @@ function createUpdateManager({ app, getMainWindow }) {
     defaultManifestUrl: joinUrl(buildGitHubLatestDownloadBaseUrl(feed.owner, feed.repo), getChannelFileName(feed.channel)),
     updateLogPath: logger.logPath,
     status: 'idle',
+    supportedWindowsArch: getSupportedWindowsArchs(),
+    runtimeCompatibility: getRuntimeCompatibility(),
     updateAvailable: false,
     updateInfo: null,
     progress: null,
@@ -669,6 +792,8 @@ function createUpdateManager({ app, getMainWindow }) {
       defaultManifestUrl: sanitizeForPublic(state.defaultManifestUrl),
       updateLogPath: state.updateLogPath,
       status: state.status,
+      supportedWindowsArch: state.supportedWindowsArch,
+      runtimeCompatibility: sanitizeForPublic(state.runtimeCompatibility),
       updateAvailable: state.updateAvailable,
       updateInfo: sanitizeForPublic(state.updateInfo),
       progress: state.progress,
@@ -753,6 +878,9 @@ function createUpdateManager({ app, getMainWindow }) {
       channel: feed.channel,
       channelFile: feed.channelFile,
       appVersion: state.currentVersion,
+      platform: process.platform,
+      arch: process.arch,
+      runtimeCompatibility: state.runtimeCompatibility,
       isPackaged: app.isPackaged,
       devUpdateForced: state.devUpdateForced,
       autoDownload: autoUpdater.autoDownload,
@@ -920,6 +1048,26 @@ function createUpdateManager({ app, getMainWindow }) {
 
     autoUpdater.on('update-available', updateInfo => {
       const normalizedInfo = normalizeUpdateInfo(updateInfo);
+      try {
+        validateUpdateInfoForRuntimeArch(normalizedInfo);
+      } catch (err) {
+        state.status = 'error';
+        state.updateAvailable = false;
+        state.updateInfo = normalizedInfo;
+        state.progress = null;
+        state.downloadedFile = '';
+        state.downloadedSha256 = '';
+        state.downloadedSha512 = '';
+        state.lastCheckedAt = new Date().toISOString();
+        state.lastError = sanitizeForPublic({ code: err.code || 'UPDATE_METADATA_INVALID', message: err.message, details: err.details });
+        logger.error('Metadata cập nhật không phù hợp với kiến trúc runtime, không tải installer để tránh lỗi Windows cannot run this app', {
+          error: state.lastError,
+          updateInfo: normalizedInfo,
+        });
+        emit('error', { error: state.lastError }, { silent: false });
+        return;
+      }
+
       state.status = 'update-available';
       state.updateAvailable = true;
       state.updateInfo = normalizedInfo;
@@ -1024,7 +1172,9 @@ function createUpdateManager({ app, getMainWindow }) {
         version: app.getVersion(),
         isPackaged: app.isPackaged,
         platform: process.platform,
-        arch: process.arch,
+        arch: normalizeRuntimeArch(process.arch),
+        supportedWindowsArch: state.supportedWindowsArch,
+        runtimeCompatibility: state.runtimeCompatibility,
       },
       state: getPublicState(),
     });
@@ -1088,6 +1238,9 @@ function createUpdateManager({ app, getMainWindow }) {
           autoDownload,
           feedUrl: state.feedUrl,
           currentVersion: state.currentVersion,
+          platform: process.platform,
+          arch: process.arch,
+          runtimeCompatibility: state.runtimeCompatibility,
         });
 
         const result = await autoUpdater.checkForUpdates();
@@ -1101,6 +1254,10 @@ function createUpdateManager({ app, getMainWindow }) {
 
         const normalizedInfo = normalizeUpdateInfo(result.updateInfo);
         state.lastCheckedAt = new Date().toISOString();
+
+        if (result.isUpdateAvailable) {
+          validateUpdateInfoForRuntimeArch(normalizedInfo);
+        }
 
         if (!result.isUpdateAvailable) {
           state.status = 'no-update';
@@ -1191,6 +1348,8 @@ function createUpdateManager({ app, getMainWindow }) {
         }
       }
 
+      validateUpdateInfoForRuntimeArch(state.updateInfo);
+
       currentDownloadSilent = silent;
       currentDownloadToken = new CancellationToken();
       state.status = 'downloading';
@@ -1199,6 +1358,9 @@ function createUpdateManager({ app, getMainWindow }) {
       logger.info('Bắt đầu tải bản cập nhật bằng electron-updater', {
         source,
         version: state.updateInfo?.version,
+        selectedInstaller: state.updateInfo?.selectedFile || state.updateInfo?.path,
+        platform: process.platform,
+        arch: process.arch,
         feedUrl: state.feedUrl,
       });
       emit('downloading', {

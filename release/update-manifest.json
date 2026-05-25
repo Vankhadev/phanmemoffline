@@ -1,12 +1,36 @@
 {
-  "version": "1.3.3",
-  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.3/banhangoffline-setup-v1.3.3.exe",
-  "sha256": "c888caf1ab618493ed3a876ed6d3195d10aa8a39bd6235d438edb0eb2f4d6c7f",
-  "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.3.3.",
-  "releaseDate": "2026-05-21T21:27:27.730Z",
+  "version": "1.3.5",
+  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.5/banhangoffline-setup-v1.3.5-x64.exe",
+  "sha256": "d48e12d72e71b0895842fa6784ea226e3ebfaafccf0a2342b8f47522cb0bc96b",
+  "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.3.5.\n- Có bộ cài riêng cho Windows x64 và Windows 32-bit (ia32).",
+  "releaseDate": "2026-05-25T11:43:42.584Z",
   "platform": "win32",
   "arch": "x64",
-  "size": 83919038,
+  "size": 83947117,
   "mandatory": false,
-  "installerType": "nsis"
+  "installerType": "nsis",
+  "supportedArch": [
+    "x64",
+    "ia32"
+  ],
+  "installers": {
+    "x64": {
+      "platform": "win32",
+      "arch": "x64",
+      "fileName": "banhangoffline-setup-v1.3.5-x64.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.5/banhangoffline-setup-v1.3.5-x64.exe",
+      "sha256": "d48e12d72e71b0895842fa6784ea226e3ebfaafccf0a2342b8f47522cb0bc96b",
+      "size": 83947117,
+      "installerType": "nsis"
+    },
+    "ia32": {
+      "platform": "win32",
+      "arch": "ia32",
+      "fileName": "banhangoffline-setup-v1.3.5-ia32.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.5/banhangoffline-setup-v1.3.5-ia32.exe",
+      "sha256": "1dcba49f4c68169b1f8904ff251b634be2f3cbc706cf2dd060131636810f0bd2",
+      "size": 74364303,
+      "installerType": "nsis"
+    }
+  }
 }

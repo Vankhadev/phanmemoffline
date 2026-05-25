@@ -17,6 +17,8 @@ release/*.exe.blockmap
 release/latest.yml
 release/builder-debug.yml
 release/win-unpacked/
+release/win-*-unpacked/
+release/*-unpacked/
 release/update-simulation/
 release/update-manifest.json
 !release/update-manifest.example.json
@@ -41,6 +43,9 @@ yarn-error.log*
 pnpm-debug.log*
 .cache/
 .tmp/
+.npm-cache/
+.electron-cache/
+.electron-builder-cache/
 tmp/
 temp/
 coverage/

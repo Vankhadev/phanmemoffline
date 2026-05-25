@@ -48,6 +48,22 @@ const NEGATIVE_STOCK_LIMIT = -10;
 const NEGATIVE_STOCK_FEATURE_NAME = 'Xuất âm tồn kho';
 const NEGATIVE_STOCK_FEATURE_DESCRIPTION = 'Bật để cho phép xuất vượt tồn kho đến giới hạn cố định trong code.';
 const NEGATIVE_STOCK_FEATURE_CATEGORY = 'Kho hàng';
+const RELEASE_VERSION = '1.3.5';
+const RELEASE_DOWNLOAD_BASE_URL = 'https://github.com/Vankhadev/phanmemoffline/releases/latest/download/';
+const WINDOWS_INSTALLERS = Object.freeze([
+  {
+    arch: 'x64',
+    label: 'Windows 64-bit (x64)',
+    fileName: `banhangoffline-setup-v${RELEASE_VERSION}-x64.exe`,
+    recommendedFor: 'Hầu hết máy tính Windows 10/11 hiện nay.',
+  },
+  {
+    arch: 'ia32',
+    label: 'Windows 32-bit (ia32)',
+    fileName: `banhangoffline-setup-v${RELEASE_VERSION}-ia32.exe`,
+    recommendedFor: 'Máy Windows 32-bit hoặc máy báo không chạy được bản x64.',
+  },
+]);
 
 function formatBytes(value) {
   const bytes = Number(value) || 0;
@@ -73,6 +89,23 @@ function formatDateTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function buildReleaseDownloadUrl(fileName) {
+  return `${RELEASE_DOWNLOAD_BASE_URL}${encodeURIComponent(fileName)}`;
+}
+
+function normalizeRuntimeArch(value) {
+  const arch = String(value || '').trim().toLowerCase();
+  if (arch === 'x86' || arch === 'win32') return 'ia32';
+  if (arch === 'amd64') return 'x64';
+  return arch;
+}
+
+function getRecommendedInstaller(runtimeArch) {
+  const arch = normalizeRuntimeArch(runtimeArch);
+  if (arch === 'ia32') return WINDOWS_INSTALLERS.find(item => item.arch === 'ia32');
+  return WINDOWS_INSTALLERS.find(item => item.arch === 'x64') || WINDOWS_INSTALLERS[0];
 }
 
 function getUpdateStatusLabel(status) {
@@ -104,6 +137,10 @@ function getUpdateErrorMessage(error) {
     UPDATE_REPOSITORY_NOT_ACCESSIBLE: 'Không truy cập được GitHub Releases/latest. Repo có thể private, owner/repo sai, URL feed sai hoặc chưa có release latest public.',
     UPDATE_FEED_UNAUTHORIZED_OR_PRIVATE: 'GitHub Release/feed yêu cầu xác thực, token sai/thiếu quyền hoặc repo đang private. Client Electron không được nhúng token nên không thể tự cập nhật từ asset private.',
     UPDATE_FEED_METADATA_NOT_FOUND: 'Không tìm thấy latest.yml trong GitHub Release latest hoặc release latest không public.',
+    UPDATE_METADATA_INVALID: 'Metadata cập nhật trên GitHub Release không hợp lệ hoặc rỗng.',
+    UPDATE_RUNTIME_ARCH_UNSUPPORTED: 'Máy Windows hiện tại chưa có bộ cài phù hợp. Hãy tải đúng bản x64 hoặc ia32 từ GitHub Release.',
+    UPDATE_METADATA_MISSING_RUNTIME_INSTALLER: 'GitHub Release chưa có installer riêng cho kiến trúc máy này. Cần upload asset có hậu tố -x64.exe hoặc -ia32.exe và cập nhật latest.yml.',
+    UPDATE_METADATA_SELECTED_INSTALLER_MISMATCH: 'Metadata cập nhật đang chọn installer không khớp kiến trúc máy. Không tải để tránh lỗi Windows không chạy được ứng dụng.',
     UPDATE_ASSET_NOT_ACCESSIBLE_OR_PRIVATE: 'Không tải được installer/blockmap. Asset có thể thiếu, tên không khớp latest.yml hoặc repo private trả 404.',
     UPDATE_RELEASE_NOT_PUBLISHED: 'Chưa có production release đã publish để electron-updater chọn làm latest.',
     UPDATE_FEED_RATE_LIMITED: 'GitHub đang giới hạn truy cập feed cập nhật, vui lòng thử lại sau.',
@@ -817,6 +854,33 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     return runUpdateAction('installing', updates => updates.install());
   };
 
+  const handleOpenInstallerDownload = async (installer) => {
+    const url = buildReleaseDownloadUrl(installer.fileName);
+    setUpdateNotice(`Đang kiểm tra link tải ${installer.label} trước khi mở trình duyệt...`);
+
+    try {
+      let verified = null;
+      if (window.khaDesktop?.verifyDownloadUrl) {
+        verified = await window.khaDesktop.verifyDownloadUrl(url);
+        if (!verified?.ok) throw new Error(verified?.error?.message || 'Link tải không vượt qua kiểm tra an toàn.');
+      }
+
+      const detail = verified?.contentLength
+        ? `HTTP ${verified.statusCode}, ${formatBytes(verified.contentLength)}, ${verified.contentType || 'Content-Type không rõ'}`
+        : 'Đã kiểm tra định dạng tên file và HTTP.';
+      setUpdateNotice(`Link tải ${installer.label} hợp lệ (${detail}). Đang mở trình duyệt mặc định. Nếu SmartScreen/antivirus cảnh báo, chỉ tiếp tục khi file đúng tên ${installer.fileName} và URL thuộc github.com/Vankhadev/phanmemoffline.`);
+
+      if (window.khaDesktop?.openExternal) {
+        const opened = await window.khaDesktop.openExternal(url);
+        if (!opened?.ok) throw new Error(opened?.error?.message || 'Không mở được link tải bằng trình duyệt mặc định.');
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      setUpdateNotice(`Không mở link tải vì kiểm tra thất bại: ${error?.message || 'không rõ'}. Hãy kiểm tra mạng, GitHub Release public và đảm bảo không tải nhầm file rỗng/trang HTML. URL: ${url}`);
+    }
+  };
+
   const tabs = useMemo(() => {
     const nextTabs = [];
     if (canViewStore) nextTabs.push({ key: 'store', label: 'Cửa hàng', icon: <Store size={16} /> });
@@ -834,6 +898,9 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   }, [tab, tabs]);
 
   const desktopAvailable = Boolean(window.khaDesktop?.isElectron && window.khaDesktop?.updates);
+  const runtimeCompatibility = updateState?.runtimeCompatibility || appInfo?.runtimeCompatibility || null;
+  const runtimeArch = normalizeRuntimeArch(runtimeCompatibility?.arch || appInfo?.arch || window.khaDesktop?.arch || '');
+  const recommendedInstaller = getRecommendedInstaller(runtimeArch);
   const currentVersion = appInfo?.version || updateState?.currentVersion || 'Không rõ';
   const updateInfo = updateState?.updateInfo || null;
   const progress = updateState?.progress || null;
@@ -1250,8 +1317,18 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                 <div className="mt-1 grid grid-cols-1 gap-x-4 gap-y-1 md:grid-cols-2">
                   <div>Đã đóng gói: {runtimeDiagnostics.isPackaged ? 'Có' : 'Không'}</div>
                   <div>app-update.yml: {runtimeDiagnostics.appUpdateYmlExists ? 'Có' : 'Không thấy'}</div>
+                  <div>Kiến trúc runtime: {runtimeArch || 'unknown'}</div>
+                  <div>Tương thích: {runtimeCompatibility?.supported === false ? 'Không' : 'Có'}</div>
                   <div className="break-all md:col-span-2">Đường dẫn app-update.yml: {runtimeDiagnostics.appUpdateYmlPath || 'Không xác định'}</div>
                 </div>
+              </div>
+            )}
+
+            {runtimeCompatibility && (
+              <div className={`mt-4 rounded-lg border px-4 py-3 text-sm ${runtimeCompatibility.supported === false ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                <div className="font-semibold">Tương thích máy Windows</div>
+                <div className="mt-1">{runtimeCompatibility.message}</div>
+                <div className="mt-1 text-xs">Bộ cài khuyến nghị: {recommendedInstaller?.label || 'Windows x64'}.</div>
               </div>
             )}
 
@@ -1370,11 +1447,43 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
             </div>
           </div>
 
+          <div className="card border-emerald-100 bg-emerald-50 text-sm text-emerald-800">
+            <h3 className="mb-3 font-bold">Tải bộ cài thủ công đúng kiến trúc</h3>
+            <div className="mb-3 rounded-lg border border-emerald-200 bg-white/70 px-3 py-2 text-xs">
+              Luôn tải từ GitHub Release chính thức và chọn đúng file có hậu tố kiến trúc. Nếu Windows báo “Ứng dụng này không thể chạy trên PC của bạn”, hãy thử bản ia32 cho Windows 32-bit hoặc kiểm tra máy có hỗ trợ x64 không.
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {WINDOWS_INSTALLERS.map(installer => {
+                const recommended = installer.arch === recommendedInstaller?.arch;
+                const url = buildReleaseDownloadUrl(installer.fileName);
+                return (
+                  <div key={installer.arch} className="rounded-xl border border-emerald-200 bg-white p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="font-semibold text-gray-800">{installer.label}</div>
+                      {recommended && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Khuyến nghị cho máy này</span>}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500">{installer.recommendedFor}</div>
+                    <div className="mt-2 break-all rounded bg-gray-50 p-2 text-xs text-gray-600">{installer.fileName}</div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenInstallerDownload(installer)}
+                      className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                    >
+                      Tải {installer.arch}
+                    </button>
+                    <div className="mt-2 break-all text-[11px] text-gray-500">{url}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="card border-blue-100 bg-blue-50 text-sm text-blue-800">
             <h3 className="mb-2 font-bold">Ghi chú update feed</h3>
             <ul className="list-disc space-y-1 pl-5">
               <li>Mặc định app dùng provider generic để đọc trực tiếp latest.yml từ GitHub Release latest.</li>
-              <li>Release production cần có installer .exe, .exe.blockmap và latest.yml do electron-builder tạo.</li>
+              <li>Release production cần có installer x64 và ia32, mỗi file .exe có .exe.blockmap tương ứng và tên asset rõ kiến trúc.</li>
+              <li>latest.yml và update-manifest.json phải cùng version, URL, sha256/sha512 và size với asset đã upload.</li>
               <li>Khi repo hoặc release asset đang private, client Electron không thể tự cập nhật nếu không có feed public phù hợp.</li>
               <li>Trước khi cài đặt, ứng dụng sẽ sao lưu file database trong thư mục userData/backups.</li>
             </ul>
