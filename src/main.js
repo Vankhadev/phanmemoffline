@@ -18,6 +18,7 @@ const OPEN_EXTERNAL_CHANNEL = 'kha:shell:open-external';
 const VERIFY_DOWNLOAD_URL_CHANNEL = 'kha:shell:verify-download-url';
 const APP_USER_MODEL_ID = 'com.vankhammo.phanmienoffline';
 const MIN_INSTALLER_DOWNLOAD_BYTES = 10 * 1024 * 1024;
+const BACKEND_HEALTH_TIMEOUT_MS = Math.max(15000, Number(process.env.KHA_BACKEND_HEALTH_TIMEOUT_MS) || 60000);
 
 let mainWindow = null;
 let backendProcess = null;
@@ -102,7 +103,19 @@ function requestJson(url, timeoutMs = 1000) {
   });
 }
 
-async function waitForBackendHealth({ apiBase, expectedInstanceId, expectedPid, timeoutMs = 15000 }) {
+function summarizeHealthResponse(health) {
+  if (!health || typeof health !== 'object') return String(health).slice(0, 500);
+  return JSON.stringify({
+    ok: health.ok,
+    service: health.service,
+    instanceId: health.instanceId,
+    pid: health.pid,
+    port: health.port,
+    version: health.version,
+  });
+}
+
+async function waitForBackendHealth({ apiBase, expectedInstanceId, expectedPid, timeoutMs = BACKEND_HEALTH_TIMEOUT_MS }) {
   const healthUrl = `${apiBase}/health`;
   const startedAt = Date.now();
   let lastError = null;
@@ -118,7 +131,7 @@ async function waitForBackendHealth({ apiBase, expectedInstanceId, expectedPid, 
       const sameInstance = !expectedInstanceId || health.instanceId === expectedInstanceId;
       const samePid = !expectedPid || Number(health.pid) === Number(expectedPid);
       if (sameService && sameInstance && samePid) return health;
-      lastError = new Error(`Unexpected backend health response at ${healthUrl}`);
+      lastError = new Error(`Unexpected backend health response at ${healthUrl}: received ${summarizeHealthResponse(health)}`);
     } catch (err) {
       lastError = err;
     }
@@ -162,6 +175,7 @@ async function startBackend() {
   const port = await findAvailablePort(DEFAULT_BACKEND_PORT, BACKEND_HOST);
   const apiBase = `http://${getBackendClientHost(BACKEND_HOST)}:${port}/api`;
   const backendEntry = getBackendEntryPath();
+  const backendCwd = getBackendCwd();
 
   const env = {
     ...process.env,
@@ -182,8 +196,10 @@ async function startBackend() {
   backendApiBase = apiBase;
   backendHealth = null;
 
+  console.log(`[KHA Electron] Starting backend at ${apiBase} (timeout=${BACKEND_HEALTH_TIMEOUT_MS}ms, packaged=${app.isPackaged})`);
+
   const child = spawn(process.execPath, [backendEntry], {
-    cwd: getBackendCwd(),
+    cwd: backendCwd,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
