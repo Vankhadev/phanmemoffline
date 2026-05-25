@@ -20,6 +20,8 @@ const SOURCE_BADGES = {
   app: { text: 'app', color: 'bg-gray-100 text-gray-600' },
   direct: { text: 'app', color: 'bg-gray-100 text-gray-600' },
 };
+const DEFAULT_INVOICE_PAPER_SIZE = 'A5';
+const DEFAULT_INVOICE_WIDTH_MM = 148;
 function formatPaymentMethod(method) {
   return PAYMENT_LABELS[method] || method || 'Tiền mặt';
 }
@@ -174,11 +176,11 @@ export default function OrderList({ store = {} }) {
   const persistPreviewTemplate = async (nextTemplate) => {
     if (!nextTemplate) return nextTemplate;
 
-    const normalizedPaperSize = String(nextTemplate.paper_size || nextTemplate.paperSize || '').trim() || 'A4';
+    const normalizedPaperSize = String(nextTemplate.paper_size || nextTemplate.paperSize || '').trim() || DEFAULT_INVOICE_PAPER_SIZE;
     const normalizedType = String(nextTemplate.type || 'sale_invoice').trim() || 'sale_invoice';
     const payload = {
       paper_size: normalizedPaperSize,
-      width_mm: Number(nextTemplate.width_mm || nextTemplate.widthMm) || 210,
+      width_mm: Number(nextTemplate.width_mm || nextTemplate.widthMm) || DEFAULT_INVOICE_WIDTH_MM,
       config: nextTemplate.config || null,
     };
 
@@ -921,8 +923,8 @@ export default function OrderList({ store = {} }) {
       const template = await getDefaultPrintTemplate({
         apiBase: inv._isOffline ? '' : resolveApiUrl(''),
         type: 'sale_invoice',
-        paperSize: 'A4',
-        fallbackPaperSize: 'A4',
+        paperSize: DEFAULT_INVOICE_PAPER_SIZE,
+        fallbackPaperSize: DEFAULT_INVOICE_PAPER_SIZE,
       });
       const printData = createInvoicePrintData({
         store,

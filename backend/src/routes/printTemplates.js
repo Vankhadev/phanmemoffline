@@ -184,8 +184,8 @@ router.get('/default', (req, res) => {
     const sameType = type ? activeTemplates.filter(template => template.type === type) : activeTemplates;
     const samePaperSize = paperSize ? sameType.filter(template => template.paper_size === paperSize) : sameType;
     const template = samePaperSize.find(row => row.is_default === true || row.is_default === 1)
-      || sameType.find(row => row.is_default === true || row.is_default === 1)
       || samePaperSize[0]
+      || sameType.find(row => row.is_default === true || row.is_default === 1)
       || sameType[0]
       || activeTemplates[0]
       || null;

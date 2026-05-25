@@ -341,7 +341,7 @@ export default function InvoicePrintPreviewModal({
                     </div>
                   </div>
                   <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
-                    Thu phóng {scalePercent}%
+                    Thu phóng xem trước {scalePercent}%
                   </div>
                 </div>
 
@@ -551,7 +551,7 @@ export default function InvoicePrintPreviewModal({
                           </div>
 
                           <label className="block text-sm">
-                            <span className="mb-1.5 block text-xs font-medium text-slate-500">Tỷ lệ thu phóng</span>
+                            <span className="mb-1.5 block text-xs font-medium text-slate-500">Tỷ lệ thu phóng xem trước</span>
                             <div className="space-y-2">
                               <input
                                 type="range"
@@ -564,7 +564,7 @@ export default function InvoicePrintPreviewModal({
                               />
                               <div className="flex items-center justify-between text-[11px] text-slate-400">
                                 <span>70%</span>
-                                <span className="font-semibold text-slate-600">{scalePercent}%</span>
+                                <span className="font-semibold text-slate-600">{scalePercent}% · không đổi tỷ lệ bản in</span>
                                 <span>140%</span>
                               </div>
                             </div>

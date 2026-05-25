@@ -89,7 +89,7 @@ function buildDefaultTemplateUrl(apiBase, type, paperSize) {
   return `${base}/print-templates/default${query ? `?${query}` : ''}`;
 }
 
-export function getLocalFallbackPrintTemplate(type = 'sale_invoice', paperSize = 'A4') {
+export function getLocalFallbackPrintTemplate(type = 'sale_invoice', paperSize = 'A5') {
   return withSource(normalizeTemplateRecord(getDefaultTemplate(type, paperSize), type, paperSize), 'fallback');
 }
 
@@ -117,7 +117,7 @@ export async function getDefaultPrintTemplate({
 } = {}) {
   const normalizedType = String(type || 'sale_invoice').trim() || 'sale_invoice';
   const normalizedPaperSize = String(paperSize || '').trim();
-  const defaultFallbackSize = normalizedType === 'sale_invoice' ? 'A4' : '80mm';
+  const defaultFallbackSize = ['sale_invoice', 'temporary_bill'].includes(normalizedType) ? 'A5' : '80mm';
   const fallbackSize = normalizedPaperSize || String(fallbackPaperSize || defaultFallbackSize).trim() || defaultFallbackSize;
   const url = buildDefaultTemplateUrl(apiBase, normalizedType, normalizedPaperSize);
 

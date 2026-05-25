@@ -13,20 +13,22 @@ import { broadcastSyncUpdate } from '../utils/crossTabSync';
 
 const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
 const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
+const DEFAULT_INVOICE_PAPER_SIZE = 'A5';
+const DEFAULT_INVOICE_WIDTH_MM = 148;
 const PRINT_TYPE_OPTIONS = {
   sale_invoice: {
     type: 'sale_invoice',
     label: 'In hóa đơn',
     title: 'Hóa đơn bán hàng',
     description: 'Phiếu bán hàng chính thức, có đầy đủ thông tin thanh toán và tổng kết tiền.',
-    paperSize: 'A4',
+    paperSize: DEFAULT_INVOICE_PAPER_SIZE,
   },
   temporary_bill: {
     type: 'temporary_bill',
     label: 'In tạm tính',
     title: 'Phiếu tạm tính',
     description: 'Phiếu tạm tính để khách kiểm tra sản phẩm, số lượng và tổng tiền trước khi xác nhận in.',
-    paperSize: 'A4',
+    paperSize: DEFAULT_INVOICE_PAPER_SIZE,
   },
 };
 const createEmptyPrintPreviewState = () => ({
@@ -1016,11 +1018,11 @@ export default function CreateOrder({ user, store }) {
   const persistPreviewTemplate = async (nextTemplate) => {
     if (!nextTemplate) return nextTemplate;
 
-    const normalizedPaperSize = String(nextTemplate.paper_size || nextTemplate.paperSize || '').trim() || 'A4';
+    const normalizedPaperSize = String(nextTemplate.paper_size || nextTemplate.paperSize || '').trim() || DEFAULT_INVOICE_PAPER_SIZE;
     const normalizedType = String(nextTemplate.type || printPreview.type || 'sale_invoice').trim() || 'sale_invoice';
     const payload = {
       paper_size: normalizedPaperSize,
-      width_mm: Number(nextTemplate.width_mm || nextTemplate.widthMm) || 210,
+      width_mm: Number(nextTemplate.width_mm || nextTemplate.widthMm) || DEFAULT_INVOICE_WIDTH_MM,
       config: nextTemplate.config || null,
     };
 

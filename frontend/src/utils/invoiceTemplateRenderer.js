@@ -3,7 +3,7 @@ const MM_TO_PX = 3.7795275591;
 export const PAPER_SIZE_CONFIG = {
   A3: { label: 'A3', widthMm: 297, minHeightMm: 420, pageSize: 'A3 portrait', marginMm: 10 },
   A4: { label: 'A4', widthMm: 210, minHeightMm: 297, pageSize: 'A4 portrait', marginMm: 10 },
-  A5: { label: 'A5', widthMm: 148, minHeightMm: 210, pageSize: 'A5 portrait', marginMm: 8 },
+  A5: { label: 'A5', widthMm: 148, minHeightMm: 210, pageSize: 'A5 portrait', marginMm: 8, marginHorizontalMm: 6, marginVerticalMm: 8 },
   A6: { label: 'A6', widthMm: 105, minHeightMm: 148, pageSize: 'A6 portrait', marginMm: 6 },
   B5: { label: 'B5', widthMm: 176, minHeightMm: 250, pageSize: '176mm 250mm', marginMm: 8 },
   Letter: { label: 'Letter', widthMm: 216, minHeightMm: 279.4, pageSize: 'Letter portrait', marginMm: 8 },
@@ -57,15 +57,39 @@ export function getPaperConfig(paperSize, widthMm) {
   };
 }
 
+function getPageSizeCssValue(paper = {}) {
+  const key = String(paper.key || paper.label || '').trim().toUpperCase();
+  if (key === 'A5') return 'A5 portrait';
+  return paper.pageSize || `${paper.widthMm || 80}mm auto`;
+}
+
+function getPageMarginsMm(paper = {}) {
+  const key = String(paper.key || paper.label || '').trim().toUpperCase();
+  if (key === 'A5') return { top: 8, right: 6, bottom: 8, left: 6 };
+  const margin = Number(paper.marginMm) || 0;
+  return { top: margin, right: margin, bottom: margin, left: margin };
+}
+
+function getPageMarginCssValue(paper = {}) {
+  const margins = getPageMarginsMm(paper);
+  return `${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm`;
+}
+
+function getPaperCssClass(paper = {}) {
+  const raw = String(paper.key || paper.label || 'paper').trim().toLowerCase();
+  const token = raw.replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'paper';
+  return `invoice-paper-${token}`;
+}
+
 function getPrintableWidthMm(paper = {}) {
-  const pageMargin = Number(paper.marginMm) || 0;
-  return paper.widthMm > 90 ? Math.max(40, paper.widthMm - pageMargin * 2) : paper.widthMm;
+  const margins = getPageMarginsMm(paper);
+  return paper.widthMm > 90 ? Math.max(40, paper.widthMm - margins.left - margins.right) : paper.widthMm;
 }
 
 function getPrintableMinHeightMm(paper = {}) {
-  const pageMargin = Number(paper.marginMm) || 0;
+  const margins = getPageMarginsMm(paper);
   const minHeight = Number(paper.minHeightMm) || paper.widthMm * 2.2;
-  return paper.widthMm > 90 ? Math.max(80, minHeight - pageMargin * 2) : minHeight;
+  return paper.widthMm > 90 ? Math.max(80, minHeight - margins.top - margins.bottom) : minHeight;
 }
 
 export function escapeHtml(value) {
@@ -137,6 +161,10 @@ function getDefaultVisualTitle(type) {
   return 'HÓA ĐƠN BÁN HÀNG';
 }
 
+function isA5Paper(paper = {}) {
+  return String(paper.key || paper.label || '').trim().toUpperCase() === 'A5';
+}
+
 function getDefaultVisualTotals(type, paper = {}) {
   if (type === 'temporary_bill') {
     return [
@@ -150,7 +178,7 @@ function getDefaultVisualTotals(type, paper = {}) {
       { key: 'return.reason', label: 'Lý do', visible: true, align: 'left', fontSize: 10 },
     ];
   }
-  if (paper.widthMm > 150) {
+  if (type === 'sale_invoice' && (paper.widthMm > 150 || isA5Paper(paper))) {
     return [
       { key: 'totals.subtotal', label: 'THÀNH TIỀN', visible: true, align: 'right', fontSize: 12 },
       { key: 'totals.discount', label: 'CHIẾT KHẤU', visible: true, align: 'right', fontSize: 12 },
@@ -203,15 +231,16 @@ function getDefaultVisualCustomerFields(type, paper = {}) {
 }
 
 function getDefaultVisualTableColumns(type, paper = {}) {
-  if (type === 'sale_invoice' && paper.widthMm > 150) {
+  if (type === 'sale_invoice' && (paper.widthMm > 150 || isA5Paper(paper))) {
+    const isA5 = isA5Paper(paper);
     return [
-      { key: 'index', label: 'STT', visible: true, align: 'center', width: '6%' },
-      { key: 'name', label: 'Tên sản phẩm', visible: true, align: 'left', width: '36%' },
-      { key: 'unit', label: 'Đơn vị', visible: true, align: 'center', width: '9%' },
-      { key: 'quantity', label: 'Số lượng', visible: true, align: 'right', width: '10%' },
-      { key: 'price', label: 'Đơn giá', visible: true, align: 'right', width: '14%' },
-      { key: 'discount', label: 'Chiết khấu', visible: true, align: 'right', width: '11%' },
-      { key: 'line_total', label: 'Thành tiền', visible: true, align: 'right', width: '14%' },
+      { key: 'index', label: 'STT', visible: true, align: 'center', width: isA5 ? '6%' : '6%' },
+      { key: 'name', label: 'Tên sản phẩm', visible: true, align: 'left', width: isA5 ? '34%' : '36%' },
+      { key: 'unit', label: 'Đơn vị', visible: true, align: 'center', width: isA5 ? '9%' : '9%' },
+      { key: 'quantity', label: 'Số lượng', visible: true, align: 'right', width: isA5 ? '10%' : '10%' },
+      { key: 'price', label: 'Đơn giá', visible: true, align: 'right', width: isA5 ? '13%' : '14%' },
+      { key: 'discount', label: 'Chiết khấu', visible: true, align: 'right', width: isA5 ? '12%' : '11%' },
+      { key: 'line_total', label: 'Thành tiền', visible: true, align: 'right', width: isA5 ? '16%' : '14%' },
     ];
   }
   const columns = [
@@ -243,32 +272,34 @@ export function cloneInvoiceVisualConfig(config) {
 export function createDefaultInvoiceVisualConfig(type = 'sale_invoice', paperSize = '80mm', widthMm = 80) {
   const paper = getPaperConfig(paperSize, widthMm);
   const isReceiptPaper = paper.widthMm <= 90;
+  const isA5SaleInvoice = type === 'sale_invoice' && String(paper.key || paperSize || '').trim().toUpperCase() === 'A5';
   const isA4SaleInvoice = type === 'sale_invoice' && paper.widthMm > 150;
+  const isSheetSaleInvoice = isA4SaleInvoice || isA5SaleInvoice;
   return {
     version: 1,
     layout: {
       paperSize,
       widthMm: paper.widthMm,
-      variant: isA4SaleInvoice ? 'sale_a4' : 'standard',
+      variant: isA5SaleInvoice ? 'sale_a5' : (isA4SaleInvoice ? 'sale_a4' : 'standard'),
       fontFamily: 'Arial, Roboto, Helvetica, sans-serif',
-      baseFontSize: isReceiptPaper ? 11 : 12,
+      baseFontSize: isReceiptPaper ? 11 : (isA5SaleInvoice ? 11 : 12),
       paddingMm: isReceiptPaper ? 4 : 0,
       borderStyle: isReceiptPaper ? 'dashed' : 'solid',
     },
     header: {
       visible: true,
-      align: isA4SaleInvoice ? 'left' : 'center',
-      showLogo: !isA4SaleInvoice,
+      align: isSheetSaleInvoice ? 'left' : 'center',
+      showLogo: !isSheetSaleInvoice,
       logoWidthMm: isReceiptPaper ? 24 : 28,
-      title: isA4SaleInvoice ? 'HOÁ ĐƠN BÁN HÀNG' : getDefaultVisualTitle(type),
+      title: isSheetSaleInvoice ? 'HOÁ ĐƠN BÁN HÀNG' : getDefaultVisualTitle(type),
       subtitle: '',
       titleFontSize: isReceiptPaper ? 15 : 18,
       subtitleFontSize: isReceiptPaper ? 11 : 12,
       fields: [
-        { key: 'store.name', label: '', visible: true, align: isA4SaleInvoice ? 'left' : 'center', fontSize: isReceiptPaper ? 15 : 18, bold: true, uppercase: isReceiptPaper },
-        { key: 'store.address', label: 'Địa chỉ', visible: true, align: isA4SaleInvoice ? 'left' : 'center', fontSize: isReceiptPaper ? 10 : 11 },
-        { key: 'store.phone', label: 'ĐT', visible: true, align: isA4SaleInvoice ? 'left' : 'center', fontSize: isReceiptPaper ? 10 : 11 },
-        { key: 'store.tax_code', label: 'MST', visible: true, align: isA4SaleInvoice ? 'left' : 'center', fontSize: isReceiptPaper ? 10 : 11 },
+        { key: 'store.name', label: '', visible: true, align: isSheetSaleInvoice ? 'left' : 'center', fontSize: isReceiptPaper ? 15 : 18, bold: true, uppercase: isReceiptPaper },
+        { key: 'store.address', label: 'Địa chỉ', visible: true, align: isSheetSaleInvoice ? 'left' : 'center', fontSize: isReceiptPaper ? 10 : 11 },
+        { key: 'store.phone', label: 'ĐT', visible: true, align: isSheetSaleInvoice ? 'left' : 'center', fontSize: isReceiptPaper ? 10 : 11 },
+        { key: 'store.tax_code', label: 'MST', visible: true, align: isSheetSaleInvoice ? 'left' : 'center', fontSize: isReceiptPaper ? 10 : 11 },
       ],
     },
     invoiceInfo: {
@@ -289,7 +320,7 @@ export function createDefaultInvoiceVisualConfig(type = 'sale_invoice', paperSiz
       visible: true,
       fontSize: isReceiptPaper ? 10 : 11,
       headerFontSize: isReceiptPaper ? 10 : 11,
-      showSku: !isA4SaleInvoice,
+      showSku: !isSheetSaleInvoice,
       columns: getDefaultVisualTableColumns(type, paper),
     },
     totals: {
@@ -299,7 +330,7 @@ export function createDefaultInvoiceVisualConfig(type = 'sale_invoice', paperSiz
       fields: getDefaultVisualTotals(type, paper),
     },
     payment: {
-      visible: type !== 'return_invoice' && !isA4SaleInvoice,
+      visible: type !== 'return_invoice' && !isSheetSaleInvoice,
       showQr: true,
       showQrLogo: true,
       qrSizeMm: isReceiptPaper ? 28 : 34,
@@ -309,14 +340,14 @@ export function createDefaultInvoiceVisualConfig(type = 'sale_invoice', paperSiz
     },
     footer: {
       visible: true,
-      align: isA4SaleInvoice ? 'left' : 'center',
+      align: isSheetSaleInvoice ? 'left' : 'center',
       fontSize: isReceiptPaper ? 10 : 11,
       lines: type === 'temporary_bill'
         ? [{ text: 'Phiếu chưa phải hóa đơn thanh toán', visible: true, fontSize: 10, bold: false }]
         : [
-          { text: '{{store.invoice_note}}', visible: !isA4SaleInvoice, fontSize: 10, bold: false },
-          { text: '{{store.invoice_slogan}}', visible: !isA4SaleInvoice, fontSize: 10, bold: false },
-          { text: 'Cảm ơn quý khách và hẹn gặp lại!', visible: !isA4SaleInvoice, fontSize: 10, bold: true },
+          { text: '{{store.invoice_note}}', visible: !isSheetSaleInvoice, fontSize: 10, bold: false },
+          { text: '{{store.invoice_slogan}}', visible: !isSheetSaleInvoice, fontSize: 10, bold: false },
+          { text: 'Cảm ơn quý khách và hẹn gặp lại!', visible: !isSheetSaleInvoice, fontSize: 10, bold: true },
         ],
     },
   };
@@ -364,6 +395,25 @@ export function normalizeInvoiceVisualConfig(config, type = 'sale_invoice', pape
   merged.payment = { ...base.payment, ...(merged.payment || {}) };
   merged.footer = { ...base.footer, ...(merged.footer || {}) };
   merged.footer.lines = Array.isArray(cloned.footer?.lines) ? cloned.footer.lines.map(line => ({ ...line })) : base.footer.lines.map(line => ({ ...line }));
+  const normalizedPaper = getPaperConfig(merged.layout.paperSize, merged.layout.widthMm);
+  const isA5SaleInvoice = type === 'sale_invoice' && String(normalizedPaper.key || paperSize || '').trim().toUpperCase() === 'A5';
+  if (type === 'sale_invoice' && normalizedPaper.widthMm <= 150 && merged.layout.variant === 'sale_a4') {
+    merged.layout.variant = isA5SaleInvoice ? 'sale_a5' : 'standard';
+    merged.table.showSku = base.table.showSku;
+    merged.table.columns = base.table.columns.map(column => ({ ...column }));
+  }
+  if (isA5SaleInvoice) {
+    const requiredA5Columns = getDefaultVisualTableColumns(type, normalizedPaper);
+    const currentColumnsByKey = new Map((Array.isArray(merged.table?.columns) ? merged.table.columns : []).map(column => [column.key, column]));
+    merged.layout.variant = 'sale_a5';
+    merged.table.showSku = false;
+    merged.table.columns = requiredA5Columns.map(defaultColumn => ({
+      ...(currentColumnsByKey.get(defaultColumn.key) || {}),
+      ...defaultColumn,
+      visible: true,
+    }));
+    merged.totals.fields = getDefaultVisualTotals(type, normalizedPaper);
+  }
   return merged;
 }
 
@@ -461,6 +511,9 @@ export function createSampleInvoiceData(type = 'sale_invoice', overrides = {}) {
       order_code: type === 'temporary_bill' ? 'TT-000245' : 'SON07451',
       created_at: createdAt,
       created_date: now.toLocaleDateString('vi-VN'),
+      printed_at: createdAt,
+      print_time: createdAt,
+      printed_date: now.toLocaleDateString('vi-VN'),
       cashier: 'Thu ngân Demo',
       payment_method: 'Tiền mặt',
       subtotal: formatCurrency(subtotal),
@@ -493,6 +546,10 @@ export function createSampleInvoiceData(type = 'sale_invoice', overrides = {}) {
       product: SAMPLE_PRODUCT_IMAGE,
       placeholder: FALLBACK_TRANSPARENT_PIXEL,
     },
+    runtime: {
+      printed_at: createdAt,
+      printed_date: now.toLocaleDateString('vi-VN'),
+    },
     items,
   };
 
@@ -524,6 +581,8 @@ function buildLegacyPlaceholderMap(data) {
     invoice_date: data.invoice?.created_date || data.invoice?.created_at,
     invoice_created_at: data.invoice?.created_at,
     invoice_created_date: data.invoice?.created_date,
+    invoice_printed_at: data.invoice?.printed_at || data.runtime?.printed_at,
+    invoice_printed_date: data.invoice?.printed_date || data.runtime?.printed_date,
     cashier_name: data.invoice?.cashier,
     payment_method: data.invoice?.payment_method,
     subtotal: data.totals?.subtotal || data.invoice?.subtotal,
@@ -874,6 +933,281 @@ function renderVisualFooter(config = {}, data) {
   return lines ? `<footer class="visual-footer"${styleAttr({ 'text-align': align })}>${lines}</footer>` : '';
 }
 
+function getConfiguredStoreName(data = {}, fallback = 'ĐÔNG PHƯƠNG FATIMA') {
+  const storeName = firstPresent(data.store?.name, data.store?.store_name);
+  if (data.store?._hasConfiguredName === false) return fallback;
+  return textOrDash(firstPresent(storeName, fallback));
+}
+
+function getPrintDateTimeText(data = {}) {
+  return textOrDash(firstPresent(
+    data.invoice?.printed_at,
+    data.invoice?.print_time,
+    data.runtime?.printed_at,
+    new Date().toLocaleString('vi-VN', { hour12: false })
+  ));
+}
+
+function getSignatureLocation(data = {}) {
+  return textOrDash(firstPresent(
+    data.store?.invoice_location,
+    data.store?.city,
+    data.store?.province,
+    getConfiguredStoreName(data, '')
+  ));
+}
+
+function getSignatureDateText(data = {}) {
+  return textOrDash(firstPresent(
+    data.invoice?.created_date,
+    data.runtime?.printed_date,
+    new Date().toLocaleDateString('vi-VN')
+  ));
+}
+
+function getFooterLine(data = {}) {
+  return String(firstPresent(
+    data.store?.invoice_footer_url,
+    data.store?.website,
+    data.store?.invoice_slogan,
+    data.store?.invoice_note,
+    data.store?.email,
+    ''
+  ) || '').trim();
+}
+
+function renderSaleA5Header(data = {}) {
+  const orderCode = getOrderCode(data);
+  const storeName = getConfiguredStoreName(data);
+  const printDateTime = getPrintDateTimeText(data);
+  const storeMeta = [
+    data.store?.address ? `Địa chỉ: ${data.store.address}` : '',
+    data.store?.phone ? `ĐT: ${data.store.phone}` : '',
+    data.store?.tax_code ? `MST: ${data.store.tax_code}` : '',
+  ].filter(Boolean);
+
+  return `
+    <header class="sale-a5-header">
+      <div class="header-top sale-a5-header-top">
+        <div class="sale-a5-header-top-left">Thời gian in: <strong>${escapeHtml(printDateTime)}</strong></div>
+        <div class="sale-a5-header-top-right">Chi tiết đơn hàng: <strong>${escapeHtml(orderCode)}</strong></div>
+      </div>
+      <div class="header-main sale-a5-header-main">
+        <div class="brand-box sale-a5-brand-box">
+          <div class="sale-a5-brand-name">${escapeHtml(storeName)}</div>
+          ${storeMeta.map(line => `<div class="sale-a5-brand-meta">${escapeHtml(line)}</div>`).join('')}
+        </div>
+        <div class="code-box sale-a5-code-box">
+          <div class="sale-a5-box-label">Mã đơn hàng</div>
+          <div class="sale-a5-order-code">${escapeHtml(orderCode)}</div>
+        </div>
+        <div class="title-box sale-a5-title-box">
+          <div>HÓA ĐƠN</div>
+          <div>BÁN HÀNG</div>
+        </div>
+      </div>
+    </header>`;
+}
+
+function renderSaleA5Customer(data = {}) {
+  return `
+    <section class="customer-section sale-a5-customer-section">
+      <table class="sale-a5-customer-table">
+        <tbody>
+          <tr>
+            <td class="sale-a5-customer-label">KHÁCH HÀNG:</td>
+            <td class="sale-a5-customer-value"><strong>${escapeHtml(textOrDash(firstPresent(data.customer?.name, 'Khách lẻ')))}</strong></td>
+            <td class="sale-a5-customer-label">ĐIỆN THOẠI:</td>
+            <td class="sale-a5-customer-value">${escapeHtml(textOrDash(data.customer?.phone))}</td>
+          </tr>
+          <tr>
+            <td class="sale-a5-customer-label">ĐỊA CHỈ:</td>
+            <td class="sale-a5-customer-value">${escapeHtml(textOrDash(data.customer?.address))}</td>
+            <td class="sale-a5-customer-label">EMAIL:</td>
+            <td class="sale-a5-customer-value">${escapeHtml(textOrDash(data.customer?.email))}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>`;
+}
+
+function renderSaleA5ItemsTable(data = {}) {
+  const normalizedItems = Array.isArray(data.items) ? data.items.map(normalizeItem) : [];
+  const bodyHtml = normalizedItems.length === 0
+    ? '<tr><td colspan="7" class="text-center empty-items">Chưa có sản phẩm</td></tr>'
+    : normalizedItems.map((item, index) => `
+      <tr>
+        <td class="text-center sale-a5-col-index">${index + 1}</td>
+        <td class="sale-a5-product-name">${escapeHtml(item.name || '')}</td>
+        <td class="text-center">${escapeHtml(item.unit || '')}</td>
+        <td class="text-right">${escapeHtml(item.quantity || '')}</td>
+        <td class="text-right">${escapeHtml(item.price || '')}</td>
+        <td class="text-right">${escapeHtml(item.discount || '')}</td>
+        <td class="text-right">${escapeHtml(item.line_total || '')}</td>
+      </tr>`).join('');
+
+  return `
+    <table class="product-table sale-a5-product-table items-table">
+      <colgroup>
+        <col style="width:7mm" />
+        <col style="width:45mm" />
+        <col style="width:12mm" />
+        <col style="width:14mm" />
+        <col style="width:19mm" />
+        <col style="width:17mm" />
+        <col style="width:22mm" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>STT</th>
+          <th>Tên sản phẩm</th>
+          <th>Đơn vị</th>
+          <th>Số lượng</th>
+          <th>Đơn giá</th>
+          <th>Chiết khấu</th>
+          <th>Thành tiền</th>
+        </tr>
+      </thead>
+      <tbody>${bodyHtml}</tbody>
+    </table>`;
+}
+
+function renderSaleA5SummaryTable(data = {}) {
+  const rows = [
+    { label: 'THÀNH TIỀN', value: firstPresent(data.totals?.subtotal, data.invoice?.subtotal) },
+    { label: 'CHIẾT KHẤU', value: firstPresent(data.totals?.discount, data.invoice?.discount) },
+    { label: 'TỔNG', value: firstPresent(data.totals?.total, data.invoice?.total), emphasis: true },
+    { label: 'NỢ CŨ', value: data.totals?.old_debt },
+    { label: 'THÀNH TIỀN', value: firstPresent(data.totals?.total_amount, data.totals?.total, data.invoice?.total_amount, data.invoice?.total), final: true },
+  ];
+
+  return `
+    <section class="summary-table-wrap sale-a5-summary-wrap">
+      <table class="summary-table sale-a5-summary-table">
+        <tbody>
+          ${rows.map(row => `
+            <tr class="${row.emphasis ? 'sale-a5-summary-emphasis' : ''} ${row.final ? 'sale-a5-summary-final' : ''}">
+              <td>${escapeHtml(row.label)}</td>
+              <td>${escapeHtml(textOrDash(row.value))}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </section>`;
+}
+
+function renderSaleA5Signature(data = {}) {
+  const location = getSignatureLocation(data);
+  const dateText = getSignatureDateText(data);
+  const receiver = textOrDash(data.invoice?.receiver_name);
+  const writer = textOrDash(firstPresent(data.invoice?.invoice_writer, data.invoice?.cashier, data.user?.name));
+  const dateLine = [location, `ngày ${dateText}`].filter(Boolean).join(', ');
+
+  return `
+    <section class="signature-section sale-a5-signature-section">
+      <table class="sale-a5-signature-table">
+        <tbody>
+          <tr>
+            <td class="sale-a5-signature-date" colspan="2">${escapeHtml(dateLine)}</td>
+          </tr>
+          <tr>
+            <td class="sale-a5-signature-box">
+              <strong>NGƯỜI NHẬN HÀNG</strong>
+              <span>(Ký, ghi rõ họ tên)</span>
+              <div class="sale-a5-signature-name">${escapeHtml(receiver)}</div>
+            </td>
+            <td class="sale-a5-signature-box">
+              <strong>NGƯỜI VIẾT HÓA ĐƠN</strong>
+              <span>(Ký, ghi rõ họ tên)</span>
+              <div class="sale-a5-signature-name">${escapeHtml(writer)}</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>`;
+}
+
+function renderSaleA5Footer(data = {}) {
+  const footerLine = getFooterLine(data);
+  return `<footer class="footer-line sale-a5-footer-line">${footerLine ? `<span>${escapeHtml(footerLine)}</span>` : ''}</footer>`;
+}
+
+function renderSaleA5TemplateCss(config = {}, paper = {}) {
+  const layout = config.layout || {};
+  const fontFamily = safeFontFamily(layout.fontFamily);
+  const printableWidthMm = getPrintableWidthMm(paper);
+  const printableMinHeightMm = getPrintableMinHeightMm(paper);
+  return `
+@page { size: A5 portrait; margin: 8mm 6mm; }
+html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+*, *::before, *::after { box-sizing: border-box; }
+body.invoice-print-document.invoice-paper-a5 { width: ${printableWidthMm}mm !important; min-width: ${printableWidthMm}mm !important; font-family: ${fontFamily}; font-size: 8.5pt; line-height: 1.22; color: #000; }
+body.invoice-print-document.invoice-paper-a5 .invoice-preview-root { width: ${printableWidthMm}mm !important; max-width: ${printableWidthMm}mm !important; min-height: ${printableMinHeightMm}mm !important; margin: 0 !important; padding: 0 !important; background: #fff !important; box-shadow: none !important; border: 0 !important; overflow: visible !important; transform: none !important; zoom: 1 !important; }
+.sale-a5-invoice { position: relative; width: 100%; min-height: ${printableMinHeightMm}mm; padding: 0 0 9mm; margin: 0; overflow: visible; color: #000; font-family: ${fontFamily}; font-size: 8.5pt; line-height: 1.22; page-break-after: auto; break-after: auto; }
+.sale-a5-invoice table { border-collapse: collapse; border-spacing: 0; width: 100%; max-width: 100%; }
+.sale-a5-header, .sale-a5-customer-section, .sale-a5-summary-wrap, .sale-a5-signature-section { break-inside: avoid; page-break-inside: avoid; }
+.sale-a5-header-top { display: table; table-layout: fixed; width: 100%; margin: 0 0 1.5mm; font-size: 7.5pt; }
+.sale-a5-header-top-left, .sale-a5-header-top-right { display: table-cell; vertical-align: top; }
+.sale-a5-header-top-right { text-align: right; }
+.sale-a5-header-main { display: table; table-layout: fixed; width: 100%; margin: 0 0 2mm; border-collapse: collapse; }
+.sale-a5-brand-box, .sale-a5-code-box, .sale-a5-title-box { display: table-cell; vertical-align: middle; border: 1px solid #000; padding: 1.4mm 1.6mm; height: 18mm; }
+.sale-a5-brand-box { width: 62mm; vertical-align: top; }
+.sale-a5-code-box { width: 30mm; text-align: center; }
+.sale-a5-title-box { width: 44mm; text-align: center; font-size: 14pt; line-height: 1.05; font-weight: 800; letter-spacing: 0.03em; }
+.sale-a5-brand-name { font-size: 12pt; line-height: 1.12; font-weight: 800; text-transform: uppercase; margin: 0 0 1mm; }
+.sale-a5-brand-meta { font-size: 7.2pt; line-height: 1.25; margin: 0.3mm 0; }
+.sale-a5-box-label { font-size: 7.2pt; text-transform: uppercase; margin-bottom: 1.2mm; }
+.sale-a5-order-code { font-size: 11pt; line-height: 1.1; font-weight: 800; word-break: break-word; }
+.sale-a5-customer-section { margin: 0 0 2mm; }
+.sale-a5-customer-table td { border: 0; padding: 0.8mm 1mm 0.8mm 0; vertical-align: top; }
+.sale-a5-customer-label { width: 20mm; white-space: nowrap; font-weight: 800; }
+.sale-a5-customer-value { word-break: break-word; }
+.sale-a5-product-table { table-layout: fixed; margin: 0; font-size: 7.5pt; border: 1px solid #000; }
+.sale-a5-product-table th, .sale-a5-product-table td { border: 1px solid #000; padding: 1.05mm 0.8mm; vertical-align: top; white-space: normal; word-break: break-word; overflow-wrap: anywhere; color: #000; }
+.sale-a5-product-table th { text-align: center !important; font-weight: 800; background: #fff; line-height: 1.1; }
+.sale-a5-product-table tbody tr { break-inside: avoid; page-break-inside: avoid; }
+.sale-a5-product-name { text-align: left; font-weight: 700; }
+.sale-a5-summary-wrap { display: table; width: 100%; margin: 2.2mm 0 0; }
+.sale-a5-summary-table { width: 58mm !important; max-width: 58mm !important; margin-left: auto; margin-right: 0; font-size: 8pt; border: 1px solid #000; }
+.sale-a5-summary-table td { border: 1px solid #000; padding: 1mm 1.2mm; font-weight: 700; }
+.sale-a5-summary-table td:first-child { width: 28mm; text-align: left; }
+.sale-a5-summary-table td:last-child { width: 30mm; text-align: right; }
+.sale-a5-summary-emphasis td, .sale-a5-summary-final td { font-weight: 800; }
+.sale-a5-summary-final td { border-top: 2px solid #000; }
+.sale-a5-signature-section { margin-top: 4mm; padding-top: 2mm; border-top: 3px double #000; }
+.sale-a5-signature-table { table-layout: fixed; }
+.sale-a5-signature-date { border: 0; padding: 0 0 2mm; text-align: right; font-style: italic; }
+.sale-a5-signature-box { width: 50%; height: 29mm; border: 0; padding: 0 5mm; text-align: center; vertical-align: top; }
+.sale-a5-signature-box strong { display: block; font-size: 8.5pt; }
+.sale-a5-signature-box span { display: block; margin-top: 0.8mm; font-size: 7.4pt; }
+.sale-a5-signature-name { margin-top: 17mm; min-height: 5mm; font-weight: 700; border-top: 1px solid #000; padding-top: 1mm; }
+.sale-a5-footer-line { position: fixed; left: 0; right: 0; bottom: 0; width: 100%; min-height: 5mm; padding-top: 1mm; border-top: 1px solid #000; background: #fff; text-align: center; font-size: 7.2pt; line-height: 1.2; color: #000; }
+@media print {
+  @page { size: A5 portrait; margin: 8mm 6mm; }
+  html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; overflow: visible !important; transform: none !important; zoom: 1 !important; }
+  .sale-a5-product-table thead { display: table-header-group; }
+  .sale-a5-product-table tfoot { display: table-footer-group; }
+  .sale-a5-header, .sale-a5-customer-section, .sale-a5-summary-wrap, .sale-a5-signature-section { break-inside: avoid; page-break-inside: avoid; }
+}
+`;
+}
+
+function renderSaleA5InvoiceTemplate(config = {}, data = {}, type = 'sale_invoice', paper = {}) {
+  const html = `
+<div class="visual-invoice-template sale-a5-invoice ${escapeAttribute(type)}">
+  ${renderSaleA5Header(data)}
+  ${renderSaleA5Customer(data)}
+  ${renderSaleA5ItemsTable(data)}
+  ${renderSaleA5SummaryTable(data)}
+  ${renderSaleA5Signature(data)}
+  ${renderSaleA5Footer(data)}
+</div>`;
+  return {
+    html,
+    css: renderSaleA5TemplateCss(config, paper),
+    config,
+  };
+}
+
 function renderSaleA4Header(data = {}) {
   const orderCode = getOrderCode(data);
   const storeName = textOrDash(firstPresent(data.store?.name, 'Cửa hàng'));
@@ -1013,7 +1347,7 @@ function renderVisualTemplateCss(config = {}, paper = {}) {
   const borderRule = borderStyle === 'none' ? '0' : `1px ${borderStyle} #9ca3af`;
   const fontFamily = safeFontFamily(layout.fontFamily);
   return `
-.visual-invoice-template { width: 100%; color: #111; font-family: ${fontFamily}; font-size: ${baseFontSize}px; line-height: 1.38; padding: ${paddingMm}mm; }
+.visual-invoice-template { width: 100%; max-width: 100%; overflow-wrap: anywhere; color: #111; font-family: ${fontFamily}; font-size: ${baseFontSize}px; line-height: 1.38; padding: ${paddingMm}mm; }
 .visual-store-header { border-bottom: ${borderRule}; padding-bottom: 6px; margin-bottom: 8px; }
 .visual-store-logo { max-width: 100%; max-height: 18mm; object-fit: contain; display: block; margin: 0 auto 4px; }
 .visual-field { margin: 1px 0; word-break: break-word; }
@@ -1023,8 +1357,8 @@ function renderVisualTemplateCss(config = {}, paper = {}) {
 .visual-info-section { margin-bottom: 6px; }
 .visual-info-section.visual-columns-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
 .visual-section-title { font-weight: 700; margin: 4px 0; }
-.visual-items-table { width: 100%; border-collapse: collapse; margin-top: 6px; table-layout: fixed; }
-.visual-items-table th, .visual-items-table td { border-bottom: 1px ${borderStyle === 'none' ? 'solid' : borderStyle} #d1d5db; padding: 4px 2px; vertical-align: top; word-break: break-word; }
+.visual-items-table { width: 100%; max-width: 100%; border-collapse: collapse; margin-top: 6px; table-layout: fixed; }
+.visual-items-table th, .visual-items-table td { border-bottom: 1px ${borderStyle === 'none' ? 'solid' : borderStyle} #d1d5db; padding: 4px 2px; vertical-align: top; word-break: break-word; overflow-wrap: anywhere; }
 .visual-items-table th { font-weight: 700; }
 .visual-totals { margin-top: 8px; border-top: ${borderRule}; padding-top: 6px; }
 .visual-total-row { display: flex; justify-content: space-between; gap: 10px; margin: 2px 0; }
@@ -1037,6 +1371,11 @@ function renderVisualTemplateCss(config = {}, paper = {}) {
 .visual-qr-logo { max-width: 32mm; max-height: 8mm; object-fit: contain; display: block; margin: 2px auto 0; }
 .visual-footer { margin-top: 6px; }
 .visual-footer-line { margin-top: 2px; }
+@media print {
+  .visual-invoice-template { break-inside: auto; page-break-inside: auto; }
+  .visual-items-table thead { display: table-header-group; }
+  .visual-items-table tbody tr { break-inside: avoid; page-break-inside: avoid; }
+}
 `;
 }
 
@@ -1046,7 +1385,10 @@ function renderVisualInvoiceTemplate(config, data, options = {}) {
   const widthMm = Number(options.widthMm || config.layout?.widthMm) || inferPaperWidthMm(paperSize, 80);
   const paper = getPaperConfig(paperSize, widthMm);
   const normalizedConfig = normalizeInvoiceVisualConfig(config, type, paperSize, paper.widthMm) || createDefaultInvoiceVisualConfig(type, paperSize, paper.widthMm);
-  if (type === 'sale_invoice' && normalizedConfig.layout?.variant === 'sale_a4') {
+  if (type === 'sale_invoice' && isA5Paper(paper) && normalizedConfig.layout?.variant === 'sale_a5') {
+    return renderSaleA5InvoiceTemplate(normalizedConfig, data, type, paper);
+  }
+  if (type === 'sale_invoice' && paper.widthMm > 150 && normalizedConfig.layout?.variant === 'sale_a4') {
     return renderSaleA4InvoiceTemplate(normalizedConfig, data, type, paper);
   }
   const html = `
@@ -1068,25 +1410,28 @@ function renderVisualInvoiceTemplate(config, data, options = {}) {
 
 export function buildPaperCss(paperSize = '80mm', widthMm = 80) {
   const paper = getPaperConfig(paperSize, widthMm);
-  const pageMargin = Number(paper.marginMm) || 0;
+  const pageMarginCssValue = getPageMarginCssValue(paper);
+  const pageSizeCssValue = getPageSizeCssValue(paper);
   const printableWidthMm = getPrintableWidthMm(paper);
   const printableMinHeightMm = getPrintableMinHeightMm(paper);
   const minHeightRule = printableMinHeightMm ? `min-height: ${printableMinHeightMm}mm;` : '';
   const receiptPadding = paper.widthMm <= 90 ? '4mm' : '0';
-  const previewPadding = paper.widthMm <= 90 ? '0' : '0';
+  const previewPadding = '0';
   const rootOverflow = paper.widthMm <= 90 ? 'hidden' : 'visible';
+  const printRootPadding = paper.widthMm <= 90 ? receiptPadding : '0';
+  const printMinHeightRule = printableMinHeightMm ? `min-height: ${printableMinHeightMm}mm !important;` : '';
 
   return `
-@page { size: ${paper.pageSize}; margin: ${pageMargin}mm; }
+@page { size: ${pageSizeCssValue}; margin: ${pageMarginCssValue}; }
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: #f3f4f6; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+html, body { margin: 0; padding: 0; min-width: 0; background: #f3f4f6; color: #111827; font-family: Arial, Helvetica, sans-serif; }
 body { width: 100%; }
-.invoice-preview-root { width: ${printableWidthMm}mm; ${minHeightRule} margin: 0 auto; background: #fff; color: #111; padding: ${previewPadding}; overflow: ${rootOverflow}; }
+.invoice-preview-root { width: ${printableWidthMm}mm; max-width: ${printableWidthMm}mm; ${minHeightRule} margin: 0 auto; background: #fff; color: #111; padding: ${previewPadding}; overflow: ${rootOverflow}; }
 .invoice-preview-root.receipt-paper { padding: ${receiptPadding}; }
 .items-table { width: 100%; border-collapse: collapse; table-layout: auto; }
 .items-table th, .items-table td { vertical-align: top; }
 .product-image { max-width: 14mm; max-height: 14mm; object-fit: cover; border-radius: 3px; }
-.product-cell { word-break: break-word; }
+.product-cell { word-break: break-word; overflow-wrap: anywhere; }
 .product-name { display: block; font-weight: 600; }
 .product-sku { display: block; color: #6b7280; font-size: 0.85em; margin-top: 1px; }
 .text-center { text-align: center; }
@@ -1098,15 +1443,56 @@ img { max-width: 100%; }
   .invoice-preview-root { box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18); border: 1px solid rgba(148, 163, 184, 0.5); }
 }
 @media print {
-  html, body { background: #fff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  @page { size: ${pageSizeCssValue}; margin: ${pageMarginCssValue}; }
+  html, body { width: ${printableWidthMm}mm !important; min-width: ${printableWidthMm}mm !important; ${printMinHeightRule} margin: 0 !important; padding: 0 !important; background: #fff !important; color: #111 !important; display: block !important; overflow: visible !important; transform: none !important; zoom: 1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   body { padding: 0 !important; }
-  .invoice-preview-root { box-shadow: none !important; border: 0 !important; margin: 0 !important; overflow: visible !important; }
+  .invoice-preview-root { width: ${printableWidthMm}mm !important; max-width: ${printableWidthMm}mm !important; ${printMinHeightRule} box-shadow: none !important; border: 0 !important; margin: 0 !important; padding: ${printRootPadding} !important; overflow: visible !important; position: static !important; inset: auto !important; transform: none !important; zoom: 1 !important; }
+}`;
+}
+
+function buildPaperEnforcementCss(paperSize = '80mm', widthMm = 80) {
+  const paper = getPaperConfig(paperSize, widthMm);
+  const pageMarginCssValue = getPageMarginCssValue(paper);
+  const pageSizeCssValue = getPageSizeCssValue(paper);
+  const paperClass = getPaperCssClass(paper);
+  const printableWidthMm = getPrintableWidthMm(paper);
+  const printableMinHeightMm = getPrintableMinHeightMm(paper);
+  const printRootPadding = paper.widthMm <= 90 ? '4mm' : '0';
+  const minHeightRule = printableMinHeightMm ? `min-height: ${printableMinHeightMm}mm !important;` : '';
+  const isA5 = String(paper.key || paperSize || '').trim().toUpperCase() === 'A5';
+  const a5TableGuard = isA5
+    ? `
+  body.invoice-print-document.${paperClass} .items-table,
+  body.invoice-print-document.${paperClass} .visual-items-table { width: 100% !important; max-width: 100% !important; table-layout: fixed !important; }
+  body.invoice-print-document.${paperClass} .items-table th,
+  body.invoice-print-document.${paperClass} .items-table td,
+  body.invoice-print-document.${paperClass} .visual-items-table th,
+  body.invoice-print-document.${paperClass} .visual-items-table td { white-space: normal !important; word-break: break-word !important; overflow-wrap: anywhere !important; }
+  body.invoice-print-document.${paperClass} .visual-totals,
+  body.invoice-print-document.${paperClass} .totals { max-width: 100% !important; }`
+    : '';
+
+  return `
+@page { size: ${pageSizeCssValue}; margin: ${pageMarginCssValue}; }
+@media print {
+  @page { size: ${pageSizeCssValue}; margin: ${pageMarginCssValue}; }
+  html,
+  body,
+  body.invoice-print-document { margin: 0 !important; padding: 0 !important; background: #fff !important; color: #111 !important; display: block !important; overflow: visible !important; transform: none !important; zoom: 1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body.invoice-print-document.${paperClass} { width: ${printableWidthMm}mm !important; min-width: ${printableWidthMm}mm !important; ${minHeightRule} }
+  body.invoice-print-document.${paperClass} .invoice-preview-root { width: ${printableWidthMm}mm !important; max-width: ${printableWidthMm}mm !important; ${minHeightRule} margin: 0 !important; padding: ${printRootPadding} !important; box-shadow: none !important; border: 0 !important; box-sizing: border-box !important; overflow: visible !important; float: none !important; clear: both !important; position: static !important; inset: auto !important; left: auto !important; top: auto !important; right: auto !important; bottom: auto !important; transform: none !important; zoom: 1 !important; }
+  body.invoice-print-document.${paperClass} .invoice-preview-root > .visual-invoice-template,
+  body.invoice-print-document.${paperClass} .invoice-preview-root > .print-template { width: 100% !important; max-width: 100% !important; min-width: 0 !important; margin-left: 0 !important; margin-right: 0 !important; padding-left: 0; padding-right: 0; float: none !important; clear: both !important; position: static !important; inset: auto !important; transform: none !important; zoom: 1 !important; overflow: visible !important; }
+  body.invoice-print-document.${paperClass} table,
+  body.invoice-print-document.${paperClass} img { max-width: 100% !important; }
+  body.invoice-print-document.${paperClass} tr { break-inside: avoid; page-break-inside: avoid; }${a5TableGuard}
 }`;
 }
 
 export function buildInvoiceDocument({ html, css, paperSize, widthMm, title = 'Xem trước mẫu in' }) {
   const paper = getPaperConfig(paperSize, widthMm);
-  const bodyClass = paper.widthMm <= 90 ? 'invoice-preview-root receipt-paper' : 'invoice-preview-root';
+  const rootClass = paper.widthMm <= 90 ? 'invoice-preview-root receipt-paper' : 'invoice-preview-root';
+  const paperClass = getPaperCssClass(paper);
   return `<!doctype html>
 <html lang="vi">
 <head>
@@ -1115,9 +1501,10 @@ export function buildInvoiceDocument({ html, css, paperSize, widthMm, title = 'X
   <title>${escapeHtml(title)}</title>
   <style>${buildPaperCss(paperSize, paper.widthMm)}</style>
   <style>${sanitizeCss(css || '')}</style>
+  <style>${buildPaperEnforcementCss(paperSize, paper.widthMm)}</style>
 </head>
-<body>
-  <main class="${bodyClass}">${sanitizeTemplateHtml(html || '')}</main>
+<body class="invoice-print-document ${paperClass}">
+  <main class="${rootClass}">${sanitizeTemplateHtml(html || '')}</main>
 </body>
 </html>`;
 }

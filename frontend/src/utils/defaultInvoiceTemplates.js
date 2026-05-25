@@ -175,13 +175,27 @@ const saleA4LegacyCss = `
 
 export const DEFAULT_PRINT_TEMPLATES = [
   {
+    id: 'fallback-sale_invoice-A5',
+    code: 'sale_invoice_a5_frontend',
+    name: 'Mẫu mặc định - Đơn bán hàng A5',
+    type: 'sale_invoice',
+    paper_size: 'A5',
+    width_mm: 148,
+    is_default: true,
+    is_fallback: true,
+    active: true,
+    html: '',
+    css: '',
+    config: createDefaultInvoiceVisualConfig('sale_invoice', 'A5', 148),
+  },
+  {
     id: 'fallback-sale_invoice-A4',
     code: 'sale_invoice_a4_frontend',
     name: 'Mẫu mặc định - Đơn bán hàng A4',
     type: 'sale_invoice',
     paper_size: 'A4',
     width_mm: 210,
-    is_default: true,
+    is_default: false,
     is_fallback: true,
     active: true,
     html: saleA4InvoiceHtml,
@@ -244,13 +258,27 @@ export const DEFAULT_PRINT_TEMPLATES = [
     config: createDefaultInvoiceVisualConfig('sale_invoice', '80mm', 80),
   },
   {
+    id: 'fallback-temporary_bill-A5',
+    code: 'temporary_bill_a5_frontend',
+    name: 'Mẫu mặc định - Phiếu tạm tính A5',
+    type: 'temporary_bill',
+    paper_size: 'A5',
+    width_mm: 148,
+    is_default: true,
+    is_fallback: true,
+    active: true,
+    html: '',
+    css: '',
+    config: createDefaultInvoiceVisualConfig('temporary_bill', 'A5', 148),
+  },
+  {
     id: 'fallback-temporary_bill-80mm',
     code: 'temporary_bill_80mm_frontend',
     name: 'Mẫu mặc định - Phiếu tạm tính 80mm',
     type: 'temporary_bill',
     paper_size: '80mm',
     width_mm: 80,
-    is_default: true,
+    is_default: false,
     is_fallback: true,
     active: true,
     html: `
@@ -357,7 +385,7 @@ export function getFallbackTemplates(type) {
   return DEFAULT_PRINT_TEMPLATES.map(cloneTemplate);
 }
 
-export function getDefaultTemplate(type = 'sale_invoice', paperSize = 'A4') {
+export function getDefaultTemplate(type = 'sale_invoice', paperSize = 'A5') {
   const exact = DEFAULT_PRINT_TEMPLATES.find(template => template.type === type && template.paper_size === paperSize);
   const sameType = DEFAULT_PRINT_TEMPLATES.find(template => template.type === type);
   const base = exact || sameType || DEFAULT_PRINT_TEMPLATES[0];

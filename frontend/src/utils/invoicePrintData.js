@@ -53,9 +53,12 @@ function formatDate(value) {
 }
 
 function normalizeStore(store = {}) {
+  const configuredName = firstDefined(store.name, store.store_name, '');
+  const hasConfiguredName = configuredName !== undefined && configuredName !== null && String(configuredName).trim() !== '';
   return {
     ...store,
-    name: firstDefined(store.name, store.store_name, 'Cửa hàng'),
+    name: firstDefined(configuredName, 'Cửa hàng'),
+    _hasConfiguredName: hasConfiguredName,
     address: firstDefined(store.address, ''),
     phone: firstDefined(store.phone, ''),
     email: firstDefined(store.email, ''),
@@ -177,6 +180,9 @@ export function createInvoicePrintData({
   const invoiceCode = firstDefined(invoice.order_code, invoice.invoice_code, invoice.code, invoice.id ? `HD-${invoice.id}` : 'Hóa đơn');
   const normalizedCustomer = normalizeCustomer(invoice, customer || invoice.customer || invoice.selectedCustomer || {});
   const normalizedUser = normalizeUser(invoice, user || invoice.user || {});
+  const printedAtSource = firstDefined(invoice.printed_at, invoice.print_time, invoice.printedAt, new Date());
+  const runtimePrintedAt = formatDateTime(printedAtSource);
+  const runtimePrintedDate = formatDate(firstDefined(invoice.printed_date, invoice.printDate, printedAtSource));
   const qrUrl = firstDefined(
     invoice.qr_url,
     invoice.qrUrl,
@@ -213,6 +219,13 @@ export function createInvoicePrintData({
     note: firstDefined(invoice.note, ''),
     invoice_writer: firstDefined(invoice.invoice_writer, normalizedUser.name, ''),
     receiver_name: firstDefined(invoice.receiver_name, ''),
+    printed_at: runtimePrintedAt,
+    print_time: runtimePrintedAt,
+    printed_date: runtimePrintedDate,
+    runtime: {
+      printed_at: runtimePrintedAt,
+      printed_date: runtimePrintedDate,
+    },
     qr_url: qrUrl,
   };
 
@@ -249,6 +262,10 @@ export function createInvoicePrintData({
     invoice: invoiceData,
     customer: normalizedCustomer,
     user: normalizedUser,
+    runtime: {
+      printed_at: runtimePrintedAt,
+      printed_date: runtimePrintedDate,
+    },
     totals,
     items: printItems,
     images: {

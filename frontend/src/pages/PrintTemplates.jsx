@@ -19,6 +19,12 @@ import InvoicePreview from '../components/InvoicePreview';
 import InvoiceTemplateVisualEditor from '../components/InvoiceTemplateVisualEditor';
 
 const API = resolveApiUrl('');
+const DEFAULT_TEMPLATE_PAPER_BY_TYPE = {
+  sale_invoice: 'A5',
+  temporary_bill: 'A5',
+  return_invoice: 'A5',
+};
+const getDefaultPaperSizeForType = (type = 'sale_invoice') => DEFAULT_TEMPLATE_PAPER_BY_TYPE[type] || 'A5';
 import {
   getDefaultTemplate,
   getFallbackTemplates,
@@ -54,6 +60,10 @@ const PLACEHOLDER_GROUPS = [
       { token: '{{invoice.order_code}}', label: 'Mã đơn hàng' },
       { token: '{{invoice.created_at}}', label: 'Ngày giờ lập' },
       { token: '{{invoice.created_date}}', label: 'Ngày lập' },
+      { token: '{{invoice.printed_at}}', label: 'Thời gian in' },
+      { token: '{{invoice.printed_date}}', label: 'Ngày in' },
+      { token: '{{runtime.printed_at}}', label: 'Thời gian in runtime' },
+      { token: '{{runtime.printed_date}}', label: 'Ngày in runtime' },
       { token: '{{invoice.cashier}}', label: 'Thu ngân' },
       { token: '{{invoice.invoice_writer}}', label: 'Người viết hóa đơn' },
       { token: '{{invoice.receiver_name}}', label: 'Người nhận hàng' },
@@ -112,7 +122,7 @@ export default function PrintTemplates({ store }) {
   const [templateType, setTemplateType] = useState('sale_invoice');
   const [templates, setTemplates] = useState(() => getFallbackTemplates('sale_invoice'));
   const [selectedId, setSelectedId] = useState('');
-  const [draft, setDraft] = useState(() => getDefaultTemplate('sale_invoice', 'A4'));
+  const [draft, setDraft] = useState(() => getDefaultTemplate('sale_invoice', getDefaultPaperSizeForType('sale_invoice')));
   const [editorTab, setEditorTab] = useState('visual');
   const [isVisualEditing, setIsVisualEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -153,7 +163,7 @@ export default function PrintTemplates({ store }) {
       const nextTemplates = apiTemplates.length > 0 ? apiTemplates : getFallbackTemplates(type);
       setTemplates(nextTemplates);
       setLoadedFromFallback(apiTemplates.length === 0);
-      const defaultTemplate = nextTemplates.find(template => template.is_default) || nextTemplates[0] || getDefaultTemplate(type, type === 'sale_invoice' ? 'A4' : '80mm');
+      const defaultTemplate = nextTemplates.find(template => template.is_default) || nextTemplates[0] || getDefaultTemplate(type, getDefaultPaperSizeForType(type));
       setDraft(buildDraftFromTemplate(defaultTemplate, type, defaultTemplate.paper_size));
       setSelectedId(String(defaultTemplate.id || ''));
       if (apiTemplates.length === 0) {
@@ -161,7 +171,7 @@ export default function PrintTemplates({ store }) {
       }
     } catch (err) {
       const fallbackTemplates = getFallbackTemplates(type);
-      const fallback = fallbackTemplates[0] || getDefaultTemplate(type, type === 'sale_invoice' ? 'A4' : '80mm');
+      const fallback = fallbackTemplates[0] || getDefaultTemplate(type, getDefaultPaperSizeForType(type));
       setTemplates(fallbackTemplates);
       setDraft(buildDraftFromTemplate(fallback, type, fallback.paper_size));
       setSelectedId(String(fallback.id || ''));
@@ -207,7 +217,7 @@ export default function PrintTemplates({ store }) {
   const handleTypeChange = (type) => {
     setTemplateType(type);
     setSelectedId('');
-    setDraft(getDefaultTemplate(type, type === 'sale_invoice' ? 'A4' : (draft.paper_size || '80mm')));
+    setDraft(getDefaultTemplate(type, draft.paper_size || getDefaultPaperSizeForType(type)));
     setIsVisualEditing(false);
   };
 
@@ -217,7 +227,7 @@ export default function PrintTemplates({ store }) {
   };
 
   const handleUseDefault = () => {
-    const defaultTemplate = getDefaultTemplate(templateType, templateType === 'sale_invoice' ? 'A4' : (draft.paper_size || '80mm'));
+    const defaultTemplate = getDefaultTemplate(templateType, draft.paper_size || getDefaultPaperSizeForType(templateType));
     setDraft(defaultTemplate);
     setSelectedId(String(defaultTemplate.id));
     setIsVisualEditing(true);
@@ -226,7 +236,7 @@ export default function PrintTemplates({ store }) {
   };
 
   const handleNewDraft = () => {
-    const base = getDefaultTemplate(templateType, templateType === 'sale_invoice' ? 'A4' : (draft.paper_size || '80mm'));
+    const base = getDefaultTemplate(templateType, draft.paper_size || getDefaultPaperSizeForType(templateType));
     const next = {
       ...base,
       id: '',
@@ -419,7 +429,7 @@ export default function PrintTemplates({ store }) {
       if (!response.ok || data?.ok === false) throw new Error(getErrorMessage(data, 'Không xóa được mẫu in'));
       const remaining = templates.filter(template => String(template.id) !== String(draft.id));
       const nextTemplates = remaining.length > 0 ? remaining : getFallbackTemplates(templateType);
-      const nextDraft = nextTemplates[0] || getDefaultTemplate(templateType, templateType === 'sale_invoice' ? 'A4' : '80mm');
+      const nextDraft = nextTemplates[0] || getDefaultTemplate(templateType, getDefaultPaperSizeForType(templateType));
       setTemplates(nextTemplates);
       setDraft(buildDraftFromTemplate(nextDraft, templateType, nextDraft.paper_size));
       setSelectedId(String(nextDraft.id || ''));
@@ -437,7 +447,7 @@ export default function PrintTemplates({ store }) {
       setDraft(buildDraftFromTemplate(selectedTemplate, templateType, selectedTemplate.paper_size));
       setSelectedId(String(selectedTemplate.id || ''));
     } else {
-      const fallback = getDefaultTemplate(templateType, templateType === 'sale_invoice' ? 'A4' : (draft.paper_size || '80mm'));
+      const fallback = getDefaultTemplate(templateType, draft.paper_size || getDefaultPaperSizeForType(templateType));
       setDraft(fallback);
       setSelectedId(String(fallback.id));
     }
@@ -446,7 +456,7 @@ export default function PrintTemplates({ store }) {
   };
 
   const restoreInitialDefault = () => {
-    const defaultTemplate = getDefaultTemplate(templateType, templateType === 'sale_invoice' ? 'A4' : (draft.paper_size || '80mm'));
+    const defaultTemplate = getDefaultTemplate(templateType, draft.paper_size || getDefaultPaperSizeForType(templateType));
     setDraft(prev => ({
       ...prev,
       html: defaultTemplate.html,

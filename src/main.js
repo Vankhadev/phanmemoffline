@@ -306,10 +306,12 @@ function registerWindowFocusIpc() {
   ipcMain.handle(WINDOW_FOCUS_CHANNEL, (_event, details) => ensureMainWindowInputFocus(details));
 }
 
-function normalizePrintMargins(value) {
+function normalizePrintMargins(value, paperSize = '') {
   const normalized = String(value || 'default').trim().toLowerCase();
-  if (normalized === 'narrow') return 'none';
+  const normalizedPaperSize = String(paperSize || '').trim().toUpperCase();
+  if (normalizedPaperSize === 'A5') return 'none';
   if (normalized === 'wide') return 'printableArea';
+  if (normalized === 'narrow') return 'none';
   return 'default';
 }
 
@@ -345,7 +347,7 @@ function sanitizePrintPayload(payload = {}) {
     deviceName: String(payload?.deviceName || '').trim(),
     copies: Math.max(1, Math.min(99, Number(payload?.copies) || 1)),
     layout: String(payload?.layout || 'portrait').trim().toLowerCase() === 'landscape' ? 'landscape' : 'portrait',
-    margins: normalizePrintMargins(payload?.margins),
+    margins: normalizePrintMargins(payload?.margins, payload?.paperSize),
     printBackground: payload?.printBackground !== false,
     showHeadersFooters: Boolean(payload?.showHeadersFooters),
     pageMode: String(payload?.pageMode || 'all').trim().toLowerCase() || 'all',
