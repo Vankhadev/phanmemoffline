@@ -3,7 +3,7 @@ const MM_TO_PX = 3.7795275591;
 export const PAPER_SIZE_CONFIG = {
   A3: { label: 'A3', widthMm: 297, minHeightMm: 420, pageSize: 'A3 portrait', marginMm: 10 },
   A4: { label: 'A4', widthMm: 210, minHeightMm: 297, pageSize: 'A4 portrait', marginMm: 10 },
-  A5: { label: 'A5', widthMm: 148, minHeightMm: 210, pageSize: 'A5 portrait', marginMm: 8, marginHorizontalMm: 6, marginVerticalMm: 8 },
+  A5: { label: 'A5', widthMm: 148, minHeightMm: 210, pageSize: 'A5 portrait', marginMm: 10, marginHorizontalMm: 10, marginVerticalMm: 10 },
   A6: { label: 'A6', widthMm: 105, minHeightMm: 148, pageSize: 'A6 portrait', marginMm: 6 },
   B5: { label: 'B5', widthMm: 176, minHeightMm: 250, pageSize: '176mm 250mm', marginMm: 8 },
   Letter: { label: 'Letter', widthMm: 216, minHeightMm: 279.4, pageSize: 'Letter portrait', marginMm: 8 },
@@ -65,7 +65,7 @@ function getPageSizeCssValue(paper = {}) {
 
 function getPageMarginsMm(paper = {}) {
   const key = String(paper.key || paper.label || '').trim().toUpperCase();
-  if (key === 'A5') return { top: 8, right: 6, bottom: 8, left: 6 };
+  if (key === 'A5') return { top: 10, right: 10, bottom: 10, left: 10 };
   const margin = Number(paper.marginMm) || 0;
   return { top: margin, right: margin, bottom: margin, left: margin };
 }
@@ -1010,6 +1010,8 @@ function renderSaleA5Header(data = {}) {
 }
 
 function renderSaleA5Customer(data = {}) {
+  const customerType = textOrDash(firstPresent(data.customer?.customer_type_name, data.customer?.customer_type, data.customer?.type));
+  const paymentStatus = textOrDash(firstPresent(data.payment_status_label, data.invoice?.payment_status_label, data.invoice?.payment_status));
   return `
     <section class="customer-section sale-a5-customer-section">
       <table class="sale-a5-customer-table">
@@ -1023,8 +1025,14 @@ function renderSaleA5Customer(data = {}) {
           <tr>
             <td class="sale-a5-customer-label">ĐỊA CHỈ:</td>
             <td class="sale-a5-customer-value">${escapeHtml(textOrDash(data.customer?.address))}</td>
+            <td class="sale-a5-customer-label">LOẠI KHÁCH:</td>
+            <td class="sale-a5-customer-value">${escapeHtml(customerType)}</td>
+          </tr>
+          <tr>
             <td class="sale-a5-customer-label">EMAIL:</td>
             <td class="sale-a5-customer-value">${escapeHtml(textOrDash(data.customer?.email))}</td>
+            <td class="sale-a5-customer-label">TT THANH TOÁN:</td>
+            <td class="sale-a5-customer-value"><strong>${escapeHtml(paymentStatus)}</strong></td>
           </tr>
         </tbody>
       </table>
@@ -1035,27 +1043,30 @@ function renderSaleA5ItemsTable(data = {}) {
   const normalizedItems = Array.isArray(data.items) ? data.items.map(normalizeItem) : [];
   const bodyHtml = normalizedItems.length === 0
     ? '<tr><td colspan="7" class="text-center empty-items">Chưa có sản phẩm</td></tr>'
-    : normalizedItems.map((item, index) => `
+    : normalizedItems.map((item, index) => {
+      const skuHtml = item.sku ? `<div class="sale-a5-product-sku">SKU: ${escapeHtml(item.sku)}</div>` : '';
+      return `
       <tr>
         <td class="text-center sale-a5-col-index">${index + 1}</td>
-        <td class="sale-a5-product-name">${escapeHtml(item.name || '')}</td>
+        <td class="sale-a5-product-name-cell"><div class="sale-a5-product-name">${escapeHtml(item.name || '')}</div>${skuHtml}</td>
         <td class="text-center">${escapeHtml(item.unit || '')}</td>
         <td class="text-right">${escapeHtml(item.quantity || '')}</td>
         <td class="text-right">${escapeHtml(item.price || '')}</td>
         <td class="text-right">${escapeHtml(item.discount || '')}</td>
         <td class="text-right">${escapeHtml(item.line_total || '')}</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
 
   return `
     <table class="product-table sale-a5-product-table items-table">
       <colgroup>
-        <col style="width:7mm" />
-        <col style="width:45mm" />
+        <col style="width:6mm" />
+        <col style="width:39mm" />
+        <col style="width:10mm" />
         <col style="width:12mm" />
-        <col style="width:14mm" />
-        <col style="width:19mm" />
-        <col style="width:17mm" />
-        <col style="width:22mm" />
+        <col style="width:18mm" />
+        <col style="width:16mm" />
+        <col style="width:27mm" />
       </colgroup>
       <thead>
         <tr>
@@ -1073,13 +1084,18 @@ function renderSaleA5ItemsTable(data = {}) {
 }
 
 function renderSaleA5SummaryTable(data = {}) {
+  const discountPercent = Number(firstPresent(data.invoice?.discount_percent, data.totals?.discount_percent, 0)) || 0;
   const rows = [
-    { label: 'THÀNH TIỀN', value: firstPresent(data.totals?.subtotal, data.invoice?.subtotal) },
+    { label: 'TẠM TÍNH', value: firstPresent(data.totals?.subtotal, data.invoice?.subtotal) },
     { label: 'CHIẾT KHẤU', value: firstPresent(data.totals?.discount, data.invoice?.discount) },
-    { label: 'TỔNG', value: firstPresent(data.totals?.total, data.invoice?.total), emphasis: true },
-    { label: 'NỢ CŨ', value: data.totals?.old_debt },
-    { label: 'THÀNH TIỀN', value: firstPresent(data.totals?.total_amount, data.totals?.total, data.invoice?.total_amount, data.invoice?.total), final: true },
-  ];
+    ...(discountPercent > 0 ? [{ label: 'CK (%)', value: `${discountPercent}%` }] : []),
+    { label: 'PT THANH TOÁN', value: firstPresent(data.invoice?.payment_method, data.payment_method_label, data.payment_method) },
+    { label: 'KHÁCH TRẢ', value: firstPresent(data.totals?.paid, data.invoice?.paid) },
+    { label: 'TIỀN THỪA', value: firstPresent(data.totals?.change, data.invoice?.change) },
+    { label: 'CÒN LẠI', value: firstPresent(data.totals?.remaining, data.invoice?.remaining) },
+    { label: 'TỔNG', value: firstPresent(data.totals?.total, data.invoice?.total), emphasis: true, final: true },
+    { label: 'GHI CHÚ', value: firstPresent(data.invoice?.note, '') },
+  ].filter(row => String(firstPresent(row.value, '')).trim() !== '');
 
   return `
     <section class="summary-table-wrap sale-a5-summary-wrap">
@@ -1134,56 +1150,63 @@ function renderSaleA5Footer(data = {}) {
 function renderSaleA5TemplateCss(config = {}, paper = {}) {
   const layout = config.layout || {};
   const fontFamily = safeFontFamily(layout.fontFamily);
-  const printableWidthMm = getPrintableWidthMm(paper);
   const printableMinHeightMm = getPrintableMinHeightMm(paper);
+  const pageWidthMm = paper.widthMm || 148;
+  const pageHeightMm = paper.minHeightMm || 210;
+  const contentPaddingMm = 10;
   return `
-@page { size: A5 portrait; margin: 8mm 6mm; }
+@page { size: A5 portrait; margin: 0; }
 html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
 *, *::before, *::after { box-sizing: border-box; }
-body.invoice-print-document.invoice-paper-a5 { width: ${printableWidthMm}mm !important; min-width: ${printableWidthMm}mm !important; font-family: ${fontFamily}; font-size: 8.5pt; line-height: 1.22; color: #000; }
-body.invoice-print-document.invoice-paper-a5 .invoice-preview-root { width: ${printableWidthMm}mm !important; max-width: ${printableWidthMm}mm !important; min-height: ${printableMinHeightMm}mm !important; margin: 0 !important; padding: 0 !important; background: #fff !important; box-shadow: none !important; border: 0 !important; overflow: visible !important; transform: none !important; zoom: 1 !important; }
-.sale-a5-invoice { position: relative; width: 100%; min-height: ${printableMinHeightMm}mm; padding: 0 0 9mm; margin: 0; overflow: visible; color: #000; font-family: ${fontFamily}; font-size: 8.5pt; line-height: 1.22; page-break-after: auto; break-after: auto; }
+body.invoice-print-document.invoice-paper-a5 { width: ${pageWidthMm}mm !important; min-width: ${pageWidthMm}mm !important; min-height: ${pageHeightMm}mm !important; font-family: ${fontFamily}; font-size: 8.2pt; line-height: 1.22; color: #000; }
+body.invoice-print-document.invoice-paper-a5 .invoice-preview-root { width: ${pageWidthMm}mm !important; max-width: ${pageWidthMm}mm !important; min-height: ${pageHeightMm}mm !important; margin: 0 !important; padding: ${contentPaddingMm}mm !important; background: #fff !important; box-shadow: none !important; border: 0 !important; overflow: visible !important; transform: none !important; zoom: 1 !important; }
+.sale-a5-invoice { position: relative; width: 100%; min-height: ${printableMinHeightMm}mm; padding: 0 0 7mm; margin: 0; overflow: visible; color: #000; font-family: ${fontFamily}; font-size: 8.2pt; line-height: 1.22; page-break-after: auto; break-after: auto; }
 .sale-a5-invoice table { border-collapse: collapse; border-spacing: 0; width: 100%; max-width: 100%; }
 .sale-a5-header, .sale-a5-customer-section, .sale-a5-summary-wrap, .sale-a5-signature-section { break-inside: avoid; page-break-inside: avoid; }
-.sale-a5-header-top { display: table; table-layout: fixed; width: 100%; margin: 0 0 1.5mm; font-size: 7.5pt; }
+.sale-a5-header-top { display: table; table-layout: fixed; width: 100%; margin: 0 0 1.5mm; font-size: 7.1pt; }
 .sale-a5-header-top-left, .sale-a5-header-top-right { display: table-cell; vertical-align: top; }
 .sale-a5-header-top-right { text-align: right; }
-.sale-a5-header-main { display: table; table-layout: fixed; width: 100%; margin: 0 0 2mm; border-collapse: collapse; }
-.sale-a5-brand-box, .sale-a5-code-box, .sale-a5-title-box { display: table-cell; vertical-align: middle; border: 1px solid #000; padding: 1.4mm 1.6mm; height: 18mm; }
-.sale-a5-brand-box { width: 62mm; vertical-align: top; }
-.sale-a5-code-box { width: 30mm; text-align: center; }
-.sale-a5-title-box { width: 44mm; text-align: center; font-size: 14pt; line-height: 1.05; font-weight: 800; letter-spacing: 0.03em; }
-.sale-a5-brand-name { font-size: 12pt; line-height: 1.12; font-weight: 800; text-transform: uppercase; margin: 0 0 1mm; }
-.sale-a5-brand-meta { font-size: 7.2pt; line-height: 1.25; margin: 0.3mm 0; }
-.sale-a5-box-label { font-size: 7.2pt; text-transform: uppercase; margin-bottom: 1.2mm; }
-.sale-a5-order-code { font-size: 11pt; line-height: 1.1; font-weight: 800; word-break: break-word; }
+.sale-a5-header-main { display: table; table-layout: fixed; width: 100%; margin: 0 0 2.6mm; border-collapse: collapse; }
+.sale-a5-brand-box, .sale-a5-code-box, .sale-a5-title-box { display: table-cell; vertical-align: middle; border: 1px solid #000; padding: 1.3mm 1.4mm; height: 18mm; }
+.sale-a5-brand-box { width: 56mm; vertical-align: top; }
+.sale-a5-code-box { width: 28mm; text-align: center; }
+.sale-a5-title-box { width: 44mm; text-align: center; font-size: 12.6pt; line-height: 1.05; font-weight: 800; letter-spacing: 0.03em; }
+.sale-a5-brand-name { font-size: 11pt; line-height: 1.12; font-weight: 800; text-transform: uppercase; margin: 0 0 1mm; }
+.sale-a5-brand-meta { font-size: 6.9pt; line-height: 1.25; margin: 0.28mm 0; }
+.sale-a5-box-label { font-size: 6.9pt; text-transform: uppercase; margin-bottom: 1.2mm; }
+.sale-a5-order-code { font-size: 10.4pt; line-height: 1.1; font-weight: 800; word-break: break-word; }
 .sale-a5-customer-section { margin: 0 0 2mm; }
-.sale-a5-customer-table td { border: 0; padding: 0.8mm 1mm 0.8mm 0; vertical-align: top; }
-.sale-a5-customer-label { width: 20mm; white-space: nowrap; font-weight: 800; }
-.sale-a5-customer-value { word-break: break-word; }
-.sale-a5-product-table { table-layout: fixed; margin: 0; font-size: 7.5pt; border: 1px solid #000; }
-.sale-a5-product-table th, .sale-a5-product-table td { border: 1px solid #000; padding: 1.05mm 0.8mm; vertical-align: top; white-space: normal; word-break: break-word; overflow-wrap: anywhere; color: #000; }
+.sale-a5-customer-table { table-layout: fixed; }
+.sale-a5-customer-table td { border: 0; padding: 0.7mm 0.8mm 0.7mm 0; vertical-align: top; }
+.sale-a5-customer-label { width: 18mm; white-space: nowrap; font-weight: 800; }
+.sale-a5-customer-value { word-break: break-word; overflow-wrap: anywhere; }
+.sale-a5-product-table { table-layout: fixed; margin: 0; font-size: 7pt; border: 1px solid #000; }
+.sale-a5-product-table th, .sale-a5-product-table td { border: 1px solid #000; padding: 1mm 0.75mm; vertical-align: top; white-space: normal; word-break: break-word; overflow-wrap: anywhere; color: #000; }
 .sale-a5-product-table th { text-align: center !important; font-weight: 800; background: #fff; line-height: 1.1; }
 .sale-a5-product-table tbody tr { break-inside: avoid; page-break-inside: avoid; }
-.sale-a5-product-name { text-align: left; font-weight: 700; }
-.sale-a5-summary-wrap { display: table; width: 100%; margin: 2.2mm 0 0; }
-.sale-a5-summary-table { width: 58mm !important; max-width: 58mm !important; margin-left: auto; margin-right: 0; font-size: 8pt; border: 1px solid #000; }
-.sale-a5-summary-table td { border: 1px solid #000; padding: 1mm 1.2mm; font-weight: 700; }
-.sale-a5-summary-table td:first-child { width: 28mm; text-align: left; }
-.sale-a5-summary-table td:last-child { width: 30mm; text-align: right; }
+.sale-a5-product-name-cell { text-align: left; }
+.sale-a5-product-name { display: block; font-weight: 700; }
+.sale-a5-product-sku { display: block; margin-top: 0.5mm; font-size: 6.4pt; line-height: 1.2; color: #333; }
+.sale-a5-summary-wrap { display: table; width: 100%; margin: 2.3mm 0 0; }
+.sale-a5-summary-table { width: 68mm !important; max-width: 68mm !important; margin-left: auto; margin-right: 0; font-size: 7.6pt; border: 1px solid #000; }
+.sale-a5-summary-table td { border: 1px solid #000; padding: 1mm 1.1mm; font-weight: 700; vertical-align: top; word-break: break-word; overflow-wrap: anywhere; }
+.sale-a5-summary-table td:first-child { width: 31mm; text-align: left; }
+.sale-a5-summary-table td:last-child { width: 37mm; text-align: right; }
 .sale-a5-summary-emphasis td, .sale-a5-summary-final td { font-weight: 800; }
 .sale-a5-summary-final td { border-top: 2px solid #000; }
 .sale-a5-signature-section { margin-top: 4mm; padding-top: 2mm; border-top: 3px double #000; }
 .sale-a5-signature-table { table-layout: fixed; }
 .sale-a5-signature-date { border: 0; padding: 0 0 2mm; text-align: right; font-style: italic; }
-.sale-a5-signature-box { width: 50%; height: 29mm; border: 0; padding: 0 5mm; text-align: center; vertical-align: top; }
-.sale-a5-signature-box strong { display: block; font-size: 8.5pt; }
-.sale-a5-signature-box span { display: block; margin-top: 0.8mm; font-size: 7.4pt; }
+.sale-a5-signature-box { width: 50%; height: 29mm; border: 0; padding: 0 4mm; text-align: center; vertical-align: top; }
+.sale-a5-signature-box strong { display: block; font-size: 8.2pt; }
+.sale-a5-signature-box span { display: block; margin-top: 0.8mm; font-size: 7pt; }
 .sale-a5-signature-name { margin-top: 17mm; min-height: 5mm; font-weight: 700; border-top: 1px solid #000; padding-top: 1mm; }
-.sale-a5-footer-line { position: fixed; left: 0; right: 0; bottom: 0; width: 100%; min-height: 5mm; padding-top: 1mm; border-top: 1px solid #000; background: #fff; text-align: center; font-size: 7.2pt; line-height: 1.2; color: #000; }
+.sale-a5-footer-line { position: fixed; left: 0; right: 0; bottom: 0; width: 100%; min-height: 5mm; padding-top: 1mm; border-top: 1px solid #000; background: #fff; text-align: center; font-size: 6.8pt; line-height: 1.2; color: #000; }
 @media print {
-  @page { size: A5 portrait; margin: 8mm 6mm; }
+  @page { size: A5 portrait; margin: 0; }
   html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; overflow: visible !important; transform: none !important; zoom: 1 !important; }
+  body.invoice-print-document.invoice-paper-a5 { width: ${pageWidthMm}mm !important; min-width: ${pageWidthMm}mm !important; min-height: ${pageHeightMm}mm !important; }
+  body.invoice-print-document.invoice-paper-a5 .invoice-preview-root { width: ${pageWidthMm}mm !important; max-width: ${pageWidthMm}mm !important; min-height: ${pageHeightMm}mm !important; margin: 0 !important; padding: ${contentPaddingMm}mm !important; box-shadow: none !important; border: 0 !important; box-sizing: border-box !important; overflow: visible !important; }
   .sale-a5-product-table thead { display: table-header-group; }
   .sale-a5-product-table tfoot { display: table-footer-group; }
   .sale-a5-header, .sale-a5-customer-section, .sale-a5-summary-wrap, .sale-a5-signature-section { break-inside: avoid; page-break-inside: avoid; }
@@ -1410,15 +1433,18 @@ function renderVisualInvoiceTemplate(config, data, options = {}) {
 
 export function buildPaperCss(paperSize = '80mm', widthMm = 80) {
   const paper = getPaperConfig(paperSize, widthMm);
-  const pageMarginCssValue = getPageMarginCssValue(paper);
-  const pageSizeCssValue = getPageSizeCssValue(paper);
+  const isA5 = String(paper.key || paper.label || '').trim().toUpperCase() === 'A5';
+  const pageMarginCssValue = isA5 ? '0' : getPageMarginCssValue(paper);
+  const pageSizeCssValue = isA5 ? 'A5 portrait' : getPageSizeCssValue(paper);
   const printableWidthMm = getPrintableWidthMm(paper);
   const printableMinHeightMm = getPrintableMinHeightMm(paper);
   const minHeightRule = printableMinHeightMm ? `min-height: ${printableMinHeightMm}mm;` : '';
   const receiptPadding = paper.widthMm <= 90 ? '4mm' : '0';
-  const previewPadding = '0';
+  const previewPadding = isA5 ? '10mm' : '0';
+  const rootWidthMm = isA5 ? paper.widthMm : printableWidthMm;
+  const rootMinHeightMm = isA5 ? paper.minHeightMm : printableMinHeightMm;
   const rootOverflow = paper.widthMm <= 90 ? 'hidden' : 'visible';
-  const printRootPadding = paper.widthMm <= 90 ? receiptPadding : '0';
+  const printRootPadding = isA5 ? '10mm' : (paper.widthMm <= 90 ? receiptPadding : '0');
   const printMinHeightRule = printableMinHeightMm ? `min-height: ${printableMinHeightMm}mm !important;` : '';
 
   return `
@@ -1426,7 +1452,7 @@ export function buildPaperCss(paperSize = '80mm', widthMm = 80) {
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; min-width: 0; background: #f3f4f6; color: #111827; font-family: Arial, Helvetica, sans-serif; }
 body { width: 100%; }
-.invoice-preview-root { width: ${printableWidthMm}mm; max-width: ${printableWidthMm}mm; ${minHeightRule} margin: 0 auto; background: #fff; color: #111; padding: ${previewPadding}; overflow: ${rootOverflow}; }
+.invoice-preview-root { width: ${rootWidthMm}mm; max-width: ${rootWidthMm}mm; ${isA5 ? `min-height: ${rootMinHeightMm}mm;` : minHeightRule} margin: 0 auto; background: #fff; color: #111; padding: ${previewPadding}; overflow: ${rootOverflow}; }
 .invoice-preview-root.receipt-paper { padding: ${receiptPadding}; }
 .items-table { width: 100%; border-collapse: collapse; table-layout: auto; }
 .items-table th, .items-table td { vertical-align: top; }
@@ -1444,22 +1470,30 @@ img { max-width: 100%; }
 }
 @media print {
   @page { size: ${pageSizeCssValue}; margin: ${pageMarginCssValue}; }
-  html, body { width: ${printableWidthMm}mm !important; min-width: ${printableWidthMm}mm !important; ${printMinHeightRule} margin: 0 !important; padding: 0 !important; background: #fff !important; color: #111 !important; display: block !important; overflow: visible !important; transform: none !important; zoom: 1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  html, body { width: ${rootWidthMm}mm !important; min-width: ${rootWidthMm}mm !important; ${isA5 ? `min-height: ${rootMinHeightMm}mm !important;` : printMinHeightRule} margin: 0 !important; padding: 0 !important; background: #fff !important; color: #111 !important; display: block !important; overflow: visible !important; transform: none !important; zoom: 1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   body { padding: 0 !important; }
-  .invoice-preview-root { width: ${printableWidthMm}mm !important; max-width: ${printableWidthMm}mm !important; ${printMinHeightRule} box-shadow: none !important; border: 0 !important; margin: 0 !important; padding: ${printRootPadding} !important; overflow: visible !important; position: static !important; inset: auto !important; transform: none !important; zoom: 1 !important; }
+  .invoice-preview-root { width: ${rootWidthMm}mm !important; max-width: ${rootWidthMm}mm !important; ${isA5 ? `min-height: ${rootMinHeightMm}mm !important;` : printMinHeightRule} box-shadow: none !important; border: 0 !important; margin: 0 !important; padding: ${printRootPadding} !important; overflow: visible !important; position: static !important; inset: auto !important; transform: none !important; zoom: 1 !important; }
 }`;
 }
 
 function buildPaperEnforcementCss(paperSize = '80mm', widthMm = 80) {
   const paper = getPaperConfig(paperSize, widthMm);
-  const pageMarginCssValue = getPageMarginCssValue(paper);
-  const pageSizeCssValue = getPageSizeCssValue(paper);
+  const isA5 = String(paper.key || paper.label || '').trim().toUpperCase() === 'A5';
+  const pageMarginCssValue = isA5 ? '0' : getPageMarginCssValue(paper);
+  const pageSizeCssValue = isA5 ? 'A5 portrait' : getPageSizeCssValue(paper);
   const paperClass = getPaperCssClass(paper);
   const printableWidthMm = getPrintableWidthMm(paper);
   const printableMinHeightMm = getPrintableMinHeightMm(paper);
-  const printRootPadding = paper.widthMm <= 90 ? '4mm' : '0';
+  const outerWidthMm = isA5 ? paper.widthMm : printableWidthMm;
+  const outerMinHeightMm = isA5 ? paper.minHeightMm : printableMinHeightMm;
+  const printRootPadding = isA5 ? '10mm' : (paper.widthMm <= 90 ? '4mm' : '0');
   const minHeightRule = printableMinHeightMm ? `min-height: ${printableMinHeightMm}mm !important;` : '';
-  const isA5 = String(paper.key || paperSize || '').trim().toUpperCase() === 'A5';
+  const exactPageWidthRule = isA5
+    ? `width: ${outerWidthMm}mm !important; min-width: ${outerWidthMm}mm !important; max-width: ${outerWidthMm}mm !important; height: auto !important;`
+    : '';
+  const exactInnerWidthRule = isA5
+    ? 'width: 100% !important; min-width: 0 !important; max-width: 100% !important; height: auto !important;'
+    : '';
   const a5TableGuard = isA5
     ? `
   body.invoice-print-document.${paperClass} .items-table,
@@ -1471,6 +1505,60 @@ function buildPaperEnforcementCss(paperSize = '80mm', widthMm = 80) {
   body.invoice-print-document.${paperClass} .visual-totals,
   body.invoice-print-document.${paperClass} .totals { max-width: 100% !important; }`
     : '';
+  const a5PositionGuard = isA5
+    ? `
+  html,
+  body,
+  #root,
+  body.invoice-print-document,
+  body.invoice-print-document.${paperClass},
+  body.invoice-print-document.${paperClass} .invoice-preview-root {
+    ${exactPageWidthRule}
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    justify-content: flex-start !important;
+    align-items: flex-start !important;
+    align-content: flex-start !important;
+    place-content: start !important;
+    place-items: start !important;
+    float: none !important;
+    clear: both !important;
+    position: static !important;
+    inset: auto !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    zoom: 1 !important;
+  }
+  body.invoice-print-document.${paperClass} .invoice-preview-root {
+    padding: ${printRootPadding} !important;
+    box-sizing: border-box !important;
+  }
+  body.invoice-print-document.${paperClass} .invoice-preview-root > *,
+  body.invoice-print-document.${paperClass} .invoice-preview-root > .visual-invoice-template,
+  body.invoice-print-document.${paperClass} .invoice-preview-root > .print-template,
+  body.invoice-print-document.${paperClass} .sale-a5-invoice {
+    ${exactInnerWidthRule}
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    display: block !important;
+    justify-content: flex-start !important;
+    align-items: flex-start !important;
+    align-content: flex-start !important;
+    place-content: start !important;
+    place-items: start !important;
+    float: none !important;
+    clear: both !important;
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    zoom: 1 !important;
+  }`
+    : '';
 
   return `
 @page { size: ${pageSizeCssValue}; margin: ${pageMarginCssValue}; }
@@ -1479,13 +1567,13 @@ function buildPaperEnforcementCss(paperSize = '80mm', widthMm = 80) {
   html,
   body,
   body.invoice-print-document { margin: 0 !important; padding: 0 !important; background: #fff !important; color: #111 !important; display: block !important; overflow: visible !important; transform: none !important; zoom: 1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  body.invoice-print-document.${paperClass} { width: ${printableWidthMm}mm !important; min-width: ${printableWidthMm}mm !important; ${minHeightRule} }
-  body.invoice-print-document.${paperClass} .invoice-preview-root { width: ${printableWidthMm}mm !important; max-width: ${printableWidthMm}mm !important; ${minHeightRule} margin: 0 !important; padding: ${printRootPadding} !important; box-shadow: none !important; border: 0 !important; box-sizing: border-box !important; overflow: visible !important; float: none !important; clear: both !important; position: static !important; inset: auto !important; left: auto !important; top: auto !important; right: auto !important; bottom: auto !important; transform: none !important; zoom: 1 !important; }
+  body.invoice-print-document.${paperClass} { width: ${outerWidthMm}mm !important; min-width: ${outerWidthMm}mm !important; ${isA5 ? `max-width: ${outerWidthMm}mm !important; height: auto !important; min-height: ${outerMinHeightMm}mm !important;` : minHeightRule} }
+  body.invoice-print-document.${paperClass} .invoice-preview-root { width: ${outerWidthMm}mm !important; min-width: ${outerWidthMm}mm !important; max-width: ${outerWidthMm}mm !important; ${isA5 ? `height: auto !important; min-height: ${outerMinHeightMm}mm !important;` : minHeightRule} margin: 0 !important; padding: ${printRootPadding} !important; box-shadow: none !important; border: 0 !important; box-sizing: border-box !important; overflow: visible !important; float: none !important; clear: both !important; position: static !important; inset: auto !important; left: auto !important; top: auto !important; right: auto !important; bottom: auto !important; transform: none !important; zoom: 1 !important; }
   body.invoice-print-document.${paperClass} .invoice-preview-root > .visual-invoice-template,
-  body.invoice-print-document.${paperClass} .invoice-preview-root > .print-template { width: 100% !important; max-width: 100% !important; min-width: 0 !important; margin-left: 0 !important; margin-right: 0 !important; padding-left: 0; padding-right: 0; float: none !important; clear: both !important; position: static !important; inset: auto !important; transform: none !important; zoom: 1 !important; overflow: visible !important; }
+  body.invoice-print-document.${paperClass} .invoice-preview-root > .print-template { width: 100% !important; max-width: 100% !important; min-width: 0 !important; margin-left: 0 !important; margin-right: 0 !important; padding-left: 0 !important; padding-right: 0 !important; float: none !important; clear: both !important; position: static !important; inset: auto !important; transform: none !important; zoom: 1 !important; overflow: visible !important; }
   body.invoice-print-document.${paperClass} table,
   body.invoice-print-document.${paperClass} img { max-width: 100% !important; }
-  body.invoice-print-document.${paperClass} tr { break-inside: avoid; page-break-inside: avoid; }${a5TableGuard}
+  body.invoice-print-document.${paperClass} tr { break-inside: avoid; page-break-inside: avoid; }${a5TableGuard}${a5PositionGuard}
 }`;
 }
 
@@ -1511,8 +1599,11 @@ export function buildInvoiceDocument({ html, css, paperSize, widthMm, title = 'X
 
 export function getPreviewFrameSize(paperSize = '80mm', widthMm = 80) {
   const paper = getPaperConfig(paperSize, widthMm);
-  const widthPx = Math.ceil(getPrintableWidthMm(paper) * MM_TO_PX) + 44;
-  const heightPx = Math.ceil(getPrintableMinHeightMm(paper) * MM_TO_PX) + 44;
+  const isA5 = String(paper.key || paper.label || '').trim().toUpperCase() === 'A5';
+  const frameWidthMm = isA5 ? paper.widthMm : getPrintableWidthMm(paper);
+  const frameHeightMm = isA5 ? paper.minHeightMm : getPrintableMinHeightMm(paper);
+  const widthPx = Math.ceil(frameWidthMm * MM_TO_PX) + 44;
+  const heightPx = Math.ceil(frameHeightMm * MM_TO_PX) + 44;
   return {
     width: Math.min(Math.max(widthPx, 300), 920),
     minHeight: Math.min(Math.max(heightPx, 420), 980),

@@ -891,25 +891,68 @@ export default function OrderList({ store = {} }) {
     }
   };
 
+  const buildLocalInvoicePrintPreviewData = async (invoice) => {
+    const inv = await ensureInvoiceForPrint(invoice);
+    const items = inv.cart || inv.details || [];
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error('Hóa đơn chưa có chi tiết sản phẩm để in.');
+    }
+
+    const customer = inv.customer
+      || inv.selectedCustomer
+      || customers.find(c => String(c.id) === String(inv.customer_id))
+      || {
+        name: inv.customer_name,
+        phone: inv.customer_phone,
+        address: inv.customer_address,
+        email: inv.customer_email,
+        customer_type: inv.customer_type || inv.customer_type_name,
+      };
+    const user = { id: inv.user_id || null, name: inv.user_name || inv.invoice_writer || '' };
+
+    return createInvoicePrintData({
+      store,
+      invoice: inv,
+      customer,
+      user,
+      items,
+      type: 'sale_invoice',
+    });
+  };
+
+  const loadInvoicePrintPreviewData = async (invoice) => {
+    if (!invoice) throw new Error('Không có dữ liệu hóa đơn để in.');
+    if (invoice._isOffline || !invoice.id) {
+      return buildLocalInvoicePrintPreviewData(invoice);
+    }
+
+    try {
+      const remotePrintData = await apiJsonChecked(
+        resolveApiUrl(`/invoices/${invoice.id}/print-data`),
+        {},
+        'Không tải được dữ liệu in hóa đơn.'
+      );
+
+      return createInvoicePrintData({
+        store: { ...(store || {}), ...(remotePrintData?.store || {}) },
+        invoice: remotePrintData?.invoice || remotePrintData || {},
+        customer: remotePrintData?.customer || null,
+        user: remotePrintData?.user || null,
+        items: remotePrintData?.items || [],
+        type: remotePrintData?.type || 'sale_invoice',
+      });
+    } catch (_remoteError) {
+      return buildLocalInvoicePrintPreviewData(invoice);
+    }
+  };
+
   const handlePrint = async (invoice) => {
     if (!invoice) {
       alert('Không có dữ liệu hóa đơn để in.');
       return;
     }
 
-    const inv = invoice._isOffline ? { ...invoice, details: invoice.cart || invoice.details || [] } : invoice;
-    const items = inv.cart || inv.details || [];
-    if (!Array.isArray(items) || items.length === 0) {
-      alert('Hóa đơn chưa có chi tiết sản phẩm để in.');
-      return;
-    }
-
-    const customer = inv.customer
-      || inv.selectedCustomer
-      || customers.find(c => String(c.id) === String(inv.customer_id))
-      || { name: inv.customer_name, phone: inv.customer_phone, address: inv.customer_address };
-    const user = { id: inv.user_id || null, name: inv.user_name || inv.invoice_writer || '' };
-    const previewTitle = `Hóa đơn bán hàng ${inv.invoice_code || ''}`.trim();
+    const previewTitle = `Hóa đơn bán hàng ${invoice.invoice_code || ''}`.trim();
 
     setPrintPreview({
       ...createEmptyPrintPreviewState(),
@@ -920,23 +963,18 @@ export default function OrderList({ store = {} }) {
     });
 
     try {
-      const template = await getDefaultPrintTemplate({
-        apiBase: inv._isOffline ? '' : resolveApiUrl(''),
-        type: 'sale_invoice',
-        paperSize: DEFAULT_INVOICE_PAPER_SIZE,
-        fallbackPaperSize: DEFAULT_INVOICE_PAPER_SIZE,
-      });
-      const printData = createInvoicePrintData({
-        store,
-        invoice: inv,
-        customer,
-        user,
-        items,
-        type: 'sale_invoice',
-      });
+      const [template, printData] = await Promise.all([
+        getDefaultPrintTemplate({
+          apiBase: invoice._isOffline ? '' : resolveApiUrl(''),
+          type: 'sale_invoice',
+          paperSize: DEFAULT_INVOICE_PAPER_SIZE,
+          fallbackPaperSize: DEFAULT_INVOICE_PAPER_SIZE,
+        }),
+        loadInvoicePrintPreviewData(invoice),
+      ]);
       setPrintPreview({
         open: true,
-        subtitle: 'Xem trước hóa đơn, kiểm tra thông tin và điều chỉnh thiết lập in trước khi gửi lệnh in hệ thống.',
+        subtitle: 'Xem trước hóa đơn A5, kiểm tra thông tin và điều chỉnh thiết lập in trước khi gửi lệnh in hệ thống.',
         title: previewTitle,
         data: printData,
         template,

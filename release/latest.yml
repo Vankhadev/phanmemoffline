@@ -1,11 +1,11 @@
-version: 1.3.6
+version: 1.3.7
 files:
-  - url: banhangoffline-setup-v1.3.6-x64.exe
-    sha512: LxOh/sBdlbeO3txmz7nQNmjhRQZnRUwValzyMzMa1ukt/Fp8qFRlVPricXiIyDPmK3m7KqkjO3rOw4zfmj6/kw==
-    size: 83959608
-  - url: banhangoffline-setup-v1.3.6-ia32.exe
-    sha512: Nm9maCKmS7PxJcT1KHhBjoPGtYuuG9l2xvLKEjrjHZcBXhIhR6YRUl0aQQywy3GJAI2PmZfVNPyX9ILjjk+Srg==
-    size: 74376731
-path: banhangoffline-setup-v1.3.6-x64.exe
-sha512: LxOh/sBdlbeO3txmz7nQNmjhRQZnRUwValzyMzMa1ukt/Fp8qFRlVPricXiIyDPmK3m7KqkjO3rOw4zfmj6/kw==
-releaseDate: '2026-05-27T01:49:29.596Z'
+  - url: banhangoffline-setup-v1.3.7-x64.exe
+    sha512: Ipq2MHUaBgf3bqTgNlSkfdyL5s8wmUqd/EhKzOMliyiqJ6Tbo0MAldUjxRMR3s38kZl0egXSBivzuLjAk0Tlaw==
+    size: 83960290
+  - url: banhangoffline-setup-v1.3.7-ia32.exe
+    sha512: UQhB3AevJyWJSHLYB+SWKe7RP49YHaXpMDcmToSO8sy3ui8DyPtNGepyVSfizY1q1i3Mnx84GqIonwRLer785g==
+    size: 74377501
+path: banhangoffline-setup-v1.3.7-x64.exe
+sha512: Ipq2MHUaBgf3bqTgNlSkfdyL5s8wmUqd/EhKzOMliyiqJ6Tbo0MAldUjxRMR3s38kZl0egXSBivzuLjAk0Tlaw==
+releaseDate: '2026-05-27T03:13:10.222Z'

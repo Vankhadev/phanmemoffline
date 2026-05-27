@@ -7,6 +7,12 @@ export const PAYMENT_LABELS = {
   debt: 'Công nợ',
 };
 
+export const PAYMENT_STATUS_LABELS = {
+  paid: 'Đã thanh toán',
+  partial: 'Thanh toán một phần',
+  unpaid: 'Chưa thanh toán',
+};
+
 const BANK_MAP = {
   Vietcombank: 'VCB',
   VietinBank: 'CTG',
@@ -36,6 +42,13 @@ function normalizePaymentMethod(method) {
   if (value.includes('chuyển') || value.includes('chuyen') || value.includes('bank')) return 'bank';
   if (value.includes('nợ') || value.includes('no') || value.includes('debt')) return 'debt';
   return 'cash';
+}
+
+function derivePaymentStatus({ totalRaw = 0, paidRaw = 0, remainingRaw = 0 } = {}) {
+  if (Math.max(0, totalRaw) <= 0) return 'paid';
+  if (Math.max(0, remainingRaw) <= 0) return 'paid';
+  if (Math.max(0, paidRaw) > 0) return 'partial';
+  return 'unpaid';
 }
 
 function formatDateTime(value) {
@@ -85,6 +98,18 @@ export function buildInvoiceVietQRUrl(store = {}, amount = 0, invoiceCode = '') 
 
 function normalizeCustomer(invoice = {}, customer = {}) {
   const source = customer || {};
+  const customerType = firstDefined(
+    source.customer_type_name,
+    source.customer_type,
+    source.type,
+    invoice.customer_type_name,
+    invoice.customer_type,
+    invoice.customer?.customer_type_name,
+    invoice.customer?.customer_type,
+    invoice.selectedCustomer?.customer_type_name,
+    invoice.selectedCustomer?.customer_type,
+    'Khách lẻ'
+  );
   return {
     ...source,
     id: firstDefined(source.id, invoice.customer_id, ''),
@@ -93,6 +118,9 @@ function normalizeCustomer(invoice = {}, customer = {}) {
     address: firstDefined(source.address, invoice.customer_address, invoice.customer?.address, invoice.selectedCustomer?.address, ''),
     email: firstDefined(source.email, invoice.customer_email, invoice.customer?.email, invoice.selectedCustomer?.email, ''),
     tax_code: firstDefined(source.tax_code, invoice.customer_tax_code, invoice.customer?.tax_code, invoice.selectedCustomer?.tax_code, ''),
+    customer_type: customerType,
+    customer_type_name: customerType,
+    type: customerType,
   };
 }
 
@@ -137,6 +165,7 @@ export function normalizeInvoicePrintItems(items = []) {
       line_total: formatCurrency(lineTotal),
       image_url: firstDefined(source.image_url, source.image, source.thumbnail, source.product_image, ''),
       reason: firstDefined(source.reason, ''),
+      selected_price_tier: firstDefined(source.selected_price_tier, source.selectedPriceTier, ''),
     };
   });
 }
@@ -177,6 +206,14 @@ export function createInvoicePrintData({
   const remainingRaw = firstDefined(invoice.remaining_amount, invoice.remainingAmount, invoice.remaining) !== undefined
     ? toNumber(firstDefined(invoice.remaining_amount, invoice.remainingAmount, invoice.remaining), 0)
     : Math.max(0, totalRaw - paidRaw);
+  const paymentStatusRaw = firstDefined(invoice.payment_status, invoice.paymentStatus)
+    || derivePaymentStatus({ totalRaw, paidRaw, remainingRaw });
+  const paymentStatusLabel = firstDefined(
+    invoice.payment_status_label,
+    invoice.paymentStatusLabel,
+    PAYMENT_STATUS_LABELS[paymentStatusRaw],
+    paymentStatusRaw
+  );
   const invoiceCode = firstDefined(invoice.order_code, invoice.invoice_code, invoice.code, invoice.id ? `HD-${invoice.id}` : 'Hóa đơn');
   const normalizedCustomer = normalizeCustomer(invoice, customer || invoice.customer || invoice.selectedCustomer || {});
   const normalizedUser = normalizeUser(invoice, user || invoice.user || {});
@@ -198,8 +235,12 @@ export function createInvoicePrintData({
     created_date: formatDate(firstDefined(invoice.created_at, invoice.createdAt, invoice.date)),
     delivery_date: invoice.delivery_date ? formatDate(invoice.delivery_date) : '',
     cashier: firstDefined(invoice.cashier, normalizedUser.name, invoice.invoice_writer, ''),
+    customer_type: normalizedCustomer.customer_type,
+    customer_type_name: normalizedCustomer.customer_type_name,
     payment_method: PAYMENT_LABELS[paymentMethod] || paymentMethod,
     payment_method_raw: paymentMethod,
+    payment_status: paymentStatusRaw,
+    payment_status_label: paymentStatusLabel,
     subtotal: formatCurrency(subtotalRaw),
     vat: formatCurrency(vatAmountRaw),
     vat_amount: formatCurrency(vatAmountRaw),
@@ -219,6 +260,9 @@ export function createInvoicePrintData({
     note: firstDefined(invoice.note, ''),
     invoice_writer: firstDefined(invoice.invoice_writer, normalizedUser.name, ''),
     receiver_name: firstDefined(invoice.receiver_name, ''),
+    selected_price_tier: firstDefined(invoice.selected_price_tier, invoice.selectedPriceTier, ''),
+    selected_price_tier_hint: firstDefined(invoice.selected_price_tier_hint, invoice.selectedPriceTierHint, ''),
+    store_info_snapshot: firstDefined(invoice.store_info_snapshot, invoice.storeInfoSnapshot, null),
     printed_at: runtimePrintedAt,
     print_time: runtimePrintedAt,
     printed_date: runtimePrintedDate,
@@ -262,6 +306,11 @@ export function createInvoicePrintData({
     invoice: invoiceData,
     customer: normalizedCustomer,
     user: normalizedUser,
+    payment_status: paymentStatusRaw,
+    payment_status_label: paymentStatusLabel,
+    selected_price_tier: invoiceData.selected_price_tier || '',
+    selected_price_tier_hint: invoiceData.selected_price_tier_hint || '',
+    store_info_snapshot: invoiceData.store_info_snapshot || null,
     runtime: {
       printed_at: runtimePrintedAt,
       printed_date: runtimePrintedDate,

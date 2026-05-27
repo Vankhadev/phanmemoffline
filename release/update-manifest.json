@@ -1,36 +1,36 @@
-{
-  "version": "1.3.6",
-  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.6/banhangoffline-setup-v1.3.6-x64.exe",
-  "sha256": "a2fb6ec727f85bda94969913e100ab7f4b002737eeeaa0b73a75437e98d614d7",
-  "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.3.6.\n- Có bộ cài riêng cho Windows x64 và Windows 32-bit (ia32).",
-  "releaseDate": "2026-05-27T01:49:31.720Z",
-  "platform": "win32",
-  "arch": "x64",
-  "size": 83959608,
-  "mandatory": false,
-  "installerType": "nsis",
-  "supportedArch": [
-    "x64",
-    "ia32"
-  ],
-  "installers": {
-    "x64": {
-      "platform": "win32",
-      "arch": "x64",
-      "fileName": "banhangoffline-setup-v1.3.6-x64.exe",
-      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.6/banhangoffline-setup-v1.3.6-x64.exe",
-      "sha256": "a2fb6ec727f85bda94969913e100ab7f4b002737eeeaa0b73a75437e98d614d7",
-      "size": 83959608,
-      "installerType": "nsis"
-    },
-    "ia32": {
-      "platform": "win32",
-      "arch": "ia32",
-      "fileName": "banhangoffline-setup-v1.3.6-ia32.exe",
-      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.6/banhangoffline-setup-v1.3.6-ia32.exe",
-      "sha256": "8e5e08a83985a186d7e8412bbcf5f67abda319ee2a8ce1f1a48930ec43bc8651",
-      "size": 74376731,
-      "installerType": "nsis"
-    }
-  }
+﻿{
+    "version":  "1.3.7",
+    "url":  "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.7/banhangoffline-setup-v1.3.7-x64.exe",
+    "sha256":  "76f9a5f1845e826a3c9f45309b8c07ead20f6024dfa88df6f15f381d39edb84a",
+    "releaseNotes":  "- Chuẩn hóa dữ liệu in hóa đơn A5 qua API backend cho hóa đơn đã lưu.\r\n- Màn danh sách đơn hàng ưu tiên lấy dữ liệu in từ server và tự fallback về dữ liệu local/offline.\r\n- Cải thiện renderer/in silent để bản in A5 giữ đúng khổ giấy, lề và zoom.",
+    "releaseDate":  "2026-05-27T03:13:11.719Z",
+    "platform":  "win32",
+    "arch":  "x64",
+    "size":  83960290,
+    "mandatory":  false,
+    "installerType":  "nsis",
+    "supportedArch":  [
+                          "x64",
+                          "ia32"
+                      ],
+    "installers":  {
+                       "x64":  {
+                                   "platform":  "win32",
+                                   "arch":  "x64",
+                                   "fileName":  "banhangoffline-setup-v1.3.7-x64.exe",
+                                   "url":  "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.7/banhangoffline-setup-v1.3.7-x64.exe",
+                                   "sha256":  "76f9a5f1845e826a3c9f45309b8c07ead20f6024dfa88df6f15f381d39edb84a",
+                                   "size":  83960290,
+                                   "installerType":  "nsis"
+                               },
+                       "ia32":  {
+                                    "platform":  "win32",
+                                    "arch":  "ia32",
+                                    "fileName":  "banhangoffline-setup-v1.3.7-ia32.exe",
+                                    "url":  "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.7/banhangoffline-setup-v1.3.7-ia32.exe",
+                                    "sha256":  "fe3ac4344a304dc995b4343d47ff7ea2a5c51ef85b49dadba973f9b0fb8efa42",
+                                    "size":  74377501,
+                                    "installerType":  "nsis"
+                                }
+                   }
 }

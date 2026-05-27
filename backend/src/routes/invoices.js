@@ -16,6 +16,7 @@ const {
   mergeDuplicateDetails: mergeInvoiceDetails,
   normalizeInvoiceDetail: normalizeInvoiceDetailService,
 } = require('../services/invoiceCreationService');
+const { getInvoicePrintData } = require('../services/invoicePrintDataService');
 const {
   getInvoiceDetailProductId,
   validateNegativeStockForDetails,
@@ -285,6 +286,20 @@ router.get('/', (req, res) => {
     res.json(pagedRows);
   } catch (err) {
     res.status(500).json({ error: 'Lỗi khi lấy danh sách: ' + err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// GET /api/invoices/:id/print-data
+// Dữ liệu normalize cho mẫu in hóa đơn A5
+// ─────────────────────────────────────────────
+router.get('/:id/print-data', (req, res) => {
+  try {
+    const data = getInvoicePrintData(req.params.id);
+    res.json(data);
+  } catch (err) {
+    const status = err.status || 500;
+    res.status(status).json({ error: 'Lỗi khi lấy dữ liệu in hóa đơn: ' + err.message });
   }
 });
 

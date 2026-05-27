@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.3.7 - 2026-05-27
+
+### Cải thiện in hóa đơn
+
+- Thêm API backend `/api/invoices/:id/print-data` để chuẩn hóa dữ liệu in hóa đơn A5 cho hóa đơn online, bao gồm khách hàng, người lập, chi tiết hàng và trạng thái thanh toán.
+- Cập nhật màn `OrderList` để ưu tiên tải dữ liệu in từ server cho hóa đơn đã lưu và tự fallback về dữ liệu local/offline khi cần.
+- Tinh chỉnh renderer mẫu in và silent print Electron để bản xem trước/in A5 giữ đúng kích thước trang, lề và zoom.
+
+### Phát hành
+
+- Đồng bộ version phát hành 1.3.7 cho ứng dụng desktop, metadata auto-update và tài liệu đi kèm.
+
 ## v1.3.6 - 2026-05-27
 
 ### Phát hành

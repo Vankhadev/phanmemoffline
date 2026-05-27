@@ -445,6 +445,13 @@ async function printHtmlSilently(payload = {}) {
     });
 
     printWindow.webContents.once('did-finish-load', () => {
+      try {
+        printWindow.webContents.setZoomFactor(1);
+      } catch (_) {
+        // Ignore zoom reset failures before printing.
+      }
+
+      const isA5Paper = String(printRequest.paperSize || '').trim().toUpperCase() === 'A5';
       const printOptions = {
         silent: true,
         printBackground: printRequest.printBackground,
@@ -452,12 +459,19 @@ async function printHtmlSilently(payload = {}) {
         copies: printRequest.copies,
         landscape: printRequest.layout === 'landscape',
         margins: {
-          marginType: printRequest.margins,
+          marginType: isA5Paper ? 'none' : printRequest.margins,
         },
+        scaleFactor: 100,
       };
 
       const pageSize = resolveSilentPrintPageSize(printRequest.paperSize, printRequest.widthMm, printRequest.heightMm);
-      if (pageSize) printOptions.pageSize = pageSize;
+      if (isA5Paper) {
+        printOptions.pageSize = printRequest.layout === 'landscape'
+          ? { width: 210000, height: 148000 }
+          : { width: 148000, height: 210000 };
+      } else if (pageSize) {
+        printOptions.pageSize = pageSize;
+      }
 
       printWindow.webContents.print(printOptions, (success, failureReason) => {
         if (!success) {

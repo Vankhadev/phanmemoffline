@@ -48,7 +48,7 @@ const NEGATIVE_STOCK_LIMIT = -10;
 const NEGATIVE_STOCK_FEATURE_NAME = 'Xuất âm tồn kho';
 const NEGATIVE_STOCK_FEATURE_DESCRIPTION = 'Bật để cho phép xuất vượt tồn kho đến giới hạn cố định trong code.';
 const NEGATIVE_STOCK_FEATURE_CATEGORY = 'Kho hàng';
-const RELEASE_VERSION = '1.3.6';
+const RELEASE_VERSION = '1.3.7';
 const RELEASE_DOWNLOAD_BASE_URL = 'https://github.com/Vankhadev/phanmemoffline/releases/latest/download/';
 const WINDOWS_INSTALLERS = Object.freeze([
   {
