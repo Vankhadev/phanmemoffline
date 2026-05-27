@@ -129,8 +129,8 @@ npm run build:all
 
 File installer production nằm trong thư mục `release`:
 
-- `banhangoffline-setup-v1.3.5-x64.exe`: dùng cho Windows 64-bit.
-- `banhangoffline-setup-v1.3.5-ia32.exe`: dùng cho Windows 32-bit hoặc khi máy báo không chạy được bản x64.
+- `banhangoffline-setup-v1.3.6-x64.exe`: dùng cho Windows 64-bit.
+- `banhangoffline-setup-v1.3.6-ia32.exe`: dùng cho Windows 32-bit hoặc khi máy báo không chạy được bản x64.
 
 Kiểm tra installer/manifest local bằng PowerShell:
 

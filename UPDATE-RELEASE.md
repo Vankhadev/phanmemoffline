@@ -10,12 +10,12 @@
 
 ## Asset GitHub Release bắt buộc
 
-Khi phát hành version `1.3.5`, release cần tối thiểu các asset:
+Khi phát hành version `1.3.6`, release cần tối thiểu các asset:
 
-- `banhangoffline-setup-v1.3.5-x64.exe`
-- `banhangoffline-setup-v1.3.5-x64.exe.blockmap`
-- `banhangoffline-setup-v1.3.5-ia32.exe`
-- `banhangoffline-setup-v1.3.5-ia32.exe.blockmap`
+- `banhangoffline-setup-v1.3.6-x64.exe`
+- `banhangoffline-setup-v1.3.6-x64.exe.blockmap`
+- `banhangoffline-setup-v1.3.6-ia32.exe`
+- `banhangoffline-setup-v1.3.6-ia32.exe.blockmap`
 - `latest.yml`
 - `update-manifest.json`
 
@@ -70,7 +70,7 @@ Script [`verify-windows-release.ps1`](scripts/verify-windows-release.ps1:1) ki�
 Tag release theo version trong [`package.json`](package.json:3):
 
 ```cmd
-git tag v1.3.5
+git tag v1.3.6
 git push origin main --tags
 ```
 
@@ -81,15 +81,15 @@ Workflow [`release-windows.yml`](.github/workflows/release-windows.yml:1) sẽ b
 Chỉ chạy sau khi local verify thành công:
 
 ```cmd
-gh release create v1.3.5 release/banhangoffline-setup-v1.3.5-x64.exe release/banhangoffline-setup-v1.3.5-x64.exe.blockmap release/banhangoffline-setup-v1.3.5-ia32.exe release/banhangoffline-setup-v1.3.5-ia32.exe.blockmap release/latest.yml release/update-manifest.json --title "BanHangOffline v1.3.5" --generate-notes --latest
+gh release create v1.3.6 release/banhangoffline-setup-v1.3.6-x64.exe release/banhangoffline-setup-v1.3.6-x64.exe.blockmap release/banhangoffline-setup-v1.3.6-ia32.exe release/banhangoffline-setup-v1.3.6-ia32.exe.blockmap release/latest.yml release/update-manifest.json --title "BanHangOffline v1.3.6" --generate-notes --latest
 ```
 
-Nếu release đã tồn tại, dùng `gh release upload v1.3.5 ... --clobber` có chủ đích sau khi kiểm tra file đúng.
+Nếu release đã tồn tại, dùng `gh release upload v1.3.6 ... --clobber` có chủ đích sau khi kiểm tra file đúng.
 
 ## Kiểm tra remote sau khi publish
 
 ```cmd
-powershell -ExecutionPolicy Bypass -File scripts/verify-windows-release.ps1 -Mode remote -Version 1.3.5 -Tag v1.3.5 -Arch x64,ia32
+powershell -ExecutionPolicy Bypass -File scripts/verify-windows-release.ps1 -Mode remote -Version 1.3.6 -Tag v1.3.6 -Arch x64,ia32
 ```
 
 Remote verify cần xác nhận:
@@ -101,10 +101,10 @@ Remote verify cần xác nhận:
 
 ## Hướng dẫn cho người dùng phổ thông
 
-- Máy Windows 10/11 thông thường: tải `banhangoffline-setup-v1.3.5-x64.exe`.
-- Máy Windows 32-bit hoặc báo lỗi “Ứng dụng này không thể chạy trên PC của bạn”: tải `banhangoffline-setup-v1.3.5-ia32.exe`.
+- Máy Windows 10/11 thông thường: tải `banhangoffline-setup-v1.3.6-x64.exe`.
+- Máy Windows 32-bit hoặc báo lỗi “Ứng dụng này không thể chạy trên PC của bạn”: tải `banhangoffline-setup-v1.3.6-ia32.exe`.
 - Chỉ tải từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`.
-- Nếu trình duyệt/SmartScreen/antivirus cảnh báo, kiểm tra tên file và nguồn tải trước. Không chạy file nếu tên không đúng `banhangoffline-setup-v1.3.5-x64.exe` hoặc `banhangoffline-setup-v1.3.5-ia32.exe`.
+- Nếu trình duyệt/SmartScreen/antivirus cảnh báo, kiểm tra tên file và nguồn tải trước. Không chạy file nếu tên không đúng `banhangoffline-setup-v1.3.6-x64.exe` hoặc `banhangoffline-setup-v1.3.6-ia32.exe`.
 - Nếu tải được file rất nhỏ hoặc mở ra trang HTML, hãy xóa file đó và tải lại từ nút/link release chính thức.
 
 ## Test cập nhật trong app
@@ -117,7 +117,7 @@ Remote verify cần xác nhận:
 
 ## Rollback
 
-- Nếu release lỗi, tạo tag và release mới thay thế, ví dụ `v1.3.5`.
+- Nếu release lỗi, tạo tag và release mới thay thế, ví dụ `v1.3.6`.
 - Không chỉnh tay metadata updater đã public nếu asset đã được cache rộng rãi.
 - Nếu bắt buộc thay asset trong cùng tag, phải upload lại đồng bộ installer, blockmap, [`latest.yml`](release/latest.yml:1) và [`update-manifest.json`](release/update-manifest.json:1), rồi chạy remote verify lại.
 

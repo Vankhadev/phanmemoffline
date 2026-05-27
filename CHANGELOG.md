@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.6 - 2026-05-27
+
+### Phát hành
+
+- Đồng bộ version phát hành 1.3.6 cho ứng dụng desktop, metadata auto-update và tài liệu đi kèm.
+- Không thay đổi tính năng; bản này tập trung chuẩn hóa metadata release và hướng dẫn tải/cập nhật.
+
 ## v1.3.5 - 2026-05-25
 
 ### Sửa lỗi phát hành Windows
