@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Demo hóa đơn A5</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="demo-shell" aria-label="Demo in hóa đơn khổ A5">
+    <section class="toolbar" aria-label="Thanh công cụ in">
+      <div>
+        <p class="eyebrow">Mẫu hóa đơn bán hàng</p>
+        <h1>Hóa đơn A5 portrait</h1>
+        <p class="toolbar-note">Thiết kế sẵn cho in trực tiếp hoặc lưu PDF khổ 148mm x 210mm.</p>
+      </div>
+      <button id="printInvoiceBtn" class="print-button" type="button" aria-live="polite">
+        <span class="button-spinner" aria-hidden="true"></span>
+        <span class="button-label">IN HÓA ĐƠN</span>
+      </button>
+    </section>
+
+    <section class="paper-stage" aria-label="Xem trước hóa đơn">
+      <article id="invoiceA5" class="invoice-page" aria-label="Hóa đơn A5">
+        <header class="invoice-header">
+          <div class="brand-block">
+            <div class="brand-logo" aria-label="Logo cửa hàng">PM</div>
+            <div>
+              <h2>PHẦN MỀM OFFLINE STORE</h2>
+              <p>123 Nguyễn Văn Cừ, Phường An Hòa, Quận Ninh Kiều, Cần Thơ</p>
+              <p>Hotline: 0909 888 777 · MST: 1800 456 789</p>
+            </div>
+          </div>
+          <div class="invoice-meta">
+            <p class="invoice-title">HÓA ĐƠN BÁN HÀNG</p>
+            <p><span>Mã HĐ:</span> HD-20260530-001</p>
+            <p><span>Ngày tạo:</span> 30/05/2026 08:31</p>
+            <p><span>Thu ngân:</span> Admin</p>
+          </div>
+        </header>
+
+        <section class="customer-card" aria-label="Thông tin khách hàng">
+          <div>
+            <span>Khách hàng</span>
+            <strong>Nguyễn Minh Anh</strong>
+          </div>
+          <div>
+            <span>Số điện thoại</span>
+            <strong>0987 654 321</strong>
+          </div>
+          <div class="customer-address">
+            <span>Địa chỉ</span>
+            <strong>45 Lý Thường Kiệt, Quận 10, TP. Hồ Chí Minh</strong>
+          </div>
+        </section>
+
+        <section class="items-section" aria-label="Danh sách sản phẩm">
+          <table class="invoice-table">
+            <thead>
+              <tr>
+                <th class="col-index">STT</th>
+                <th class="col-name">Tên sản phẩm</th>
+                <th class="col-qty">SL</th>
+                <th class="col-price">Đơn giá</th>
+                <th class="col-total">Thành tiền</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>
+                  <strong>Bộ bàn phím cơ văn phòng ProKey K87</strong>
+                  <small>Bảo hành 12 tháng</small>
+                </td>
+                <td>1</td>
+                <td>1.250.000</td>
+                <td>1.250.000</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>
+                  <strong>Chuột không dây Silent Mouse M220</strong>
+                  <small>Màu đen, kết nối 2.4GHz</small>
+                </td>
+                <td>2</td>
+                <td>285.000</td>
+                <td>570.000</td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>
+                  <strong>Tai nghe call center ClearVoice C1</strong>
+                  <small>Jack USB, chống ồn micro</small>
+                </td>
+                <td>1</td>
+                <td>690.000</td>
+                <td>690.000</td>
+              </tr>
+              <tr>
+                <td>4</td>
+                <td>
+                  <strong>Giấy in hóa đơn K80</strong>
+                  <small>Lốc 10 cuộn</small>
+                </td>
+                <td>3</td>
+                <td>95.000</td>
+                <td>285.000</td>
+              </tr>
+              <tr>
+                <td>5</td>
+                <td>
+                  <strong>Dịch vụ cài đặt phần mềm bán hàng offline</strong>
+                  <small>Thiết lập máy in, cấu hình dữ liệu ban đầu</small>
+                </td>
+                <td>1</td>
+                <td>450.000</td>
+                <td>450.000</td>
+              </tr>
+              <tr>
+                <td>6</td>
+                <td>
+                  <strong>Tem nhãn mã vạch 35x22mm</strong>
+                  <small>Cuộn 3.000 tem</small>
+                </td>
+                <td>2</td>
+                <td>120.000</td>
+                <td>240.000</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="summary-section" aria-label="Tổng kết thanh toán">
+          <div class="payment-note">
+            <strong>Ghi chú:</strong>
+            <span>Hàng đã mua vui lòng kiểm tra trước khi rời cửa hàng. Hóa đơn có giá trị trong ngày.</span>
+          </div>
+          <div class="summary-box">
+            <div>
+              <span>Tạm tính</span>
+              <strong>3.485.000</strong>
+            </div>
+            <div>
+              <span>Chiết khấu</span>
+              <strong>- 185.000</strong>
+            </div>
+            <div>
+              <span>VAT</span>
+              <strong>0</strong>
+            </div>
+            <div class="grand-total">
+              <span>Tổng tiền</span>
+              <strong>3.300.000 đ</strong>
+            </div>
+          </div>
+        </section>
+
+        <footer class="invoice-footer">
+          <div class="signature-block">
+            <p>Khách hàng</p>
+            <span>(Ký, ghi rõ họ tên)</span>
+            <strong>Nguyễn Minh Anh</strong>
+          </div>
+          <div class="qr-block" aria-label="QR thanh toán fake">
+            <div class="fake-qr" role="img" aria-label="Mã QR thanh toán minh họa"></div>
+            <p>QR thanh toán</p>
+          </div>
+          <div class="signature-block">
+            <p>Admin xử lý</p>
+            <span>(Ký, ghi rõ họ tên)</span>
+            <strong>Admin</strong>
+          </div>
+        </footer>
+      </article>
+    </section>
+  </main>
+
+  <script src="script.js" defer></script>
+</body>
+</html>

@@ -1,36 +1,36 @@
-﻿{
-    "version":  "1.3.7",
-    "url":  "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.7/banhangoffline-setup-v1.3.7-x64.exe",
-    "sha256":  "76f9a5f1845e826a3c9f45309b8c07ead20f6024dfa88df6f15f381d39edb84a",
-    "releaseNotes":  "- Chuẩn hóa dữ liệu in hóa đơn A5 qua API backend cho hóa đơn đã lưu.\r\n- Màn danh sách đơn hàng ưu tiên lấy dữ liệu in từ server và tự fallback về dữ liệu local/offline.\r\n- Cải thiện renderer/in silent để bản in A5 giữ đúng khổ giấy, lề và zoom.",
-    "releaseDate":  "2026-05-27T03:13:11.719Z",
-    "platform":  "win32",
-    "arch":  "x64",
-    "size":  83960290,
-    "mandatory":  false,
-    "installerType":  "nsis",
-    "supportedArch":  [
-                          "x64",
-                          "ia32"
-                      ],
-    "installers":  {
-                       "x64":  {
-                                   "platform":  "win32",
-                                   "arch":  "x64",
-                                   "fileName":  "banhangoffline-setup-v1.3.7-x64.exe",
-                                   "url":  "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.7/banhangoffline-setup-v1.3.7-x64.exe",
-                                   "sha256":  "76f9a5f1845e826a3c9f45309b8c07ead20f6024dfa88df6f15f381d39edb84a",
-                                   "size":  83960290,
-                                   "installerType":  "nsis"
-                               },
-                       "ia32":  {
-                                    "platform":  "win32",
-                                    "arch":  "ia32",
-                                    "fileName":  "banhangoffline-setup-v1.3.7-ia32.exe",
-                                    "url":  "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.7/banhangoffline-setup-v1.3.7-ia32.exe",
-                                    "sha256":  "fe3ac4344a304dc995b4343d47ff7ea2a5c51ef85b49dadba973f9b0fb8efa42",
-                                    "size":  74377501,
-                                    "installerType":  "nsis"
-                                }
-                   }
+{
+  "version": "1.3.8",
+  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.8/banhangoffline-setup-v1.3.8-x64.exe",
+  "sha256": "23d068ad5c59b8ca4e00c3eefdd26f39b5f9f714b65d2b2fde247b86cb3b4017",
+  "releaseNotes": "- Siết CSS in A5 để trang in giữ đúng khổ 148mm x 210mm, bỏ lệch lề/zoom.\n- Cập nhật renderer mẫu hóa đơn và guard bố cục khi in.\n- Chuẩn hóa in tem sản phẩm dạng cuộn và dạng tờ A4/A5.",
+  "releaseDate": "2026-05-30T02:04:02.705Z",
+  "platform": "win32",
+  "arch": "x64",
+  "size": 83964755,
+  "mandatory": false,
+  "installerType": "nsis",
+  "supportedArch": [
+    "x64",
+    "ia32"
+  ],
+  "installers": {
+    "x64": {
+      "platform": "win32",
+      "arch": "x64",
+      "fileName": "banhangoffline-setup-v1.3.8-x64.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.8/banhangoffline-setup-v1.3.8-x64.exe",
+      "sha256": "23d068ad5c59b8ca4e00c3eefdd26f39b5f9f714b65d2b2fde247b86cb3b4017",
+      "size": 83964755,
+      "installerType": "nsis"
+    },
+    "ia32": {
+      "platform": "win32",
+      "arch": "ia32",
+      "fileName": "banhangoffline-setup-v1.3.8-ia32.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.8/banhangoffline-setup-v1.3.8-ia32.exe",
+      "sha256": "f7c950f34bfabe4594743488b7ac0c4c755683ba0ba91fa34f8047b7c29456ea",
+      "size": 74382043,
+      "installerType": "nsis"
+    }
+  }
 }

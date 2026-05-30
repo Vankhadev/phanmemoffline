@@ -53,3 +53,133 @@
     }
   }
 }
+
+@page {
+  size: A5 portrait;
+  margin: 0;
+}
+
+@media print {
+  html,
+  body {
+    width: 148mm !important;
+    height: 210mm !important;
+    min-width: 148mm !important;
+    min-height: 210mm !important;
+    max-width: 148mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #111 !important;
+    display: block !important;
+    overflow: visible !important;
+    position: static !important;
+    inset: auto !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    zoom: 1 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #root,
+  #root > *,
+  .app-main-scroll,
+  .print-root,
+  .print-wrapper,
+  .invoice-print-document,
+  .invoice-preview-root,
+  .print-template,
+  .visual-invoice-template,
+  .label-sheet,
+  .sheet-page,
+  .roll-page {
+    margin: 0 !important;
+    display: block !important;
+    justify-content: flex-start !important;
+    align-items: flex-start !important;
+    align-content: flex-start !important;
+    place-content: start !important;
+    place-items: start !important;
+    float: none !important;
+    clear: both !important;
+    inset: auto !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    zoom: 1 !important;
+    box-shadow: none !important;
+  }
+
+  #root,
+  #root > *,
+  .app-main-scroll,
+  .print-root,
+  .print-wrapper,
+  .invoice-print-document {
+    width: 148mm !important;
+    min-width: 148mm !important;
+    max-width: 148mm !important;
+    min-height: 210mm !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    position: static !important;
+    background: #fff !important;
+  }
+
+  .print-page,
+  .invoice-preview-root.print-page,
+  .invoice-preview-root:not(.receipt-paper) {
+    width: 148mm !important;
+    min-width: 148mm !important;
+    max-width: 148mm !important;
+    min-height: 210mm !important;
+    margin: 0 !important;
+    padding: 10mm !important;
+    display: block !important;
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+    box-sizing: border-box !important;
+    background: #fff !important;
+    border: 0 !important;
+    overflow: visible !important;
+    transform: none !important;
+    zoom: 1 !important;
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .print-page > *,
+  .invoice-preview-root.print-page > *,
+  .invoice-preview-root:not(.receipt-paper) > *,
+  .print-template,
+  .visual-invoice-template {
+    max-width: 100% !important;
+    margin-top: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    transform: none !important;
+    zoom: 1 !important;
+  }
+
+  .app-main-scroll table,
+  .print-page table,
+  .invoice-preview-root table,
+  .print-template table,
+  .visual-invoice-template table {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  img,
+  svg,
+  canvas {
+    max-width: 100% !important;
+  }
+}

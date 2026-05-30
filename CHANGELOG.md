@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.3.8 - 2026-05-30
+
+### Cải thiện in ấn
+
+- Siết CSS in A5 để trang in giữ đúng khổ 148mm x 210mm, bỏ lệch lề/zoom và căn từ góc trên trái trong cửa sổ in cũng như silent print.
+- Cập nhật renderer mẫu hóa đơn để đánh dấu trang A5 bằng lớp print-page, áp dụng guard cho bảng/hình ảnh và tránh vỡ bố cục khi in.
+- Chuẩn hóa in tem sản phẩm dạng cuộn và dạng tờ A4/A5 với khổ giấy, lề, vị trí trang và màu in nhất quán hơn.
+- Thêm demo hóa đơn A5 độc lập để kiểm tra nhanh layout, iframe in và trạng thái nút in trước khi phát hành.
+
+### Phát hành
+
+- Đồng bộ version phát hành 1.3.8 cho ứng dụng desktop, frontend, backend, metadata auto-update và tài liệu đi kèm.
+
 ## v1.3.7 - 2026-05-27
 
 ### Cải thiện in hóa đơn

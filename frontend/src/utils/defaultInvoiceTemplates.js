@@ -51,10 +51,11 @@ h1 { margin: 8px 0 6px; text-align: center; font-size: 15px; }
 `;
 
 const commonSheetCss = `
-@page { size: A5; margin: 8mm; }
+@page { size: A5 portrait; margin: 0; }
 * { box-sizing: border-box; }
-body { margin: 0; background: #fff; color: #111; font-family: Arial, sans-serif; font-size: 12px; }
-.print-template { width: 100%; padding: 0; }
+html, body { width: 148mm; height: 210mm; margin: 0; padding: 0; background: #fff; }
+body { color: #111; font-family: Arial, sans-serif; font-size: 12px; display: block; overflow: visible; transform: none; zoom: 1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.print-template { width: 148mm; min-height: 210mm; margin: 0; padding: 10mm; display: block; position: relative; top: 0; left: 0; box-sizing: border-box; transform: none; zoom: 1; }
 .store-header { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #d1d5db; padding-bottom: 8px; margin-bottom: 10px; }
 .store-logo { width: 22mm; height: 18mm; object-fit: contain; }
 .store-name { font-size: 18px; font-weight: 700; text-transform: uppercase; }
@@ -71,6 +72,11 @@ h1 { margin: 10px 0; text-align: center; font-size: 18px; }
 .totals div { min-width: 58mm; display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
 .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 28mm; margin-top: 18mm; text-align: center; }
 .signatures span { display: block; margin-top: 4px; font-size: 11px; color: #4b5563; }
+@media print {
+  @page { size: A5 portrait; margin: 0; }
+  html, body { width: 148mm !important; height: 210mm !important; min-width: 148mm !important; min-height: 210mm !important; margin: 0 !important; padding: 0 !important; display: block !important; overflow: visible !important; transform: none !important; zoom: 1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .print-template, .print-page { width: 148mm !important; min-width: 148mm !important; max-width: 148mm !important; min-height: 210mm !important; margin: 0 !important; padding: 10mm !important; display: block !important; position: relative !important; top: 0 !important; left: 0 !important; box-sizing: border-box !important; transform: none !important; zoom: 1 !important; box-shadow: none !important; border: 0 !important; }
+}
 `;
 
 const saleA4InvoiceHtml = `
