@@ -1,6 +1,6 @@
 # Phan mem offline
 
-## Phiên bản hiện tại: 1.3.8
+## Phiên bản hiện tại: 1.3.9
 
 Ứng dụng quản lý bán hàng offline gồm:
 
@@ -68,8 +68,8 @@ Các script `build:installer`, `build:portable` và `build:all` luôn build lạ
 
 Bản Windows production hiện tạo installer riêng theo kiến trúc:
 
-- `release/banhangoffline-setup-v1.3.8-x64.exe` cho Windows 64-bit.
-- `release/banhangoffline-setup-v1.3.8-ia32.exe` cho Windows 32-bit.
+- `release/banhangoffline-setup-v1.3.9-x64.exe` cho Windows 64-bit.
+- `release/banhangoffline-setup-v1.3.9-ia32.exe` cho Windows 32-bit.
 
 Sau khi build installer, script sẽ sinh lại [`latest.yml`](release/latest.yml:1) và [`update-manifest.json`](release/update-manifest.json:1). Có thể kiểm tra local bằng:
 

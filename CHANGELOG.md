@@ -1,17 +1,61 @@
 # Changelog
 
-## v1.3.8 - 2026-05-30
-
-### Cải thiện in ấn
-
-- Siết CSS in A5 để trang in giữ đúng khổ 148mm x 210mm, bỏ lệch lề/zoom và căn từ góc trên trái trong cửa sổ in cũng như silent print.
-- Cập nhật renderer mẫu hóa đơn để đánh dấu trang A5 bằng lớp print-page, áp dụng guard cho bảng/hình ảnh và tránh vỡ bố cục khi in.
-- Chuẩn hóa in tem sản phẩm dạng cuộn và dạng tờ A4/A5 với khổ giấy, lề, vị trí trang và màu in nhất quán hơn.
-- Thêm demo hóa đơn A5 độc lập để kiểm tra nhanh layout, iframe in và trạng thái nút in trước khi phát hành.
+## v1.3.9 - 2026-05-30
 
 ### Phát hành
 
+- Đồng bộ version phát hành 1.3.9 cho ứng dụng desktop, frontend, backend, lockfile và metadata cập nhật Windows.
+- Chuẩn hóa tài liệu release và hướng dẫn tải/cập nhật theo tag v1.3.9.
+- Không đưa các thay đổi chưa commit ngoài phạm vi release vào commit phát hành.
+
+### Lưu ý quan trọng
+
+- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.3.9-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.3.9-ia32.exe`.
+- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
+- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+
+## v1.3.8 - 2026-05-30
+
+### Bảng phát hành chính thức
+
+| Hạng mục | Nội dung |
+| --- | --- |
+| Phiên bản | 1.3.8 |
+| Ngày phát hành | 2026-05-30 |
+| Trạng thái | Sẵn sàng công bố cho người dùng Windows x64 và ia32 |
+| Tổng quan | Bản 1.3.8 tập trung ổn định trải nghiệm in hóa đơn A5, in tem sản phẩm và đồng bộ metadata phát hành Windows. |
+
+### Ghi chú thay đổi tổng quan
+
+- Cải thiện độ chính xác khổ giấy, lề và vị trí trang khi in hóa đơn A5 trong cửa sổ in cũng như silent print.
+- Chuẩn hóa luồng in tem sản phẩm cho cả dạng cuộn và dạng tờ A4/A5 để màu in, vùng in và căn trang nhất quán hơn.
 - Đồng bộ version phát hành 1.3.8 cho ứng dụng desktop, frontend, backend, metadata auto-update và tài liệu đi kèm.
+
+### Tính năng mới
+
+- Thêm demo hóa đơn A5 độc lập để kiểm tra nhanh layout, iframe in và trạng thái nút in trước khi phát hành.
+- Bổ sung đánh dấu trang A5 bằng lớp print-page trong renderer mẫu hóa đơn để hệ thống in nhận diện đúng vùng trang.
+- Hoàn thiện ghi chú phát hành và metadata cho bộ cài Windows x64/ia32 của phiên bản 1.3.8.
+
+### Lỗi đã sửa
+
+- Sửa tình trạng in hóa đơn A5 bị lệch lề, sai zoom hoặc không căn từ góc trên trái trong cửa sổ in và silent print.
+- Giảm lỗi vỡ bố cục bảng, hình ảnh hoặc nội dung hóa đơn khi renderer mẫu in gặp dữ liệu dài.
+- Sửa độ không nhất quán về khổ giấy, lề và màu in giữa in tem dạng cuộn với in tem dạng tờ A4/A5.
+
+### Cải tiến hiệu năng
+
+- Tối ưu CSS print theo đúng khổ 148mm x 210mm và vùng in thực tế để trình in dựng trang ổn định hơn.
+- Áp dụng guard bố cục cho bảng/hình ảnh nhằm giảm reflow và hạn chế phải căn chỉnh thủ công trước khi in.
+- Chuẩn hóa metadata auto-update để quy trình kiểm tra phiên bản, kích thước và hash installer cho x64/ia32 rõ ràng hơn.
+
+### Lưu ý quan trọng
+
+- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.3.8-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.3.8-ia32.exe`.
+- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
+- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
 
 ## v1.3.7 - 2026-05-27
 
