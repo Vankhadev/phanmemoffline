@@ -11,21 +11,22 @@ router.get('/', (req, res) => {
 });
 
 router.put('/', (req, res) => {
-  const { name, email, phone, tax_code, bank_account, bank_name, address,
-    invoice_width, invoice_logo, invoice_slogan, invoice_note, invoice_vietqr_logo } = req.body;
+  const { name, email, phone, tax_code, bank_account, bank_name, address } = req.body;
   const stores = getAll('store_info');
+  const payload = {
+    name,
+    email,
+    phone,
+    tax_code,
+    bank_account,
+    bank_name,
+    address,
+    updated_at: now(),
+  };
   if (stores[0]) {
-    update('store_info', stores[0].id, {
-      name, email, phone, tax_code, bank_account, bank_name, address,
-      invoice_width, invoice_logo, invoice_slogan, invoice_note, invoice_vietqr_logo,
-      updated_at: now(),
-    });
+    update('store_info', stores[0].id, payload);
   } else {
-    insert('store_info', {
-      name, email, phone, tax_code, bank_account, bank_name, address,
-      invoice_width, invoice_logo, invoice_slogan, invoice_note, invoice_vietqr_logo,
-      updated_at: now(),
-    });
+    insert('store_info', payload);
   }
   res.json({ ok: true });
 });

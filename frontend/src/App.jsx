@@ -16,7 +16,7 @@ import CustomerOrderReport from './pages/CustomerOrderReport';
 import ProductReport from './pages/ProductReport';
 import CashBook from './pages/CashBook';
 import Payroll from './pages/Payroll';
-import PrintTemplates from './pages/PrintTemplates';
+import InvoicePrint from './pages/InvoicePrint';
 import {
   BadgeDollarSign,
   BarChart3,
@@ -30,7 +30,6 @@ import {
   Menu,
   Package,
   PlusCircle,
-  Printer,
   Settings as SettingsIcon,
   ShieldCheck,
   ShoppingCart,
@@ -119,6 +118,7 @@ const ROUTE_PERMISSIONS = {
   [HOME_ROUTE]: [],
   '/tao-don-hang': ['invoices.manage'],
   '/danh-sach-don-hang': ['invoices.read'],
+  '/hoa-don-in': ['invoices.read'],
   '/kho-hang': ['products.read'],
   '/nha-cung-cap': ['partners.read'],
   '/nhap-hang': ['imports.read'],
@@ -130,11 +130,17 @@ const ROUTE_PERMISSIONS = {
   '/bao-cao-theo-don-hang': ['invoices.read'],
   '/bao-cao-theo-san-pham': ['stats.read'],
   '/cai-dat': ['settings.read', 'settings.manage', 'store.read', 'store.manage', 'users.read', 'users.manage', 'customers.read', 'customers.manage', 'updates.read', 'updates.manage'],
-  '/mau-in': ['print_templates.read'],
 };
 
+function resolvePermissionRoute(route) {
+  const safeRoute = normalizeRoutePath(route);
+  if (Object.prototype.hasOwnProperty.call(ROUTE_PERMISSIONS, safeRoute)) return safeRoute;
+  if (safeRoute.startsWith('/hoa-don-in/')) return '/hoa-don-in';
+  return safeRoute;
+}
+
 function isKnownAppRoute(route) {
-  return Object.prototype.hasOwnProperty.call(ROUTE_PERMISSIONS, route);
+  return Object.prototype.hasOwnProperty.call(ROUTE_PERMISSIONS, resolvePermissionRoute(route));
 }
 
 function normalizeDefaultRoute(route, user, permissions) {
@@ -161,8 +167,9 @@ function hasAnyPermission(user, permissions, required = []) {
 }
 
 function canAccessRoute(route, user, permissions) {
-  if (!user || !isKnownAppRoute(route)) return false;
-  const required = ROUTE_PERMISSIONS[route] || [];
+  const permissionRoute = resolvePermissionRoute(route);
+  if (!user || !isKnownAppRoute(permissionRoute)) return false;
+  const required = ROUTE_PERMISSIONS[permissionRoute] || [];
   return hasAnyPermission(user, permissions, required);
 }
 
@@ -249,7 +256,7 @@ function AppLayout({
   const [openMenus, setOpenMenus] = useState(() => ({
     don_hang: location.pathname.startsWith('/tao-don-hang') || location.pathname.startsWith('/danh-sach-don-hang'),
     danh_muc: location.pathname.startsWith('/san-pham') || location.pathname.startsWith('/kho-hang') || location.pathname.startsWith('/khach-hang') || location.pathname.startsWith('/nhap-hang') || location.pathname.startsWith('/nha-cung-cap'),
-    quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat') || location.pathname.startsWith('/mau-in'),
+    quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat'),
   }));
   const [updateToast, setUpdateToast] = useState(null);
   const [updateToastVisible, setUpdateToastVisible] = useState(false);
@@ -292,7 +299,7 @@ function AppLayout({
       const autoOpenMatchers = {
         don_hang: ['/tao-don-hang', '/danh-sach-don-hang'],
         danh_muc: ['/san-pham', '/kho-hang', '/khach-hang', '/nhap-hang', '/nha-cung-cap'],
-        quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/bang-luong-nhan-vien', '/cai-dat', '/mau-in'],
+        quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/bang-luong-nhan-vien', '/cai-dat'],
       };
 
       Object.entries(autoOpenMatchers).forEach(([key, routes]) => {
@@ -348,7 +355,6 @@ function AppLayout({
           { to: '/bao-cao-theo-san-pham', label: 'Báo cáo sản phẩm', icon: Boxes },
           { to: '/bang-luong-nhan-vien', label: 'Bảng lương nhân viên', icon: BadgeDollarSign },
           { to: '/cai-dat', label: 'Cài đặt', icon: SettingsIcon },
-          { to: '/mau-in', label: 'Hóa đơn', icon: Printer },
         ],
       },
     ];
@@ -433,6 +439,7 @@ function AppLayout({
             <Route path={HOME_ROUTE} element={<Home user={user} store={store} />} />
             <Route path="/tao-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/tao-don-hang"><CreateOrder user={user} store={store} /></ProtectedRoute>} />
             <Route path="/danh-sach-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/danh-sach-don-hang"><OrderList store={store} /></ProtectedRoute>} />
+            <Route path="/hoa-don-in/:idOrCode" element={<ProtectedRoute user={user} permissions={permissions} path="/hoa-don-in"><InvoicePrint /></ProtectedRoute>} />
             <Route path="/kho-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/kho-hang"><KhoHang /></ProtectedRoute>} />
             <Route path="/nha-cung-cap" element={<ProtectedRoute user={user} permissions={permissions} path="/nha-cung-cap"><NhaCungCap /></ProtectedRoute>} />
             <Route path="/nhap-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/nhap-hang"><Nhaphang store={store} /></ProtectedRoute>} />
@@ -444,7 +451,6 @@ function AppLayout({
             <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><CustomerOrderReport /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ProductReport /></ProtectedRoute>} />
             <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><Settings store={store} onStoreChange={onStoreChange} permissions={permissions} /></ProtectedRoute>} />
-            <Route path="/mau-in" element={<ProtectedRoute user={user} permissions={permissions} path="/mau-in"><PrintTemplates store={store} /></ProtectedRoute>} />
             <Route path={LOGIN_REGISTER_ROUTE} element={<Navigate to={firstAccessibleRoute(user, permissions)} replace />} />
             {Object.entries(ROUTE_ALIASES).map(([from, to]) => (
               <Route key={from} path={from} element={<Navigate to={canAccess(to) ? to : firstAccessibleRoute(user, permissions)} replace />} />

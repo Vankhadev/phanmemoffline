@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react';
-import { apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT, requestSyncCheck } from '../utils/apiClient';
-import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, Printer, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud } from 'lucide-react';
-import { cacheDefaultPrintTemplate, getDefaultPrintTemplate } from '../utils/printTemplateService';
-import { createInvoicePrintData } from '../utils/invoicePrintData';
-import InvoicePrintPreviewModal from '../components/InvoicePrintPreviewModal';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { apiJson, apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT, requestSyncCheck } from '../utils/apiClient';
+import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud, Printer, FileDown } from 'lucide-react';
 import { getProductDisplayName } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
 
@@ -17,11 +15,12 @@ const STATUS_LABELS = {
 };
 const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
 const SOURCE_BADGES = {
-  app: { text: 'app', color: 'bg-gray-100 text-gray-600' },
-  direct: { text: 'app', color: 'bg-gray-100 text-gray-600' },
+  app: { text: 'App', color: 'bg-gray-100 text-gray-600' },
+  direct: { text: 'App', color: 'bg-gray-100 text-gray-600' },
+  web: { text: 'Web', color: 'bg-blue-50 text-blue-700' },
+  sync: { text: 'Sync', color: 'bg-purple-50 text-purple-700' },
+  offline: { text: 'Offline', color: 'bg-orange-50 text-orange-700' },
 };
-const DEFAULT_INVOICE_PAPER_SIZE = 'A5';
-const DEFAULT_INVOICE_WIDTH_MM = 148;
 function formatPaymentMethod(method) {
   return PAYMENT_LABELS[method] || method || 'Tiền mặt';
 }
@@ -60,39 +59,37 @@ function getOrderSourceBadge(inv = {}) {
   return SOURCE_BADGES[key] || { text: key || 'Web', color: 'bg-gray-100 text-gray-600' };
 }
 
-// Hợp nhất các sản phẩm trùng ID (để tránh duplicate khi edit)
-function mergeDuplicateProducts(details) {
+function mergeDuplicateProducts(details = []) {
   const map = new Map();
-  for (const d of details) {
-    const key = d.product_id || d.id;
+  details.forEach((detail, index) => {
+    const key = `${detail.type || detail.item_type || 'product'}:${detail.combo_id || detail.product_id || detail.variant_id || detail.id || index}:${Number(detail.unit_price) || 0}`;
+    const current = {
+      ...detail,
+      quantity: Number(detail.quantity) || 1,
+      unit_price: Number(detail.unit_price) || 0,
+      discount_percent: Number(detail.discount_percent) || 0,
+      discount_amount: Number(detail.discount_amount) || 0,
+      line_total: Number(detail.line_total) || ((Number(detail.quantity) || 1) * (Number(detail.unit_price) || 0)),
+    };
     if (map.has(key)) {
       const existing = map.get(key);
-      existing.quantity += d.quantity;
-      existing.line_total += d.line_total;
-      existing.discount_amount += d.discount_amount || 0;
-      // Nếu có discount_percent, lấy weighted average? Đơn giản: giữ nguyên của dòng đầu
-    } else {
-      map.set(key, { ...d });
+      existing.quantity += current.quantity;
+      existing.discount_amount += current.discount_amount;
+      existing.line_total += current.line_total;
+      return;
     }
-  }
+    map.set(key, current);
+  });
   return Array.from(map.values());
-}
-
-const BANK_MAP = {
-  'Vietcombank': 'VCB', 'VietinBank': 'CTG', 'TPBank': 'TPB',
-  'MBBank': 'MB', 'ACB': 'ACB', 'VPBank': 'VPB', 'Sacombank': 'SACBOM',
-  'Agribank': 'VBA', 'BIDV': 'BIDV', 'Techcombank': 'TCB', 'Default': 'ICB',
-};
-function buildVietQRUrl(store, amount, invoiceCode) {
-  const bankCode = BANK_MAP[store.bank_name?.trim()] || BANK_MAP['Default'];
-  const account = (store.bank_account || '').replace(/\s/g, '');
-  const addInfo = encodeURIComponent(`Thanh toan don hang ${invoiceCode}`);
-  const accountName = encodeURIComponent(store.name || '');
-  return `https://img.vietqr.io/image/${bankCode}-${account}-compact2.png?amount=${amount}&addInfo=${addInfo}&accountName=${accountName}`;
 }
 
 function getOrderIdentityKey(order = {}) {
   return String(order.client_order_id || order.payload?.client_order_id || order.invoice_code || order.id || '').trim();
+}
+
+function normalizeInvoiceListResponse(data) {
+  const items = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+  return items.filter(Boolean).map(item => ({ ...item, _isOffline: false }));
 }
 
 function getOrderDedupeKey(order = {}) {
@@ -108,9 +105,9 @@ function sameOrderIdentity(a = {}, b = {}) {
 
 function dedupeOrdersByInvoiceCode(orders) {
   const map = new Map();
-  for (const order of orders) {
-    const key = getOrderDedupeKey(order);
-    if (!key) continue;
+  for (const [index, order] of orders.entries()) {
+    if (!order) continue;
+    const key = getOrderDedupeKey(order) || `${order._isOffline ? 'offline' : 'db'}-${order.id || order.created_at || index}`;
     const existing = map.get(key);
     if (!existing || (existing._isOffline && !order._isOffline)) {
       map.set(key, order);
@@ -119,19 +116,14 @@ function dedupeOrdersByInvoiceCode(orders) {
   return Array.from(map.values());
 }
 
-function createEmptyPrintPreviewState() {
-  return {
-    open: false,
-    title: '',
-    subtitle: '',
-    data: null,
-    template: null,
-    loading: false,
-    error: '',
-  };
+function getOrderRowKey(order = {}, index = 0) {
+  const identity = getOrderIdentityKey(order);
+  if (identity) return `${order._isOffline ? 'offline' : 'db'}-${identity}`;
+  return `${order._isOffline ? 'offline' : 'db'}-${order.id || order.invoice_code || order.created_at || index}`;
 }
 
-export default function OrderList({ store = {} }) {
+export default function OrderList() {
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [invoiceDetails, setInvoiceDetails] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -146,7 +138,6 @@ export default function OrderList({ store = {} }) {
   const [showView, setShowView] = useState(null);
   const [showEdit, setShowEdit] = useState(null);
   const [editForm, setEditForm] = useState({});
-  const [printPreview, setPrintPreview] = useState(() => createEmptyPrintPreviewState());
   const [editDetails, setEditDetails] = useState([]);
   const [editProducts, setEditProducts] = useState([]);
   const [editProductSearch, setEditProductSearch] = useState('');
@@ -169,82 +160,58 @@ export default function OrderList({ store = {} }) {
     });
   };
 
-  const closePrintPreview = () => {
-    setPrintPreview(createEmptyPrintPreviewState());
-  };
+  const readOfflineOrders = useCallback(() => {
+    try { return JSON.parse(localStorage.getItem('kha_pending_orders') || '[]'); }
+    catch { return []; }
+  }, []);
 
-  const persistPreviewTemplate = async (nextTemplate) => {
-    if (!nextTemplate) return nextTemplate;
+  const mergeOrders = useCallback((serverOrders = [], offlineOrders = readOfflineOrders()) => dedupeOrdersByInvoiceCode([
+    ...offlineOrders.map(order => ({ ...order, _isOffline: true })),
+    ...serverOrders.map(order => ({ ...order, _isOffline: false })),
+  ]), [readOfflineOrders]);
 
-    const normalizedPaperSize = String(nextTemplate.paper_size || nextTemplate.paperSize || '').trim() || DEFAULT_INVOICE_PAPER_SIZE;
-    const normalizedType = String(nextTemplate.type || 'sale_invoice').trim() || 'sale_invoice';
-    const payload = {
-      paper_size: normalizedPaperSize,
-      width_mm: Number(nextTemplate.width_mm || nextTemplate.widthMm) || DEFAULT_INVOICE_WIDTH_MM,
-      config: nextTemplate.config || null,
-    };
+  const refreshOrderState = useCallback((serverOrders, offlineOrders) => {
+    const normalizedServerOrders = normalizeInvoiceListResponse(serverOrders);
+    setInvoices(normalizedServerOrders);
+    setAllOrders(mergeOrders(normalizedServerOrders, offlineOrders));
+  }, [mergeOrders]);
 
-    if (/^\d+$/.test(String(nextTemplate.id || '').trim())) {
-      const data = await apiJsonChecked(resolveApiUrl(`/print-templates/${nextTemplate.id}`), {
-        method: 'PUT',
-        body: payload,
-      }, 'Không thể cập nhật khổ giấy mẫu in.');
-      const savedTemplate = cacheDefaultPrintTemplate(data?.template || data, {
-        type: normalizedType,
-        paperSize: normalizedPaperSize,
-      }) || nextTemplate;
-      setPrintPreview(prev => ({ ...prev, template: savedTemplate }));
-      return savedTemplate;
+  const fetchInvoices = useCallback(async () => {
+    const offline = readOfflineOrders();
+    try {
+      const data = await apiJson('/invoices', {}, 'Không tải được danh sách đơn hàng.');
+      refreshOrderState(data, offline);
+      setServerOnline(true);
+      return data;
+    } catch (error) {
+      setServerOnline(false);
+      setAllOrders(offline.map(order => ({ ...order, _isOffline: true })));
+      return [];
     }
-
-    const cachedTemplate = cacheDefaultPrintTemplate({
-      ...nextTemplate,
-      paper_size: normalizedPaperSize,
-      width_mm: payload.width_mm,
-      config: payload.config,
-    }, {
-      type: normalizedType,
-      paperSize: normalizedPaperSize,
-    }) || nextTemplate;
-    setPrintPreview(prev => ({ ...prev, template: cachedTemplate }));
-    return cachedTemplate;
-  };
+  }, [readOfflineOrders, refreshOrderState]);
 
   // Load products for picker
   useEffect(() => {
-    if (showProductPicker) {
-      fetch(`${API}/products/all/with-variants`).then(r => r.json()).then(setEditProducts).catch(() => { });
-    }
+    if (!showProductPicker) return;
+    apiJson('/products/all/with-variants', {}, 'Không tải được sản phẩm.')
+      .then(data => setEditProducts(Array.isArray(data) ? data : []))
+      .catch(() => setEditProducts([]));
   }, [showProductPicker]);
 
   // Kiểm tra server + load dữ liệu
   useEffect(() => {
     const checkAndLoad = async () => {
       setLoading(true);
-      const offline = (() => {
-        try { return JSON.parse(localStorage.getItem('kha_pending_orders') || '[]'); }
-        catch { return []; }
-      })();
+      const offline = readOfflineOrders();
 
       try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 5000);
-        const r = await fetch(`${API}/store`, { signal: controller.signal });
-        clearTimeout(timer);
-        if (r.ok) {
-          setServerOnline(true);
-          const [invData, custData] = await Promise.all([
-            fetch(`${API}/invoices`).then(x => x.json()),
-            fetch(`${API}/customers`).then(x => x.json()),
-          ]);
-          setInvoices(invData);
-          setCustomers(custData);
-          const merged = dedupeOrdersByInvoiceCode([
-            ...offline.map(o => ({ ...o, _isOffline: true })),
-            ...invData.map(i => ({ ...i, _isOffline: false })),
-          ]);
-          setAllOrders(merged);
-        }
+        const [invData, custData] = await Promise.all([
+          apiJson('/invoices', {}, 'Không tải được danh sách đơn hàng.'),
+          apiJson('/customers', {}, 'Không tải được khách hàng.'),
+        ]);
+        setServerOnline(true);
+        refreshOrderState(invData, offline);
+        setCustomers(Array.isArray(custData) ? custData : []);
       } catch {
         setServerOnline(false);
         setAllOrders(offline.map(o => ({ ...o, _isOffline: true })));
@@ -288,32 +255,10 @@ export default function OrderList({ store = {} }) {
     };
   }, []);
 
-  const fetchInvoices = () => {
-    const offline = (() => {
-      try { return JSON.parse(localStorage.getItem('kha_pending_orders') || '[]'); }
-      catch { return []; }
-    })();
-
-    return fetch(`${API}/invoices`)
-      .then(r => r.json())
-      .then(data => {
-        setInvoices(data);
-        setAllOrders(dedupeOrdersByInvoiceCode([
-          ...offline.map(o => ({ ...o, _isOffline: true })),
-          ...data.map(i => ({ ...i, _isOffline: false })),
-        ]));
-        setServerOnline(true);
-      })
-      .catch(() => {
-        setServerOnline(false);
-        setAllOrders(offline.map(o => ({ ...o, _isOffline: true })));
-      });
-  };
-
   // Lọc danh sách
-  const displayOrders = allOrders.length > 0 ? allOrders : invoices;
+  const displayOrders = useMemo(() => (allOrders.length > 0 ? allOrders : invoices), [allOrders, invoices]);
   const normalizedSearch = search.trim().toLowerCase();
-  const filtered = displayOrders.filter(inv => {
+  const filtered = useMemo(() => displayOrders.filter(inv => {
     const matchSearch =
       (inv.invoice_code || '').toLowerCase().includes(normalizedSearch) ||
       (inv.client_order_id || inv.payload?.client_order_id || '').toLowerCase().includes(normalizedSearch) ||
@@ -327,7 +272,7 @@ export default function OrderList({ store = {} }) {
       sourceKey === filterSource ||
       (filterSource === 'sync' && sourceKey === 'sync');
     return matchSearch && matchStatus && matchSource;
-  });
+  }), [displayOrders, filterSource, filterStatus, normalizedSearch]);
 
   useEffect(() => {
     const orderIds = new Set(displayOrders.map(inv => getOrderIdentityKey(inv)).filter(Boolean));
@@ -385,7 +330,8 @@ export default function OrderList({ store = {} }) {
   ];
 
 
-  const selectedAll = filtered.length > 0 && filtered.every(inv => selectedOrders.includes(getOrderIdentityKey(inv)));
+  const selectableOrderIds = filtered.map(inv => getOrderIdentityKey(inv)).filter(Boolean);
+  const selectedAll = selectableOrderIds.length > 0 && selectableOrderIds.every(id => selectedOrders.includes(id));
 
   // ── CHECKBOX HANDERS ──
   const toggleSelectOrder = (orderId) => {
@@ -396,7 +342,7 @@ export default function OrderList({ store = {} }) {
   };
 
   const toggleSelectAll = () => {
-    const allIdentifiers = filtered.map(inv => getOrderIdentityKey(inv)).filter(Boolean);
+    const allIdentifiers = selectableOrderIds;
     const areAllSelected = allIdentifiers.length > 0 && allIdentifiers.every(id => selectedOrders.includes(id));
     if (areAllSelected) {
       setSelectedOrders([]);
@@ -418,7 +364,7 @@ export default function OrderList({ store = {} }) {
 
       // Cancel online orders (backend marks as cancelled, doesn't hard delete)
       const promises = onlineOrders.map(inv =>
-        fetch(`${API}/invoices/${inv.id}`, { method: 'DELETE' })
+        apiJsonChecked(`/invoices/${inv.id}`, { method: 'DELETE' }, 'Không thể hủy đơn hàng.')
       );
       const results = await Promise.allSettled(promises);
       const successCount = results.filter(r => r.status === 'fulfilled').length;
@@ -435,12 +381,23 @@ export default function OrderList({ store = {} }) {
       setSelectedOrders([]);
       // Refresh data - cancelled orders will disappear from list
       notifyOrderChanged({ reason: 'orders-cancelled' });
-      fetch(`${API}/products/all/with-variants`).catch(() => { });
+      await fetchInvoices();
+      apiJson('/products/all/with-variants').catch(() => { });
     } catch (err) {
       alert(`📡 Lỗi khi hủy: ${err.message}`);
     } finally {
       setIsBulkDeleting(false);
     }
+  };
+
+  const getInvoicePrintTarget = (inv = {}) => inv.id || inv.invoice_code || inv.client_order_id || '';
+
+  const openInvoicePrint = (inv, { quick = false } = {}) => {
+    if (inv?._isOffline || !getInvoicePrintTarget(inv)) {
+      alert('Đơn offline chưa có dữ liệu hóa đơn thật trên server để in. Vui lòng đồng bộ đơn trước khi in.');
+      return;
+    }
+    navigate(`/hoa-don-in/${encodeURIComponent(getInvoicePrintTarget(inv))}${quick ? '?print=1' : ''}`);
   };
 
   // Mở xem chi tiết
@@ -452,12 +409,7 @@ export default function OrderList({ store = {} }) {
     }
 
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(`${API}/invoices/${inv.id}`, { signal: controller.signal });
-      clearTimeout(timer);
-      if (!res.ok) { alert('Không tải được chi tiết đơn!'); return; }
-      const data = await res.json();
+      const data = await apiJson(`/invoices/${inv.id}`, {}, 'Không tải được chi tiết đơn!');
       setInvoiceDetails(data.details || []);
       setShowView({ ...inv, ...data });
     } catch {
@@ -514,12 +466,7 @@ export default function OrderList({ store = {} }) {
     }
     // ── ONLINE: fetch từ server ──
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(`${API}/invoices/${inv.id}`, { signal: controller.signal });
-      clearTimeout(timer);
-      if (!res.ok) { alert('Không tải được đơn hàng!'); return; }
-      const data = await res.json();
+      const data = await apiJson(`/invoices/${inv.id}`, {}, 'Không tải được đơn hàng!');
       setEditDetails(mergeDuplicateProducts(data.details || []));
       setEditForm({
         customer_id: data.customer_id || inv.customer_id || null,
@@ -733,47 +680,32 @@ export default function OrderList({ store = {} }) {
 
     // ── ONLINE: PUT lên server ──
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(`${API}/invoices/${showEdit.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_id: editForm.customer_id || null,
-          payment_method: editForm.payment_method,
-          note: editForm.note || '',
-          subtotal: editForm.subtotal || 0,
-          vat_percent: editForm.vat_percent || 0,
-          vat_amount: editForm.vat_amount || 0,
-          discount_percent: editForm.discount_percent || 0,
-          discount_amount: editForm.discount_amount || 0,
-          total: editForm.total || 0,
-          delivery_fee: editForm.delivery_fee || 0,
-          paid_amount: editForm.paid_amount || 0,
-          change_amount: editForm.change_amount || 0,
-          remaining_amount: editForm.remaining_amount || 0,
-          status: editForm.status || 'pending',
-          created_at: editForm.created_at || null,
-          details: editDetails.map(({ product_id, variant_id, parent_id, parent_name, variant_name, product_name, product_sku, name, sku, quantity, unit_price, discount_amount, discount_percent, line_total }) =>
-            ({ product_id, variant_id: variant_id || null, parent_id: parent_id || null, parent_name: parent_name || '', variant_name: variant_name || '', product_name: product_name || name || '', product_sku: product_sku || sku || '', name: name || product_name || '', sku: sku || product_sku || '', quantity, unit_price, discount_amount, discount_percent, line_total })),
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-      const data = await res.json();
-      if (data.ok) {
-        setShowEdit(null);
-        notifyOrderChanged({ reason: 'order-updated', invoice_id: showEdit.id });
-        fetch(`${API}/products/all/with-variants`).catch(() => { });
-      } else {
-        alert(`⚠️ Lỗi khi lưu!\n\nCode: HTTP ${res.status}\nLý do: ${data.error || 'Không rõ'}`);
-      }
+      const payload = {
+        customer_id: editForm.customer_id || null,
+        payment_method: editForm.payment_method,
+        note: editForm.note || '',
+        subtotal: editForm.subtotal || 0,
+        vat_percent: editForm.vat_percent || 0,
+        vat_amount: editForm.vat_amount || 0,
+        discount_percent: editForm.discount_percent || 0,
+        discount_amount: editForm.discount_amount || 0,
+        total: editForm.total || 0,
+        delivery_fee: editForm.delivery_fee || 0,
+        paid_amount: editForm.paid_amount || 0,
+        change_amount: editForm.change_amount || 0,
+        remaining_amount: editForm.remaining_amount || 0,
+        status: editForm.status || 'pending',
+        created_at: editForm.created_at || null,
+        details: editDetails.map(({ product_id, variant_id, parent_id, parent_name, variant_name, product_name, product_sku, name, sku, quantity, unit_price, discount_amount, discount_percent, line_total }) =>
+          ({ product_id, variant_id: variant_id || null, parent_id: parent_id || null, parent_name: parent_name || '', variant_name: variant_name || '', product_name: product_name || name || '', product_sku: product_sku || sku || '', name: name || product_name || '', sku: sku || product_sku || '', quantity, unit_price, discount_amount, discount_percent, line_total })),
+      };
+      await apiJsonChecked(`/invoices/${showEdit.id}`, { method: 'PUT', body: payload }, 'Không thể lưu đơn hàng.');
+      setShowEdit(null);
+      notifyOrderChanged({ reason: 'order-updated', invoice_id: showEdit.id });
+      await fetchInvoices();
+      apiJson('/products/all/with-variants').catch(() => { });
     } catch (err) {
-      if (err.name === 'AbortError') {
-        alert('⏱️ Yêu cầu bị timeout! Server phản hồi quá chậm.');
-      } else {
-        alert('📡 Không thể kết nối server!');
-      }
+      alert(err.message || '📡 Không thể kết nối server!');
     } finally {
       setSaveLoading(false);
     }
@@ -783,9 +715,6 @@ export default function OrderList({ store = {} }) {
   const handleCancel = async (inv) => {
     if (!confirm(`Hủy đơn hàng ${inv.invoice_code}?\n\nHàng sẽ được hoàn về kho.`)) return;
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-
       // Determine order identifier
       const orderId = getOrderIdentityKey(inv);
       const isOffline = inv._isOffline;
@@ -800,18 +729,8 @@ export default function OrderList({ store = {} }) {
         success = true;
       } else {
         // Delete online order from server
-        const res = await fetch(`${API}/invoices/${inv.id}`, {
-          method: 'DELETE',
-          signal: controller.signal,
-        });
-        clearTimeout(timer);
-        const data = await res.json();
-        if (data.ok) {
-          success = true;
-        } else {
-          alert(data.error || 'Không thể hủy đơn!');
-          return;
-        }
+        await apiJsonChecked(`/invoices/${inv.id}`, { method: 'DELETE' }, 'Không thể hủy đơn!');
+        success = true;
       }
 
       if (success) {
@@ -819,7 +738,8 @@ export default function OrderList({ store = {} }) {
         setSelectedOrders(prev => prev.filter(id => id !== orderId));
         notifyOrderChanged({ reason: 'order-cancelled', invoice_id: inv.id || null, invoice_code: inv.invoice_code || '' });
         // Refresh product stock
-        fetch(`${API}/products/all/with-variants`).catch(() => { });
+        await fetchInvoices();
+        apiJson('/products/all/with-variants').catch(() => { });
         alert('✅ Đã hủy đơn hàng!');
       }
     } catch {
@@ -831,9 +751,6 @@ export default function OrderList({ store = {} }) {
   const handleMarkAsPaid = async (inv) => {
     if (!confirm(`Xác nhận đơn hàng ${inv.invoice_code} đã thanh toán?`)) return;
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-
       if (inv._isOffline) {
         // Cập nhật offline order trong localStorage
         const pending = JSON.parse(localStorage.getItem('kha_pending_orders') || '[]');
@@ -850,145 +767,17 @@ export default function OrderList({ store = {} }) {
         alert('✅ Đã cập nhật trạng thái đơn offline thành "Đã thanh toán"!');
       } else {
         // Gọi API xác nhận đơn hàng (PATCH /invoices/:id/confirm)
-        const res = await fetch(`${API}/invoices/${inv.id}/confirm`, {
-          method: 'PATCH',
-          signal: controller.signal,
-        });
-        clearTimeout(timer);
-        const data = await res.json();
-        if (data.ok) {
-          alert('✅ Đã xác nhận thanh toán!');
-          notifyOrderChanged({ reason: 'order-paid', invoice_id: inv.id || null, invoice_code: inv.invoice_code || '' });
-          fetch(`${API}/products/all/with-variants`).catch(() => { });
-        } else {
-          alert('Lỗi: ' + (data.error || 'Không thể xác nhận'));
-        }
+        await apiJsonChecked(`/invoices/${inv.id}/confirm`, { method: 'PATCH' }, 'Không thể xác nhận thanh toán.');
+        alert('✅ Đã xác nhận thanh toán!');
+        notifyOrderChanged({ reason: 'order-paid', invoice_id: inv.id || null, invoice_code: inv.invoice_code || '' });
+        await fetchInvoices();
+        apiJson('/products/all/with-variants').catch(() => { });
       }
     } catch (err) {
-      if (err.name === 'AbortError') {
-        alert('⏱️ Timeout!');
-      } else {
-        alert('📡 Lỗi kết nối!');
-      }
+      alert(err.message || '📡 Lỗi kết nối!');
     }
   };
 
-  const ensureInvoiceForPrint = async (invoice) => {
-    if (!invoice) throw new Error('Không có dữ liệu hóa đơn để in.');
-    if (invoice._isOffline) return { ...invoice, details: invoice.cart || invoice.details || [] };
-    if ((invoice.details && invoice.details.length > 0) || (invoice.cart && invoice.cart.length > 0)) return invoice;
-    if (!invoice.id) return invoice;
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    try {
-      const res = await fetch(`${API}/invoices/${invoice.id}`, { signal: controller.signal });
-      if (!res.ok) throw new Error('Không tải được chi tiết hóa đơn.');
-      const data = await res.json();
-      return { ...invoice, ...data, details: data.details || invoice.details || [] };
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
-  const buildLocalInvoicePrintPreviewData = async (invoice) => {
-    const inv = await ensureInvoiceForPrint(invoice);
-    const items = inv.cart || inv.details || [];
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new Error('Hóa đơn chưa có chi tiết sản phẩm để in.');
-    }
-
-    const customer = inv.customer
-      || inv.selectedCustomer
-      || customers.find(c => String(c.id) === String(inv.customer_id))
-      || {
-        name: inv.customer_name,
-        phone: inv.customer_phone,
-        address: inv.customer_address,
-        email: inv.customer_email,
-        customer_type: inv.customer_type || inv.customer_type_name,
-      };
-    const user = { id: inv.user_id || null, name: inv.user_name || inv.invoice_writer || '' };
-
-    return createInvoicePrintData({
-      store,
-      invoice: inv,
-      customer,
-      user,
-      items,
-      type: 'sale_invoice',
-    });
-  };
-
-  const loadInvoicePrintPreviewData = async (invoice) => {
-    if (!invoice) throw new Error('Không có dữ liệu hóa đơn để in.');
-    if (invoice._isOffline || !invoice.id) {
-      return buildLocalInvoicePrintPreviewData(invoice);
-    }
-
-    try {
-      const remotePrintData = await apiJsonChecked(
-        resolveApiUrl(`/invoices/${invoice.id}/print-data`),
-        {},
-        'Không tải được dữ liệu in hóa đơn.'
-      );
-
-      return createInvoicePrintData({
-        store: { ...(store || {}), ...(remotePrintData?.store || {}) },
-        invoice: remotePrintData?.invoice || remotePrintData || {},
-        customer: remotePrintData?.customer || null,
-        user: remotePrintData?.user || null,
-        items: remotePrintData?.items || [],
-        type: remotePrintData?.type || 'sale_invoice',
-      });
-    } catch (_remoteError) {
-      return buildLocalInvoicePrintPreviewData(invoice);
-    }
-  };
-
-  const handlePrint = async (invoice) => {
-    if (!invoice) {
-      alert('Không có dữ liệu hóa đơn để in.');
-      return;
-    }
-
-    const previewTitle = `Hóa đơn bán hàng ${invoice.invoice_code || ''}`.trim();
-
-    setPrintPreview({
-      ...createEmptyPrintPreviewState(),
-      open: true,
-      title: previewTitle,
-      subtitle: 'Kiểm tra đầy đủ thông tin đơn hàng, sản phẩm và tổng tiền trước khi bấm In.',
-      loading: true,
-    });
-
-    try {
-      const [template, printData] = await Promise.all([
-        getDefaultPrintTemplate({
-          apiBase: invoice._isOffline ? '' : resolveApiUrl(''),
-          type: 'sale_invoice',
-          paperSize: DEFAULT_INVOICE_PAPER_SIZE,
-          fallbackPaperSize: DEFAULT_INVOICE_PAPER_SIZE,
-        }),
-        loadInvoicePrintPreviewData(invoice),
-      ]);
-      setPrintPreview({
-        open: true,
-        subtitle: 'Xem trước hóa đơn A5, kiểm tra thông tin và điều chỉnh thiết lập in trước khi gửi lệnh in hệ thống.',
-        title: previewTitle,
-        data: printData,
-        template,
-        loading: false,
-        error: '',
-      });
-    } catch (err) {
-      setPrintPreview(prev => ({
-        ...prev,
-        loading: false,
-        error: err.message || 'Không thể dựng bản xem trước phiếu in. Vui lòng thử lại.',
-      }));
-    }
-  };
   return (
     <div className="min-w-0 space-y-4">
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -1185,7 +974,7 @@ export default function OrderList({ store = {} }) {
                 </button>
                 <span className="text-xs text-gray-400">{filtered.length} đơn</span>
               </div>
-              {filtered.map(inv => {
+              {filtered.map((inv, rowIndex) => {
                 const st = STATUS_LABELS[inv.status] || STATUS_LABELS.pending;
                 const formatDelivery = (d) => {
                   if (!d) return 'Chưa chốt';
@@ -1206,7 +995,7 @@ export default function OrderList({ store = {} }) {
                       : 'bg-white';
 
                 return (
-                  <div key={orderKey} className={`rounded-2xl border border-gray-200 p-3 shadow-sm ${rowBg}`}>
+                  <div key={getOrderRowKey(inv, rowIndex)} className={`rounded-2xl border border-gray-200 p-3 shadow-sm ${rowBg}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-start gap-3">
                         <button
@@ -1265,9 +1054,15 @@ export default function OrderList({ store = {} }) {
                       </div>
                     )}
 
-                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
                       <button onClick={() => openView(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-medium text-gray-600 hover:border-blue-200 hover:text-blue-700" title="Xem chi tiết">
                         <Eye size={14} /> Xem
+                      </button>
+                      <button onClick={() => openInvoicePrint(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-100" title="Preview/In A5">
+                        <Printer size={14} /> In A5
+                      </button>
+                      <button onClick={() => openInvoicePrint(inv, { quick: true })} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-2 text-xs font-medium text-purple-700 hover:bg-purple-100" title="In nhanh A5">
+                        <FileDown size={14} /> In nhanh
                       </button>
                       <button onClick={() => openEdit(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100" title="Sửa">
                         <Edit2 size={14} /> Sửa
@@ -1288,11 +1083,23 @@ export default function OrderList({ store = {} }) {
           )}
         </div>
 
-        <div className="hidden w-full max-w-full overflow-x-auto border-t border-gray-100 lg:block">
-          <table className="w-full min-w-[1320px] text-sm">
+        <div className="system-table-scroll hidden border-t border-gray-100 lg:block">
+          <table className="system-table order-list-table text-sm">
+            <colgroup>
+              <col style={{ width: '4%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '12%' }} />
+            </colgroup>
             <thead>
-              <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-                <th className="px-4 py-3 text-center w-12">
+              <tr>
+                <th className="text-center">
                   <button
                     onClick={toggleSelectAll}
                     className="w-5 h-5 inline-flex items-center justify-center text-gray-600 hover:text-blue-600"
@@ -1301,19 +1108,19 @@ export default function OrderList({ store = {} }) {
                     {selectedAll ? <CheckSquare size={16} /> : <Square size={16} />}
                   </button>
                 </th>
-                <th className="px-4 py-3 text-left">Đơn hàng</th>
-                <th className="px-4 py-3 text-left">Nguồn</th>
-                <th className="px-4 py-3 text-left">Khách hàng</th>
-                <th className="px-4 py-3 text-right">Giá trị đơn</th>
-                <th className="px-4 py-3 text-left">Thanh toán</th>
-                <th className="px-4 py-3 text-left">Trạng thái</th>
-                <th className="px-4 py-3 text-left">Ngày tạo</th>
-                <th className="px-4 py-3 text-left">Ngày giao</th>
-                <th className="px-4 py-3 text-center">Thao tác</th>
+                <th className="text-left">Đơn hàng</th>
+                <th className="text-left">Nguồn</th>
+                <th className="text-left">Khách hàng</th>
+                <th className="text-right">Giá trị đơn</th>
+                <th className="text-left">Thanh toán</th>
+                <th className="text-left">Trạng thái</th>
+                <th className="text-left">Ngày tạo</th>
+                <th className="text-left">Ngày giao</th>
+                <th className="text-center">Thao tác</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(inv => {
+              {filtered.map((inv, rowIndex) => {
                 const st = STATUS_LABELS[inv.status] || STATUS_LABELS.pending;
                 const formatDelivery = (d) => {
                   if (!d) return '—';
@@ -1324,8 +1131,8 @@ export default function OrderList({ store = {} }) {
                 const orderKey = getOrderIdentityKey(inv);
                 const isSelected = selectedOrders.includes(orderKey);
                 const paymentLabel = isUnpaid
-                  ? <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-500">Chưa thanh toán</span>
-                  : <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700">{formatPaymentMethod(inv.payment_method)}</span>;
+                  ? <span className="order-payment-badge bg-gray-100 text-gray-500">Chưa thanh toán</span>
+                  : <span className="order-payment-badge bg-emerald-50 text-emerald-700">{formatPaymentMethod(inv.payment_method)}</span>;
                 const sourceBadge = getOrderSourceBadge(inv);
                 const creatorName = inv.user_name || inv.invoice_writer || inv.created_by_user_name || '';
                 const rowBg = inv.status === 'cancelled'
@@ -1337,8 +1144,8 @@ export default function OrderList({ store = {} }) {
                       : 'bg-white';
 
                 return (
-                  <tr key={orderKey} className={`border-t border-gray-100 align-top transition hover:bg-slate-50 ${rowBg}`}>
-                    <td className="px-4 py-4 text-center">
+                  <tr key={getOrderRowKey(inv, rowIndex)} className={rowBg}>
+                    <td className="text-center">
                       <button
                         onClick={() => toggleSelectOrder(orderKey)}
                         className="w-5 h-5 inline-flex items-center justify-center text-gray-600 hover:text-blue-600"
@@ -1347,12 +1154,12 @@ export default function OrderList({ store = {} }) {
                         {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
                       </button>
                     </td>
-                    <td className="px-4 py-4">
+                    <td>
                       <div className="flex items-start gap-3">
                         <div className="mt-0.5 h-10 w-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-xs">
                           DH
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="font-semibold text-blue-700">{displayOrderCode(inv.invoice_code)}</div>
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                             {inv.note && (
@@ -1362,37 +1169,34 @@ export default function OrderList({ store = {} }) {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4">
+                    <td>
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${sourceBadge.color}`}>{sourceBadge.text}</span>
                     </td>
-                    <td className="px-4 py-4">
-                      <span className="text-xs text-gray-300">—</span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="font-medium text-gray-800">{inv.customer_name || 'Khách lẻ'}</div>
+                    <td>
+                      <div className="font-medium text-gray-800 table-text-clip">{inv.customer_name || 'Khách lẻ'}</div>
                       <div className="mt-1 text-xs text-gray-400">{inv.receiver_name || 'Chưa có người nhận'}</div>
                     </td>
-                    <td className="px-4 py-4 text-right">
+                    <td className="text-right">
                       <div className="font-bold text-gray-900">{formatVND(inv.total)}</div>
                       <div className="mt-1 text-xs text-gray-400">Tạm tính: {formatVND(inv.subtotal)}</div>
                     </td>
-                    <td className="px-4 py-4">
+                    <td>
                       <div className="space-y-1">
                         {paymentLabel}
                         <div className="text-xs text-gray-400">{formatPaymentMethod(inv.payment_method)}</div>
                       </div>
                     </td>
-                    <td className="px-4 py-4">
-                      <div className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium ${st.color}`}>
+                    <td>
+                      <div className={`order-status-badge ${st.color}`}>
                         <span className={`h-2 w-2 rounded-full ${st.dot}`}></span>
                         <span>{st.text}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-4">
+                    <td>
                       <div className="text-sm text-gray-700">{formatDate(inv.created_at)}</div>
                       <div className="mt-1 text-xs text-gray-400">{creatorName || '—'}</div>
                     </td>
-                    <td className="px-4 py-4">
+                    <td>
                       {inv.delivery_date ? (
                         <span className="inline-flex rounded-full bg-orange-100 px-2.5 py-1 text-xs font-medium text-orange-700">
                           {formatDelivery(inv.delivery_date)}
@@ -1401,20 +1205,26 @@ export default function OrderList({ store = {} }) {
                         <span className="text-xs text-gray-300">Chưa chốt</span>
                       )}
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="flex flex-wrap items-center justify-center gap-2">
-                        <button onClick={() => openView(inv)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:border-blue-200 hover:text-blue-700" title="Xem chi tiết">
+                    <td>
+                      <div className="order-table-actions">
+                        <button onClick={() => openView(inv)} className="order-table-action-btn border border-gray-200 text-gray-600 hover:border-blue-200 hover:text-blue-700" title="Xem chi tiết">
                           <Eye size={14} /> Xem
                         </button>
-                        <button onClick={() => openEdit(inv)} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100" title="Sửa">
+                        <button onClick={() => openEdit(inv)} className="order-table-action-btn border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" title="Sửa">
                           <Edit2 size={14} /> Sửa
                         </button>
+                        <button onClick={() => openInvoicePrint(inv)} className="order-table-action-btn border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100" title="Preview/In hóa đơn A5">
+                          <Printer size={14} /> In A5
+                        </button>
+                        <button onClick={() => openInvoicePrint(inv, { quick: true })} className="order-table-action-btn border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100" title="In nhanh hóa đơn A5">
+                          <FileDown size={14} /> In nhanh
+                        </button>
                         {(inv._isOffline || inv.status === 'pending' || inv.status === 'processing') && (
-                          <button onClick={() => handleMarkAsPaid(inv)} className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100" title="Xác nhận thanh toán">
+                          <button onClick={() => handleMarkAsPaid(inv)} className="order-table-action-btn border border-green-200 bg-green-50 text-green-700 hover:bg-green-100" title="Xác nhận thanh toán">
                             <CheckSquare size={14} /> Thanh toán
                           </button>
                         )}
-                        <button onClick={() => handleCancel(inv)} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100" title="Hủy đơn">
+                        <button onClick={() => handleCancel(inv)} className="order-table-action-btn border border-red-200 bg-red-50 text-red-600 hover:bg-red-100" title="Hủy đơn">
                           <Trash2 size={14} /> Hủy
                         </button>
                       </div>
@@ -1489,7 +1299,7 @@ export default function OrderList({ store = {} }) {
               </thead>
               <tbody>
                 {(invoiceDetails || []).map((d, idx) => (
-                  <tr key={d.id} className="border-b">
+                  <tr key={`${d.id || d.product_id || d.product_sku || 'detail'}-${idx}`} className="border-b">
                     <td className="border p-2 text-center">{idx + 1}</td>
                     <td className="border p-2">{getProductDisplayName(d)}</td>
                     <td className="border p-2 text-center">{d.quantity}</td>
@@ -1509,12 +1319,14 @@ export default function OrderList({ store = {} }) {
               <div className="flex justify-between font-bold text-base border-t pt-1"><span>Khách phải trả:</span><span className="text-blue-700">{formatVND(showView.total)}</span></div>
             </div>
 
-            <div className="flex gap-2 mt-4">
+            <div className="flex flex-col gap-2 mt-4 sm:flex-row">
+              {!showView._isOffline && (
+                <button onClick={() => openInvoicePrint(showView)} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold inline-flex items-center justify-center gap-2">
+                  <Printer size={16} /> Mở hóa đơn A5
+                </button>
+              )}
               <button onClick={() => setShowView(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">
                 Đóng
-              </button>
-              <button onClick={() => handlePrint(showView)} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
-                <Printer size={16} /> In hóa đơn
               </button>
             </div>
           </div>
@@ -1605,7 +1417,7 @@ export default function OrderList({ store = {} }) {
                     </thead>
                     <tbody>
                       {editDetails.map((d, idx) => (
-                        <tr key={d.id} className="border-b last:border-b-0 hover:bg-gray-50 text-xs">
+                        <tr key={`${d.id || d.product_id || d.product_sku || 'edit-detail'}-${idx}`} className="border-b last:border-b-0 hover:bg-gray-50 text-xs">
                           <td className="py-2 px-3 text-center text-gray-400">{idx + 1}</td>
                           <td className="py-2 px-3">
                             <div className="font-medium text-gray-800">{getProductDisplayName(d)}</div>
@@ -1703,27 +1515,6 @@ export default function OrderList({ store = {} }) {
             <div className="px-5 py-4 border-t bg-gray-50 rounded-b-xl flex flex-col gap-2 sm:flex-row">
               <button onClick={() => setShowEdit(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">
                 Hủy
-              </button>
-              <button onClick={() => handlePrint({
-                ...showEdit,
-                cart: editDetails,
-                subtotal: editForm.subtotal,
-                total: editForm.total,
-                vat_percent: editForm.vat_percent,
-                vat_amount: editForm.vat_amount,
-                discount_percent: editForm.discount_percent,
-                discount_amount: editForm.discount_amount,
-                delivery_fee: editForm.delivery_fee,
-                paid_amount: editForm.paid_amount,
-                change_amount: editForm.change_amount,
-                remaining_amount: editForm.remaining_amount,
-                payment_method: editForm.payment_method,
-                customer_name: editForm.customer_name,
-                note: editForm.note,
-                created_at: editForm.created_at || showEdit.created_at,
-                invoice_code: showEdit.invoice_code,
-              })} className="flex-1 py-2.5 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
-                <Printer size={16} /> In
               </button>
               <button onClick={handleSaveEdit}
                 disabled={editDetails.length === 0 || saveLoading}
@@ -1860,19 +1651,6 @@ export default function OrderList({ store = {} }) {
         </div>
       )}
 
-      <InvoicePrintPreviewModal
-        open={printPreview.open}
-        data={printPreview.data}
-        template={printPreview.template}
-        title={printPreview.title}
-        subtitle={printPreview.subtitle}
-        loading={printPreview.loading}
-        error={printPreview.error}
-        onBack={closePrintPreview}
-        onClose={closePrintPreview}
-        onTemplateChange={persistPreviewTemplate}
-      />
-
       {/* Help Modal */}
       {showHelp && (
         <div className="fixed inset-0 bg-black/40 flex items-start justify-center z-50 overflow-y-auto p-3 sm:items-center sm:p-4">
@@ -1907,15 +1685,6 @@ export default function OrderList({ store = {} }) {
                   <li>Tìm kiếm theo mã đơn (DH XXXXX) hoặc tên khách hàng</li>
                   <li>Lọc theo trạng thái từ dropdown</li>
                   <li>Kết hợp cả hai để tìm nhanh</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-gray-800 mb-2">📤 Xuất & In</h3>
-                <ul className="list-disc pl-5 space-y-1">
-                  <li><strong>Xem chi tiết:</strong> Nhấn icon mắt để xem thông tin đơn hàng</li>
-                  <li><strong>In hóa đơn:</strong> Nhấn nút "In" trong modal xem chi tiết</li>
-                  <li>Hóa đơn in định dạng A4, chuyên nghiệp</li>
                 </ul>
               </div>
 

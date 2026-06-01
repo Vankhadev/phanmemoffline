@@ -2,45 +2,13 @@ import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, SYNC_UPDATED_EVENT, apiJsonChecked, getApiErrorMessage, resolveApiUrl } from '../utils/apiClient';
 import {
-  Search, Plus, X, ShoppingCart, Trash2, ChevronDown, ChevronRight, Barcode, Filter, Layers, UserPlus, Users, Package, Settings2
+  Search, Plus, ShoppingCart, Trash2, ChevronDown, ChevronRight, Filter, UserPlus, Users, Printer
 } from 'lucide-react';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, getProductDisplayName, getProductVariants, getVariantIdentity } from '../utils/productSearch';
-import InvoicePrintPreviewModal from '../components/InvoicePrintPreviewModal';
-import { cacheDefaultPrintTemplate, getDefaultPrintTemplate } from '../utils/printTemplateService';
-import { createInvoicePrintData } from '../utils/invoicePrintData';
 import { attachClientOrderMetadata, generateClientOrderId } from '../utils/clientOrderId';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
 
 const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
-const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
-const DEFAULT_INVOICE_PAPER_SIZE = 'A5';
-const DEFAULT_INVOICE_WIDTH_MM = 148;
-const PRINT_TYPE_OPTIONS = {
-  sale_invoice: {
-    type: 'sale_invoice',
-    label: 'In hóa đơn',
-    title: 'Hóa đơn bán hàng',
-    description: 'Phiếu bán hàng chính thức, có đầy đủ thông tin thanh toán và tổng kết tiền.',
-    paperSize: DEFAULT_INVOICE_PAPER_SIZE,
-  },
-  temporary_bill: {
-    type: 'temporary_bill',
-    label: 'In tạm tính',
-    title: 'Phiếu tạm tính',
-    description: 'Phiếu tạm tính để khách kiểm tra sản phẩm, số lượng và tổng tiền trước khi xác nhận in.',
-    paperSize: DEFAULT_INVOICE_PAPER_SIZE,
-  },
-};
-const createEmptyPrintPreviewState = () => ({
-  open: false,
-  type: '',
-  title: '',
-  subtitle: '',
-  data: null,
-  template: null,
-  loading: false,
-  error: '',
-});
 const COMBO_REFRESH_STALE_MS = 30 * 1000;
 
 // Tạo 5 số ngẫu nhiên từ 1-9
@@ -59,18 +27,6 @@ const customerTypeToPriceType = (ct) => {
   if (t.includes('vip')) return 'vip';
   return 'retail';
 };
-const BANK_MAP = {
-  'Vietcombank': 'VCB', 'VietinBank': 'CTG', 'TPBank': 'TPB',
-  'MBBank': 'MB', 'ACB': 'ACB', 'VPBank': 'VPB', 'Sacombank': 'SACBOM',
-  'Agribank': 'VBA', 'BIDV': 'BIDV', 'Techcombank': 'TCB', 'Default': 'ICB',
-};
-function buildVietQRUrl(store, amount, invoiceCode) {
-  const bankCode = BANK_MAP[store.bank_name?.trim()] || BANK_MAP['Default'];
-  const account = (store.bank_account || '').replace(/\s/g, '');
-  const addInfo = encodeURIComponent(`Thanh toan don hang ${invoiceCode}`);
-  const accountName = encodeURIComponent(store.name || '');
-  return `https://img.vietqr.io/image/${bankCode}-${account}-compact2.png?amount=${amount}&addInfo=${addInfo}&accountName=${accountName}`;
-}
 function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
 }
@@ -188,8 +144,6 @@ export default function CreateOrder({ user, store }) {
   const [splitLine, setSplitLine] = useState(false);
   const [creating, setCreating] = useState(false);
   const [lastInvoice, setLastInvoice] = useState(null);
-  const [printChoiceOpen, setPrintChoiceOpen] = useState(false);
-  const [printPreview, setPrintPreview] = useState(() => createEmptyPrintPreviewState());
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
   const [showProductPanel, setShowProductPanel] = useState(false);
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -228,7 +182,23 @@ export default function CreateOrder({ user, store }) {
   const comboFetchInFlightRef = useRef(null);
 
   const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
-  const getCartRowKey = (item, idx) => String(item?.id ?? `${item?.combo_id || item?.product_id || 'row'}_${idx}`);
+  const getCartRowKey = (item, idx) => `cart-row-${String(item?.id ?? item?._cartKey ?? item?.combo_id ?? item?.product_id ?? 'item')}-${idx}`;
+  const recalculateCartLine = (item) => {
+    const quantity = Math.max(MIN_QUANTITY, Number(item.quantity) || MIN_QUANTITY);
+    const unitPrice = Math.max(0, Number(item.unit_price) || 0);
+    const discountPercent = Math.min(100, Math.max(0, Number(item.discount_percent) || 0));
+    const discountAmount = discountPercent > 0
+      ? quantity * unitPrice * discountPercent / 100
+      : Math.max(0, Number(item.discount_amount) || 0);
+    return {
+      ...item,
+      quantity,
+      unit_price: unitPrice,
+      discount_percent: discountPercent,
+      discount_amount: discountAmount,
+      line_total: Math.max(0, quantity * unitPrice - discountAmount),
+    };
+  };
   const toggleComboRow = (rowKey) => {
     setExpandedComboRows(prev => ({ ...prev, [rowKey]: !prev[rowKey] }));
   };
@@ -500,7 +470,7 @@ export default function CreateOrder({ user, store }) {
     (c.phone || '').includes(customerSearch)
   );
 
-  const subtotal = cart.reduce((s, i) => s + i.line_total, 0);
+  const subtotal = cart.reduce((s, i) => s + (Number(i.line_total) || 0), 0);
 
   // Lấy giá đúng theo loại khách hàng đã chọn
   const getPrice = (product) => {
@@ -557,7 +527,7 @@ export default function CreateOrder({ user, store }) {
       if (existing) {
         const newQty = normalizeDecimalQuantity(existing.quantity + qty, 1);
         return prev.map(c => c.product_id === v.id && c.unit_price === unit_price
-          ? { ...c, quantity: newQty, line_total: newQty * c.unit_price - c.discount_amount }
+          ? recalculateCartLine({ ...c, quantity: newQty })
           : c);
       }
       return [...prev, {
@@ -599,7 +569,7 @@ export default function CreateOrder({ user, store }) {
       if (existing) {
         const newQty = normalizeDecimalQuantity(existing.quantity + 1, 1);
         return prev.map(c => c.id === existing.id
-          ? { ...c, quantity: newQty, line_total: newQty * c.unit_price - (c.discount_amount || 0) }
+          ? recalculateCartLine({ ...c, quantity: newQty })
           : c);
       }
       return [...prev, {
@@ -635,7 +605,7 @@ export default function CreateOrder({ user, store }) {
       if (existing) {
         const newQty = normalizeDecimalQuantity(existing.quantity + 1, 1);
         return prev.map(c => c.product_id === product.id && c.unit_price === unit_price && !splitLine
-          ? { ...c, quantity: newQty, line_total: newQty * c.unit_price - c.discount_amount }
+          ? recalculateCartLine({ ...c, quantity: newQty })
           : c);
       }
       return [...prev, {
@@ -662,18 +632,12 @@ export default function CreateOrder({ user, store }) {
   const updateCartItem = (id, field, value) => {
     setCart(prev => prev.map(item => {
       if (item.id !== id) return item;
-      if (field === 'quantity') {
-        const newQty = normalizeDecimalQuantity(value, 1);
-        return { ...item, quantity: newQty, line_total: newQty * item.unit_price - (item.discount_amount || 0) };
-      }
-      const updated = { ...item, [field]: value };
-      if (field === 'unit_price') updated.unit_price = Math.max(0, value);
-      if (field === 'discount_percent') {
-        updated.discount_percent = Math.min(100, Math.max(0, value));
-        updated.discount_amount = updated.quantity * updated.unit_price * updated.discount_percent / 100;
-      }
-      updated.line_total = updated.quantity * updated.unit_price - (updated.discount_amount || 0);
-      return updated;
+      const updated = { ...item };
+      if (field === 'quantity') updated.quantity = normalizeDecimalQuantity(value, 1);
+      else if (field === 'unit_price') updated.unit_price = Math.max(0, Number(value) || 0);
+      else if (field === 'discount_percent') updated.discount_percent = Math.min(100, Math.max(0, Number(value) || 0));
+      else updated[field] = value;
+      return recalculateCartLine(updated);
     }));
   };
 
@@ -863,9 +827,6 @@ export default function CreateOrder({ user, store }) {
         alert(getApiErrorMessage(error.data, error.message || 'Không thể tạo đơn hàng.'));
         return;
       }
-      if (error?.name !== 'AbortError' && error?.message) {
-        console.warn('Không thể gửi đơn hàng lên backend, chuyển sang lưu cục bộ:', error.message);
-      }
       showSuccess(`LOCAL_${Date.now().toString(36).toUpperCase()}`, null, true);
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
@@ -978,10 +939,17 @@ export default function CreateOrder({ user, store }) {
     }
   };
 
+  const openLastInvoicePrint = (quick = false) => {
+    const target = lastInvoice?.id || lastInvoice?.invoice_code || '';
+    if (!lastInvoice || !target || String(lastInvoice.invoice_code || '').startsWith('LOCAL_')) {
+      alert('Đơn offline chưa có dữ liệu hóa đơn thật trên server để in. Vui lòng đồng bộ đơn trước khi in.');
+      return;
+    }
+    navigate(`/hoa-don-in/${encodeURIComponent(target)}${quick ? '?print=1' : ''}`);
+  };
+
   const resetForm = () => {
     setLastInvoice(null);
-    setPrintChoiceOpen(false);
-    setPrintPreview(createEmptyPrintPreviewState());
     setEditingInvoiceId(null);
     setCart([]);
     setProductSearch('');
@@ -1001,109 +969,6 @@ export default function CreateOrder({ user, store }) {
     setDeliveryDate('');
     setInvoiceWriter(user?.name || '');
     setReceiverName('');
-  };
-
-  const handlePrint = () => {
-    if (!lastInvoice) {
-      alert('Không có dữ liệu hóa đơn để in.');
-      return;
-    }
-    setPrintChoiceOpen(true);
-  };
-
-  const closePrintPreview = () => {
-    setPrintPreview(createEmptyPrintPreviewState());
-  };
-
-  const persistPreviewTemplate = async (nextTemplate) => {
-    if (!nextTemplate) return nextTemplate;
-
-    const normalizedPaperSize = String(nextTemplate.paper_size || nextTemplate.paperSize || '').trim() || DEFAULT_INVOICE_PAPER_SIZE;
-    const normalizedType = String(nextTemplate.type || printPreview.type || 'sale_invoice').trim() || 'sale_invoice';
-    const payload = {
-      paper_size: normalizedPaperSize,
-      width_mm: Number(nextTemplate.width_mm || nextTemplate.widthMm) || DEFAULT_INVOICE_WIDTH_MM,
-      config: nextTemplate.config || null,
-    };
-
-    if (/^\d+$/.test(String(nextTemplate.id || '').trim())) {
-      const data = await apiJsonChecked(resolveApiUrl(`/print-templates/${nextTemplate.id}`), {
-        method: 'PUT',
-        body: payload,
-      }, 'Không thể cập nhật khổ giấy mẫu in.');
-      const savedTemplate = cacheDefaultPrintTemplate(data?.template || data, {
-        type: normalizedType,
-        paperSize: normalizedPaperSize,
-      }) || nextTemplate;
-      setPrintPreview(prev => ({ ...prev, template: savedTemplate }));
-      return savedTemplate;
-    }
-
-    const cachedTemplate = cacheDefaultPrintTemplate({
-      ...nextTemplate,
-      paper_size: normalizedPaperSize,
-      width_mm: payload.width_mm,
-      config: payload.config,
-    }, {
-      type: normalizedType,
-      paperSize: normalizedPaperSize,
-    }) || nextTemplate;
-    setPrintPreview(prev => ({ ...prev, template: cachedTemplate }));
-    return cachedTemplate;
-  };
-
-  const handleSelectPrintType = async (type) => {
-    if (!lastInvoice) {
-      alert('Không có dữ liệu hóa đơn để in.');
-      return;
-    }
-
-    const option = PRINT_TYPE_OPTIONS[type] || PRINT_TYPE_OPTIONS.sale_invoice;
-    const invoiceSnapshot = lastInvoice;
-    const previewTitle = `${option.title} ${invoiceSnapshot.invoice_code || ''}`.trim();
-
-    setPrintChoiceOpen(false);
-    setPrintPreview({
-      ...createEmptyPrintPreviewState(),
-      open: true,
-      type: option.type,
-      title: previewTitle,
-      subtitle: option.description,
-      loading: true,
-    });
-
-    try {
-      const template = await getDefaultPrintTemplate({
-        apiBase: resolveApiUrl(''),
-        type: option.type,
-        paperSize: option.paperSize,
-        fallbackPaperSize: option.paperSize,
-      });
-      const printData = createInvoicePrintData({
-        store,
-        invoice: invoiceSnapshot,
-        customer: invoiceSnapshot.selectedCustomer,
-        user: { id: user?.id, name: invoiceSnapshot.invoice_writer || user?.name || '' },
-        items: invoiceSnapshot.cart,
-        type: option.type,
-      });
-      setPrintPreview({
-        open: true,
-        type: option.type,
-        title: previewTitle,
-        subtitle: `${option.description} Kiểm tra đầy đủ thông tin đơn hàng, sản phẩm và tổng tiền trước khi bấm In.`,
-        data: printData,
-        template,
-        loading: false,
-        error: '',
-      });
-    } catch (err) {
-      setPrintPreview(prev => ({
-        ...prev,
-        loading: false,
-        error: err.message || 'Không thể dựng bản xem trước phiếu in. Vui lòng thử lại.',
-      }));
-    }
   };
 
   return (
@@ -1229,20 +1094,12 @@ export default function CreateOrder({ user, store }) {
                               const combo = getComboById(item.combo_id);
                               if (!combo) return item;
                               const newPrice = getComboPriceValue(combo, newPriceType);
-                              return {
-                                ...item,
-                                unit_price: newPrice,
-                                line_total: item.quantity * newPrice - (item.discount_amount || 0)
-                              };
+                              return recalculateCartLine({ ...item, unit_price: newPrice });
                             }
                             const prod = getProductById(item.product_id);
                             if (!prod) return item;
                             const newPrice = prod[`${newPriceType}_price`] || prod.retail_price || 0;
-                            return {
-                              ...item,
-                              unit_price: newPrice,
-                              line_total: item.quantity * newPrice - (item.discount_amount || 0)
-                            };
+                            return recalculateCartLine({ ...item, unit_price: newPrice });
                           }));
                         }}
                         className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b last:border-b-0">
@@ -1269,20 +1126,12 @@ export default function CreateOrder({ user, store }) {
                         const combo = getComboById(item.combo_id);
                         if (!combo) return item;
                         const newPrice = getComboPriceValue(combo, 'retail');
-                        return {
-                          ...item,
-                          unit_price: newPrice,
-                          line_total: item.quantity * newPrice - (item.discount_amount || 0)
-                        };
+                        return recalculateCartLine({ ...item, unit_price: newPrice });
                       }
                       const prod = getProductById(item.product_id);
                       if (!prod) return item;
                       const newPrice = prod.retail_price || 0;
-                      return {
-                        ...item,
-                        unit_price: newPrice,
-                        line_total: item.quantity * newPrice - (item.discount_amount || 0)
-                      };
+                      return recalculateCartLine({ ...item, unit_price: newPrice });
                     }));
                   }} className="text-red-400 hover:text-red-600 text-xs">✕ Bỏ chọn</button>
                 </div>
@@ -1321,9 +1170,9 @@ export default function CreateOrder({ user, store }) {
                   onFocus={handleProductSearchFocus}
                   onChange={e => setProductSearch(e.target.value)} />
               </div>
-              <div className="flex flex-wrap gap-1">
+              <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 lg:w-auto lg:flex lg:flex-wrap lg:items-center lg:justify-end">
                 {selectedCustomer ? (
-                  <span className={`px-3 py-2 rounded text-xs font-bold border ${(selectedCustomer.customer_type || '').toLowerCase().includes('sỉ') || (selectedCustomer.customer_type || '').toLowerCase().includes('wholesale')
+                  <span className={`order-toolbar-pill border ${(selectedCustomer.customer_type || '').toLowerCase().includes('sỉ') || (selectedCustomer.customer_type || '').toLowerCase().includes('wholesale')
                     ? 'bg-orange-100 text-orange-700 border-orange-300'
                     : (selectedCustomer.customer_type || '').toLowerCase().includes('vip')
                       ? 'bg-purple-100 text-purple-700 border-purple-300'
@@ -1334,24 +1183,24 @@ export default function CreateOrder({ user, store }) {
                 ) : (
                   Object.entries(PRICE_LABELS).map(([k, v]) => (
                     <button key={k} onClick={() => setPriceType(k)}
-                      className={`px-3 py-2 rounded text-xs font-medium border transition ${priceType === k ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:border-blue-400'}`}>
+                      className={`order-toolbar-pill border transition ${priceType === k ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:border-blue-400'}`}>
                       {v}
                     </button>
                   ))
                 )}
+                <button
+                  onClick={() => {
+                    const nextShowProductPanel = !showProductPanel;
+                    setShowProductPanel(nextShowProductPanel);
+                    if (nextShowProductPanel && productResultFilter === 'combo') fetchCombos();
+                  }}
+                  className="order-toolbar-pill bg-blue-600 hover:bg-blue-700 text-white">
+                  <Plus size={12} /> Chọn nhanh
+                </button>
+                <button className="order-toolbar-pill border border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600">
+                  <Filter size={12} /> Lọc
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  const nextShowProductPanel = !showProductPanel;
-                  setShowProductPanel(nextShowProductPanel);
-                  if (nextShowProductPanel && productResultFilter === 'combo') fetchCombos();
-                }}
-                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium flex items-center gap-1">
-                <Plus size={12} /> Chọn nhanh
-              </button>
-              <button className="px-3 py-2 border border-gray-300 rounded text-xs text-gray-600 hover:border-blue-400 hover:text-blue-600 flex items-center gap-1">
-                <Filter size={12} /> Lọc
-              </button>
             </div>
 
             {/* Product grid when searching */}
@@ -1454,17 +1303,26 @@ export default function CreateOrder({ user, store }) {
             )}
 
             {/* Product table */}
-            <div className="overflow-x-auto -mx-3 sm:mx-0">
-              <table className="w-full min-w-[760px] text-sm">
+            <div className="system-table-scroll">
+              <table className="system-table pos-order-table text-sm">
+                <colgroup>
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '34%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '5%' }} />
+                </colgroup>
                 <thead>
-                  <tr className="bg-gray-100 text-gray-600 text-xs border-b">
-                    <th className="py-2 px-3 text-center w-10">STT</th>
-                    <th className="py-2 px-3 text-left">Tên sản phẩm</th>
-                    <th className="py-2 px-3 text-center w-16">Số lượng</th>
-                    <th className="py-2 px-3 text-right w-28">Đơn giá</th>
-                    <th className="py-2 px-3 text-center w-20">Chiết khấu</th>
-                    <th className="py-2 px-3 text-right w-28">Thành tiền</th>
-                    <th className="py-2 px-3 w-10"></th>
+                  <tr>
+                    <th className="text-center">STT</th>
+                    <th className="text-left">Tên sản phẩm</th>
+                    <th className="text-center">Số lượng</th>
+                    <th className="text-right">Đơn giá</th>
+                    <th className="text-center">Chiết khấu</th>
+                    <th className="text-right">Thành tiền</th>
+                    <th className="text-center">Xóa</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1476,15 +1334,10 @@ export default function CreateOrder({ user, store }) {
 
                     return (
                       <Fragment key={rowKey}>
-                        <tr className={`border-b hover:bg-gray-50 text-xs ${!isCombo && item.max_stock <= 0 ? 'bg-red-50' : ''}`}>
-                          <td className="py-2 px-3 text-center text-gray-400">{idx + 1}</td>
-                          <td className="py-2 px-3">
-                            <div className="w-10 h-10 mx-auto rounded border bg-gray-50 text-gray-400 flex items-center justify-center">
-                              <Package size={16} />
-                            </div>
-                          </td>
-                          <td className="py-2 px-3">
-                            <div className="font-medium flex items-center gap-1">
+                        <tr className={`align-middle ${!isCombo && item.max_stock <= 0 ? 'bg-red-50' : ''}`}>
+                          <td className="text-center text-gray-500 font-medium">{idx + 1}</td>
+                          <td>
+                            <div className="font-medium flex items-center gap-1 min-w-0">
                               {isCombo && (
                                 <button
                                   type="button"
@@ -1499,8 +1352,8 @@ export default function CreateOrder({ user, store }) {
                                   {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                                 </button>
                               )}
-                              {isCombo && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-bold">Combo</span>}
-                              <span>{getProductDisplayName(item)}</span>
+                              {isCombo && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-bold shrink-0">Combo</span>}
+                              <span className="table-text-clip">{getProductDisplayName(item)}</span>
                             </div>
                             <div className="text-[10px] text-gray-400">{item.product_sku}</div>
                             {isCombo && (
@@ -1510,38 +1363,38 @@ export default function CreateOrder({ user, store }) {
                               <div className="text-xs font-bold text-red-600 mt-0.5">⚠️ Hết hàng</div>
                             )}
                           </td>
-                          <td className="py-2 px-3 text-center">
+                          <td>
                             <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal" max={isCombo ? undefined : item.max_stock}
                               value={item.quantity}
                               disabled={!isCombo && item.max_stock <= 0}
                               onChange={e => updateCartItem(item.id, 'quantity', e.target.value)}
-                              className={`w-14 text-center border rounded px-1 py-1 text-sm ${!isCombo && item.max_stock <= 0 ? 'bg-red-100 text-red-400 border-red-200' : ''}`} />
+                              className={`pos-table-input text-center ${!isCombo && item.max_stock <= 0 ? 'bg-red-100 text-red-400 border-red-200' : ''}`} />
                           </td>
-                          <td className="py-2 px-3 text-right">
+                          <td>
                             <input type="number" min="0"
                               value={item.unit_price}
                               onChange={e => updateCartItem(item.id, 'unit_price', +e.target.value)}
-                              className="w-24 text-right border rounded px-2 py-1 text-sm" />
+                              className="pos-table-input text-right" />
                           </td>
-                          <td className="py-2 px-3 text-center">
+                          <td>
                             <input type="number" min="0" max="100"
                               value={item.discount_percent}
                               onChange={e => updateCartItem(item.id, 'discount_percent', +e.target.value)}
-                              className="w-14 text-center border rounded px-1 py-1 text-sm" />
+                              className="pos-table-input text-center" />
                           </td>
-                          <td className="py-2 px-3 text-right font-semibold text-blue-700">
+                          <td className="font-semibold text-blue-700">
                             {formatVND(item.line_total)}
                           </td>
-                          <td className="py-2 px-3 text-center">
-                            <button onClick={() => removeCartItem(item.id)} className="text-red-400 hover:text-red-600 p-1">
+                          <td>
+                            <button onClick={() => removeCartItem(item.id)} className="action-icon-btn text-red-500 hover:text-red-700 hover:bg-red-50" title="Xóa sản phẩm">
                               <Trash2 size={13} />
                             </button>
                           </td>
                         </tr>
                         {isCombo && isExpanded && (
                           <tr className="bg-purple-50/60 border-b border-purple-100 text-xs">
-                            <td colSpan={8} className="py-2 px-3">
-                              <div className="ml-[104px] border-l-2 border-purple-200 pl-3 space-y-1">
+                            <td colSpan={7}>
+                              <div className="border-l-2 border-purple-200 pl-3 space-y-1">
                                 {comboItems.length > 0 ? comboItems.map((comboItem, childIdx) => {
                                   const childSku = getComboChildSku(comboItem);
                                   return (
@@ -1570,7 +1423,7 @@ export default function CreateOrder({ user, store }) {
                   })}
                   {cart.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-center text-gray-400 py-10">
+                      <td colSpan={7} className="text-center text-gray-400 py-10">
                         <div className="text-4xl mb-2 opacity-20">📦</div>
                         <div className="mb-3">Chưa có thông tin sản phẩm</div>
                         <button onClick={() => setShowProductPanel(true)}
@@ -1778,15 +1631,8 @@ export default function CreateOrder({ user, store }) {
                 onClick={editingInvoiceId ? handleSaveEdit : handleCreateOrder}
                 disabled={cart.length === 0 || creating}
                 className={`w-full mt-2 py-2.5 disabled:bg-gray-300 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${editingInvoiceId ? 'bg-green-600 hover:bg-green-700' : 'bg-green-600 hover:bg-green-700'}`}>
-                {creating ? (editingInvoiceId ? ' Đang lưu...' : ' Đang tạo...') : (editingInvoiceId ? ' Lưu thay đổi' : '🖨️ Tạo đơn hàng')}
+                {creating ? (editingInvoiceId ? ' Đang lưu...' : ' Đang tạo...') : (editingInvoiceId ? ' Lưu thay đổi' : 'Tạo đơn hàng')}
               </button>
-              {lastInvoice && (
-                <button
-                  onClick={handlePrint}
-                  className="w-full mt-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2">
-                  In
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -1849,7 +1695,7 @@ export default function CreateOrder({ user, store }) {
             <div className="px-5 py-4 border-b bg-blue-50 flex items-center justify-between">
               <div>
                 <div className="text-lg font-bold text-blue-800">Xem lại đơn hàng</div>
-                <div className="text-xs text-blue-600">Kiểm tra lại trước khi in hóa đơn</div>
+                <div className="text-xs text-blue-600">Kiểm tra lại thông tin đơn hàng vừa tạo</div>
               </div>
               <button onClick={resetForm} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
@@ -1881,8 +1727,8 @@ export default function CreateOrder({ user, store }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {lastInvoice.cart.map((item, idx) => (
-                      <tr key={item.id || idx} className="border-b last:border-b-0">
+                    {(lastInvoice.cart || []).map((item, idx) => (
+                      <tr key={`${item.id || item.product_id || item.product_sku || 'review'}-${idx}`} className="border-b last:border-b-0">
                         <td className="py-2 px-3 text-center text-gray-500">{idx + 1}</td>
                         <td className="py-2 px-3">
                           <div className="font-medium text-gray-800">{getProductDisplayName(item)}</div>
@@ -1905,68 +1751,21 @@ export default function CreateOrder({ user, store }) {
                 Đóng
               </button>
               <button
-                onClick={handlePrint}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold"
+                onClick={() => openLastInvoicePrint(false)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold inline-flex items-center justify-center gap-2"
               >
-                In
+                <Printer size={16} /> Mở hóa đơn A5
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {printChoiceOpen && lastInvoice && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden">
-            <div className="px-5 py-4 border-b bg-blue-50 flex items-center justify-between">
-              <div>
-                <div className="text-lg font-bold text-blue-800">Chọn loại phiếu cần in</div>
-                <div className="text-xs text-blue-600">Bấm một lựa chọn để mở bản xem trước, chưa gọi in trình duyệt ở bước này.</div>
-              </div>
-              <button onClick={() => setPrintChoiceOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
-            </div>
-            <div className="p-5 grid grid-cols-1 gap-3">
-              {Object.values(PRINT_TYPE_OPTIONS).map(option => (
-                <button
-                  key={option.type}
-                  type="button"
-                  onClick={() => handleSelectPrintType(option.type)}
-                  className="text-left rounded-xl border border-gray-200 hover:border-blue-400 hover:bg-blue-50 p-4 transition shadow-sm"
-                >
-                  <div className="font-bold text-gray-900">{option.label}</div>
-                  <div className="text-sm text-gray-500 mt-1">{option.description}</div>
-                  <div className="text-xs text-blue-600 font-medium mt-2">Mở màn hình xem trước trước khi in</div>
-                </button>
-              ))}
-            </div>
-            <div className="px-5 py-4 border-t bg-gray-50 flex justify-end">
               <button
-                type="button"
-                onClick={() => setPrintChoiceOpen(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium"
+                onClick={() => openLastInvoicePrint(true)}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold inline-flex items-center justify-center gap-2"
               >
-                Hủy in
+                <Printer size={16} /> In nhanh
               </button>
             </div>
           </div>
         </div>
       )}
-
-      <InvoicePrintPreviewModal
-        open={printPreview.open}
-        data={printPreview.data}
-        template={printPreview.template}
-        title={printPreview.title}
-        subtitle={printPreview.subtitle}
-        loading={printPreview.loading}
-        error={printPreview.error}
-        onBack={() => {
-          closePrintPreview();
-          if (lastInvoice) setPrintChoiceOpen(true);
-        }}
-        onClose={closePrintPreview}
-        onTemplateChange={persistPreviewTemplate}
-      />
 
       {/* ===== VARIANT PICKER MODAL ===== */}
       {

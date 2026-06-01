@@ -30,7 +30,6 @@ export default defineConfig({
           if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'react-vendor'
           if (id.includes('xlsx')) return 'xlsx-vendor'
           if (id.includes('recharts') || id.includes('d3-')) return 'charts-vendor'
-          if (id.includes('jspdf') || id.includes('html2canvas')) return 'print-vendor'
           if (id.includes('lucide-react')) return 'icons-vendor'
           return 'vendor'
         },

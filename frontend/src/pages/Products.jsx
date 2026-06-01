@@ -1,7 +1,6 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown, Printer, Ban } from 'lucide-react';
+import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown, Ban } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import ProductLabelPrintModal from '../components/ProductLabelPrintModal';
 import ExcelImportPanel from '../components/ExcelImportPanel';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
 import { ensureFocusableElement } from '../utils/electronFocusGuard';
@@ -179,7 +178,6 @@ const ProductFormModal = memo(function ProductFormModal({
   suppliers,
   onClose,
   onSubmit,
-  onPrintLabel,
 }) {
   const [form, setForm] = useState(() => createProductFormInitial(initialForm));
   const nameInputRef = useRef(null);
@@ -210,16 +208,6 @@ const ProductFormModal = memo(function ProductFormModal({
     e.preventDefault();
     onSubmit(form);
   }, [form, onSubmit]);
-
-  const handlePrintLabel = useCallback(() => {
-    onPrintLabel({
-      id: editing?.id || null,
-      name: form.name || editing?.name || '',
-      sku: form.sku || editing?.sku || '',
-      retail_price: form.retail_price !== '' ? form.retail_price : (editing?.retail_price || 0),
-      unit: form.unit || editing?.unit || 'cái',
-    });
-  }, [editing, form, onPrintLabel]);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
@@ -277,23 +265,6 @@ const ProductFormModal = memo(function ProductFormModal({
               ))}
             </select>
           </div>
-          {editing && (
-            <div className="border border-blue-200 bg-blue-50 rounded-xl p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-sm font-bold text-blue-900 flex items-center gap-2">
-                  <Printer size={16} /> In tem
-                </div>
-                <p className="text-xs text-blue-700 mt-0.5">In lại tem sản phẩm này với khổ tem/giấy in tùy chọn.</p>
-              </div>
-              <button
-                type="button"
-                onClick={handlePrintLabel}
-                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-1.5 shrink-0"
-              >
-                <Printer size={15} /> In tem
-              </button>
-            </div>
-          )}
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
             <button type="submit" disabled={saving}
               className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
@@ -546,7 +517,6 @@ export default function Products({ store }) {
   const [categoryForm, setCategoryForm] = useState({ name: '', group_name: '', keywords: '' });
   const [stockSortDirection, setStockSortDirection] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [labelPrintModal, setLabelPrintModal] = useState({ open: false, items: [], source: '' });
   const supplierNameById = useMemo(() => new Map((suppliers || []).map(supplier => [String(supplier.id), supplier.name])), [suppliers]);
   const categoryNameById = useMemo(() => new Map((categories || []).map(category => [String(category.id), category.name])), [categories]);
 
@@ -615,34 +585,6 @@ export default function Products({ store }) {
     fetchCategories();
     return () => productsFetchAbortRef.current?.abort();
   }, []);
-
-  const buildProductLabelItem = (product, quantity = 1) => ({
-    id: product?.id || product?.product_id || product?.variant_id || product?.sku,
-    product_id: product?.product_id || (!product?.parent_id ? product?.id : product?.parent_id) || null,
-    variant_id: product?.variant_id || (product?.parent_id ? product?.id : null) || null,
-    name: product?.parent_name && product?.parent_id ? `${product.parent_name} / ${product.name || ''}` : (product?.name || ''),
-    sku: product?.sku || '',
-    retail_price: product?.retail_price || product?.price || 0,
-    quantity,
-    unit: product?.unit || 'cái',
-  });
-
-  const openProductLabelModal = useCallback((product, { quantity = 1, source = '' } = {}) => {
-    if (!product) return;
-    setLabelPrintModal({
-      open: true,
-      items: [buildProductLabelItem(product, quantity)],
-      source,
-    });
-  }, []);
-
-  const closeProductLabelModal = useCallback(() => {
-    setLabelPrintModal({ open: false, items: [], source: '' });
-  }, []);
-
-  const handlePrintEditingProductLabel = useCallback((productForLabel) => {
-    openProductLabelModal(productForLabel, { quantity: 1, source: 'edit-form' });
-  }, [openProductLabelModal]);
 
   // ── Refresh khi đơn/sync làm đổi tồn kho, sản phẩm hoặc danh mục ──
   useEffect(() => {
@@ -1540,11 +1482,6 @@ export default function Products({ store }) {
         signal: controller.signal,
       }, currentEditing ? 'Không thể cập nhật sản phẩm.' : 'Không thể tạo sản phẩm.');
       clearTimeout(timer);
-      const savedProductForLabel = {
-        id: currentEditing?.id || data.id,
-        ...payload,
-        quantity: 1,
-      };
       alert(currentEditing ? '✅ Đã cập nhật sản phẩm!' : `✅ Tạo sản phẩm thành công!\nMã: ${data.id}`);
       closeProductForm();
       setProductFormInitial(createProductFormInitial());
@@ -1553,16 +1490,13 @@ export default function Products({ store }) {
         reason: currentEditing ? 'product-updated' : 'product-created',
         changedTables: ['products'],
       });
-      if (!currentEditing) {
-        openProductLabelModal(savedProductForLabel, { quantity: 1, source: 'created-product' });
-      }
     } catch (err) {
       if (err.name === 'AbortError') alert('⏱️ Server không phản hồi sau 10 giây.');
       else alert(`📡 Lỗi kết nối: ${err.message}`);
     } finally {
       setSaving(false);
     }
-  }, [closeProductForm, editing, fetchProducts, openProductLabelModal]);
+  }, [closeProductForm, editing, fetchProducts]);
 
   const handleDelete = useCallback(async (id) => {
     if (!confirm('Xóa sản phẩm này? Tất cả biến thể sẽ bị xóa.')) return;
@@ -2076,7 +2010,6 @@ export default function Products({ store }) {
           suppliers={suppliers}
           onClose={closeProductForm}
           onSubmit={handleProductSubmit}
-          onPrintLabel={handlePrintEditingProductLabel}
         />
       )}
 
@@ -2255,20 +2188,6 @@ export default function Products({ store }) {
           </div>
         </div>
       )}
-
-      <ProductLabelPrintModal
-        open={labelPrintModal.open}
-        items={labelPrintModal.items}
-        store={store}
-        title="In tem sản phẩm"
-        onClose={closeProductLabelModal}
-        onSkip={() => {}}
-        onPrinted={(rendered) => {
-          alert(rendered?.silent
-            ? `✅ Đã gửi lệnh in trực tiếp ${rendered.labelCount} tem sản phẩm.`
-            : `✅ Đã mở hộp thoại in ${rendered.labelCount} tem sản phẩm.`);
-        }}
-      />
 
       {/* Help Modal */}
       {showHelp && (

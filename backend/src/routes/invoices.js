@@ -6,7 +6,6 @@
 const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, remove, now, getNextSeq, normalizePaymentMethod, getActiveAccountId, withAtomicDbWrite } = require('../db/database');
-const { requireAdmin } = require('../middleware/auth');
 const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
 const {
   createInvoiceFromPayload,
@@ -16,7 +15,6 @@ const {
   mergeDuplicateDetails: mergeInvoiceDetails,
   normalizeInvoiceDetail: normalizeInvoiceDetailService,
 } = require('../services/invoiceCreationService');
-const { getInvoicePrintData } = require('../services/invoicePrintDataService');
 const {
   getInvoiceDetailProductId,
   validateNegativeStockForDetails,
@@ -157,6 +155,225 @@ function buildItemsSummary(details = []) {
     .join('; ');
 }
 
+function toMoney(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function parseObjectMaybe(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value !== 'string' || !value.trim()) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function normalizeLookupText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeInvoiceCodeLookup(value) {
+  const compact = normalizeLookupText(value).replace(/[\s_-]+/g, '');
+  if (/^dh\d+$/i.test(compact)) return `hd${compact.slice(2)}`;
+  return compact;
+}
+
+function normalizeImageValue(value) {
+  const text = firstNonEmpty(value);
+  if (!text) return '';
+  if (/^(data:image\/|https?:\/\/|blob:|file:)/i.test(text)) return text;
+  if (/^[a-z0-9+/=\r\n]+$/i.test(text) && text.length > 80) return `data:image/png;base64,${text.replace(/\s+/g, '')}`;
+  return text;
+}
+
+function buildStorePrintInfo(store = {}) {
+  return {
+    id: store.id || null,
+    name: firstNonEmpty(store.name, store.store_name, store.company_name, 'Cửa hàng'),
+    company_name: firstNonEmpty(store.company_name, store.name),
+    address: firstNonEmpty(store.address, store.store_address),
+    phone: firstNonEmpty(store.phone, store.hotline, store.tel),
+    email: firstNonEmpty(store.email),
+    tax_code: firstNonEmpty(store.tax_code, store.mst),
+    logo_url: normalizeImageValue(firstNonEmpty(store.logo_url, store.logo, store.logo_base64, store.logo_data_url)),
+    bank_name: firstNonEmpty(store.bank_name, store.bank, store.bank_branch),
+    bank_account: firstNonEmpty(store.bank_account, store.account_number, store.bank_account_number),
+    bank_account_name: firstNonEmpty(store.bank_account_name, store.account_name, store.name),
+    payment_qr_url: normalizeImageValue(firstNonEmpty(store.payment_qr_url, store.payment_qr, store.qr_code, store.qr_image, store.bank_qr_url)),
+  };
+}
+
+function buildCustomerPrintInfo(invoice = {}, customer = {}) {
+  return {
+    id: customer?.id || invoice.customer_id || null,
+    name: firstNonEmpty(customer?.name, invoice.customer_name, 'Khách lẻ'),
+    phone: firstNonEmpty(customer?.phone, invoice.customer_phone),
+    email: firstNonEmpty(customer?.email, invoice.customer_email),
+    address: firstNonEmpty(customer?.address, invoice.customer_address),
+    tax_code: firstNonEmpty(customer?.tax_code, invoice.customer_tax_code),
+    customer_type: firstNonEmpty(customer?.customer_type),
+  };
+}
+
+function buildPaymentPrintInfo(invoice = {}, store = {}) {
+  const method = normalizePaymentMethod(invoice.payment_method || 'cash') || 'cash';
+  const labels = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
+  const bankName = firstNonEmpty(invoice.bank_name, invoice.payment_bank_name, store.bank_name);
+  const bankAccount = firstNonEmpty(invoice.bank_account, invoice.payment_bank_account, store.bank_account);
+  const accountName = firstNonEmpty(invoice.bank_account_name, invoice.payment_account_name, store.bank_account_name, store.name);
+  const qrText = firstNonEmpty(
+    invoice.payment_qr_text,
+    invoice.qr_text,
+    bankAccount ? `${bankName ? `${bankName} - ` : ''}${bankAccount}${accountName ? ` - ${accountName}` : ''}` : ''
+  );
+
+  return {
+    method,
+    method_label: labels[method] || method || 'Tiền mặt',
+    paid_amount: toMoney(invoice.paid_amount),
+    change_amount: toMoney(invoice.change_amount),
+    remaining_amount: toMoney(invoice.remaining_amount),
+    bank_name: bankName,
+    bank_account: bankAccount,
+    bank_account_name: accountName,
+    qr_image: normalizeImageValue(firstNonEmpty(invoice.payment_qr_url, invoice.payment_qr, invoice.qr_code, invoice.qr_image, store.payment_qr_url)),
+    qr_text: qrText,
+    transfer_content: firstNonEmpty(invoice.transfer_content, invoice.invoice_code ? `Thanh toan ${invoice.invoice_code}` : ''),
+  };
+}
+
+function buildPrintItem(detail = {}, index = 0, productsById = new Map()) {
+  const displayFields = resolveInvoiceDetailDisplayFields(detail, id => productsById.get(Number(id)) || null);
+  const quantity = toMoney(detail.quantity) || 0;
+  const unitPrice = toMoney(detail.unit_price);
+  const discountAmount = toMoney(detail.discount_amount);
+  const lineTotal = Number.isFinite(Number(detail.line_total))
+    ? toMoney(detail.line_total)
+    : Math.max(0, quantity * unitPrice - discountAmount);
+
+  return {
+    id: detail.id || null,
+    no: index + 1,
+    type: detail.type || detail.item_type || (detail.combo_id ? 'combo' : 'product'),
+    product_id: detail.product_id || null,
+    variant_id: detail.variant_id || null,
+    combo_id: detail.combo_id || null,
+    sku: firstNonEmpty(detail.product_sku, detail.sku, displayFields.product_sku),
+    name: firstNonEmpty(displayFields.product_name, detail.product_name, detail.name, detail.combo_name, detail.sku, detail.product_sku, 'Sản phẩm'),
+    unit: firstNonEmpty(detail.unit, detail.product_unit, detail.unit_name),
+    quantity,
+    unit_price: unitPrice,
+    discount_percent: toMoney(detail.discount_percent),
+    discount_amount: discountAmount,
+    line_total: lineTotal,
+    note: firstNonEmpty(detail.note),
+  };
+}
+
+function findInvoiceForPrint(idOrCode) {
+  const raw = String(idOrCode || '').trim();
+  const numericId = Number(raw);
+  const lookup = normalizeLookupText(raw);
+  const codeLookup = normalizeInvoiceCodeLookup(raw);
+
+  return getAll('invoices').find(invoice => {
+    if (!invoice) return false;
+    if (Number.isFinite(numericId) && Number(invoice.id) === numericId) return true;
+    if (normalizeLookupText(invoice.invoice_code) === lookup) return true;
+    if (normalizeInvoiceCodeLookup(invoice.invoice_code) === codeLookup) return true;
+    if (invoice.client_order_id && normalizeLookupText(invoice.client_order_id) === lookup) return true;
+    return false;
+  }) || null;
+}
+
+function buildInvoicePrintPayload(idOrCode) {
+  const invoice = findInvoiceForPrint(idOrCode);
+  if (!invoice) return null;
+
+  const productsById = new Map(getAll('products').map(product => [Number(product.id), product]));
+  const details = getAll('invoice_details', detail => Number(detail.invoice_id) === Number(invoice.id))
+    .map((detail, index) => buildPrintItem(detail, index, productsById));
+  const customer = getOne('customers', c => Number(c.id) === Number(invoice.customer_id));
+  const user = getOne('users', u => Number(u.id) === Number(invoice.user_id));
+  const currentStore = getAll('store_info')[0] || {};
+  const storeSnapshot = parseObjectMaybe(invoice.store_info_snapshot);
+  const store = buildStorePrintInfo({ ...currentStore, ...storeSnapshot });
+  const customerInfo = buildCustomerPrintInfo(invoice, customer || {});
+  const subtotal = Number.isFinite(Number(invoice.subtotal))
+    ? toMoney(invoice.subtotal)
+    : details.reduce((sum, item) => sum + item.line_total, 0);
+  const totals = {
+    subtotal,
+    vat_percent: toMoney(invoice.vat_percent),
+    vat_amount: toMoney(invoice.vat_amount),
+    discount_percent: toMoney(invoice.discount_percent),
+    discount_amount: toMoney(invoice.discount_amount),
+    delivery_fee: toMoney(invoice.delivery_fee),
+    total: Number.isFinite(Number(invoice.total)) ? toMoney(invoice.total) : subtotal,
+    paid_amount: toMoney(invoice.paid_amount),
+    change_amount: toMoney(invoice.change_amount),
+    remaining_amount: toMoney(invoice.remaining_amount),
+  };
+  const payment = buildPaymentPrintInfo(invoice, store);
+
+  return {
+    invoice: {
+      id: invoice.id,
+      invoice_code: invoice.invoice_code,
+      client_order_id: invoice.client_order_id || '',
+      created_at: invoice.created_at || null,
+      updated_at: invoice.updated_at || null,
+      delivery_date: invoice.delivery_date || null,
+      status: invoice.status || 'pending',
+      payment_method: invoice.payment_method || 'cash',
+      note: invoice.note || '',
+      source: invoice.source || invoice.order_source || invoice.sync_source || '',
+    },
+    store,
+    customer: customerInfo,
+    items: details,
+    totals,
+    payment,
+    signatures: {
+      seller: {
+        label: 'Bên giao hàng',
+        name: firstNonEmpty(invoice.invoice_writer, user?.name),
+      },
+      buyer: {
+        label: 'Khách hàng / Người nhận',
+        name: firstNonEmpty(invoice.receiver_name, customerInfo.name),
+      },
+    },
+    metadata: {
+      invoice_id: invoice.id,
+      invoice_code: invoice.invoice_code,
+      client_order_id: invoice.client_order_id || '',
+      user_id: invoice.user_id || null,
+      user_name: user?.name || '',
+      account_id: invoice.account_id || null,
+      idempotency_key: invoice.idempotency_key || '',
+      payload_hash: invoice.payload_hash || '',
+      sync_status: invoice.sync_status || '',
+      synced_at: invoice.synced_at || null,
+      sync_device_id: invoice.sync_device_id || null,
+      store_info_snapshot: storeSnapshot,
+      printed_at: now(),
+    },
+  };
+}
+
 // ─────────────────────────────────────────────
 // GET /api/invoices/reports/customer-orders
 // Báo cáo read-only theo khách hàng và khoảng ngày local
@@ -263,17 +480,24 @@ router.get('/reports/customer-orders', (req, res) => {
 // ─────────────────────────────────────────────
 // GET /api/invoices
 // ─────────────────────────────────────────────
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { status, delivery, from, to } = req.query;
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 0, 0), 1000);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
     const includeMeta = String(req.query.meta || '').trim() === '1';
-    let rows = getAll('invoices').map(inv => ({
+    let rows = await Promise.resolve(getAll('invoices').map(inv => ({
       ...inv,
-      customer_name: getOne('customers', c => c.id === inv.customer_id)?.name || '',
-      user_name: getOne('users', u => u.id === inv.user_id)?.name || '',
-    }));
+      customer_name: getOne('customers', c => Number(c.id) === Number(inv.customer_id))?.name || '',
+      user_name: getOne('users', u => Number(u.id) === Number(inv.user_id))?.name || '',
+      total: Number(inv.total) || 0,
+      subtotal: Number(inv.subtotal) || 0,
+      paid_amount: Number(inv.paid_amount) || 0,
+      remaining_amount: Number(inv.remaining_amount) || 0,
+      status: inv.status || 'pending',
+      payment_method: inv.payment_method || 'cash',
+      source: inv.source || inv.order_source || 'web',
+    })));
     if (status) rows = rows.filter(r => r.status === status);
     if (delivery === 'pending') rows = rows.filter(r => !r.delivery_date);
     if (delivery === 'done') rows = rows.filter(r => !!r.delivery_date);
@@ -290,32 +514,32 @@ router.get('/', (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// GET /api/invoices/:id/print-data
-// Dữ liệu normalize cho mẫu in hóa đơn A5
+// GET /api/invoices/:idOrCode/print
+// Dữ liệu in hóa đơn A5 lấy từ DB hiện có, không dùng dữ liệu mẫu.
 // ─────────────────────────────────────────────
-router.get('/:id/print-data', (req, res) => {
+router.get('/:idOrCode/print', async (req, res) => {
   try {
-    const data = getInvoicePrintData(req.params.id);
-    res.json(data);
+    const payload = await Promise.resolve(buildInvoicePrintPayload(req.params.idOrCode));
+    if (!payload) return res.status(404).json({ ok: false, error: 'Không tìm thấy hóa đơn để in' });
+    res.json({ ok: true, ...payload });
   } catch (err) {
-    const status = err.status || 500;
-    res.status(status).json({ error: 'Lỗi khi lấy dữ liệu in hóa đơn: ' + err.message });
+    res.status(500).json({ ok: false, error: 'Lỗi khi lấy dữ liệu in hóa đơn: ' + err.message });
   }
 });
 
 // ─────────────────────────────────────────────
 // GET /api/invoices/:id
 // ─────────────────────────────────────────────
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const inv = getOne('invoices', i => i.id === +req.params.id);
+    const inv = await Promise.resolve(getOne('invoices', i => Number(i.id) === Number(req.params.id)));
     if (!inv) return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
-    const details = getAll('invoice_details', d => d.invoice_id === inv.id)
+    const details = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id))
       .map(detail => ({
         ...detail,
         ...resolveInvoiceDetailDisplayFields(detail, id => getOne('products', product => Number(product.id) === Number(id))),
       }));
-    const customer = getOne('customers', c => c.id === inv.customer_id);
+    const customer = getOne('customers', c => Number(c.id) === Number(inv.customer_id));
     res.json({ ...inv, customer_name: customer?.name || '', details });
   } catch (err) {
     res.status(500).json({ error: 'Lỗi: ' + err.message });
@@ -325,9 +549,9 @@ router.get('/:id', (req, res) => {
 // ─────────────────────────────────────────────
 // POST /api/invoices → Tạo đơn hàng mới
 // ─────────────────────────────────────────────
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const result = createInvoiceFromPayload(req.body, req, { orderSource: 'direct' });
+    const result = await Promise.resolve(createInvoiceFromPayload(req.body, req, { orderSource: 'direct' }));
 
     res.json({
       ok: true,
@@ -336,6 +560,7 @@ router.post('/', (req, res) => {
       client_order_id: result.client_order_id || '',
       idempotent: result.idempotent === true,
       existing: result.idempotent === true,
+      invoice: result.invoice || null,
     });
   } catch (err) {
     const status = err.status || 500;
@@ -346,10 +571,10 @@ router.post('/', (req, res) => {
 // ─────────────────────────────────────────────
 // PUT /api/invoices/:id → Sửa đơn hàng (admin)
 // ─────────────────────────────────────────────
-router.put('/:id', requireAdmin, (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
-    const result = withAtomicDbWrite(() => {
-      const inv = getOne('invoices', i => i.id === +req.params.id);
+    const result = await Promise.resolve(withAtomicDbWrite(() => {
+      const inv = getOne('invoices', i => Number(i.id) === Number(req.params.id));
       if (!inv) {
         const err = new Error('Không tìm thấy đơn hàng');
         err.status = 404;
@@ -366,7 +591,7 @@ router.put('/:id', requireAdmin, (req, res) => {
         customer_id, payment_method, note,
         subtotal, vat_percent, vat_amount,
         discount_amount, discount_percent,
-        total, delivery_date,
+        total, delivery_date, status,
         paid_amount, change_amount, remaining_amount, delivery_fee,
         invoice_writer, receiver_name,
         details,
@@ -390,12 +615,13 @@ router.put('/:id', requireAdmin, (req, res) => {
         ...(delivery_date !== undefined && { delivery_date: delivery_date || null }),
         ...(invoice_writer !== undefined && { invoice_writer }),
         ...(receiver_name !== undefined && { receiver_name }),
+        ...(status !== undefined && { status: status || 'pending' }),
         ...(req.body.created_at && { created_at: req.body.created_at }),
       }, { skipSave: true });
 
       if (details !== undefined) {
         const safeDetails = mergeDuplicateDetails(details);
-        const oldDetails = getAll('invoice_details', d => d.invoice_id === inv.id);
+        const oldDetails = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id));
         validateStockForInvoiceEditDetails(safeDetails, oldDetails);
         for (const d of oldDetails) {
           const stockProductId = getInvoiceDetailProductId(d);
@@ -412,10 +638,15 @@ router.put('/:id', requireAdmin, (req, res) => {
         }
       }
 
-      const updatedInvoice = getOne('invoices', i => i.id === inv.id);
+      const updatedInvoice = getOne('invoices', i => Number(i.id) === Number(inv.id));
+      const updatedDetails = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id))
+        .map(detail => ({
+          ...detail,
+          ...resolveInvoiceDetailDisplayFields(detail, id => getOne('products', product => Number(product.id) === Number(id))),
+        }));
       syncInvoiceAccounting(updatedInvoice, { skipSave: true, previousCreatedAt, timestamp: now() });
-      return { ok: true };
-    });
+      return { ok: true, invoice: updatedInvoice, details: updatedDetails };
+    }));
 
     res.json(result);
   } catch (err) {
@@ -427,10 +658,10 @@ router.put('/:id', requireAdmin, (req, res) => {
 // ─────────────────────────────────────────────
 // DELETE /api/invoices/:id → Hủy đơn hàng (admin)
 // ─────────────────────────────────────────────
-router.delete('/:id', requireAdmin, (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const result = withAtomicDbWrite(() => {
-      const inv = getOne('invoices', i => i.id === +req.params.id);
+    const result = await Promise.resolve(withAtomicDbWrite(() => {
+      const inv = getOne('invoices', i => Number(i.id) === Number(req.params.id));
       if (!inv) {
         const err = new Error('Không tìm thấy đơn hàng');
         err.status = 404;
@@ -438,7 +669,7 @@ router.delete('/:id', requireAdmin, (req, res) => {
       }
 
       const previousCreatedAt = inv.created_at;
-      const details = getAll('invoice_details', d => d.invoice_id === inv.id);
+      const details = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id));
       for (const d of details) {
         const stockProductId = getInvoiceDetailProductId(d);
         if (stockProductId) restoreInvoiceStock(stockProductId, +d.quantity || 0, { skipSave: true });
@@ -448,7 +679,7 @@ router.delete('/:id', requireAdmin, (req, res) => {
       }
 
       update('invoices', inv.id, { status: 'cancelled' }, { skipSave: true });
-      const cancelledInvoice = getOne('invoices', i => i.id === inv.id);
+      const cancelledInvoice = getOne('invoices', i => Number(i.id) === Number(inv.id));
       syncInvoiceAccounting(cancelledInvoice, {
         skipSave: true,
         previousCreatedAt,
@@ -456,8 +687,8 @@ router.delete('/:id', requireAdmin, (req, res) => {
         voidReason: 'invoice_cancelled',
       });
 
-      return { ok: true };
-    });
+      return { ok: true, invoice_id: inv.id, status: 'cancelled' };
+    }));
 
     res.json(result);
   } catch (err) {
@@ -469,10 +700,10 @@ router.delete('/:id', requireAdmin, (req, res) => {
 // ─────────────────────────────────────────────
 // PATCH /api/invoices/:id/confirm
 // ─────────────────────────────────────────────
-router.patch('/:id/confirm', requireAdmin, (req, res) => {
+router.patch('/:id/confirm', async (req, res) => {
   try {
-    const result = withAtomicDbWrite(() => {
-      const inv = getOne('invoices', i => i.id === +req.params.id);
+    const result = await Promise.resolve(withAtomicDbWrite(() => {
+      const inv = getOne('invoices', i => Number(i.id) === Number(req.params.id));
       if (!inv) {
         const err = new Error('Không tìm thấy đơn hàng');
         err.status = 404;
@@ -491,11 +722,11 @@ router.patch('/:id/confirm', requireAdmin, (req, res) => {
 
       const previousCreatedAt = inv.created_at;
       update('invoices', inv.id, { status: 'completed' }, { skipSave: true });
-      const completedInvoice = getOne('invoices', i => i.id === inv.id);
+      const completedInvoice = getOne('invoices', i => Number(i.id) === Number(inv.id));
       syncInvoiceAccounting(completedInvoice, { skipSave: true, previousCreatedAt, timestamp: now() });
 
-      return { ok: true, message: 'Đơn đã được xác nhận' };
-    });
+      return { ok: true, invoice_id: inv.id, status: 'completed', message: 'Đơn đã được xác nhận' };
+    }));
 
     res.json(result);
   } catch (err) {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Plus, X, Save, Package, Tag, FileText, LogOut, AlertCircle, CheckCircle, Building, Trash2, CreditCard, RotateCcw } from 'lucide-react';
-import ProductLabelPrintModal from '../components/ProductLabelPrintModal';
 import { SYNC_UPDATED_EVENT, apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
 import { buildCategoriesById, categoryFields, getProductDisplayName, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
@@ -680,7 +679,6 @@ const Nhaphang = ({ store }) => {
   const [orderHistory, setOrderHistory] = useState([]);
   const [selectedHistoryIds, setSelectedHistoryIds] = useState([]);
   const [showAllSuppliers, setShowAllSuppliers] = useState(false); // Thêm state để hiển thị full khi focus
-  const [labelPrintModal, setLabelPrintModal] = useState({ open: false, items: [], sourceCode: '' });
   const searchInputRef = useRef(null);
   const productSearchContainerRef = useRef(null);
   const searchResultsRef = useRef(null);
@@ -1382,21 +1380,6 @@ const Nhaphang = ({ store }) => {
     })),
   });
 
-  const buildImportLabelItems = (sourceProducts = []) => sourceProducts.map(p => ({
-    id: p.variant_id || p.product_id || p.id || p.maSP,
-    product_id: p.product_id || p.id || null,
-    variant_id: p.variant_id || null,
-    name: p.tenSP || p.product_name || p.name || '',
-    sku: p.maSP || p.sku || '',
-    retail_price: p.retail_price || p.giaBan || p.price || 0,
-    quantity: p.soLuongNhap || p.quantity || p.soLuong || 1,
-    unit: p.donVi || p.unit || 'cái',
-  })).filter(item => item.name || item.sku);
-
-  const closeLabelPrintModal = () => {
-    setLabelPrintModal({ open: false, items: [], sourceCode: '' });
-  };
-
   const buildLocalOrderData = (status, importCode, result = {}) => ({
     id: result.import_id || currentOrder?.id || Date.now(),
     maDonHang: result.import_code || importCode,
@@ -1449,7 +1432,6 @@ const Nhaphang = ({ store }) => {
 
     const isEditing = Boolean(isEditingOrder && editingImportKey);
     const nextImportCode = isEditing ? currentOrder.maDonHang : generateOrderNumber();
-    const submittedProductsSnapshot = products.map(product => ({ ...product }));
     const confirmMessage = isEditing
       ? `Cập nhật phiếu nhập ${nextImportCode}? Hệ thống sẽ sửa đúng phiếu hiện tại, không tạo phiếu/mã mới.`
       : status === 'received'
@@ -1477,12 +1459,6 @@ const Nhaphang = ({ store }) => {
       setCurrentOrder(savedOrder);
       setIsEditingOrder(true);
       setPaymentStatus(savedOrder.payment_status || 'unpaid');
-      if (status === 'received' || savedOrder.trangThai === 'da_nhap' || result.stock_applied === true || result.stock_delta?.length > 0 || result.stock_mode) {
-        const labelItems = buildImportLabelItems(submittedProductsSnapshot);
-        if (labelItems.length > 0) {
-          setLabelPrintModal({ open: true, items: labelItems, sourceCode: savedOrder.maDonHang });
-        }
-      }
       setTimeout(() => {
         if (status === 'received' || result.stock_delta?.length > 0 || result.stock_mode) {
           window.dispatchEvent(new Event('kha-order-created'));
@@ -2711,19 +2687,6 @@ const Nhaphang = ({ store }) => {
         )}
       </div>
 
-      <ProductLabelPrintModal
-        open={labelPrintModal.open}
-        items={labelPrintModal.items}
-        store={store}
-        title="In tem sản phẩm"
-        onClose={closeLabelPrintModal}
-        onSkip={() => {
-          setSuccess(labelPrintModal.sourceCode ? `Phiếu ${labelPrintModal.sourceCode} đã lưu; đã bỏ qua in tem sản phẩm.` : 'Đã bỏ qua in tem sản phẩm.');
-        }}
-        onPrinted={(rendered) => {
-          setSuccess(labelPrintModal.sourceCode ? `Phiếu ${labelPrintModal.sourceCode} đã lưu; đã mở hộp thoại in ${rendered.labelCount} tem sản phẩm.` : `Đã mở hộp thoại in ${rendered.labelCount} tem sản phẩm.`);
-        }}
-      />
     </div>
   );
 };

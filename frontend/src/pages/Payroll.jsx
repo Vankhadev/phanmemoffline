@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiJson, apiJsonChecked } from '../utils/apiClient';
 import { Calculator, Edit2, Filter, Loader, Plus, RefreshCcw, Search, Trash2, Wallet, X } from 'lucide-react';
-
-const API = resolveApiUrl('');
 
 const currentDate = new Date();
 const currentMonth = currentDate.getMonth() + 1;
@@ -34,32 +32,40 @@ function toNumber(value) {
 
 function calculatePreview(source) {
   const salaryMonth = toNumber(source.daily_wage) * toNumber(source.working_days);
-  const totalIncome = salaryMonth
+  const totalBonus = toNumber(source.overtime_amount)
     + toNumber(source.extra_bonus)
-    + toNumber(source.overtime_amount);
+    + toNumber(source.holiday_bonus)
+    + toNumber(source.tet_bonus);
+  const totalIncome = salaryMonth + totalBonus;
   const netSalary = totalIncome - toNumber(source.advance_amount);
 
-  return { salaryMonth, totalIncome, netSalary };
+  return { salaryMonth, totalBonus, totalIncome, netSalary };
 }
 
 function formatVND(value) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 
-async function parseJsonResponse(response, fallbackMessage) {
-  const contentType = response.headers.get('content-type') || '';
-  const text = await response.text();
+function isBlank(value) {
+  return String(value ?? '').trim() === '';
+}
 
-  if (!contentType.toLowerCase().includes('application/json')) {
-    const preview = text.trim().slice(0, 120).replace(/\s+/g, ' ');
-    throw new Error(`${fallbackMessage}. Máy chủ không trả JSON từ ${response.url}. Kiểm tra API /api/payrolls đã được mount/proxy đúng. Nội dung nhận được: ${preview || 'trống'}`);
-  }
+function isValidNumberInput(value) {
+  if (isBlank(value)) return true;
+  return Number.isFinite(Number(value));
+}
 
-  try {
-    return text ? JSON.parse(text) : null;
-  } catch (err) {
-    throw new Error(`${fallbackMessage}. JSON trả về không hợp lệ: ${err.message}`);
-  }
+function buildPayrollRecord(payload, id) {
+  const preview = calculatePreview(payload);
+  return {
+    ...payload,
+    id,
+    salary_month: preview.salaryMonth,
+    total_bonus: preview.totalBonus,
+    total_income: preview.totalIncome,
+    net_salary: preview.netSalary,
+    active: 1,
+  };
 }
 
 function normalizePayrollForForm(payroll) {
@@ -87,6 +93,7 @@ export default function Payroll() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [toast, setToast] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -106,7 +113,7 @@ export default function Payroll() {
     acc.total_extra_bonus += toNumber(row.extra_bonus);
     acc.total_holiday_bonus += toNumber(row.holiday_bonus);
     acc.total_tet_bonus += toNumber(row.tet_bonus);
-    acc.total_bonus += toNumber(row.overtime_amount) + toNumber(row.extra_bonus);
+    acc.total_bonus += toNumber(row.overtime_amount) + toNumber(row.extra_bonus) + toNumber(row.holiday_bonus) + toNumber(row.tet_bonus);
     acc.total_income += toNumber(row.total_income);
     acc.total_net_salary += toNumber(row.net_salary);
     return acc;
@@ -129,31 +136,51 @@ export default function Payroll() {
     fetchPayrolls();
   }, []);
 
+  const showToast = useCallback((type, message) => {
+    setToast({ type, message, id: Date.now() });
+    if (type === 'success') {
+      setNotice(message);
+      setError('');
+    }
+    if (type === 'error') {
+      setError(message);
+      setNotice('');
+    }
+  }, []);
+
   useEffect(() => {
     if (!notice) return undefined;
     const timer = window.setTimeout(() => setNotice(''), 2500);
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  const buildQuery = () => {
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 2800);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const buildQuery = (sourceFilters = filters) => {
     const params = new URLSearchParams();
-    if (filters.search.trim()) params.append('search', filters.search.trim());
-    if (filters.month) params.append('month', filters.month);
-    if (filters.year) params.append('year', filters.year);
+    if (sourceFilters.search.trim()) params.append('search', sourceFilters.search.trim());
+    if (sourceFilters.month) params.append('month', sourceFilters.month);
+    if (sourceFilters.year) params.append('year', sourceFilters.year);
     return params.toString();
   };
 
-  const fetchPayrolls = async () => {
+  const sortPayrollRows = (rows = []) => rows.slice().sort((a, b) => Number(b.year) - Number(a.year) || Number(b.month) - Number(a.month) || String(a.employee_name || '').localeCompare(String(b.employee_name || ''), 'vi'));
+
+  const fetchPayrolls = async (sourceFilters = filters) => {
     setLoading(true);
     setError('');
     try {
-      const query = buildQuery();
+      const query = buildQuery(sourceFilters);
       const [listData, summaryData] = await Promise.all([
-        apiJson(`${API}/payrolls${query ? `?${query}` : ''}`, {}, 'Không tải được danh sách bảng lương'),
-        apiJson(`${API}/payrolls/summary${query ? `?${query}` : ''}`, {}, 'Không tải được tổng hợp bảng lương'),
+        apiJson(`/payrolls${query ? `?${query}` : ''}`, {}, 'Không tải được danh sách bảng lương'),
+        apiJson(`/payrolls/summary${query ? `?${query}` : ''}`, {}, 'Không tải được tổng hợp bảng lương'),
       ]);
 
-      setPayrolls(Array.isArray(listData) ? listData : []);
+      setPayrolls(Array.isArray(listData) ? sortPayrollRows(listData) : []);
       setSummary(summaryData || null);
     } catch (err) {
       setPayrolls([]);
@@ -188,9 +215,27 @@ export default function Payroll() {
     if (!Number.isInteger(month) || month < 1 || month > 12) return 'Tháng lương phải từ 1 đến 12';
     const year = Number.parseInt(form.year, 10);
     if (!Number.isInteger(year) || year < 1900 || year > 3000) return 'Năm lương không hợp lệ';
+
+    const labels = {
+      daily_wage: 'Lương/ngày',
+      working_days: 'Số ngày đi làm',
+      leave_days: 'Số ngày nghỉ',
+      advance_amount: 'Tiền ứng trước',
+      overtime_amount: 'Tiền tăng ca',
+      extra_bonus: 'Tiền thưởng thêm',
+      holiday_bonus: 'Thưởng lễ',
+      tet_bonus: 'Thưởng Tết',
+    };
+
+    if (isBlank(form.daily_wage)) return 'Vui lòng nhập lương/ngày';
+    if (isBlank(form.working_days)) return 'Vui lòng nhập số ngày đi làm';
+    if (!isValidNumberInput(form.daily_wage)) return 'Lương/ngày phải là số hợp lệ';
+    if (!isValidNumberInput(form.working_days)) return 'Số ngày đi làm phải là số hợp lệ';
+
     for (const field of numberFields) {
+      if (!isValidNumberInput(form[field])) return `${labels[field] || field} phải là số hợp lệ`;
       const value = toNumber(form[field]);
-      if (value < 0) return 'Số tiền và số ngày không được âm';
+      if (value < 0) return `${labels[field] || field} không được âm`;
     }
     return '';
   };
@@ -223,17 +268,33 @@ export default function Payroll() {
     setError('');
     try {
       const method = editing ? 'PUT' : 'POST';
-      const url = editing ? `${API}/payrolls/${editing.id}` : `${API}/payrolls`;
-      await apiJsonChecked(url, {
+      const url = editing ? `/payrolls/${editing.id}` : '/payrolls';
+      const payload = buildPayload();
+      const data = await apiJsonChecked(url, {
         method,
-        body: buildPayload(),
+        body: payload,
       }, 'Không lưu được bảng lương');
+      const savedPayroll = data?.payroll || data?.record || buildPayrollRecord(payload, data?.id || editing?.id);
 
+      const nextFilters = {
+        search: '',
+        month: savedPayroll.month || payload.month || currentMonth,
+        year: savedPayroll.year || payload.year || currentYear,
+      };
+      setFilters(nextFilters);
+      setPayrolls(prev => {
+        const withoutOld = prev.filter(row => Number(row.id) !== Number(savedPayroll.id));
+        const mergedRows = editing ? [...withoutOld, savedPayroll] : [savedPayroll, ...withoutOld];
+        return sortPayrollRows(mergedRows.filter(row => Number(row.month) === Number(nextFilters.month) && Number(row.year) === Number(nextFilters.year)));
+      });
+      setSummary(null);
       setShowForm(false);
-      setNotice(editing ? 'Đã cập nhật bảng lương thành công' : 'Đã thêm bảng lương thành công');
-      await fetchPayrolls();
+      setEditing(null);
+      setForm({ ...emptyForm, month: nextFilters.month, year: nextFilters.year });
+      showToast('success', editing ? 'Đã cập nhật bảng lương thành công' : 'Đã thêm bảng lương thành công');
+      fetchPayrolls(nextFilters).catch(() => {});
     } catch (err) {
-      setError(err.message || 'Lỗi kết nối khi lưu bảng lương');
+      showToast('error', err.message || 'Lỗi server khi lưu bảng lương');
     } finally {
       setSaving(false);
     }
@@ -243,12 +304,14 @@ export default function Payroll() {
     if (!confirm(`Xóa bảng lương của ${payroll.employee_name}?`)) return;
     setError('');
     try {
-      await apiJsonChecked(`${API}/payrolls/${payroll.id}`, { method: 'DELETE' }, 'Không xóa được bảng lương');
+      await apiJsonChecked(`/payrolls/${payroll.id}`, { method: 'DELETE' }, 'Không xóa được bảng lương');
 
-      setNotice('Đã xóa bảng lương thành công');
-      await fetchPayrolls();
+      setPayrolls(prev => prev.filter(row => Number(row.id) !== Number(payroll.id)));
+      setSummary(null);
+      showToast('success', 'Đã xóa bảng lương thành công');
+      fetchPayrolls().catch(() => {});
     } catch (err) {
-      setError(err.message || 'Lỗi kết nối khi xóa bảng lương');
+      showToast('error', err.message || 'Lỗi server khi xóa bảng lương');
     }
   };
 
@@ -260,10 +323,10 @@ export default function Payroll() {
     try {
       const query = new URLSearchParams({ month: String(defaultFilters.month), year: String(defaultFilters.year) }).toString();
       const [listData, summaryData] = await Promise.all([
-        apiJson(`${API}/payrolls?${query}`, {}, 'Không tải được danh sách bảng lương'),
-        apiJson(`${API}/payrolls/summary?${query}`, {}, 'Không tải được tổng hợp bảng lương'),
+        apiJson(`/payrolls?${query}`, {}, 'Không tải được danh sách bảng lương'),
+        apiJson(`/payrolls/summary?${query}`, {}, 'Không tải được tổng hợp bảng lương'),
       ]);
-      setPayrolls(Array.isArray(listData) ? listData : []);
+      setPayrolls(Array.isArray(listData) ? sortPayrollRows(listData) : []);
       setSummary(summaryData || null);
     } catch (err) {
       setPayrolls([]);
@@ -290,7 +353,7 @@ export default function Payroll() {
   );
 
   return (
-    <div>
+    <div className="min-w-0">
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Wallet className="text-blue-600" size={24} /> Bảng lương nhân viên
@@ -364,10 +427,28 @@ export default function Payroll() {
         </div>
       </div>
 
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm min-w-[1650px]">
+      <div className="system-table-scroll card p-0">
+        <table className="system-table payroll-table text-sm">
+          <colgroup>
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '8%' }} />
+          </colgroup>
           <thead>
-            <tr className="bg-gray-100 text-gray-600">
+            <tr>
               <th className="p-2 text-left">Kỳ lương</th>
               <th className="p-2 text-left">Tên nhân viên</th>
               <th className="p-2 text-left">Số điện thoại</th>
@@ -392,7 +473,7 @@ export default function Payroll() {
             ) : payrolls.length === 0 ? (
               <tr><td colSpan={16} className="text-center text-gray-400 py-10">Chưa có bảng lương phù hợp</td></tr>
             ) : payrolls.map(row => (
-              <tr key={row.id} className="border-b hover:bg-gray-50">
+              <tr key={`${row.id}-${row.month}-${row.year}`} className="border-b hover:bg-gray-50">
                 <td className="p-2 font-medium">{String(row.month).padStart(2, '0')}/{row.year}</td>
                 <td className="p-2 font-semibold text-gray-800">{row.employee_name}</td>
                 <td className="p-2 text-gray-600">{row.employee_phone || '—'}</td>
@@ -408,13 +489,15 @@ export default function Payroll() {
                 <td className="p-2 text-right font-semibold text-purple-600">{formatVND(row.total_income)}</td>
                 <td className="p-2 text-right font-bold text-emerald-600">{formatVND(row.net_salary)}</td>
                 <td className="p-2 text-gray-500 max-w-[220px] truncate" title={row.note || ''}>{row.note || '—'}</td>
-                <td className="p-2 text-center whitespace-nowrap">
-                  <button onClick={() => openEdit(row)} className="text-blue-600 hover:text-blue-800 text-xs mr-3 inline-flex items-center gap-1">
-                    <Edit2 size={12} /> Sửa
-                  </button>
-                  <button onClick={() => handleDelete(row)} className="text-red-500 hover:text-red-700 text-xs inline-flex items-center gap-1">
-                    <Trash2 size={12} /> Xóa
-                  </button>
+                <td className="p-2 text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <button onClick={() => openEdit(row)} className="order-table-action-btn border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">
+                      <Edit2 size={12} /> Sửa
+                    </button>
+                    <button onClick={() => handleDelete(row)} className="order-table-action-btn border border-red-200 bg-red-50 text-red-600 hover:bg-red-100">
+                      <Trash2 size={12} /> Xóa
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -490,7 +573,7 @@ export default function Payroll() {
               </div>
 
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                Thưởng lễ và Thưởng Tết được lưu/hiển thị riêng để theo dõi, không cộng vào Tổng thu nhập. Nếu cần tính vào lương, nhập chung vào Tiền thưởng thêm.
+                Tổng thu nhập được tính từ lương tháng, tăng ca, thưởng thêm, thưởng lễ và thưởng Tết; thực nhận trừ tiền ứng trước.
               </div>
 
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
@@ -506,7 +589,7 @@ export default function Payroll() {
                   <div className="bg-white rounded-lg p-3 border">
                     <div className="text-xs text-gray-500">Tổng thu nhập</div>
                     <div className="text-lg font-bold text-purple-600">{formatVND(preview.totalIncome)}</div>
-                    <div className="text-xs text-gray-400">Lương tháng + thưởng thêm + tăng ca</div>
+                    <div className="text-xs text-gray-400">Lương tháng + tăng ca + các khoản thưởng</div>
                   </div>
                   <div className="bg-white rounded-lg p-3 border">
                     <div className="text-xs text-gray-500">Lương thực nhận</div>
@@ -523,6 +606,14 @@ export default function Payroll() {
                 <button type="button" onClick={() => setShowForm(false)} className="btn-danger flex-1">Hủy</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="toast-stack">
+          <div className={`toast-card ${toast.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+            {toast.type === 'success' ? '✅' : '⚠️'} {toast.message}
           </div>
         </div>
       )}

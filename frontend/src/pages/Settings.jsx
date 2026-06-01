@@ -24,11 +24,6 @@ const INITIAL_STORE_FORM = Object.freeze({
   bank_account: '',
   bank_name: '',
   address: '',
-  invoice_width: '80',
-  invoice_logo: '',
-  invoice_note: '',
-  invoice_slogan: '',
-  invoice_vietqr_logo: '',
 });
 
 const INITIAL_EMP_FORM = Object.freeze({
@@ -215,11 +210,6 @@ function normalizeStorePayload(payload = {}) {
     bank_account: String(payload?.bank_account || ''),
     bank_name: String(payload?.bank_name || ''),
     address: String(payload?.address || ''),
-    invoice_width: String(payload?.invoice_width || '80'),
-    invoice_logo: String(payload?.invoice_logo || ''),
-    invoice_note: String(payload?.invoice_note || ''),
-    invoice_slogan: String(payload?.invoice_slogan || ''),
-    invoice_vietqr_logo: String(payload?.invoice_vietqr_logo || ''),
   };
 }
 
@@ -252,11 +242,6 @@ function sanitizeStorePayload(form = {}) {
     bank_account: normalized.bank_account.trim(),
     bank_name: normalized.bank_name.trim(),
     address: normalized.address.trim(),
-    invoice_width: String(normalized.invoice_width || '80').trim() || '80',
-    invoice_logo: normalized.invoice_logo.trim(),
-    invoice_note: normalized.invoice_note.trim(),
-    invoice_slogan: normalized.invoice_slogan.trim(),
-    invoice_vietqr_logo: normalized.invoice_vietqr_logo.trim(),
   };
 }
 
@@ -1631,7 +1616,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
               <h3 className="mb-2 font-bold text-gray-800">Tab Cửa hàng</h3>
               <ul className="list-disc space-y-1 pl-5">
                 <li>Cập nhật tên cửa hàng, địa chỉ, số điện thoại, email, mã số thuế và thông tin ngân hàng.</li>
-                <li>Phần logo, ghi chú và slogan ảnh hưởng trực tiếp tới nội dung in hóa đơn.</li>
+                <li>Phần logo, ghi chú và slogan dùng cho nhận diện cửa hàng trong hệ thống.</li>
                 <li>Sau khi chỉnh sửa, nhấn <strong>Lưu thay đổi</strong> để ghi xuống backend.</li>
               </ul>
             </div>

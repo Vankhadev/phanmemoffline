@@ -3,13 +3,11 @@ export const AUTH_USER_KEY = 'kha_user';
 export const AUTH_SNAPSHOT_KEY = 'kha_auth_snapshot';
 export const PENDING_ORDERS_KEY = 'kha_pending_orders';
 export const OFFLINE_CUSTOMERS_KEY = 'kha_offline_customers';
-export const PRINT_TEMPLATE_SELECTION_KEY = 'kha_print_template';
 export const COMBOS_UPDATED_AT_KEY = 'kha_combos_updated_at';
-export const PRINT_TEMPLATE_CACHE_PREFIX = 'kha_print_template_default';
 
 const AUTH_KEYS = [AUTH_TOKEN_KEY, AUTH_USER_KEY, AUTH_SNAPSHOT_KEY];
 const PENDING_KEYS = [PENDING_ORDERS_KEY, OFFLINE_CUSTOMERS_KEY];
-const TEMP_CACHE_KEYS = [PRINT_TEMPLATE_SELECTION_KEY, COMBOS_UPDATED_AT_KEY];
+const TEMP_CACHE_KEYS = [COMBOS_UPDATED_AT_KEY];
 
 function getBrowserStorage(type = 'localStorage') {
   try {
@@ -235,7 +233,6 @@ export function clearVolatileCache({ includePending = true } = {}) {
     removed.push(key);
   }
 
-  removed.push(...clearStorageKeysByPrefix(PRINT_TEMPLATE_CACHE_PREFIX));
   return Array.from(new Set(removed));
 }
 

@@ -1,9 +1,9 @@
 {
-  "version": "1.3.9",
-  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.9/banhangoffline-setup-v1.3.9-x64.exe",
+  "version": "1.4.0",
+  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.4.0/banhangoffline-setup-v1.4.0-x64.exe",
   "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "releaseNotes": "Tổng quan:\n- Bản 1.3.9 là bản phát hành bảo trì, tập trung đồng bộ version, lockfile, metadata auto-update Windows và tài liệu release.\n\nPhát hành:\n- Đồng bộ version 1.3.9 cho ứng dụng desktop, frontend, backend và lockfile tương ứng.\n- Cập nhật metadata/hướng dẫn release theo tag v1.3.9 và bộ cài riêng cho Windows x64/ia32.\n- Không đưa các thay đổi chưa commit ngoài phạm vi release vào commit phát hành.\n\nLưu ý quan trọng:\n- Windows 10/11 64-bit dùng banhangoffline-setup-v1.3.9-x64.exe; Windows 32-bit dùng banhangoffline-setup-v1.3.9-ia32.exe.\n- Chỉ tải từ GitHub Release chính thức và kiểm tra SHA256/size trong manifest production khớp installer đã upload.",
-  "releaseDate": "2026-05-30T00:00:00.000+07:00",
+  "releaseNotes": "Tổng quan:\n- Bản 1.4.0 hoàn thiện luồng in hóa đơn theo trang in riêng, cải thiện danh sách đơn hàng/offline và bổ sung nghiệp vụ bảng lương nhân viên.\n\nPhát hành:\n- Đồng bộ version 1.4.0 cho ứng dụng desktop, frontend, backend và lockfile tương ứng.\n- Cập nhật tài liệu release, manifest ví dụ và quy ước asset theo tag v1.4.0.\n- GitHub Actions build/publish installer Windows x64/ia32 kèm latest.yml và update-manifest.json từ artifact thực tế.\n\nLưu ý quan trọng:\n- Windows 10/11 64-bit dùng banhangoffline-setup-v1.4.0-x64.exe; Windows 32-bit dùng banhangoffline-setup-v1.4.0-ia32.exe.\n- Chỉ tải từ GitHub Release chính thức và kiểm tra SHA256/size trong manifest production khớp installer đã upload.",
+  "releaseDate": "2026-06-01T00:00:00.000+07:00",
   "platform": "win32",
   "arch": "x64",
   "size": 0,
@@ -17,8 +17,8 @@
     "x64": {
       "platform": "win32",
       "arch": "x64",
-      "fileName": "banhangoffline-setup-v1.3.9-x64.exe",
-      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.9/banhangoffline-setup-v1.3.9-x64.exe",
+      "fileName": "banhangoffline-setup-v1.4.0-x64.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.4.0/banhangoffline-setup-v1.4.0-x64.exe",
       "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "size": 0,
       "installerType": "nsis"
@@ -26,8 +26,8 @@
     "ia32": {
       "platform": "win32",
       "arch": "ia32",
-      "fileName": "banhangoffline-setup-v1.3.9-ia32.exe",
-      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.3.9/banhangoffline-setup-v1.3.9-ia32.exe",
+      "fileName": "banhangoffline-setup-v1.4.0-ia32.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.4.0/banhangoffline-setup-v1.4.0-ia32.exe",
       "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
       "size": 0,
       "installerType": "nsis"

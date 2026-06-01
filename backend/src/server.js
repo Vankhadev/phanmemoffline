@@ -29,7 +29,6 @@ const cashBookRoutes = require('./routes/cashbook');
 const payrollsRoutes = require('./routes/payrolls');
 const customerTypesRoutes = require('./routes/customerTypes');
 const productCategoriesRoutes = require('./routes/productCategories');
-const printTemplatesRoutes = require('./routes/printTemplates');
 const featuresRoutes = require('./routes/features');
 const updatesRoutes = require('./routes/updates');
 const excelImportsRoutes = require('./routes/excelImports');
@@ -201,7 +200,6 @@ app.use('/api/cash-book',      requireAuth, requireAnyPermission(['cashbook.read
 app.use('/api/payrolls',       requireAuth, requireAnyPermission(['payrolls.read', 'payrolls.manage']), payrollsRoutes);
 app.use('/api/customer-types', requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customerTypesRoutes);
 app.use('/api/product-categories', requireAuth, requireAnyPermission(['products.read', 'products.manage']), productCategoriesRoutes);
-app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
 app.use('/api/features', featuresRoutes);
 app.use('/api/updates', updatesRoutes);
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);

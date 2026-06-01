@@ -17,7 +17,6 @@ const PULL_TABLES = [
   'invoice_details',
   'combos',
   'combo_items',
-  'print_templates',
   'cash_book',
   'return_logs',
   'return_details',

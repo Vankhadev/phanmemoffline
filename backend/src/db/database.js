@@ -45,7 +45,6 @@ const SCHEMA = {
   counters: [],
   cash_book: [],
   payrolls: [],
-  print_templates: [],
   excel_import_runs: [],
   excel_import_details: [],
   update_releases: [],
@@ -59,7 +58,7 @@ const INITIAL_NEXT_ID = Object.keys(SCHEMA).reduce((acc, table) => {
 const ACCOUNT_SCOPED_TABLES = new Set([
   'store_info', 'users', 'customers', 'products', 'product_categories', 'partners',
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
-  'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book', 'payrolls', 'print_templates',
+  'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book', 'payrolls',
   'excel_import_runs', 'excel_import_details',
   'sync_metadata', 'audit_logs',
 ]);
@@ -94,8 +93,6 @@ const DEFAULT_PERMISSIONS = [
   ['cashbook.manage', 'Quản lý sổ quỹ', 'Tạo, sửa chứng từ sổ quỹ'],
   ['payrolls.read', 'Xem lương', 'Xem bảng lương'],
   ['payrolls.manage', 'Quản lý lương', 'Tạo, sửa bảng lương'],
-  ['print_templates.read', 'Xem mẫu in', 'Xem mẫu in'],
-  ['print_templates.manage', 'Quản lý mẫu in', 'Tạo, sửa mẫu in'],
   ['sync.read', 'Xem đồng bộ', 'Xem trạng thái đồng bộ'],
   ['sync.manage', 'Quản lý đồng bộ', 'Đẩy/kéo dữ liệu đồng bộ'],
   ['settings.read', 'Xem thiết lập', 'Xem thiết lập hệ thống'],
@@ -105,14 +102,14 @@ const DEFAULT_PERMISSIONS = [
 const DEFAULT_USER_PERMISSION_KEYS = [
   'admin_panel.read', 'features.read', 'updates.read', 'users.read', 'store.read', 'products.read',
   'customers.read', 'partners.read', 'invoices.read', 'imports.read', 'combos.read', 'returns.read',
-  'stats.read', 'cashbook.read', 'payrolls.read', 'print_templates.read', 'sync.read', 'sync.manage',
+  'stats.read', 'cashbook.read', 'payrolls.read', 'sync.read', 'sync.manage',
   'settings.read',
 ];
 
 const SYNC_TRACKED_TABLES = [
   'store_info', 'users', 'customers', 'products', 'product_categories', 'partners',
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
-  'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book', 'payrolls', 'print_templates',
+  'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book', 'payrolls',
   'excel_import_runs', 'excel_import_details',
   'feature_catalog', 'update_releases',
 ];
@@ -392,32 +389,6 @@ function parseList(value) {
 
 const DEFAULT_PRODUCT_CATEGORIES = [];
 
-function inferPrintWidthMm(_paperSize, fallback = 80) {
-  return fallback;
-}
-
-function clonePrintTemplateConfig(config) {
-  return JSON.parse(JSON.stringify(config || {}));
-}
-
-function createDefaultSaleInvoiceVisualConfig(paperSize = '80mm', widthMm = 80) {
-  return {
-    layout: { paperSize, widthMm },
-    header: { fields: [] },
-    invoiceInfo: { fields: [] },
-    customerInfo: { fields: [] },
-    table: { columns: [] },
-    totals: { fields: [] },
-    payment: {},
-    footer: { lines: [] },
-  };
-}
-
-function normalizePrintTemplateConfig(config, paperSize = '80mm', widthMm = 80) {
-  return { ...createDefaultSaleInvoiceVisualConfig(paperSize, widthMm), ...(config || {}) };
-}
-
-const DEFAULT_PRINT_TEMPLATES = [];
 const DEFAULT_FEATURE_CATALOG = [
   {
     feature_key: 'negative_stock_exports',
@@ -631,8 +602,6 @@ function seedDefaultAdmin(_defaultAccountId) {
   // Intentionally disabled: first-user/bootstrap admin flow must remain intact.
 }
 
-function seedDefaultPrintTemplates() {}
-
 function seedDefaultFeatureCatalog() {
   const current = getDb();
   const defaultAccount = ensureDefaultAccount();
@@ -755,7 +724,6 @@ function migrateDB() {
   normalizeDBData();
   cleanupRemovedLegacyArtifacts();
   seedDefaultProductCategories();
-  seedDefaultPrintTemplates();
   seedDefaultFeatureCatalog();
   ensureAuthAndSyncSchema();
   rebuildAllDailyStatsFromInvoices();
@@ -1128,7 +1096,6 @@ module.exports = {
   DEFAULT_USER_PERMISSION_KEYS,
   SYNC_TRACKED_TABLES,
   DEFAULT_PRODUCT_CATEGORIES,
-  DEFAULT_PRINT_TEMPLATES,
   loadDB,
   saveDB,
   getDb,
@@ -1155,10 +1122,6 @@ module.exports = {
   touchSyncMetadata,
   normalizeNumber,
   parseList,
-  inferPrintWidthMm,
-  clonePrintTemplateConfig,
-  createDefaultSaleInvoiceVisualConfig,
-  normalizePrintTemplateConfig,
   findCategoryByText,
   ensureField,
   normalizePermissionKey,

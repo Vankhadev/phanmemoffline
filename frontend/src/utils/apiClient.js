@@ -230,7 +230,7 @@ function logResolvedApiBase(details) {
 function shouldUseDevApiProxyPath(pathname) {
   if (!pathname || !pathname.startsWith('/')) return false;
   if (pathname === '/api' || pathname.startsWith('/api/')) return false;
-  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|excel-imports|store|stats|cash-book|cashbook|payrolls|partners|combos|print-templates|sync|features|updates|dashboard)(\/|\?|$)/i.test(pathname);
+  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|excel-imports|store|stats|cash-book|cashbook|payrolls|partners|combos|sync|features|updates|dashboard)(\/|\?|$)/i.test(pathname);
 }
 
 function normalizeDevApiProxyPath(input) {
@@ -623,6 +623,20 @@ export const customerTypesApi = {
   create(payload = {}) { return apiJson('/customer-types', { method: 'POST', body: payload }, 'Không thể tạo loại khách hàng.'); },
   update(id, payload = {}) { return apiJson(`/customer-types/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật loại khách hàng.'); },
   remove(id) { return apiJson(`/customer-types/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể xóa loại khách hàng.'); },
+};
+
+export const invoicesApi = {
+  list(params = {}) {
+    const query = new URLSearchParams(params);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiJson(`/invoices${suffix}`, {}, 'Không thể tải danh sách đơn hàng.');
+  },
+  detail(id) { return apiJson(`/invoices/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết đơn hàng.'); },
+  printData(idOrCode) { return apiJsonChecked(`/invoices/${encodeURIComponent(idOrCode)}/print`, {}, 'Không thể tải dữ liệu in hóa đơn.'); },
+  create(payload = {}) { return apiJsonChecked('/invoices', { method: 'POST', body: payload }, 'Không thể tạo đơn hàng.'); },
+  update(id, payload = {}) { return apiJsonChecked(`/invoices/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật đơn hàng.'); },
+  remove(id) { return apiJsonChecked(`/invoices/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể hủy đơn hàng.'); },
+  confirm(id) { return apiJsonChecked(`/invoices/${encodeURIComponent(id)}/confirm`, { method: 'PATCH' }, 'Không thể xác nhận thanh toán.'); },
 };
 
 export const authApi = {

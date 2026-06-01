@@ -334,7 +334,7 @@ export default function Home({ user, store = {} }) {
                 <p>7 nút truy cập nhanh đến các chức năng chính:</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
                   <li><strong>Quản lý sản phẩm:</strong> Thêm, sửa, xóa sản phẩm và biến thể</li>
-                  <li><strong>Đơn hàng:</strong> Xem danh sách đơn hàng, lọc, in hóa đơn</li>
+                  <li><strong>Đơn hàng:</strong> Xem danh sách đơn hàng, lọc và xử lý trạng thái</li>
                   <li><strong>Thống kê:</strong> Xem biểu đồ doanh thu theo ngày/tuần/tháng</li>
                   <li><strong>Báo cáo đơn hàng:</strong> Xem báo cáo theo đơn hàng</li>
                   <li><strong>Kho hàng:</strong> Theo dõi tồn kho và cảnh báo hàng hóa</li>

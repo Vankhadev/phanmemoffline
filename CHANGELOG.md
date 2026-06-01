@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.4.0 - 2026-06-01
+
+### Tính năng và cải tiến
+
+- Chuẩn hóa luồng in hóa đơn bằng trang in riêng theo mã/ID đơn hàng, hỗ trợ mở nhanh bản in từ tạo đơn và danh sách đơn hàng.
+- Cải thiện danh sách đơn hàng với dữ liệu từ API, nhãn nguồn đơn, gộp dòng hàng ổn định hơn và xử lý đơn offline rõ ràng hơn.
+- Bổ sung lại nghiệp vụ bảng lương nhân viên theo service/controller riêng, validation đầu vào, tổng hợp lương và thao tác thêm/sửa/xóa mềm.
+- Tinh gọn module in legacy, bỏ các route/component mẫu in cũ và cập nhật dependency in/xuất file phù hợp frontend hiện tại.
+
+### Phát hành
+
+- Đồng bộ version phát hành 1.4.0 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
+- Cập nhật tài liệu phát hành, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.4.0.
+- GitHub Actions tiếp tục build/publish installer Windows x64 và ia32 kèm latest.yml và update-manifest.json từ artifact thực tế.
+
+### Lưu ý quan trọng
+
+- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.0-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.0-ia32.exe`.
+- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
+- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+
 ## v1.3.9 - 2026-05-30
 
 ### Phát hành
