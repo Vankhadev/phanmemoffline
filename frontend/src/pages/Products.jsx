@@ -6,6 +6,7 @@ import { buildCategoriesById, filterProductTree, normalizeSearchText, searchFlat
 import { ensureFocusableElement } from '../utils/electronFocusGuard';
 import { apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
+import { NEGATIVE_STOCK_LIMIT, getStockDisplayMeta } from '../utils/negativeStock';
 
 const vndFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
 const PRODUCTS_PAGE_SIZE = 80;
@@ -67,6 +68,21 @@ function normalizeDecimalQuantity(value, fallback = MIN_QUANTITY) {
   const quantity = parseDecimalQuantity(value, fallback);
   if (!Number.isFinite(quantity)) return fallback;
   return Math.max(MIN_QUANTITY, Math.round((quantity + Number.EPSILON) * 10) / 10);
+}
+
+function ProductStockValue({ stock, align = 'right' }) {
+  const meta = getStockDisplayMeta(stock);
+  return (
+    <div className={`flex flex-col ${align === 'right' ? 'items-end' : 'items-start'} gap-0.5`}>
+      <span className={`font-semibold ${meta.textClass}`}>{meta.display}</span>
+      {(meta.isNegative || meta.isNearLimit || meta.isBreached) && (
+        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${meta.badgeClass}`}>
+          {meta.isBreached ? 'Vượt ngưỡng' : 'Âm kho'}
+        </span>
+      )}
+      {meta.isNearLimit && <span className="text-[10px] font-semibold text-orange-700">Gần -100</span>}
+    </div>
+  );
 }
 
 const EMPTY_PRODUCT_FORM = Object.freeze({
@@ -407,8 +423,10 @@ const ProductRow = memo(function ProductRow({
     return variants.filter(v => matchedVariantIds.has(v.id));
   }, [expanded, isSearching, p._matchedVariantIdSet, p._matchedVariantIds, shouldRenderVariants, variants]);
 
+  const parentStockMeta = getStockDisplayMeta(p.stock);
+
   return (
-    <div className="border-b last:border-0">
+    <div className={`border-b last:border-0 ${!hasVariants ? parentStockMeta.rowClass : ''}`}>
       <div className="flex flex-wrap items-center gap-2 px-3 py-3 hover:bg-gray-50 transition md:flex-nowrap md:py-2">
         <button
           onClick={() => onToggleSelect(p.id)}
@@ -427,7 +445,13 @@ const ProductRow = memo(function ProductRow({
 
         <div className="flex-1 min-w-[12rem] md:min-w-0">
           <div className="flex items-center gap-2">
-            <span className={`font-medium text-sm ${!hasVariants && p.stock === 0 ? 'text-red-500' : ''}`}>{p.name}</span>
+            <span className={`font-medium text-sm ${!hasVariants ? parentStockMeta.nameClass : ''}`}>{p.name}</span>
+            {!hasVariants && parentStockMeta.isNegative && (
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${parentStockMeta.badgeClass}`}>Âm kho</span>
+            )}
+            {!hasVariants && parentStockMeta.isNearLimit && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">Gần -100</span>
+            )}
             {hasVariants && (
               <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
                 {variantCount} biến thể
@@ -442,8 +466,8 @@ const ProductRow = memo(function ProductRow({
         {hasVariants ? (
           <div className="text-right text-sm w-20 text-gray-300" title="Tồn kho được quản lý ở từng biến thể">—</div>
         ) : (
-          <div className={`text-right font-semibold text-sm w-20 ${p.stock === 0 ? 'text-red-500 font-bold' : p.stock < 10 ? 'text-red-600' : 'text-green-600'}`}>
-            {p.stock === 0 ? 'Hết hàng' : p.stock}
+          <div className="text-right text-sm w-24">
+            <ProductStockValue stock={p.stock} />
           </div>
         )}
 
@@ -465,17 +489,19 @@ const ProductRow = memo(function ProductRow({
         </div>
       </div>
 
-      {variantRows.map(v => (
-        <div key={v.id} className={`flex flex-wrap items-center gap-2 px-3 py-3 pl-8 sm:pl-12 bg-gray-50 border-t md:flex-nowrap md:py-2 ${v.stock === 0 ? 'opacity-60' : ''}`}>
+      {variantRows.map(v => {
+        const variantStockMeta = getStockDisplayMeta(v.stock);
+        return (
+        <div key={v.id} className={`flex flex-wrap items-center gap-2 px-3 py-3 pl-8 sm:pl-12 border-t md:flex-nowrap md:py-2 ${variantStockMeta.rowClass || 'bg-gray-50'}`}>
           <div className="flex-1 min-w-[12rem] md:min-w-0">
-            <div className={`text-sm ${v.stock === 0 ? 'text-red-400 line-through' : 'text-gray-700'}`}>{v.name}</div>
+            <div className={`text-sm ${variantStockMeta.nameClass || 'text-gray-700'}`}>{v.name}</div>
             <div className="text-xs text-gray-400">
               {v.sku} · {getCategoryName(v) || getCategoryName(p)} · {getSupplierName(v.supplier_id || p.supplier_id)}
             </div>
           </div>
 
-          <div className={`text-right font-semibold text-sm w-20 ${v.stock === 0 ? 'text-red-500 font-bold' : v.stock < 10 ? 'text-red-600' : 'text-green-600'}`}>
-            {v.stock === 0 ? 'Hết hàng' : v.stock}
+          <div className="text-right text-sm w-24">
+            <ProductStockValue stock={v.stock} />
           </div>
 
           <div className="hidden text-right text-xs text-gray-500 w-24 md:block">{formatVND(v.import_price)}</div>
@@ -492,7 +518,8 @@ const ProductRow = memo(function ProductRow({
             </button>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 });
@@ -1077,7 +1104,7 @@ export default function Products({ store }) {
       ['Tên sản phẩm', 'Có với SKU mới', 'Tên sản phẩm cha hoặc tên biến thể. Với biến thể, tên biến thể là dữ liệu phân biệt để cập nhật đúng dòng trong cùng sản phẩm cha.'],
       ['Tên cha', 'Tham khảo', 'Chỉ giúp người dùng đọc file; backend liên kết bằng Parent SKU.'],
       ['Giá nhập / Giá sỉ / Giá lẻ / Giá VIP', 'Không', 'Nhập số không âm. Có thể dùng định dạng 100000, 100.000 hoặc 100,000.'],
-      ['Tồn kho', 'Không', 'Nhập số nguyên không âm.'],
+      ['Tồn kho', 'Không', `Có thể âm đến ${NEGATIVE_STOCK_LIMIT}. Nếu thấp hơn ${NEGATIVE_STOCK_LIMIT}, backend sẽ chặn ghi dữ liệu.`],
       ['Đơn vị', 'Không', 'Ví dụ: cái, bộ, hộp. Biến thể bỏ trống sẽ lấy theo sản phẩm cha khi thêm mới.'],
       ['Danh mục text', 'Không', 'Tên/nhóm/từ khóa danh mục. Backend có thể tự khớp danh mục mặc định nếu đã cấu hình.'],
       ['Default category id', 'Không', 'ID danh mục mặc định nếu biết chính xác. Nếu không biết thì để trống và dùng Danh mục text.'],
@@ -2245,6 +2272,7 @@ export default function Products({ store }) {
                   <li><strong>Loại dòng</strong>: nhập <strong>PARENT</strong> cho sản phẩm cha, <strong>VARIANT</strong> cho biến thể. Nếu bỏ trống, backend tự suy luận: có Parent SKU là VARIANT, không có Parent SKU là PARENT.</li>
                   <li><strong>Parent SKU</strong> là khóa giữ quan hệ cha-con; SKU này phải trùng SKU của dòng sản phẩm cha trong file hoặc sản phẩm cha đã có trong hệ thống. Khi tạo biến thể qua giao diện/API, SKU biến thể sẽ được backend tự sinh tăng dần từ SKU cha.</li>
                   <li>Có thể nhập file có alias phổ biến như <strong>Mã SKU</strong>, <strong>Ma SKU</strong>, <strong>Mã sản phẩm</strong>, <strong>Tên</strong>, <strong>SL hàng</strong>, <strong>So luong</strong>, <strong>Giá vốn</strong>, <strong>Giá bán</strong>, <strong>ĐVT</strong>, <strong>Danh mục</strong>, <strong>ParentSKU</strong>, <strong>SKU cha</strong>, <strong>Mã cha</strong>.</li>
+                  <li><strong>Tồn kho</strong> có thể âm đến <strong>{NEGATIVE_STOCK_LIMIT}</strong>; hệ thống cảnh báo “Âm kho” và backend sẽ chặn mọi tồn kho thấp hơn ngưỡng này.</li>
                   <li>Import sẽ validate toàn bộ file trước khi ghi. Nếu có lỗi, thông báo sẽ chỉ rõ dòng/cột và dữ liệu chưa được cập nhật.</li>
                   <li>Các cột <strong>ID</strong>, <strong>Parent ID</strong>, <strong>Default category name</strong>, <strong>Supplier name</strong>, <strong>Ghi chú</strong> chỉ để tham khảo khi xuất file; backend bỏ qua khi import.</li>
                 </ul>

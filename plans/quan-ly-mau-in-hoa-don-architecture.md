@@ -1,475 +1,806 @@
-# Kiến trúc module quản lý mẫu in hóa đơn
+# Kiến trúc nâng cấp module quản lý mẫu in hóa đơn
 
 ## 1. Phạm vi subtask
 
-Subtask này chỉ chốt thiết kế và kế hoạch triển khai cho module quản lý mẫu in hóa đơn, không triển khai code sản phẩm.
+Subtask này chỉ làm 3 việc:
+- khảo sát hiện trạng frontend và backend liên quan tới mẫu in hóa đơn
+- đối chiếu với yêu cầu editor kiểu Canva production-ready
+- chốt kiến trúc triển khai và danh sách file cần sửa hoặc tạo
 
-Mục tiêu chính:
-- Giữ nguyên phần lớn backend hiện tại đang chạy trên JSON DB.
-- Tách riêng module `print_templates` sang MySQL thật ngay từ đầu.
-- Tận dụng tối đa luồng in hóa đơn A5 đã có để tránh làm vỡ layout hiện tại.
-- Chuẩn bị rõ danh sách file cần tạo sửa cho subtask code tiếp theo.
+Không triển khai code tính năng ngoài việc cập nhật tài liệu kiến trúc.
 
-## 2. Hiện trạng codebase đã xác nhận
+## 2. File đã khảo sát
 
-### 2.1 Backend
+### Backend
+- `backend/src/routes/printTemplates.js`
+- `backend/src/services/printTemplateService.js`
+- `backend/src/db/printTemplatesMySql.js`
+- `backend/src/db/printTemplatesSchema.js`
+- `backend/src/middleware/printTemplateUpload.js`
+- `backend/src/routes/invoices.js`
+- `backend/src/server.js`
+- `backend/src/db/database.js`
+- `backend/scripts/init-print-templates-mysql.js`
+- `backend/package.json`
 
-- Backend entry đang ở [backend/src/server.js](backend/src/server.js).
-- Route hiện tại được mount trực tiếp trong [backend/src/server.js](backend/src/server.js) bằng [`app.use()`](backend/src/server.js:188).
-- Lớp dữ liệu chính hiện tại là JSON DB trong [backend/src/db/database.js](backend/src/db/database.js).
-- Quyền truy cập hiện được resolve từ JSON DB qua [backend/src/middleware/auth.js](backend/src/middleware/auth.js).
-- Endpoint dữ liệu in hóa đơn hiện tại là [`router.get('/:idOrCode/print')`](backend/src/routes/invoices.js:520) trong [backend/src/routes/invoices.js](backend/src/routes/invoices.js).
-- Payload in hóa đơn hiện được build bởi [`buildInvoicePrintPayload()`](backend/src/routes/invoices.js:301).
-- Thông tin cửa hàng hiện lấy từ bảng JSON `store_info` qua [backend/src/routes/store.js](backend/src/routes/store.js).
-- Dependency `multer` đã có trong [backend/package.json](backend/package.json) nhưng chưa được dùng ở bất kỳ route nào.
-- Chưa có `express.static` cho thư mục upload trong [backend/src/server.js](backend/src/server.js:122).
-- Chưa có dependency MySQL trong [backend/package.json](backend/package.json).
-- Có package `dotenv` trong [backend/package.json](backend/package.json) nhưng chưa thấy nơi nào gọi `dotenv.config`, nghĩa là env file chưa được bootstrap ở runtime hiện tại.
+### Frontend
+- `frontend/src/pages/InvoicePrint.jsx`
+- `frontend/src/pages/Settings.jsx`
+- `frontend/src/components/invoice-print/InvoiceTemplateRenderer.jsx`
+- `frontend/src/components/invoice-print/PrintTemplateFormModal.jsx`
+- `frontend/src/components/invoice-print/templateDefaults.js`
+- `frontend/src/components/invoice-print/mockInvoicePayload.js`
+- `frontend/src/utils/apiClient.js`
+- `frontend/src/index.css`
+- `frontend/package.json`
 
-### 2.2 Frontend
+### Tài liệu
+- `plans/quan-ly-mau-in-hoa-don-architecture.md`
 
-- Frontend entry đang ở [frontend/src/App.jsx](frontend/src/App.jsx) và [frontend/src/main.jsx](frontend/src/main.jsx).
-- Route in hóa đơn hiện tại là `/hoa-don-in/:idOrCode` trong [`<Route />`](frontend/src/App.jsx:442).
-- Trang in hóa đơn hiện tại nằm ở [frontend/src/pages/InvoicePrint.jsx](frontend/src/pages/InvoicePrint.jsx).
-- Trang này đang fetch dữ liệu thật từ [`invoicesApi.printData()`](frontend/src/utils/apiClient.js:635).
-- UI cài đặt hiện đã có cấu trúc tab trong [frontend/src/pages/Settings.jsx](frontend/src/pages/Settings.jsx), rất phù hợp để đặt thêm tab quản lý mẫu in thay vì tạo menu top-level mới.
-- CSS in A5 hiện tại nằm trong [frontend/src/index.css](frontend/src/index.css), đã có nhiều quy tắc quan trọng để chống lệch vỡ bảng:
-  - [`table-layout: fixed`](frontend/src/index.css:664)
-  - [`display: table-header-group`](frontend/src/index.css:670)
-  - [`page-break-inside: avoid`](frontend/src/index.css:675)
-  - kích thước cột theo `mm` như [`.invoice-col-no`](frontend/src/index.css:695) và [`.invoice-col-money`](frontend/src/index.css:705)
-- [frontend/src/utils/apiClient.js](frontend/src/utils/apiClient.js) đã hỗ trợ `FormData` trong lớp fetch dùng chung, nên upload logo không đòi hỏi thay đổi lớn ở transport layer.
-- Chưa thấy hạ tầng dark mode toàn cục như lớp `dark` hoặc Tailwind `dark:` trong mã hiện tại.
+## 3. Hiện trạng đã xác nhận
 
-## 3. Quyết định kiến trúc chính
+### 3.1 Backend hiện có
 
-### 3.1 Tách riêng `print_templates` sang MySQL thật
+Module mẫu in hóa đơn không còn là ý tưởng nữa, mà đã có một nền tảng chạy thật:
 
-Khuyến nghị chốt theo hướng:
-- Auth, permissions, invoices, store info tiếp tục dùng JSON DB hiện tại.
-- Riêng module `print_templates` dùng MySQL thật với pool kết nối riêng.
-- Không cố migrate toàn bộ backend sang MySQL trong subtask này.
+1. Đã có route CRUD riêng tại `/api/print-templates`
+   - list
+   - detail
+   - default
+   - create
+   - update
+   - soft delete
+   - set default
+   - upload logo
+   - remove logo
 
-Lý do:
-- Đúng theo phạm vi user đã chốt.
-- Tránh đụng sâu vào toàn bộ backend đang ổn định.
-- Cho phép subtask code tập trung vào một module độc lập và có rollback rõ ràng.
+2. Đã có lớp service riêng cho module mẫu in
+   - parse payload
+   - validate cơ bản
+   - serialize dữ liệu trả ra frontend
+   - xử lý default template theo transaction lock
+   - xử lý logo path đang dùng và cleanup file cũ
 
-### 3.2 Không tạo top-level page mới cho quản lý mẫu in
+3. Đã có MySQL pool độc lập cho module print templates
+   - module còn lại của backend vẫn dùng JSON DB
+   - module mẫu in dùng MySQL riêng
+   - đây là kiến trúc mixed storage đã chạy được
 
-Khuyến nghị:
-- Thêm tab mới `print-templates` trong [frontend/src/pages/Settings.jsx](frontend/src/pages/Settings.jsx).
-- Không thêm menu sidebar riêng trong giai đoạn đầu.
+4. Đã có bootstrap schema và script init riêng
+   - backend start có `ensurePrintTemplatesSchema`
+   - có script `init-print-templates-mysql`
 
-Lý do:
-- Mẫu in là cấu hình hệ thống, phù hợp với khu vực Cài đặt.
-- Ít thay đổi nhất tới điều hướng trong [frontend/src/App.jsx](frontend/src/App.jsx).
-- Dễ kiểm soát permission theo nhóm settings hoặc permission chuyên biệt.
+5. Đã có upload logo và static serving
+   - thư mục `backend/data/uploads/print-templates`
+   - public path `/static/print-templates`
+   - kiểm soát mime và dung lượng file bằng `multer`
 
-### 3.3 Tách renderer preview dùng chung
+6. Đã tích hợp template vào luồng in hóa đơn thật
+   - endpoint `/api/invoices/:idOrCode/print` đã attach template vào payload
+   - nếu MySQL template lỗi thì backend fallback về luồng in hiện tại để không chặn bán hàng
 
-Khuyến nghị:
-- Tách phần render A5 hiện đang nằm trực tiếp trong [frontend/src/pages/InvoicePrint.jsx](frontend/src/pages/InvoicePrint.jsx) thành component dùng chung.
-- [frontend/src/pages/InvoicePrint.jsx](frontend/src/pages/InvoicePrint.jsx) chỉ còn vai trò container fetch dữ liệu và gọi print download.
-- Tab quản lý mẫu in dùng lại đúng renderer này để preview realtime.
+7. Đã có permission riêng
+   - `print_templates.read`
+   - `print_templates.manage`
 
-Lý do:
-- Tránh hai nơi dựng hai layout khác nhau.
-- Bảo toàn CSS in hiện có.
-- Giảm rủi ro preview đẹp nhưng trang in thực tế lệch.
+### 3.2 Frontend hiện có
 
-## 4. Điểm tích hợp chính
+Frontend cũng đã có nền tảng dùng được thật:
 
-## 4.1 Database và khởi tạo schema MySQL
+1. Đã có tab quản lý mẫu in trong `Settings`
+   - tải danh sách template từ API thật
+   - tạo, sửa, xóa, đặt mặc định
+   - upload và xóa logo
 
-Vì project chưa có migration framework hiện hữu, khuyến nghị dùng mô hình bootstrap cục bộ cho riêng module này:
+2. Đã có modal cấu hình mẫu in và preview realtime
+   - hiện là editor kiểu form cấu hình
+   - thay đổi font size, scale, padding, table width, toggle logo, QR, chữ ký, ghi chú, công nợ
+   - preview realtime bằng `mockInvoicePayload`
 
-1. Tạo pool MySQL riêng.
-2. Khi backend start, gọi hàm `ensurePrintTemplatesSchema` để chạy `CREATE TABLE IF NOT EXISTS`.
-3. Có thêm một script init riêng để deploy production hoặc chạy thủ công khi cần.
+3. Đã có renderer dùng chung cho preview và trang in
+   - `InvoiceTemplateRenderer` đã render từ `template + payload`
+   - `InvoicePrint` chỉ làm vai trò container fetch dữ liệu và print hoặc PDF
 
-Khuyến nghị env riêng cho module:
-- `KHA_PRINT_TEMPLATES_MYSQL_URL`
-- hoặc bộ biến:
-  - `KHA_PRINT_TEMPLATES_MYSQL_HOST`
-  - `KHA_PRINT_TEMPLATES_MYSQL_PORT`
-  - `KHA_PRINT_TEMPLATES_MYSQL_USER`
-  - `KHA_PRINT_TEMPLATES_MYSQL_PASSWORD`
-  - `KHA_PRINT_TEMPLATES_MYSQL_DATABASE`
+4. Đã có CSS A5 tương đối hoàn chỉnh
+   - dùng đơn vị `mm`
+   - có `@page`
+   - có `display: table-header-group`
+   - có `break-inside: avoid`
+   - có style riêng cho preview và print
 
-Lưu ý quan trọng:
-- Nếu muốn đọc `.env`, cần bootstrap `dotenv` rõ ràng ở startup vì hiện tại chưa có nơi gọi `dotenv.config` trong backend.
+5. Đã có API client riêng cho print templates
+   - CRUD
+   - set default
+   - upload logo bằng `FormData`
 
-## 4.2 Schema đề xuất cho bảng `print_templates`
+### 3.3 Mô hình dữ liệu hiện tại
 
-Khuyến nghị dùng **một bảng chính** là đủ cho phase đầu.
+Bảng `print_templates` hiện đã có các cột chính:
+- `layout_json`
+- `settings_json`
+- `paper_size`
+- `orientation`
+- `status`
+- `is_default`
+- `logo_url`
+- `logo_path`
+- `shop_name`
+- `shop_address`
+- `shop_phone`
 
-### Cấu trúc bảng đề xuất
+Tuy nhiên dữ liệu hiện tại vẫn là schema v1, thiên về cấu hình tham số hơn là layout editor kiểu Canva.
 
-| Cột | Kiểu | Ghi chú |
+### 3.4 Ràng buộc kỹ thuật hiện tại
+
+1. `InvoiceTemplateRenderer` đang là renderer semantic cố định
+   - header
+   - info
+   - items table
+   - totals
+   - note
+   - signatures
+   - footer
+
+2. `layout_json` hiện chưa mô tả được các block tự do có tọa độ, kích thước, layer và binding
+
+3. Modal hiện tại là form-based editor, chưa phải stage editor kéo thả hoặc resize
+
+## 4. Đối chiếu với yêu cầu người dùng
+
+| Yêu cầu | Hiện trạng | Đánh giá |
 |---|---|---|
-| `id` | BIGINT UNSIGNED PK AUTO_INCREMENT | khóa chính |
-| `account_id` | BIGINT UNSIGNED NOT NULL | scope theo tài khoản đang dùng trong auth hiện tại |
-| `code` | VARCHAR 100 NOT NULL | slug kỹ thuật, unique theo account |
-| `name` | VARCHAR 150 NOT NULL | tên mẫu in |
-| `description` | VARCHAR 255 NULL | mô tả ngắn |
-| `paper_size` | ENUM `A5` | hiện chốt A5 |
-| `orientation` | ENUM `portrait`,`landscape` | hỗ trợ dọc ngang |
-| `status` | ENUM `draft`,`active`,`archived` | quản trị vòng đời |
-| `is_default` | TINYINT 1 NOT NULL DEFAULT 0 | mẫu mặc định theo account |
-| `logo_mode` | ENUM `inherit_store`,`upload`,`external_url`,`none` | cách lấy logo |
-| `logo_url` | VARCHAR 1024 NULL | khi dùng external url hoặc public url đã resolve |
-| `logo_path` | VARCHAR 1024 NULL | đường dẫn file upload tương đối trên backend |
-| `settings_json` | JSON NOT NULL | toàn bộ cấu hình layout |
-| `schema_version` | INT UNSIGNED NOT NULL DEFAULT 1 | version cấu trúc config |
-| `created_by` | BIGINT UNSIGNED NULL | user tạo |
-| `updated_by` | BIGINT UNSIGNED NULL | user sửa gần nhất |
-| `created_at` | DATETIME NOT NULL | thời điểm tạo |
-| `updated_at` | DATETIME NOT NULL | thời điểm sửa |
-| `deleted_at` | DATETIME NULL | soft delete |
+| CRUD template | Đã có | Đạt |
+| Upload logo | Đã có | Đạt |
+| Lưu JSON vào MySQL | Đã có nhưng schema còn v1 | Đạt một phần |
+| Preview realtime | Đã có dạng form preview | Đạt một phần |
+| In chuẩn A5 | Đã có nền tảng tốt | Đạt một phần |
+| Editor kiểu Canva | Chưa có | Thiếu |
+| Drag và drop | Chưa có | Thiếu |
+| Resize block | Chưa có | Thiếu |
+| Autosave | Chưa có | Thiếu |
+| Draft và publish an toàn | Chưa có | Thiếu |
+| Soft migration template cũ | Chưa có | Thiếu |
+| Production-ready cho layout editor | Chưa có | Thiếu |
 
-### Index và ràng buộc
+## 5. Kết luận hiện trạng
 
-- Unique `account_id + code`
-- Unique `account_id + name`
-- Index `account_id + is_default + deleted_at`
-- Index `account_id + status + deleted_at`
+Codebase hiện tại đã đi được khoảng nửa đường:
+- phần backend CRUD MySQL, upload logo, default template, attach template vào invoice print đã có
+- phần frontend preview và renderer A5 đã có
+- thứ còn thiếu chủ yếu nằm ở lớp editor v2 và mô hình dữ liệu layout tự do
 
-### Quy tắc nghiệp vụ
+Điểm quan trọng nhất là không nên viết lại từ đầu toàn bộ module. Nên tận dụng nền móng hiện có và nâng cấp theo hướng tương thích ngược.
 
-- Mỗi `account_id` chỉ có một mẫu `is_default = 1`.
-- Khi set mặc định phải chạy transaction:
-  1. clear default của account
-  2. set template đích thành default
-- Không hard delete ngay logo file khi template bị soft delete trừ khi có cleanup rõ ràng.
+## 6. Quyết định kiến trúc chính
 
-## 4.3 Gợi ý cấu trúc `settings_json`
+### 6.1 Chọn kiến trúc editor hybrid thay vì canvas bitmap thuần
 
-`settings_json` nên là nguồn sự thật cho layout, thay vì tách quá nhiều cột vật lý.
+Khuyến nghị không dùng kiến trúc render hóa đơn hoàn toàn thành bitmap canvas kiểu thiết kế poster.
 
-Nhóm cấu hình nên có:
-- `page`
-  - `size`
-  - `orientation`
-  - `paddingMm`
-- `branding`
-  - `showLogo`
-  - `logoWidthMm`
-  - `storeNameUppercase`
-  - `headerBorder`
-- `content`
-  - `showCustomerTaxCode`
-  - `showDeliveryDate`
-  - `showCreator`
-  - `showQr`
-  - `showSignatures`
-  - `showFooter`
-- `table`
-  - `fontSizePt`
-  - `headerFontSizePt`
-  - `lineClamp`
-  - `columns`
-    - `no`
-    - `name`
-    - `qty`
-    - `unitPrice`
-    - `lineTotal`
-  - `columnWidthsMm`
-- `totals`
-  - `showVat`
-  - `showDiscount`
-  - `showDeliveryFee`
-- `theme`
-  - `primaryColor`
-  - `mutedColor`
-  - `borderColor`
-- `print`
-  - `forceWhiteBackground`
-  - `exactColorAdjust`
+Lý do:
+- hóa đơn có bảng sản phẩm động, số dòng thay đổi
+- A5 print cần giữ text sắc nét và page break ổn định
+- `html2canvas` hoặc canvas-only sẽ làm khó pagination, PDF và in thật
+- renderer DOM hiện tại là tài sản tốt, không nên bỏ
 
-Khuyến nghị validate JSON ở backend trước khi lưu để tránh lưu template làm vỡ layout.
+Kiến trúc đề xuất là **hybrid DOM layout editor**:
+- editor nhìn và thao tác như Canva
+- lưu layout block theo tọa độ và kích thước
+- nhưng render cuối cùng vẫn bằng DOM hoặc CSS production-ready
+- riêng bảng hàng hóa vẫn là block semantic động, không biến thành ảnh
 
-## 4.4 Backend API cần thêm
+### 6.2 Giữ bảng `print_templates`, mở rộng theo hướng không phá vỡ dữ liệu cũ
 
-Khuyến nghị route mới: `/api/print-templates`
+Khuyến nghị giữ bảng hiện tại và thêm các cột phục vụ editor v2 thay vì thay tên hoặc thay storage model.
+
+Mục tiêu:
+- template cũ vẫn đọc được
+- invoice print hiện tại vẫn chạy được ngay cả khi editor mới chưa hoàn tất
+- rollout từng bước dễ hơn
+
+### 6.3 Chốt chiến lược tương thích ngược
+
+Yêu cầu ưu tiên từ user là tương thích ngược và migrate mềm. Vì vậy kiến trúc chốt như sau:
+
+1. `layout_json` và `settings_json` hiện tại được xem là schema v1
+2. editor mới lưu schema v2
+3. khi đọc template:
+   - nếu là v2 thì render trực tiếp
+   - nếu là v1 thì adapter migrate in-memory sang v2 view model
+4. chỉ khi người dùng lưu lại từ editor mới mới persist schema v2 xuống MySQL
+5. endpoint in hóa đơn phải đọc được cả v1 lẫn v2 trong giai đoạn chuyển tiếp
+
+## 7. Bộ thư viện đề xuất
+
+### 7.1 Phương án chính
+
+Khuyến nghị chính:
+- `@dnd-kit/core`
+- `@dnd-kit/sortable`
+- `react-rnd`
+
+Vai trò:
+- `dnd-kit` dùng cho palette, kéo thả block mới vào stage, reorder layer list
+- `react-rnd` dùng cho drag và resize block trên stage A5
+- renderer cuối cùng vẫn là DOM và CSS của app
+
+Lý do chọn:
+- production-ready
+- phổ biến, dễ kiểm soát state bằng React
+- không ép toàn bộ renderer sang canvas engine riêng
+- phù hợp với template dạng block, text, logo, QR, totals, signature, table
+
+### 7.2 Phương án dự phòng
+
+Nếu ở bước implementation phát sinh nhu cầu:
+- rotate block
+- multi-select
+- alignment guides nâng cao
+- selection box phức tạp
+
+thì phương án dự phòng là `react-moveable` cho lớp thao tác stage. Tuy nhiên không nên dùng ngay từ đầu nếu chưa thật sự cần, vì chi phí tích hợp lớn hơn.
+
+## 8. Mô hình dữ liệu MySQL đề xuất
+
+## 8.1 Giữ các cột hiện có
+
+Tiếp tục giữ:
+- `layout_json`
+- `settings_json`
+- `paper_size`
+- `orientation`
+- `status`
+- `is_default`
+- `logo_url`
+- `logo_path`
+- `logo_mime`
+- `logo_size`
+- `shop_name`
+- `shop_address`
+- `shop_phone`
+
+Ý nghĩa mới:
+- `layout_json` là **published layout** đang được trang in thật sử dụng
+- `settings_json` là **published settings** tương ứng
+
+## 8.2 Cột nên thêm cho editor v2
+
+Khuyến nghị bổ sung vào `print_templates`:
+
+| Cột | Kiểu | Mục đích |
+|---|---|---|
+| `template_schema_version` | INT UNSIGNED NOT NULL DEFAULT 1 | version layout đang publish |
+| `draft_layout_json` | JSON NULL | bản autosave draft chưa publish |
+| `draft_settings_json` | JSON NULL | metadata draft |
+| `editor_meta_json` | JSON NULL | zoom, grid, selected tool, migration meta |
+| `revision` | INT UNSIGNED NOT NULL DEFAULT 1 | optimistic concurrency |
+| `last_autosaved_at` | DATETIME 3 NULL | thời điểm autosave gần nhất |
+| `published_at` | DATETIME 3 NULL | thời điểm publish gần nhất |
+
+Ghi chú:
+- giai đoạn đầu chưa bắt buộc tạo bảng revision history riêng
+- nếu cần rollback sâu hơn ở phase sau, có thể thêm `print_template_revisions`
+- phase implementation đầu tiên chỉ cần draft và publish trên cùng một row là đủ thực dụng
+
+## 8.3 `layout_json` schema v2 đề xuất
+
+`layout_json` v2 cần mô tả document thay vì chỉ settings rời rạc.
+
+```json
+{
+  "schema_version": 2,
+  "canvas": {
+    "pageSize": "A5",
+    "orientation": "portrait",
+    "unit": "mm",
+    "safePaddingMm": 8,
+    "snapGridMm": 1
+  },
+  "zones": [
+    {
+      "id": "header",
+      "type": "absolute",
+      "frame": { "x": 8, "y": 8, "w": 132, "h": 34 }
+    },
+    {
+      "id": "body",
+      "type": "flow",
+      "frame": { "x": 8, "y": 46, "w": 132, "h": 118 }
+    },
+    {
+      "id": "footer",
+      "type": "absolute",
+      "frame": { "x": 8, "y": 168, "w": 132, "h": 34 }
+    }
+  ],
+  "elements": [
+    {
+      "id": "logo",
+      "type": "logo",
+      "zoneId": "header",
+      "frame": { "x": 0, "y": 0, "w": 22, "h": 22 },
+      "visible": true,
+      "locked": false,
+      "bindings": { "source": "template.logo" }
+    },
+    {
+      "id": "storeInfo",
+      "type": "storeInfo",
+      "zoneId": "header",
+      "frame": { "x": 24, "y": 0, "w": 48, "h": 22 },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "invoiceTitle",
+      "type": "invoiceTitle",
+      "zoneId": "header",
+      "frame": { "x": 86, "y": 0, "w": 46, "h": 18 },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "customerInfo",
+      "type": "customerInfo",
+      "zoneId": "header",
+      "frame": { "x": 0, "y": 24, "w": 78, "h": 10 },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "paymentQr",
+      "type": "paymentQr",
+      "zoneId": "footer",
+      "frame": { "x": 0, "y": 0, "w": 30, "h": 30 },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "totals",
+      "type": "totals",
+      "zoneId": "footer",
+      "frame": { "x": 82, "y": 0, "w": 50, "h": 24 },
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "signatures",
+      "type": "signatures",
+      "zoneId": "footer",
+      "frame": { "x": 0, "y": 30, "w": 132, "h": 18 },
+      "visible": true,
+      "locked": false
+    }
+  ],
+  "table": {
+    "id": "itemsTable",
+    "zoneId": "body",
+    "frame": { "x": 0, "y": 0, "w": 132, "h": "auto" },
+    "headerRepeat": true,
+    "allowPageBreak": true,
+    "columns": [
+      { "key": "no", "label": "STT", "widthMm": 8, "align": "center" },
+      { "key": "name", "label": "Tên sản phẩm", "widthMm": 54, "align": "left" },
+      { "key": "unit", "label": "Đơn vị", "widthMm": 13, "align": "center" },
+      { "key": "qty", "label": "Số lượng", "widthMm": 13, "align": "center" },
+      { "key": "unitPrice", "label": "Đơn giá", "widthMm": 21, "align": "right" },
+      { "key": "discount", "label": "Chiết khấu", "widthMm": 21, "align": "right" },
+      { "key": "lineTotal", "label": "Thành tiền", "widthMm": 22, "align": "right" }
+    ]
+  },
+  "theme": {
+    "primaryColor": "#111827",
+    "mutedColor": "#64748b",
+    "borderColor": "#cbd5e1"
+  },
+  "print": {
+    "forceWhiteBackground": true,
+    "exactColorAdjust": true
+  }
+}
+```
+
+## 8.4 `settings_json` schema v2 đề xuất
+
+`settings_json` v2 không nên trùng chức năng với `layout_json`. Nó nên giữ metadata của editor và publish.
+
+```json
+{
+  "schema_version": 2,
+  "renderMode": "hybrid-dom",
+  "editor": {
+    "showGrid": true,
+    "showSafeArea": true,
+    "zoom": 1,
+    "snapEnabled": true,
+    "snapGridMm": 1
+  },
+  "publish": {
+    "revision": 3,
+    "hasDraft": true
+  },
+  "migration": {
+    "sourceSchemaVersion": 1,
+    "migratedAt": null,
+    "migratedBy": null
+  }
+}
+```
+
+## 8.5 Quy tắc dữ liệu quan trọng
+
+1. Tọa độ và kích thước persist theo `mm`, không lưu theo `px`
+2. `layout_json` chỉ lưu **published document**
+3. `draft_layout_json` lưu autosave draft
+4. endpoint in hóa đơn chỉ đọc published document
+5. `itemsTable` là dynamic block đặc biệt, không biến thành block text tự do
+6. mọi template đều phải qua validation server trước khi publish
+
+## 9. Kiến trúc frontend đề xuất
+
+## 9.1 Cấu trúc component
+
+Khuyến nghị tách khỏi `Settings.jsx` để giảm file quá lớn.
+
+### Component mới nên tạo
+- `frontend/src/components/invoice-print/PrintTemplatesTab.jsx`
+- `frontend/src/components/invoice-print/PrintTemplateEditorModal.jsx`
+- `frontend/src/components/invoice-print/editor/EditorCanvas.jsx`
+- `frontend/src/components/invoice-print/editor/EditorToolbar.jsx`
+- `frontend/src/components/invoice-print/editor/ElementPalette.jsx`
+- `frontend/src/components/invoice-print/editor/LayerPanel.jsx`
+- `frontend/src/components/invoice-print/editor/PropertiesPanel.jsx`
+- `frontend/src/components/invoice-print/editor/ElementFrame.jsx`
+- `frontend/src/components/invoice-print/editor/useTemplateEditorState.js`
+- `frontend/src/components/invoice-print/editor/useTemplateAutosave.js`
+- `frontend/src/components/invoice-print/editor/templateSchemaAdapter.js`
+- `frontend/src/components/invoice-print/editor/elementRegistry.js`
+
+### Component hiện có nên refactor
+- `frontend/src/components/invoice-print/InvoiceTemplateRenderer.jsx`
+- `frontend/src/components/invoice-print/PrintTemplateFormModal.jsx`
+- `frontend/src/components/invoice-print/templateDefaults.js`
+- `frontend/src/pages/Settings.jsx`
+- `frontend/src/pages/InvoicePrint.jsx`
+
+## 9.2 Vai trò từng lớp
+
+1. `PrintTemplatesTab`
+   - list template
+   - filter và search
+   - open editor
+   - actions create, duplicate, set default, delete
+
+2. `PrintTemplateEditorModal`
+   - editor shell full screen
+   - toolbar save hoặc publish
+   - left palette và layer
+   - center stage A5
+   - right inspector
+
+3. `EditorCanvas`
+   - stage A5
+   - grid và safe area
+   - render block selection
+   - drag và resize qua `react-rnd`
+
+4. `LayerPanel`
+   - reorder elements bằng `dnd-kit`
+   - hide hoặc lock
+   - select active element
+
+5. `PropertiesPanel`
+   - text style
+   - visibility
+   - binding
+   - spacing
+   - column width của bảng
+
+6. `templateSchemaAdapter`
+   - normalize v1
+   - map sang view model v2
+   - serialize ngược về payload backend
+
+7. `InvoiceTemplateRenderer`
+   - nhận document v1 hoặc v2
+   - render cùng một nguồn dữ liệu cho editor preview và invoice print thật
+
+## 9.3 Nguyên tắc quan trọng
+
+Không để editor có một renderer riêng khác hẳn renderer in thật. Editor và print phải dùng chung document model và chung logic render ở mức cao nhất có thể.
+
+## 10. Chiến lược drag, drop, resize và realtime preview
+
+## 10.1 Drag và drop
+
+- kéo phần tử từ `ElementPalette` vào zone hợp lệ
+- reorder layer bằng `dnd-kit`
+- mỗi element có `id`, `type`, `zoneId`, `frame`, `visible`, `locked`, `zIndex`
+- không cho drop tự do vào body nếu block đó thuộc nhóm dynamic flow không hỗ trợ absolute layout
+
+## 10.2 Resize
+
+- dùng `react-rnd` cho block trong zone absolute
+- block bị ràng buộc trong safe area của zone
+- snap grid mặc định `1mm`
+- keyboard nudge:
+  - `Shift + Arrow` đi `1mm`
+  - `Arrow` đi `0.5mm`
+
+## 10.3 Realtime preview
+
+- stage editor và preview cùng đọc một editor state
+- preview cập nhật tức thì trong bộ nhớ local
+- autosave API chạy theo debounce, không chặn thao tác
+- preview mặc định dùng `mockInvoicePayload`
+- phase sau có thể bổ sung chọn một hóa đơn thật làm preview data source
+
+## 10.4 Dynamic block strategy
+
+Đây là quyết định kỹ thuật quan trọng nhất:
+- `itemsTable`, `totals`, `signatures`, `note` không nên coi là các text box tự do hoàn toàn
+- chúng là **structured elements** có renderer chuyên biệt
+- user được kéo thả, đổi vị trí hoặc kích thước trong zone cho phép
+- nhưng nội dung bên trong vẫn được render semantic để giữ pagination và độ ổn định khi in
+
+Nói cách khác, editor sẽ giống Canva về UX, nhưng document model vẫn tôn trọng bản chất của hóa đơn.
+
+## 11. Chiến lược A5 print CSS
+
+## 11.1 Giữ lại nền CSS hiện có
+
+Không nên viết lại toàn bộ `frontend/src/index.css`. Nền CSS hiện tại đã có nhiều quy tắc đúng:
+- `@page`
+- `display: table-header-group`
+- `break-inside: avoid`
+- width cột theo `mm`
+- preview shell tách biệt khỏi print mode
+
+## 11.2 Hướng mở rộng
+
+Bổ sung thêm lớp CSS cho v2:
+- zone absolute
+- selection frame chỉ xuất hiện ở editor mode
+- grid overlay chỉ xuất hiện ở editor mode
+- safe area overlay
+- hidden print-only và editor-only states
+
+## 11.3 Quy tắc bắt buộc
+
+1. print mode không được giữ `transform` từ preview zoom
+2. background giấy luôn trắng
+3. logo và QR phải dùng URL resolve được ở môi trường web và Electron
+4. table vẫn phải có header repeat khi sang trang
+5. body invoice phải giữ được multi-page với nhiều dòng sản phẩm
+
+## 12. Backend và API flow đề xuất
+
+## 12.1 Endpoint giữ nguyên
+
+Tiếp tục dùng các endpoint hiện có cho:
+- danh sách
+- chi tiết
+- tạo template
+- cập nhật metadata cơ bản
+- xóa template
+- set default
+- upload logo
+- xóa logo
+
+## 12.2 Endpoint nên bổ sung cho editor v2
 
 | Method | Path | Mục đích |
 |---|---|---|
-| GET | `/api/print-templates` | danh sách mẫu in theo account |
-| GET | `/api/print-templates/default` | lấy mẫu mặc định |
-| GET | `/api/print-templates/:id` | lấy chi tiết một mẫu |
-| POST | `/api/print-templates` | tạo mẫu mới |
-| PUT | `/api/print-templates/:id` | cập nhật mẫu |
-| POST | `/api/print-templates/:id/set-default` | đặt mặc định |
-| POST | `/api/print-templates/:id/logo` | upload hoặc thay logo |
-| DELETE | `/api/print-templates/:id/logo` | xóa logo của mẫu |
-| DELETE | `/api/print-templates/:id` | soft delete mẫu |
+| `PATCH` | `/api/print-templates/:id/autosave` | lưu draft layout và editor meta |
+| `POST` | `/api/print-templates/:id/publish` | validate và copy draft thành published layout |
+| `POST` | `/api/print-templates/:id/discard-draft` | bỏ draft, quay về published layout |
+| `POST` | `/api/print-templates/:id/duplicate` | nhân bản template để thử nghiệm an toàn |
 
-### Permission đề xuất
+`PUT /api/print-templates/:id` vẫn giữ để sửa metadata cơ bản như tên, mô tả, trạng thái, logo, thông tin shop.
 
-Thêm 2 permission vào [backend/src/db/database.js](backend/src/db/database.js):
-- `print_templates.read`
-- `print_templates.manage`
+## 12.3 Flow autosave và publish
+
+1. User mở editor
+2. Frontend lấy detail template
+3. Backend trả:
+   - metadata template
+   - published layout
+   - draft layout nếu có
+   - revision hiện tại
+4. Frontend dựng editor state
+5. Khi user thao tác:
+   - update local state ngay
+   - debounce 1200 đến 1500 ms
+   - gọi autosave nếu payload thay đổi thật
+6. Khi user bấm publish:
+   - backend validate document v2
+   - cập nhật `layout_json` và `settings_json`
+   - tăng `revision`
+   - set `published_at`
+   - có thể giữ draft bằng null hoặc tạo lại từ published mới
+7. Trang in thật chỉ đọc `layout_json` đã publish
+
+## 12.4 Flow upload logo
+
+Khuyến nghị giữ endpoint upload logo hiện tại và coi logo là asset cấp template:
+- template lưu `logo_url`, `logo_path`, `logo_mime`, `logo_size`
+- block `logo` trong layout chỉ bind vào `template.logo`
+- autosave không upload binary, chỉ tham chiếu asset đã có
+
+Điểm này giúp giữ phạm vi gọn và không phải tạo asset manager tổng quát ở phase đầu.
+
+## 12.5 Validation backend
+
+Production-ready bắt buộc cần validation mạnh hơn hiện tại.
+
+Khuyến nghị validation theo allowlist:
+- loại element hợp lệ
+- zone hợp lệ
+- frame hợp lệ theo `mm`
+- cột bảng hợp lệ
+- màu sắc và font size hợp lệ
+- schema version hợp lệ
+- kích thước block không vượt page bounds
+
+Nếu đội code muốn tăng độ chặt, có thể dùng `ajv` cho JSON schema validation. Đây là phụ thuộc hợp lý cho phase implementation.
+
+## 12.6 Concurrency strategy
+
+Autosave và publish cần tránh ghi đè chéo khi có nhiều tab hoặc nhiều người cùng sửa.
 
 Khuyến nghị:
-- chỉ admin mặc định có quyền manage
-- user thường không tự có quyền này trong `DEFAULT_USER_PERMISSION_KEYS`
+- frontend gửi `revision`
+- backend chỉ chấp nhận autosave hoặc publish khi `revision` khớp
+- nếu lệch revision, trả `409` để frontend hiển thị cảnh báo và cho phép reload draft mới nhất
 
-## 4.5 Tích hợp route và upload ở backend
+## 13. Soft migration từ template hiện tại
 
-### Cần sửa ở [backend/src/server.js](backend/src/server.js)
+## 13.1 Nguồn migrate
 
-1. Import route mới `printTemplatesRoutes`.
-2. Mount route mới bằng auth middleware và permission middleware.
-3. Khởi tạo schema MySQL trước khi `app.listen`.
-4. Đăng ký static file cho logo upload.
+Schema v1 hiện nay chủ yếu đến từ:
+- `layout_json` dạng page, branding, content, table, totals, theme, print
+- `settings_json` dạng font size, padding, line spacing, toggle các phần
 
-Khuyến nghị static public:
-- URL public: `/static/print-templates`
-- Thư mục vật lý: `backend/data/uploads/print-templates`
+## 13.2 Cách migrate mềm
 
-Lý do chọn public static:
-- thẻ `img` trong preview và print không tự gửi Bearer token
-- đơn giản hơn cho Chrome Edge Cốc Cốc
-- dễ tái sử dụng trong `html2canvas` và `react-to-print`
+Khuyến nghị viết adapter theo 3 bước:
 
-### Multer
+1. Đọc template cũ
+2. Map sang document v2 mặc định
+3. Điền frame mặc định cho các block dựa trên preset A5 hiện tại
 
-Vì `multer` đã có dependency nhưng chưa dùng, khuyến nghị tạo middleware riêng cho module này:
-- giới hạn mime chỉ nhận ảnh phổ biến
-- giới hạn dung lượng rõ ràng
-- tên file random và sanitize
-- cleanup file cũ khi replace logo
+Ví dụ:
+- `branding.showLogo` map thành element `logo.visible`
+- `shop_name`, `shop_address`, `shop_phone` map thành element `storeInfo`
+- `content.showQr` map thành element `paymentQr.visible`
+- `content.showSignatures` map thành element `signatures.visible`
+- `table.columns` và `columnWidthsMm` map sang `table.columns`
 
-## 4.6 Tích hợp với endpoint in hóa đơn hiện có
+## 13.3 Nguyên tắc migrate
 
-Khuyến nghị **không tạo endpoint in hoàn toàn mới**.
+- migrate in-memory khi đọc
+- không ghi đè template cũ ngay khi chỉ xem preview
+- chỉ persist v2 sau khi user bấm save hoặc publish từ editor mới
+- với template cũ, frontend nên hiển thị trạng thái `Đã chuyển sang bản xem editor mới, chưa publish`
 
-Thay vào đó, mở rộng [`buildInvoicePrintPayload()`](backend/src/routes/invoices.js:301) và endpoint [`router.get('/:idOrCode/print')`](backend/src/routes/invoices.js:520) để:
-- resolve template mặc định theo `req.accountId`
-- cho phép override tạm bằng query `template_id` nếu cần QA
-- trả thêm `template` vào payload in hóa đơn
+## 14. Danh sách file dự kiến cần sửa hoặc tạo
 
-Khuyến nghị payload in sau cùng có thêm:
-- `template.id`
-- `template.name`
-- `template.code`
-- `template.orientation`
-- `template.settings`
-- `template.logo_url_resolved`
+## 14.1 Backend cần sửa
 
-Lợi ích:
-- Trang in chỉ cần một request chính.
-- PDF download và print dialog luôn dùng cùng một nguồn dữ liệu.
-- Nếu sau này có Electron native print hoặc export server-side thì cùng dùng được payload này.
+- `backend/src/db/printTemplatesSchema.js`
+- `backend/src/services/printTemplateService.js`
+- `backend/src/routes/printTemplates.js`
+- `backend/src/routes/invoices.js`
+- `backend/src/middleware/printTemplateUpload.js`
+- `backend/scripts/init-print-templates-mysql.js`
+- `backend/package.json`
 
-## 4.7 Frontend route page menu tab
+## 14.2 Backend nên tạo mới
 
-### Khuyến nghị chính
+- `backend/src/services/printTemplateMigration.js`
+- `backend/src/services/printTemplateLayoutValidator.js`
+- `backend/src/services/printTemplateDocumentAdapter.js`
 
-- Không thêm route top-level mới.
-- Thêm tab `print-templates` vào [frontend/src/pages/Settings.jsx](frontend/src/pages/Settings.jsx).
-- Route vẫn là `/cai-dat`.
-- Nếu cần deep-link, dùng query như `#/cai-dat?tab=print-templates`.
+Ghi chú:
+- có thể gộp các file này vào `printTemplateService.js`
+- nhưng tách file sẽ dễ test và dễ bảo trì hơn
 
-### Vì sao không thêm page riêng ngay
+## 14.3 Frontend cần sửa
 
-- Cấu trúc tab cài đặt đã sẵn có.
-- Giảm sửa ở điều hướng sidebar trong [frontend/src/App.jsx](frontend/src/App.jsx).
-- Người dùng nhìn nhận đây là cấu hình hệ thống hơn là nghiệp vụ bán hàng hàng ngày.
-
-### Nhưng vẫn cần sửa [frontend/src/App.jsx](frontend/src/App.jsx)
-
-Dù không thêm route mới, vẫn nên sửa:
-- `ROUTE_PERMISSIONS` cho `/cai-dat` để nhận thêm `print_templates.read` và `print_templates.manage`
-- nếu có logic tab deep-link hoặc tab icon thì giữ thống nhất với settings
-
-## 4.8 Component preview và renderer
-
-Khuyến nghị tách như sau:
-
-### Renderer dùng chung
-
-Tạo component mới, ví dụ:
+- `frontend/src/pages/Settings.jsx`
+- `frontend/src/pages/InvoicePrint.jsx`
 - `frontend/src/components/invoice-print/InvoiceTemplateRenderer.jsx`
+- `frontend/src/components/invoice-print/PrintTemplateFormModal.jsx`
+- `frontend/src/components/invoice-print/templateDefaults.js`
+- `frontend/src/components/invoice-print/mockInvoicePayload.js`
+- `frontend/src/utils/apiClient.js`
+- `frontend/src/index.css`
+- `frontend/package.json`
 
-Nó nhận vào:
-- `invoicePayload`
-- `templateSettings`
-- `resolvedAssets`
-- `mode` `preview` hoặc `print`
+## 14.4 Frontend nên tạo mới
 
-### Container trang in
+- `frontend/src/components/invoice-print/PrintTemplatesTab.jsx`
+- `frontend/src/components/invoice-print/PrintTemplateEditorModal.jsx`
+- `frontend/src/components/invoice-print/editor/EditorCanvas.jsx`
+- `frontend/src/components/invoice-print/editor/EditorToolbar.jsx`
+- `frontend/src/components/invoice-print/editor/ElementPalette.jsx`
+- `frontend/src/components/invoice-print/editor/LayerPanel.jsx`
+- `frontend/src/components/invoice-print/editor/PropertiesPanel.jsx`
+- `frontend/src/components/invoice-print/editor/ElementFrame.jsx`
+- `frontend/src/components/invoice-print/editor/useTemplateEditorState.js`
+- `frontend/src/components/invoice-print/editor/useTemplateAutosave.js`
+- `frontend/src/components/invoice-print/editor/templateSchemaAdapter.js`
+- `frontend/src/components/invoice-print/editor/elementRegistry.js`
 
-[frontend/src/pages/InvoicePrint.jsx](frontend/src/pages/InvoicePrint.jsx) sẽ còn trách nhiệm:
-- đọc route param
-- gọi API in hóa đơn
-- gọi print download pdf
-- truyền dữ liệu vào renderer dùng chung
+## 15. Rủi ro kỹ thuật và phụ thuộc
 
-### Tab quản lý mẫu in
+### 15.1 Rủi ro lớn nhất: invoice table không phù hợp freeform tuyệt đối
 
-Tạo component tab mới, ví dụ:
-- `frontend/src/components/settings/PrintTemplatesTab.jsx`
+Nếu triển khai editor kiểu poster tự do hoàn toàn, hóa đơn nhiều dòng sẽ rất dễ vỡ trang. Đây là lý do kiến trúc chốt là hybrid zone + structured elements.
 
-Tab này có 2 cột:
-- cột trái: danh sách template + form chỉnh sửa + upload logo + nút set default
-- cột phải: preview realtime A5 dùng chung renderer
+### 15.2 Autosave có thể ghi quá dày vào MySQL
 
-### Dữ liệu preview
+Cần:
+- debounce phía client
+- bỏ qua request nếu payload không đổi
+- có `revision` để tránh race condition
 
-Khuyến nghị không gọi API preview riêng.
+### 15.3 Asset URL và CORS
 
-Dùng một trong hai cách:
-- sample invoice payload nội bộ cho preview editor
-- hoặc cho chọn một hóa đơn thật làm mẫu preview sau này
+`html2canvas`, PDF và in thật rất nhạy với URL ảnh. Logo phải resolve đúng backend origin ở cả web và Electron.
 
-Phase đầu nên dùng sample payload nội bộ để editor hoạt động ổn định, không phụ thuộc dữ liệu đơn hàng thực.
+### 15.4 Soft migration không thể chính xác tuyệt đối cho mọi template cũ
 
-## 4.9 Ảnh logo và URL resolve ở frontend
+Một số template v1 sẽ cần user tinh chỉnh lại vị trí sau khi mở bằng editor mới. Đây là chấp nhận được, miễn là renderer cũ vẫn tiếp tục chạy an toàn trước khi publish.
 
-Vì frontend dev thường chạy khác port backend, logo upload không nên được dùng trực tiếp như path tương đối thuần.
+### 15.5 File `Settings.jsx` hiện đã rất lớn
 
-Khuyến nghị:
-- backend lưu `logo_path` tương đối
-- API trả `logo_url` public tương đối như `/static/print-templates/...`
-- renderer frontend phải resolve ảnh qua helper URL hiện có trong [frontend/src/utils/apiClient.js](frontend/src/utils/apiClient.js), thay vì gắn raw path trực tiếp
+Nếu không tách tab mẫu in ra component riêng, bước implementation sẽ khó bảo trì và tăng nguy cơ regression.
 
-Điểm tốt hiện có:
-- lớp fetch chung đã xử lý `FormData`
-- helper URL hiện tại có thể tái sử dụng để build absolute URL backend
+### 15.6 In A5 phụ thuộc engine trình duyệt
 
-## 5. Danh sách file cần tạo và sửa
+Cần QA ở:
+- Chrome
+- Edge
+- Electron shell
+- Cốc Cốc nếu là môi trường vận hành thực tế
 
-## 5.1 Backend tạo mới
+### 15.7 Validation còn nhẹ ở backend hiện tại
 
-| File | Vai trò |
-|---|---|
-| `backend/src/db/printTemplatesMySql.js` | pool MySQL, query helper, transaction helper |
-| `backend/src/db/printTemplatesSchema.js` | `CREATE TABLE IF NOT EXISTS` và bootstrap schema |
-| `backend/src/routes/printTemplates.js` | CRUD API + set default + logo endpoints |
-| `backend/src/middleware/printTemplateUpload.js` | cấu hình multer upload logo |
-| `backend/scripts/init-print-templates-mysql.js` | script init schema thủ công cho deploy CI production |
+Schema v2 mà không có validation chặt sẽ dễ lưu document lỗi và làm hỏng trang in thật.
 
-## 5.2 Backend cần sửa
-
-| File | Lý do |
-|---|---|
-| [backend/package.json](backend/package.json) | thêm `mysql2` và script init nếu cần |
-| [backend/src/server.js](backend/src/server.js) | bootstrap MySQL schema, mount route, static assets |
-| [backend/src/db/database.js](backend/src/db/database.js) | thêm permission `print_templates.read` và `print_templates.manage` |
-| [backend/src/routes/invoices.js](backend/src/routes/invoices.js) | ghép template vào payload in hiện có |
-
-## 5.3 Frontend tạo mới
-
-| File | Vai trò |
-|---|---|
-| `frontend/src/components/invoice-print/InvoiceTemplateRenderer.jsx` | renderer A5 dùng chung cho print và preview |
-| `frontend/src/components/invoice-print/templateDefaults.js` | config mặc định và normalizer |
-| `frontend/src/components/invoice-print/mockInvoicePayload.js` | dữ liệu preview realtime cho editor |
-| `frontend/src/components/settings/PrintTemplatesTab.jsx` | UI CRUD quản lý mẫu in |
-
-## 5.4 Frontend cần sửa
-
-| File | Lý do |
-|---|---|
-| [frontend/src/utils/apiClient.js](frontend/src/utils/apiClient.js) | thêm `printTemplatesApi` và helper upload logo |
-| [frontend/src/pages/Settings.jsx](frontend/src/pages/Settings.jsx) | thêm tab `print-templates` và điều khiển quyền |
-| [frontend/src/pages/InvoicePrint.jsx](frontend/src/pages/InvoicePrint.jsx) | chuyển thành container dùng renderer chung |
-| [frontend/src/App.jsx](frontend/src/App.jsx) | mở quyền route `/cai-dat` cho permission mới nếu cần |
-| [frontend/src/index.css](frontend/src/index.css) hoặc file CSS tách riêng | giữ và mở rộng CSS in A5 cùng preview editor |
-
-## 6. Thứ tự triển khai khuyến nghị
-
-1. **Chuẩn bị backend MySQL riêng cho module**
-   - thêm dependency `mysql2`
-   - chốt env strategy
-   - bootstrap schema riêng cho `print_templates`
-
-2. **Bổ sung permission và route backend**
-   - thêm permission mới vào JSON auth layer
-   - tạo route CRUD và set default
-   - thêm upload logo và static serving
-
-3. **Mở rộng endpoint in hóa đơn hiện tại**
-   - resolve template mặc định
-   - merge `template` vào payload in
-   - giữ backward compatibility nếu template chưa có
-
-4. **Tách renderer in A5 dùng chung ở frontend**
-   - rút markup từ [frontend/src/pages/InvoicePrint.jsx](frontend/src/pages/InvoicePrint.jsx)
-   - giữ nguyên các CSS chống lệch bảng đang hoạt động
-
-5. **Thêm API client và tab quản lý mẫu in**
-   - thêm `printTemplatesApi`
-   - thêm tab `print-templates` trong Settings
-   - CRUD, set default, upload logo, preview realtime
-
-6. **Hoàn thiện trải nghiệm production**
-   - validate config đầu vào
-   - cleanup logo cũ
-   - fallback khi MySQL lỗi
-   - kiểm thử Chrome Edge Cốc Cốc và PDF download
-
-## 7. Rủi ro và điểm lưu ý cho subtask code
-
-### 7.1 JSON DB và MySQL sẽ cùng tồn tại
-
-Đây là quyết định chủ động, nhưng cần tránh để lỗi MySQL làm sập backend bán hàng hiện có.
-
-Khuyến nghị:
-- nếu MySQL module lỗi, route `/api/print-templates` trả `503`
-- route in hóa đơn vẫn có fallback template mặc định trong code để không chặn bán hàng
-
-### 7.2 Chưa có bootstrap env rõ ràng
-
-Vì chưa thấy `dotenv.config`, nếu dev chỉ thêm biến vào `.env` nhưng không bootstrap thì MySQL sẽ không kết nối được.
-
-### 7.3 Static logo dễ lỗi khác origin
-
-Nếu logo trả path tương đối mà renderer không resolve đúng base backend, preview ảnh sẽ hỏng khi frontend chạy port khác backend.
-
-### 7.4 Chỉ một template mặc định
-
-Phải dùng transaction khi set mặc định để tránh hai record cùng `is_default = 1` khi có thao tác đồng thời.
-
-### 7.5 Cleanup file logo
-
-Khi thay logo hoặc xóa template phải dọn file cũ đúng lúc, nhưng không xóa nhầm file đang được template khác dùng lại.
-
-### 7.6 Không có dark mode infra toàn cục
-
-Hiện tại chưa thấy hệ thống dark mode thật sự trong app, nên subtask code chỉ nên bảo đảm:
-- phần editor quản lý mẫu in dùng màu trung tính và tương phản đủ tốt
-- vùng preview giấy in luôn nền trắng cố định
-- không phụ thuộc vào class `dark` chưa tồn tại
-
-### 7.7 Không nên viết lại CSS in từ đầu
-
-CSS in hiện tại đã có nhiều tinh chỉnh đúng hướng cho A5 và bảng sản phẩm. Nên tái sử dụng nền tảng đang có thay vì thay toàn bộ.
-
-## 8. Mermaid tổng quan
+## 16. Mermaid tổng quan
 
 ```mermaid
 flowchart LR
-A[Settings tab print templates] --> B[printTemplatesApi]
-B --> C[/api/print-templates]
+A[Settings tab print templates] --> B[Editor modal v2]
+B --> C[Autosave publish API]
 C --> D[MySQL print_templates]
-C --> E[logo upload storage]
-F[InvoicePrint page] --> G[/api/invoices id print]
-G --> H[JSON DB invoices store auth]
-G --> D
-F --> I[shared invoice renderer]
-A --> I
+C --> E[Draft fields]
+B --> F[Shared document renderer]
+G[Invoice print page] --> H[Invoice print API]
+H --> D
+G --> F
 ```
 
-## 9. Kết luận chốt cho subtask code tiếp theo
+## 17. Thứ tự implementation khuyến nghị
 
-Hướng triển khai nên là:
-- giữ backend hiện hữu trên JSON DB
-- thêm một module MySQL độc lập chỉ cho `print_templates`
-- quản lý mẫu in dưới tab mới trong [frontend/src/pages/Settings.jsx](frontend/src/pages/Settings.jsx)
-- tách renderer A5 dùng chung để preview realtime và trang in thật dùng cùng một layout
-- mở rộng payload từ [backend/src/routes/invoices.js](backend/src/routes/invoices.js) để trang in lấy luôn template đã resolve
+1. Bổ sung schema MySQL cho draft và revision
+2. Viết adapter v1 sang v2 và validation backend
+3. Mở rộng service và route cho autosave, publish, discard draft
+4. Refactor renderer dùng document model chung
+5. Tách `Settings` tab mẫu in thành component riêng
+6. Xây editor shell và stage drag hoặc resize
+7. Kết nối autosave, conflict handling và publish flow
+8. Regression test A5 print, PDF, logo, multi-page table
 
-Đây là phương án ít rủi ro nhất, đúng phạm vi user yêu cầu, và phù hợp cấu trúc codebase hiện tại.
+## 18. Kết luận chốt cho bước tiếp theo
+
+Kiến trúc triển khai phù hợp nhất không phải là thay toàn bộ module hiện tại, mà là:
+- tận dụng backend CRUD MySQL và upload logo đã có
+- tận dụng renderer A5 và CSS in hiện có
+- nâng cấp sang document schema v2 tương thích ngược
+- xây editor kiểu Canva theo hướng hybrid DOM editor
+- tách autosave draft khỏi published layout để an toàn production
+
+Đây là phương án ít rủi ro nhất, bám sát codebase hiện tại, đáp ứng yêu cầu editor mới và vẫn bảo toàn độ ổn định của luồng in hóa đơn thật.

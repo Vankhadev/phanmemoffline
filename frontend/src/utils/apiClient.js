@@ -655,9 +655,26 @@ export const printTemplatesApi = {
     return apiJsonChecked(`/print-templates${suffix}`, {}, 'Không thể tải danh sách mẫu in hóa đơn.');
   },
   default() { return apiJsonChecked('/print-templates/default', {}, 'Không thể tải mẫu in hóa đơn mặc định.'); },
+  current(params = {}) {
+    const query = new URLSearchParams();
+    const templateId = params.template_id ?? params.templateId ?? params.id;
+    if (templateId !== undefined && templateId !== null && String(templateId).trim()) query.set('template_id', String(templateId).trim());
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiJsonChecked(`/print-templates/current${suffix}`, {}, 'Không thể tải mẫu in hóa đơn hiện hành.');
+  },
+  active(params = {}) {
+    const query = new URLSearchParams();
+    const templateId = params.template_id ?? params.templateId ?? params.id;
+    if (templateId !== undefined && templateId !== null && String(templateId).trim()) query.set('template_id', String(templateId).trim());
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiJsonChecked(`/print-templates/active${suffix}`, {}, 'Không thể tải mẫu in hóa đơn đang dùng.');
+  },
   detail(id) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết mẫu in hóa đơn.'); },
   create(payload = {}) { return apiJsonChecked('/print-templates', { method: 'POST', body: payload }, 'Không thể tạo mẫu in hóa đơn.'); },
   update(id, payload = {}) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật mẫu in hóa đơn.'); },
+  autosave(id, payload = {}) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}/autosave`, { method: 'PATCH', body: payload }, 'Không thể autosave mẫu in hóa đơn.'); },
+  publish(id, payload = {}) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}/publish`, { method: 'POST', body: payload }, 'Không thể publish mẫu in hóa đơn.'); },
+  discardDraft(id, payload = {}) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}/discard-draft`, { method: 'POST', body: payload }, 'Không thể hủy draft mẫu in hóa đơn.'); },
   remove(id) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể xóa mẫu in hóa đơn.'); },
   setDefault(id) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}/set-default`, { method: 'POST' }, 'Không thể đặt mẫu in hóa đơn mặc định.'); },
   uploadLogo(id, file) {

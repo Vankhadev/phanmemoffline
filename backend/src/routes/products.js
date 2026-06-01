@@ -5,6 +5,13 @@ const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, replaceTable, now } = require('../db/database');
 const { normalizeSearchText, parseKeywordList, searchFlatProducts } = require('../utils/productSearch');
+const {
+  NEGATIVE_STOCK_LIMIT,
+  NEGATIVE_STOCK_LIMIT_MESSAGE,
+  assertProductStockValueWithinLimit,
+  logNegativeStockTransition,
+  logNegativeStockLimitViolation,
+} = require('../utils/negativeStock');
 
 function getCategories() {
   return getAll('product_categories', c => c.active !== 0);
@@ -162,7 +169,7 @@ function productPayload(body, existing = {}, parent = null) {
     wholesale_price: body.wholesale_price !== null && body.wholesale_price !== undefined ? parseFloat(body.wholesale_price) || 0 : (existing.wholesale_price || 0),
     retail_price: body.retail_price !== null && body.retail_price !== undefined ? parseFloat(body.retail_price) || 0 : (existing.retail_price || 0),
     vip_price: body.vip_price !== null && body.vip_price !== undefined ? parseFloat(body.vip_price) || 0 : (existing.vip_price || 0),
-    stock: body.stock !== null && body.stock !== undefined ? parseInt(body.stock) || 0 : (existing.stock || 0),
+    stock: body.stock !== null && body.stock !== undefined ? parseInt(body.stock, 10) || 0 : (existing.stock || 0),
     unit: body.unit ? String(body.unit).trim() : (existing.unit || parent?.unit || 'cái'),
     category: categoryText,
     default_category_id: defaultCategoryId,
@@ -170,6 +177,17 @@ function productPayload(body, existing = {}, parent = null) {
       ? (body.supplier_id && body.supplier_id !== '' ? parseInt(body.supplier_id) : null)
       : (existing.supplier_id !== undefined ? existing.supplier_id : (parent?.supplier_id || null)),
   };
+
+  const stockProvided = body.stock !== null && body.stock !== undefined;
+  if (stockProvided || !existing.id) {
+    assertProductStockValueWithinLimit({
+      productId: existing.id || body.id || null,
+      productName: payload.name || body.name || existing.name || parent?.name || payload.sku || 'Sản phẩm',
+      stock: payload.stock,
+      currentStock: existing.id ? existing.stock : null,
+      operation: 'cập nhật tồn kho sản phẩm',
+    });
+  }
 
   const optionalFields = [
     'barcode', 'image_url', 'description', 'option1', 'option2', 'option3', 'sync_source',
@@ -180,6 +198,22 @@ function productPayload(body, existing = {}, parent = null) {
     else if (parent && ['sync_source'].includes(field) && Object.prototype.hasOwnProperty.call(parent, field)) payload[field] = parent[field] || '';
   }
   return payload;
+}
+
+function logProductStockChangeIfNegative(product, previousStock = null, source = 'products', options = {}) {
+  const finalStock = Number(product?.stock) || 0;
+  if (!product || finalStock >= 0) return null;
+  const normalizedPreviousStock = previousStock === undefined || previousStock === null ? null : (Number(previousStock) || 0);
+  return logNegativeStockTransition({
+    productId: product.id || null,
+    productName: product.name || product.sku || 'Sản phẩm',
+    currentStock: normalizedPreviousStock,
+    changeQuantity: normalizedPreviousStock === null ? undefined : finalStock - normalizedPreviousStock,
+    projectedStock: finalStock,
+    operation: options.operation || 'cập nhật tồn kho sản phẩm',
+    source,
+    reference_id: options.reference_id || null,
+  }, { skipSave: options.skipSave === true });
 }
 
 const IMPORT_EXPECTED_COLUMNS = Object.freeze([
@@ -439,11 +473,12 @@ function normalizeSingleNumericSeparator(raw, separator) {
   return raw.replace(new RegExp(`\\${separator}`, 'g'), '');
 }
 
-function parseImportNumber(value, fieldLabel, line, errors) {
+function parseImportNumber(value, fieldLabel, line, errors, options = {}) {
   if (!hasImportValue(value)) return undefined;
+  const allowNegative = options.allowNegative === true;
   if (typeof value === 'number') {
-    if (!Number.isFinite(value) || value < 0) {
-      errors.push({ line, field: fieldLabel, message: `${fieldLabel} phải là số không âm` });
+    if (!Number.isFinite(value) || (!allowNegative && value < 0)) {
+      errors.push({ line, field: fieldLabel, message: `${fieldLabel} phải là số${allowNegative ? '' : ' không âm'}` });
       return undefined;
     }
     return value;
@@ -489,18 +524,18 @@ function parseImportNumber(value, fieldLabel, line, errors) {
   }
 
   const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) {
-    errors.push({ line, field: fieldLabel, message: `${fieldLabel} phải là số không âm` });
+  if (!Number.isFinite(n) || (!allowNegative && n < 0)) {
+    errors.push({ line, field: fieldLabel, message: `${fieldLabel} phải là số${allowNegative ? '' : ' không âm'}` });
     return undefined;
   }
   return n;
 }
 
-function parseImportInteger(value, fieldLabel, line, errors) {
-  const n = parseImportNumber(value, fieldLabel, line, errors);
+function parseImportInteger(value, fieldLabel, line, errors, options = {}) {
+  const n = parseImportNumber(value, fieldLabel, line, errors, options);
   if (n === undefined) return undefined;
   if (!Number.isInteger(n)) {
-    errors.push({ line, field: fieldLabel, message: `${fieldLabel} phải là số nguyên không âm` });
+    errors.push({ line, field: fieldLabel, message: `${fieldLabel} phải là số nguyên${options.allowNegative === true ? '' : ' không âm'}` });
     return undefined;
   }
   return n;
@@ -588,13 +623,16 @@ function normalizeExcelImportRow(row, index, errors) {
     wholesale_price: parseImportNumber(getImportCell(row, IMPORT_COLUMN_ALIASES.wholesale_price), 'Giá sỉ', line, numericErrors),
     retail_price: parseImportNumber(getImportCell(row, IMPORT_COLUMN_ALIASES.retail_price), 'Giá lẻ', line, numericErrors),
     vip_price: parseImportNumber(getImportCell(row, IMPORT_COLUMN_ALIASES.vip_price), 'Giá VIP', line, numericErrors),
-    stock: parseImportInteger(getImportCell(row, IMPORT_COLUMN_ALIASES.stock), 'Tồn kho', line, numericErrors),
+    stock: parseImportInteger(getImportCell(row, IMPORT_COLUMN_ALIASES.stock), 'Tồn kho', line, numericErrors, { allowNegative: true }),
     unit,
     category,
     default_category_id: parseImportId(getImportCell(row, IMPORT_COLUMN_ALIASES.default_category_id), 'Default category id', line, numericErrors, id => Boolean(getOne('product_categories', c => c.id === id && c.active !== 0))),
     supplier_id: parseImportId(getImportCell(row, IMPORT_COLUMN_ALIASES.supplier_id), 'Supplier id', line, numericErrors),
     active: parseImportBoolean(getImportCell(row, IMPORT_COLUMN_ALIASES.active), 'Hoạt động', line, numericErrors),
   };
+  if (parsed.stock !== undefined && parsed.stock < NEGATIVE_STOCK_LIMIT) {
+    errors.push({ line, field: 'Tồn kho', message: `${NEGATIVE_STOCK_LIMIT_MESSAGE}. Tồn kho import không được nhỏ hơn ${NEGATIVE_STOCK_LIMIT}.` });
+  }
   errors.push(...numericErrors);
   return parsed;
 }
@@ -867,7 +905,9 @@ router.post('/import-excel-rows', (req, res) => {
       });
     }
 
-    const nextProducts = getAll('products').map(product => ({ ...product }));
+    const previousProducts = getAll('products');
+    const previousProductsById = new Map(previousProducts.map(product => [Number(product.id), product]));
+    const nextProducts = previousProducts.map(product => ({ ...product }));
     let nextId = nextProducts.reduce((max, product) => Math.max(max, Number(product.id) || 0), 0) + 1;
     const parentBySku = new Map(nextProducts.filter(product => product.sku && !product.parent_id).map(product => [normalizeSkuKey(product.sku), product]));
     const variantByLegacySku = new Map(nextProducts.filter(product => product.sku && product.parent_id).map(product => [normalizeSkuKey(product.sku), product]));
@@ -947,6 +987,12 @@ router.post('/import-excel-rows', (req, res) => {
     summary.syncedVariantSkus = 0;
 
     replaceTable('products', nextProducts);
+    for (const product of nextProducts) {
+      const previous = previousProductsById.get(Number(product.id));
+      if ((Number(product.stock) || 0) < 0 && (!previous || (Number(previous.stock) || 0) !== (Number(product.stock) || 0))) {
+        logProductStockChangeIfNegative(product, previous?.stock ?? null, 'products_import_excel_rows');
+      }
+    }
     res.json({
       ok: true,
       error: null,
@@ -960,7 +1006,9 @@ router.post('/import-excel-rows', (req, res) => {
     });
   } catch (err) {
     console.error('[KHA IMPORT EXCEL] Unexpected error:', err);
-    res.status(500).json({
+    logNegativeStockLimitViolation(err, { source: 'products_import_excel_rows' });
+    const status = err.status || err.statusCode || 500;
+    res.status(status).json({
       ok: false,
       error: 'Lỗi khi import Excel sản phẩm',
       detail: err.message,
@@ -1024,16 +1072,20 @@ router.post('/', (req, res) => {
 
     if (existing) {
       const parentSkuChanged = normalizeSku(existing.sku) !== normalizeSku(finalData.sku);
-      update('products', existing.id, finalData);
+      const updated = update('products', existing.id, finalData);
+      logProductStockChangeIfNegative(updated, existing.stock, 'products_api');
       const reassignedVariantSkus = parentSkuChanged ? reassignVariantSkusToParentSequence(existing.id, finalData.sku, nowTime) : 0;
       res.json({ ok: true, id: existing.id, message: 'Cập nhật sản phẩm thành công', action: 'updated', syncedVariants: reassignedVariantSkus, reassignedVariantSkus });
     } else {
       finalData.created_at = nowTime;
       const id = insert('products', finalData);
+      logProductStockChangeIfNegative({ id, ...finalData }, null, 'products_api');
       res.json({ ok: true, id, message: 'Tạo sản phẩm thành công', action: 'created', syncedVariants: 0, reassignedVariantSkus: 0 });
     }
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi lưu sản phẩm', detail: err.message });
+    const status = err.status || err.statusCode || 500;
+    logNegativeStockLimitViolation(err, { source: 'products_api_create_or_update' });
+    res.status(status).json({ error: 'Lỗi khi lưu sản phẩm', detail: err.message, code: err.code });
   }
 });
 
@@ -1070,11 +1122,14 @@ router.put('/:id', (req, res) => {
     };
 
     const parentSkuChanged = !isVariant && normalizeSku(product.sku) !== normalizeSku(changes.sku);
-    update('products', id, changes);
+    const updated = update('products', id, changes);
+    logProductStockChangeIfNegative(updated, product.stock, 'products_api');
     const reassignedVariantSkus = parentSkuChanged ? reassignVariantSkusToParentSequence(id, changes.sku, nowTime) : 0;
     res.json({ ok: true, message: 'Cập nhật sản phẩm thành công', syncedVariants: reassignedVariantSkus, reassignedVariantSkus });
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi cập nhật sản phẩm', detail: err.message });
+    const status = err.status || err.statusCode || 500;
+    logNegativeStockLimitViolation(err, { source: 'products_api_update' });
+    res.status(status).json({ error: 'Lỗi khi cập nhật sản phẩm', detail: err.message, code: err.code });
   }
 });
 
@@ -1145,10 +1200,13 @@ router.post('/:parentId/variants', (req, res) => {
       created_at: nowTime,
       updated_at: nowTime,
     });
+    logProductStockChangeIfNegative({ id, ...payload, parent_id: parentId }, null, 'products_variant_api');
 
     res.json({ ok: true, id, sku: payload.sku, message: 'Tạo biến thể thành công' });
   } catch (err) {
-    res.status(err.statusCode || 500).json({ error: 'Lỗi khi tạo biến thể', detail: err.message });
+    const status = err.status || err.statusCode || 500;
+    logNegativeStockLimitViolation(err, { source: 'products_variant_create' });
+    res.status(status).json({ error: 'Lỗi khi tạo biến thể', detail: err.message, code: err.code });
   }
 });
 
@@ -1170,10 +1228,13 @@ router.put('/variants/:id', (req, res) => {
       updated_at: now(),
     };
 
-    update('products', id, changes);
+    const updated = update('products', id, changes);
+    logProductStockChangeIfNegative(updated, variant.stock, 'products_variant_api');
     res.json({ ok: true, message: 'Cập nhật biến thể thành công' });
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi cập nhật biến thể', detail: err.message });
+    const status = err.status || err.statusCode || 500;
+    logNegativeStockLimitViolation(err, { source: 'products_variant_update' });
+    res.status(status).json({ error: 'Lỗi khi cập nhật biến thể', detail: err.message, code: err.code });
   }
 });
 
@@ -1251,17 +1312,21 @@ router.post('/import', (req, res) => {
         if (sku) {
           const existing = getOne('products', p => p.sku === sku && p.active !== 0);
           if (existing) {
-            update('products', existing.id, { ...productPayload(base, existing, parent), updated_at: now() });
+            const updated = update('products', existing.id, { ...productPayload(base, existing, parent), updated_at: now() });
+            logProductStockChangeIfNegative(updated, existing.stock, 'products_import_csv');
             results.updated++;
           } else {
-            insert('products', { ...payload, active: 1, created_at: now(), updated_at: now() });
+            const id = insert('products', { ...payload, active: 1, created_at: now(), updated_at: now() });
+            logProductStockChangeIfNegative({ id, ...payload }, null, 'products_import_csv');
             results.created++;
           }
         } else {
-          insert('products', { ...payload, sku: '', active: 1, created_at: now(), updated_at: now() });
+          const id = insert('products', { ...payload, sku: '', active: 1, created_at: now(), updated_at: now() });
+          logProductStockChangeIfNegative({ id, ...payload, sku: '' }, null, 'products_import_csv');
           results.created++;
         }
       } catch (e) {
+        logNegativeStockLimitViolation(e, { source: 'products_import_csv', line: i + 1 });
         results.errors.push(`Dòng ${i + 1}: ${e.message}`);
       }
     }

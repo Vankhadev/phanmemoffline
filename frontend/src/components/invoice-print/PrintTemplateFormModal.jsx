@@ -1,6 +1,5 @@
 import { Image, Loader2, Upload, X } from 'lucide-react';
 import InvoiceTemplateRenderer from './InvoiceTemplateRenderer';
-import mockInvoicePayload from './mockInvoicePayload';
 
 function ToggleField({ label, description = '', checked, onChange }) {
   return (
@@ -76,6 +75,7 @@ export default function PrintTemplateFormModal({
   logoFile,
   logoPreviewUrl,
   previewTemplate,
+  previewPayload = null,
   canManage = true,
   onClose,
   onSave,
@@ -195,7 +195,13 @@ export default function PrintTemplateFormModal({
               <div>{form.paper_size} · {form.orientation === 'landscape' ? 'Ngang' : 'Dọc'} · {Math.round(Number(form.previewZoom || 1) * 100)}%</div>
             </div>
             <div className="invoice-print-preview-frame min-h-full justify-start lg:justify-center">
-              <InvoiceTemplateRenderer payload={mockInvoicePayload} template={previewTemplate} logoPreviewUrl={logoPreviewUrl} />
+              {previewPayload ? (
+                <InvoiceTemplateRenderer payload={previewPayload} template={previewTemplate} logoPreviewUrl={logoPreviewUrl} />
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-white/80 p-4 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-400">
+                  Component legacy này chỉ render preview khi được truyền dữ liệu hóa đơn thật qua previewPayload.
+                </div>
+              )}
             </div>
           </section>
         </div>

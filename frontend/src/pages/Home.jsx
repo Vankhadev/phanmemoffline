@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AlertCircle, BarChart3, Calendar, FileText, HelpCircle, Layers, Package, PackageSearch, ShoppingCart, Store, TrendingUp } from 'lucide-react';
 import { ApiError, SYNC_UPDATED_EVENT, apiJsonChecked } from '../utils/apiClient';
 import HelpModal from '../components/HelpModal';
+import { NEGATIVE_STOCK_LIMIT, formatStockValue, getStockDisplayMeta } from '../utils/negativeStock';
 
 const EMPTY_STATS = {
   todayRevenue: 0,
@@ -11,9 +12,108 @@ const EMPTY_STATS = {
   totalProducts: 0,
   outOfStock: 0,
   lowStock: 0,
+  negativeStockCount: 0,
+  negativeStockNearLimitCount: 0,
+  negativeStockBreachedCount: 0,
+  lowestNegativeStock: 0,
+  negativeStockProducts: [],
 };
 
 const SUMMARY_SYNC_TABLES = ['invoices', 'invoice_details', 'products', 'daily_stats'];
+
+function normalizeNegativeStockProduct(product = {}) {
+  const stock = Number(product.stock ?? product.current_stock ?? product.currentStock ?? 0);
+  return {
+    ...product,
+    id: product.id ?? product.product_id ?? product.variant_id ?? '',
+    sku: product.sku || product.product_sku || product.variant_sku || '',
+    name: product.name || product.product_name || product.variant_name || product.sku || 'Sản phẩm',
+    stock: Number.isFinite(stock) ? stock : 0,
+  };
+}
+
+function hasNegativeStockFields(data = {}) {
+  const summary = data?.summary || {};
+  return Boolean(
+    data?.negativeStock
+    || data?.negative_stock
+    || data?.stock?.negative_stock
+    || data?.stock?.negativeStock
+    || summary.negativeStock
+    || summary.negative_stock
+    || summary.negativeStockCount !== undefined
+    || summary.negative_stock_count !== undefined
+    || data?.negativeStockCount !== undefined
+    || data?.negative_stock_count !== undefined
+  );
+}
+
+function extractNegativeStockStats(data = {}) {
+  const summary = data?.summary || {};
+  const negativeStock = data?.negativeStock
+    || data?.negative_stock
+    || data?.stock?.negative_stock
+    || data?.stock?.negativeStock
+    || summary.negativeStock
+    || summary.negative_stock
+    || {};
+  const productCandidates = [
+    negativeStock.products,
+    negativeStock.negative_products,
+    negativeStock.items,
+    summary.negativeStockProducts,
+    summary.negative_stock_products,
+    data?.negativeStockProducts,
+    data?.negative_stock_products,
+    data?.lowStock,
+  ].find(Array.isArray) || [];
+  const products = productCandidates
+    .map(normalizeNegativeStockProduct)
+    .filter(product => product.stock < 0);
+  const nearLimitProducts = products.filter(product => getStockDisplayMeta(product.stock).isNearLimit);
+  const breachedProducts = products.filter(product => getStockDisplayMeta(product.stock).isBreached);
+  const lowestStock = products.length > 0 ? Math.min(...products.map(product => product.stock)) : 0;
+
+  return {
+    count: Number(
+      negativeStock.negative_count
+      ?? negativeStock.negativeCount
+      ?? summary.negativeStockCount
+      ?? summary.negative_stock_count
+      ?? data?.negativeStockCount
+      ?? data?.negative_stock_count
+      ?? products.length
+    ) || 0,
+    nearLimitCount: Number(
+      negativeStock.near_limit_count
+      ?? negativeStock.nearLimitCount
+      ?? summary.negativeStockNearLimitCount
+      ?? summary.negative_stock_near_limit_count
+      ?? data?.negativeStockNearLimitCount
+      ?? data?.negative_stock_near_limit_count
+      ?? nearLimitProducts.length
+    ) || 0,
+    breachedCount: Number(
+      negativeStock.breached_count
+      ?? negativeStock.breachedCount
+      ?? summary.negativeStockBreachedCount
+      ?? summary.negative_stock_breached_count
+      ?? data?.negativeStockBreachedCount
+      ?? data?.negative_stock_breached_count
+      ?? breachedProducts.length
+    ) || 0,
+    lowestStock: Number(
+      negativeStock.lowest_stock
+      ?? negativeStock.lowestStock
+      ?? summary.lowestNegativeStock
+      ?? summary.lowest_negative_stock
+      ?? data?.lowestNegativeStock
+      ?? data?.lowest_negative_stock
+      ?? lowestStock
+    ) || 0,
+    products,
+  };
+}
 
 export default function Home({ user, store = {} }) {
   const [stats, setStats] = useState(EMPTY_STATS);
@@ -37,7 +137,16 @@ export default function Home({ user, store = {} }) {
 
     try {
       const data = await apiJsonChecked('/dashboard/summary', {}, 'Không thể tải thống kê trang chủ.');
+      let negativeStockSource = data;
+      if (!hasNegativeStockFields(data)) {
+        try {
+          negativeStockSource = await apiJsonChecked('/stats/summary', {}, 'Không thể tải thống kê âm kho.');
+        } catch (_) {
+          negativeStockSource = data;
+        }
+      }
       const summary = data?.summary || data || {};
+      const negativeStockInfo = extractNegativeStockStats(negativeStockSource);
 
       setStats({
         todayRevenue: Number(summary.todayRevenue) || 0,
@@ -46,6 +155,11 @@ export default function Home({ user, store = {} }) {
         totalProducts: Number(summary.totalProducts) || 0,
         outOfStock: Number(summary.outOfStock) || 0,
         lowStock: Number(summary.lowStock) || 0,
+        negativeStockCount: negativeStockInfo.count,
+        negativeStockNearLimitCount: negativeStockInfo.nearLimitCount,
+        negativeStockBreachedCount: negativeStockInfo.breachedCount,
+        lowestNegativeStock: negativeStockInfo.lowestStock,
+        negativeStockProducts: negativeStockInfo.products,
       });
     } catch (error) {
       setStats(EMPTY_STATS);
@@ -103,20 +217,30 @@ export default function Home({ user, store = {} }) {
     {
       title: 'Tổng sản phẩm',
       value: stats.totalProducts.toLocaleString('vi-VN'),
-      sub: `${stats.outOfStock.toLocaleString('vi-VN')} sản phẩm hết hàng`,
+      sub: `${stats.outOfStock.toLocaleString('vi-VN')} sản phẩm tồn 0`,
       icon: Package,
       textColor: 'text-purple-600',
       bgColor: 'bg-purple-50',
     },
     {
       title: 'Cảnh báo tồn kho',
-      value: (stats.outOfStock + stats.lowStock).toLocaleString('vi-VN'),
-      sub: `${stats.lowStock.toLocaleString('vi-VN')} sản phẩm sắp hết`,
+      value: (stats.outOfStock + stats.lowStock + stats.negativeStockCount).toLocaleString('vi-VN'),
+      sub: `${stats.lowStock.toLocaleString('vi-VN')} sắp hết · ${stats.negativeStockCount.toLocaleString('vi-VN')} âm kho`,
       icon: AlertCircle,
       textColor: 'text-red-600',
       bgColor: 'bg-red-50',
     },
-  ]), [formatVND, stats.lowStock, stats.outOfStock, stats.paidOrders, stats.todayOrders, stats.todayRevenue, stats.totalProducts]);
+    {
+      title: 'Âm kho',
+      value: stats.negativeStockCount.toLocaleString('vi-VN'),
+      sub: stats.negativeStockCount > 0
+        ? `${stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} gần ${NEGATIVE_STOCK_LIMIT} · thấp nhất ${formatStockValue(stats.lowestNegativeStock)}`
+        : `Không có sản phẩm âm kho; ngưỡng ${NEGATIVE_STOCK_LIMIT}`,
+      icon: AlertCircle,
+      textColor: stats.negativeStockNearLimitCount > 0 ? 'text-orange-600' : 'text-red-600',
+      bgColor: stats.negativeStockNearLimitCount > 0 ? 'bg-orange-50' : 'bg-red-50',
+    },
+  ]), [formatVND, stats.lowStock, stats.lowestNegativeStock, stats.negativeStockCount, stats.negativeStockNearLimitCount, stats.outOfStock, stats.paidOrders, stats.todayOrders, stats.todayRevenue, stats.totalProducts]);
 
   const quickActions = useMemo(() => ([
     {
@@ -235,6 +359,33 @@ export default function Home({ user, store = {} }) {
         </div>
       ) : null}
 
+      {stats.negativeStockCount > 0 ? (
+        <div className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${stats.negativeStockNearLimitCount > 0 ? 'border-orange-200 bg-orange-50 text-orange-900' : 'border-red-200 bg-red-50 text-red-800'}`}>
+          <div className="font-bold">⚠️ Có {stats.negativeStockCount.toLocaleString('vi-VN')} sản phẩm đang âm kho</div>
+          <div className="mt-1 text-xs">
+            {stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} sản phẩm gần ngưỡng {NEGATIVE_STOCK_LIMIT}; thấp nhất {formatStockValue(stats.lowestNegativeStock)}.
+          </div>
+          {stats.negativeStockProducts.length > 0 ? (
+            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {stats.negativeStockProducts.slice(0, 6).map((product, index) => {
+                const stockMeta = getStockDisplayMeta(product.stock);
+                return (
+                  <div key={`${product.id || product.sku || product.name}-${index}`} className={`rounded-xl border px-3 py-2 ${stockMeta.isNearLimit ? 'border-orange-200 bg-white/70' : 'border-red-200 bg-white/70'}`}>
+                    <div className={`truncate text-xs font-semibold ${stockMeta.nameClass}`}>{product.name}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="text-gray-500">SKU: {product.sku || '—'}</span>
+                      <span className={stockMeta.textClass}>{stockMeta.display}</span>
+                      <span className={`rounded-full px-2 py-0.5 font-bold ${stockMeta.badgeClass}`}>Âm kho</span>
+                      {stockMeta.isNearLimit ? <span className="rounded-full border border-orange-200 bg-orange-100 px-2 py-0.5 font-bold text-orange-800">Gần -100</span> : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <TrendingUp size={18} className="text-blue-500" />
@@ -242,8 +393,8 @@ export default function Home({ user, store = {} }) {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, index) => (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, index) => (
               <div key={`home-stat-skeleton-${index}`} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-3">
@@ -257,7 +408,7 @@ export default function Home({ user, store = {} }) {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
             {statCards.map(card => {
               const Icon = card.icon;
 
@@ -325,7 +476,8 @@ export default function Home({ user, store = {} }) {
                   <li><strong>Doanh thu hôm nay:</strong> Tổng tiền từ các đơn hàng đã thanh toán trong ngày</li>
                   <li><strong>Đơn hàng hôm nay:</strong> Số lượng đơn tạo trong ngày và số đã thanh toán</li>
                   <li><strong>Tổng sản phẩm:</strong> Tổng số sản phẩm trong kho, cả sản phẩm cha và biến thể</li>
-                  <li><strong>Cảnh báo tồn kho:</strong> Số lượng sản phẩm hết hàng hoặc sắp hết ({'<'}10)</li>
+                  <li><strong>Cảnh báo tồn kho:</strong> Số lượng sản phẩm tồn 0, sắp hết hoặc đang âm kho</li>
+                  <li><strong>Âm kho:</strong> Sản phẩm có tồn âm, cảnh báo gần ngưỡng {NEGATIVE_STOCK_LIMIT}</li>
                 </ul>
               </div>
 

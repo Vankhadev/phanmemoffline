@@ -15,6 +15,9 @@ const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayNa
 const {
   getInvoiceDetailProductId,
   validateNegativeStockForDetails,
+  assertCanApplyProductStockDelta,
+  logNegativeStockTransition,
+  logNegativeStockLimitViolation,
 } = require('../utils/negativeStock');
 
 function createHttpError(message, status = 400) {
@@ -137,20 +140,41 @@ function mergeDuplicateDetails(details) {
 
 function deductStock(productOrVariantId, quantity, options = {}) {
   const writeOptions = options.skipSave === true ? { skipSave: true } : {};
+  const normalizedQuantity = Math.max(0, Number(quantity) || 0);
+  if (normalizedQuantity <= 0) return null;
+
   const variant = getOne('products', v => Number(v.id) === Number(productOrVariantId) && v.parent_id != null);
   if (variant) {
-    update('products', variant.id, {
-      stock: (Number(variant.stock) || 0) - quantity,
+    const validation = assertCanApplyProductStockDelta({
+      productId: variant.id,
+      detail: { product_name: variant.name, product_sku: variant.sku },
+      delta: -normalizedQuantity,
+      quantity: normalizedQuantity,
+      operation: 'xuất kho hóa đơn',
+    });
+    const updated = update('products', variant.id, {
+      stock: validation.projectedStock,
     }, writeOptions);
-    return;
+    logNegativeStockTransition({ ...validation, source: options.source || 'invoice' }, writeOptions);
+    return updated;
   }
 
   const product = getOne('products', p => Number(p.id) === Number(productOrVariantId) && !p.parent_id);
   if (product) {
-    update('products', product.id, {
-      stock: (Number(product.stock) || 0) - quantity,
+    const validation = assertCanApplyProductStockDelta({
+      productId: product.id,
+      detail: { product_name: product.name, product_sku: product.sku },
+      delta: -normalizedQuantity,
+      quantity: normalizedQuantity,
+      operation: 'xuất kho hóa đơn',
+    });
+    const updated = update('products', product.id, {
+      stock: validation.projectedStock,
     }, writeOptions);
+    logNegativeStockTransition({ ...validation, source: options.source || 'invoice' }, writeOptions);
+    return updated;
   }
+  return null;
 }
 
 function restoreStock(productOrVariantId, quantity, options = {}) {
@@ -234,10 +258,11 @@ function getDetailProductId(detail = {}) {
   return getInvoiceDetailProductId(detail);
 }
 
-function validateStockForDetails(details = []) {
+function validateStockForDetails(details = [], options = {}) {
   try {
-    validateNegativeStockForDetails(details);
+    return validateNegativeStockForDetails(details, options);
   } catch (error) {
+    logNegativeStockLimitViolation(error, { source: options.source || 'invoice_service', operation: 'validate_invoice_details' }, { skipSave: true });
     if (error?.status) throw error;
     throw createHttpError(error?.message || 'Không thể kiểm tra tồn kho trước khi xuất hàng', 400);
   }
@@ -396,7 +421,7 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
     return buildExistingInvoiceResult(existing, client_order_id, payload_hash, idempotency_key);
   }
 
-  validateStockForDetails(safeDetails);
+  validateStockForDetails(safeDetails, { source: options.orderSource || 'invoice_service' });
 
   const money = buildInvoiceMoneyFields(payload, safeDetails);
   const creatorMetadata = buildCreatorMetadata(payload, req, options);
@@ -437,7 +462,7 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
       const detailRow = normalizeInvoiceDetail(detail, invoice_id);
       insert('invoice_details', detailRow, { skipSave: true, accountId });
       const productId = getDetailProductId(detailRow);
-      if (productId) deductStock(productId, +detailRow.quantity || 1, { skipSave: true });
+      if (productId) deductStock(productId, +detailRow.quantity || 1, { skipSave: true, source: creatorMetadata.order_source || 'invoice' });
     }
 
     const invoice = getOne('invoices', invoiceRow => Number(invoiceRow.id) === Number(invoice_id));

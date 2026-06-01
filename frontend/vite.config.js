@@ -23,15 +23,16 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined
-          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'react-vendor'
-          if (id.includes('xlsx')) return 'xlsx-vendor'
-          if (id.includes('recharts') || id.includes('d3-')) return 'charts-vendor'
-          if (id.includes('lucide-react')) return 'icons-vendor'
-          return 'vendor'
+          if (/node_modules[\\/](react|react-dom|react-router-dom|scheduler)[\\/]/.test(id)) return 'react-vendor'
+          if (/node_modules[\\/]xlsx[\\/]/.test(id)) return 'xlsx-vendor'
+          if (/node_modules[\\/](recharts|d3-[^\\/]+)[\\/]/.test(id)) return 'charts-vendor'
+          if (/node_modules[\\/]lucide-react[\\/]/.test(id)) return 'icons-vendor'
+          return undefined
         },
       },
     },

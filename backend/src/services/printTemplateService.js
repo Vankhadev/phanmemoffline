@@ -1,5 +1,24 @@
 const { ensurePrintTemplatesSchema } = require('../db/printTemplatesSchema');
 const { getPrintTemplatesPool, normalizePrintTemplatesMySqlError, query } = require('../db/printTemplatesMySql');
+const {
+  DEFAULT_LAYOUT_V2,
+  DEFAULT_SETTINGS_V2,
+  buildDefaultV2Settings,
+  cloneJson,
+  detectTemplateSchemaVersion,
+  isPlainObject,
+  isV2Layout,
+  isV2Settings,
+  normalizeOrientation: normalizeDocumentOrientation,
+  normalizePaperSize: normalizeDocumentPaperSize,
+  toEditorV2Document,
+} = require('./printTemplateDocumentAdapter');
+const {
+  formatValidationErrors,
+  validateEditorMetaJson,
+  validateLayoutV2,
+  validateSettingsV2,
+} = require('./printTemplateLayoutValidator');
 
 const DEFAULT_LAYOUT_JSON = Object.freeze({
   page: { size: 'A5', orientation: 'portrait', paddingMm: 8 },
@@ -24,11 +43,12 @@ const STATUSES = new Set(['draft', 'active', 'archived']);
 
 let readyPromise = null;
 
-function createHttpError(status, message, code = '') {
+function createHttpError(status, message, code = '', details = null) {
   const error = new Error(message);
   error.status = status;
   error.code = code;
   error.expose = status >= 400 && status < 500;
+  if (details && typeof details === 'object') error.details = details;
   return error;
 }
 
@@ -60,6 +80,11 @@ function normalizeUserId(value) {
   return parseId(value) || null;
 }
 
+function parsePositiveInteger(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
 function parseBooleanFlag(value, fallback = 0) {
   if (value === undefined || value === null || value === '') return fallback ? 1 : 0;
   if (value === true || value === 1 || value === '1') return 1;
@@ -70,30 +95,40 @@ function parseBooleanFlag(value, fallback = 0) {
   return fallback ? 1 : 0;
 }
 
-function isPlainObject(value) {
-  return value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function cloneJson(value) {
+function cloneJsonValue(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
 function parseJsonObject(value, fallback = {}) {
-  if (value === undefined || value === null || value === '') return cloneJson(fallback);
+  if (value === undefined || value === null || value === '') return cloneJsonValue(fallback);
   if (isPlainObject(value)) return value;
   if (typeof value === 'string') {
     try {
       const parsed = JSON.parse(value);
-      return isPlainObject(parsed) ? parsed : cloneJson(fallback);
+      return isPlainObject(parsed) ? parsed : cloneJsonValue(fallback);
     } catch (_error) {
-      return cloneJson(fallback);
+      return cloneJsonValue(fallback);
     }
   }
-  return cloneJson(fallback);
+  return cloneJsonValue(fallback);
+}
+
+function parseNullableJsonObject(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (isPlainObject(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return isPlainObject(parsed) ? parsed : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+  return null;
 }
 
 function parseJsonObjectInput(value, fieldLabel, fallback = {}, { allowNull = true } = {}) {
-  if (value === undefined) return { provided: false, value: cloneJson(fallback) };
+  if (value === undefined) return { provided: false, value: cloneJsonValue(fallback) };
   if (value === null || value === '') {
     if (allowNull) return { provided: true, value: null };
     return { error: `${fieldLabel} phải là JSON object hợp lệ.` };
@@ -145,6 +180,65 @@ function normalizeStatus(value) {
   return STATUSES.has(status) ? status : 'active';
 }
 
+function schemaVersionFromLayout(layout, settings, explicitVersion = null) {
+  return detectTemplateSchemaVersion(layout || {}, settings || {}, explicitVersion) >= 2 ? 2 : 1;
+}
+
+function jsonStringifyOrNull(value) {
+  return value === null || value === undefined ? null : JSON.stringify(value);
+}
+
+function extractPaperSizeFromLayout(layout, fallback = 'A5') {
+  if (!isPlainObject(layout)) return normalizePaperSize(fallback);
+  if (isV2Layout(layout)) return normalizeDocumentPaperSize(layout.canvas?.pageSize || fallback);
+  return normalizePaperSize(layout.page?.size || fallback);
+}
+
+function extractOrientationFromLayout(layout, fallback = 'portrait') {
+  if (!isPlainObject(layout)) return normalizeOrientation(fallback);
+  if (isV2Layout(layout)) return normalizeDocumentOrientation(layout.canvas?.orientation || fallback, extractPaperSizeFromLayout(layout));
+  return normalizeOrientation(layout.page?.orientation || fallback);
+}
+
+function mergeSettingsPublishState(settings, { revision, hasDraft, sourceSchemaVersion } = {}) {
+  const result = isPlainObject(settings) ? cloneJson(settings) : cloneJson(DEFAULT_SETTINGS_V2);
+  result.schema_version = 2;
+  result.renderMode = result.renderMode || result.render_mode || 'hybrid-dom';
+  result.editor = isPlainObject(result.editor) ? result.editor : cloneJson(DEFAULT_SETTINGS_V2.editor || {});
+  result.publish = isPlainObject(result.publish) ? result.publish : {};
+  result.publish.revision = parsePositiveInteger(revision) || 1;
+  result.publish.hasDraft = hasDraft === true;
+  result.migration = isPlainObject(result.migration) ? result.migration : {};
+  result.migration.sourceSchemaVersion = parsePositiveInteger(result.migration.sourceSchemaVersion) || parsePositiveInteger(sourceSchemaVersion) || 2;
+  if (!hasOwn(result.migration, 'migratedAt')) result.migration.migratedAt = null;
+  if (!hasOwn(result.migration, 'migratedBy')) result.migration.migratedBy = null;
+  return result;
+}
+
+function validateV2LayoutOrThrow(layout, fieldLabel = 'layout_json') {
+  const result = validateLayoutV2(layout);
+  if (!result.ok) {
+    throw createHttpError(400, `${fieldLabel} không hợp lệ: ${formatValidationErrors(result.errors)}`, 'PRINT_TEMPLATE_LAYOUT_VALIDATION_ERROR', { errors: result.errors });
+  }
+  return result.value;
+}
+
+function validateV2SettingsOrThrow(settings, fieldLabel = 'settings_json') {
+  const result = validateSettingsV2(settings);
+  if (!result.ok) {
+    throw createHttpError(400, `${fieldLabel} không hợp lệ: ${formatValidationErrors(result.errors)}`, 'PRINT_TEMPLATE_SETTINGS_VALIDATION_ERROR', { errors: result.errors });
+  }
+  return result.value;
+}
+
+function validateEditorMetaOrThrow(meta) {
+  const result = validateEditorMetaJson(meta);
+  if (!result.ok) {
+    throw createHttpError(400, `editor_meta_json không hợp lệ: ${formatValidationErrors(result.errors)}`, 'PRINT_TEMPLATE_EDITOR_META_VALIDATION_ERROR', { errors: result.errors });
+  }
+  return result.value;
+}
+
 async function ensureReady() {
   if (!readyPromise) {
     readyPromise = ensurePrintTemplatesSchema({ failSoft: false }).catch(error => {
@@ -163,11 +257,67 @@ async function execute(connection, sql, params = []) {
   return query(sql, params);
 }
 
+function buildEditorDocumentPayload(row, publishedLayout, publishedSettings, draftLayout, draftSettings) {
+  const revision = parsePositiveInteger(row?.revision) || 1;
+  const hasDraft = Boolean(draftLayout);
+  const explicitVersion = row?.template_schema_version;
+  const publishedDocument = toEditorV2Document({
+    layout: publishedLayout,
+    settings: publishedSettings,
+    template: {
+      ...row,
+      revision,
+      has_draft: hasDraft,
+      template_schema_version: schemaVersionFromLayout(publishedLayout, publishedSettings, explicitVersion),
+    },
+  });
+  const draftDocument = draftLayout
+    ? toEditorV2Document({
+      layout: draftLayout,
+      settings: draftSettings || {},
+      template: {
+        ...row,
+        revision,
+        has_draft: hasDraft,
+        template_schema_version: 2,
+      },
+    })
+    : null;
+
+  return {
+    schema_version: 2,
+    revision,
+    has_draft: hasDraft,
+    active: draftDocument ? 'draft' : 'published',
+    published: {
+      schema_version: 2,
+      source_schema_version: publishedDocument.sourceSchemaVersion,
+      migrated: publishedDocument.migrated,
+      layout_json: publishedDocument.layout,
+      settings_json: mergeSettingsPublishState(publishedDocument.settings, { revision, hasDraft, sourceSchemaVersion: publishedDocument.sourceSchemaVersion }),
+    },
+    draft: draftDocument ? {
+      schema_version: 2,
+      source_schema_version: draftDocument.sourceSchemaVersion,
+      migrated: draftDocument.migrated,
+      layout_json: draftDocument.layout,
+      settings_json: mergeSettingsPublishState(draftDocument.settings, { revision, hasDraft: true, sourceSchemaVersion: draftDocument.sourceSchemaVersion }),
+    } : null,
+  };
+}
+
 function serializePrintTemplate(row) {
   if (!row) return null;
   const layout = parseJsonObject(row.layout_json, {});
   const settings = parseJsonObject(row.settings_json, {});
+  const draftLayout = parseNullableJsonObject(row.draft_layout_json);
+  const draftSettings = parseNullableJsonObject(row.draft_settings_json);
+  const editorMeta = parseNullableJsonObject(row.editor_meta_json);
+  const revision = parsePositiveInteger(row.revision) || 1;
+  const templateSchemaVersion = schemaVersionFromLayout(layout, settings, row.template_schema_version);
+  const editorDocument = buildEditorDocumentPayload(row, layout, settings, draftLayout, draftSettings);
   const headerLogo = cleanText(row.header_logo || row.logo_url, 1024);
+
   return {
     id: Number(row.id),
     account_id: Number(row.account_id),
@@ -180,6 +330,13 @@ function serializePrintTemplate(row) {
     logo_path: cleanText(row.logo_path, 1024),
     logo_mime: cleanText(row.logo_mime, 100),
     logo_size: Number(row.logo_size) || 0,
+    logo: {
+      url: cleanText(row.logo_url || headerLogo, 1024),
+      path: cleanText(row.logo_path, 1024),
+      mime: cleanText(row.logo_mime, 100),
+      size: Number(row.logo_size) || 0,
+      binding: 'template.logo',
+    },
     shop_name: cleanText(row.shop_name, 150),
     shop_address: cleanText(row.shop_address, 255),
     shop_phone: cleanText(row.shop_phone, 50),
@@ -188,6 +345,24 @@ function serializePrintTemplate(row) {
     layout,
     settings_json: settings,
     settings,
+    template_schema_version: templateSchemaVersion,
+    schema_version: templateSchemaVersion,
+    draft_layout_json: draftLayout,
+    draft_settings_json: draftSettings,
+    editor_meta_json: editorMeta,
+    has_draft: Boolean(draftLayout),
+    revision,
+    last_autosaved_at: row.last_autosaved_at || null,
+    published_at: row.published_at || null,
+    editor_document: editorDocument,
+    published_layout_v2: editorDocument.published.layout_json,
+    published_settings_v2: editorDocument.published.settings_json,
+    layout_v2: editorDocument.published.layout_json,
+    settings_v2: editorDocument.published.settings_json,
+    draft_layout_v2: editorDocument.draft?.layout_json || null,
+    draft_settings_v2: editorDocument.draft?.settings_json || null,
+    active_editor_layout_json: editorDocument.draft?.layout_json || editorDocument.published.layout_json,
+    active_editor_settings_json: editorDocument.draft?.settings_json || editorDocument.published.settings_json,
     paper_size: normalizePaperSize(row.paper_size),
     orientation: normalizeOrientation(row.orientation),
     status: normalizeStatus(row.status),
@@ -203,6 +378,14 @@ function serializePrintTemplate(row) {
 function serializePrintTemplateForInvoice(row) {
   const item = serializePrintTemplate(row);
   if (!item) return null;
+  const publishedDocument = {
+    schema_version: 2,
+    revision: item.revision,
+    has_draft: false,
+    active: 'published',
+    published: item.editor_document.published,
+    draft: null,
+  };
   return {
     id: item.id,
     code: item.code,
@@ -212,23 +395,67 @@ function serializePrintTemplateForInvoice(row) {
     paper_size: item.paper_size,
     orientation: item.orientation,
     css_style: item.css_style,
+    template_schema_version: item.template_schema_version,
+    schema_version: item.template_schema_version,
     layout_json: item.layout_json,
     settings_json: item.settings_json,
+    layout_v2: item.layout_v2,
+    settings_v2: item.settings_v2,
+    editor_document: publishedDocument,
     settings: Object.keys(item.settings_json || {}).length > 0 ? item.settings_json : item.layout_json,
     header_logo: item.header_logo,
     logo_url: item.logo_url,
     logo_url_resolved: item.logo_url || item.header_logo,
+    logo: item.logo,
     shop_name: item.shop_name,
     shop_address: item.shop_address,
     shop_phone: item.shop_phone,
     is_default: item.is_default,
+    revision: item.revision,
+    published_at: item.published_at,
     updated_at: item.updated_at,
   };
+}
+
+function validateParsedTemplateJsonForPayload(payload, parsedLayout, parsedSettings, { partial } = {}) {
+  const hasLayout = parsedLayout !== undefined;
+  const hasSettings = parsedSettings !== undefined;
+  const layoutValue = parsedLayout === null ? null : parsedLayout;
+  const settingsValue = parsedSettings === null ? null : parsedSettings;
+
+  if (layoutValue && schemaVersionFromLayout(layoutValue, settingsValue || {}, null) >= 2) {
+    const normalizedLayout = validateV2LayoutOrThrow(layoutValue, 'layout_json');
+    const normalizedSettings = settingsValue
+      ? validateV2SettingsOrThrow(settingsValue, 'settings_json')
+      : buildDefaultV2Settings({ revision: 1, hasDraft: false, sourceSchemaVersion: 2 });
+    payload.layout_json = JSON.stringify(normalizedLayout);
+    payload.settings_json = JSON.stringify(mergeSettingsPublishState(normalizedSettings, { revision: 1, hasDraft: false, sourceSchemaVersion: 2 }));
+    payload.template_schema_version = 2;
+    payload.paper_size = extractPaperSizeFromLayout(normalizedLayout, payload.paper_size);
+    payload.orientation = extractOrientationFromLayout(normalizedLayout, payload.orientation);
+    return;
+  }
+
+  if (hasLayout && layoutValue === null) {
+    payload.layout_json = null;
+    payload.template_schema_version = 1;
+  } else if (hasLayout) {
+    payload.layout_json = JSON.stringify(layoutValue);
+    payload.template_schema_version = 1;
+  }
+
+  if (hasSettings && settingsValue === null) {
+    payload.settings_json = null;
+  } else if (hasSettings) {
+    payload.settings_json = JSON.stringify(settingsValue);
+  }
 }
 
 function buildPrintTemplatePayload(body = {}, options = {}) {
   const partial = options.partial === true;
   const payload = {};
+  let parsedLayout;
+  let parsedSettings;
 
   const nameInput = pickBodyValue(body, ['template_name', 'name']);
   const templateName = cleanText(nameInput.value, 150);
@@ -272,20 +499,26 @@ function buildPrintTemplatePayload(body = {}, options = {}) {
 
   const layoutInput = pickBodyValue(body, ['layout_json', 'layout']);
   if (layoutInput.provided) {
-    const parsed = parseJsonObjectInput(layoutInput.value, 'layout_json', DEFAULT_LAYOUT_JSON);
+    const parsed = parseJsonObjectInput(layoutInput.value, 'layout_json', DEFAULT_LAYOUT_V2);
     if (parsed.error) return { error: parsed.error };
-    payload.layout_json = parsed.value === null ? null : JSON.stringify(parsed.value);
+    parsedLayout = parsed.value;
   } else if (!partial) {
-    payload.layout_json = JSON.stringify(DEFAULT_LAYOUT_JSON);
+    parsedLayout = cloneJson(DEFAULT_LAYOUT_V2);
   }
 
   const settingsInput = pickBodyValue(body, ['settings_json', 'settings']);
   if (settingsInput.provided) {
-    const parsed = parseJsonObjectInput(settingsInput.value, 'settings_json', DEFAULT_SETTINGS_JSON);
+    const parsed = parseJsonObjectInput(settingsInput.value, 'settings_json', DEFAULT_SETTINGS_V2);
     if (parsed.error) return { error: parsed.error };
-    payload.settings_json = parsed.value === null ? null : JSON.stringify(parsed.value);
+    parsedSettings = parsed.value;
   } else if (!partial) {
-    payload.settings_json = JSON.stringify(DEFAULT_SETTINGS_JSON);
+    parsedSettings = cloneJson(DEFAULT_SETTINGS_V2);
+  }
+
+  try {
+    validateParsedTemplateJsonForPayload(payload, parsedLayout, parsedSettings, { partial });
+  } catch (error) {
+    return { error: error.message, details: error.details, code: error.code };
   }
 
   return { value: payload };
@@ -373,6 +606,28 @@ async function withDefaultTemplateTransaction(accountId, callback) {
   }
 }
 
+async function withTemplateTransaction(callback) {
+  let connection = null;
+  try {
+    connection = await getPrintTemplatesPool().getConnection();
+    await connection.beginTransaction();
+    const result = await callback(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (_rollbackError) {
+        // Keep the original error.
+      }
+    }
+    throw normalizePrintTemplatesMySqlError(error);
+  } finally {
+    if (connection) connection.release();
+  }
+}
+
 async function getTemplateRowById(accountId, id, options = {}) {
   const includeDeleted = options.includeDeleted === true;
   const connection = options.connection || null;
@@ -436,19 +691,40 @@ async function getDefaultPrintTemplate(options = {}) {
   return serializePrintTemplate(rows?.[0] || null);
 }
 
+async function getCurrentPrintTemplate(options = {}) {
+  await ensureReady();
+  const accountId = normalizeAccountId(options.accountId);
+  const requestedId = parseId(options.templateId || options.id);
+  if (requestedId) return getPrintTemplateById({ accountId, id: requestedId });
+  const defaultTemplate = await getDefaultPrintTemplate({ accountId });
+  if (defaultTemplate) return defaultTemplate;
+  const rows = await query(
+    `SELECT * FROM print_templates
+      WHERE account_id = ?
+        AND deleted_at IS NULL
+        AND status = 'active'
+      ORDER BY updated_at DESC, id DESC
+      LIMIT 1`,
+    [accountId]
+  );
+  return serializePrintTemplate(rows?.[0] || null);
+}
+
 async function createPrintTemplate(options = {}) {
   await ensureReady();
   const accountId = normalizeAccountId(options.accountId);
   const userId = normalizeUserId(options.userId);
   const parsed = buildPrintTemplatePayload(options.body || {}, { partial: false });
-  if (parsed.error) throw createHttpError(400, parsed.error, 'PRINT_TEMPLATE_VALIDATION_ERROR');
+  if (parsed.error) throw createHttpError(400, parsed.error, parsed.code || 'PRINT_TEMPLATE_VALIDATION_ERROR', parsed.details || null);
 
   const payload = {
     account_id: accountId,
     ...parsed.value,
+    revision: 1,
     created_by: userId,
     updated_by: userId,
   };
+  if (Number(payload.template_schema_version) >= 2 && !payload.published_at) payload.published_at = new Date().toISOString().slice(0, 23).replace('T', ' ');
   await ensureNoDuplicateTemplate(accountId, payload);
 
   const insertAndFetch = async (connection = null) => {
@@ -475,7 +751,7 @@ async function updatePrintTemplate(options = {}) {
   if (!id) throw createHttpError(400, 'ID mẫu in hóa đơn không hợp lệ.', 'PRINT_TEMPLATE_INVALID_ID');
 
   const parsed = buildPrintTemplatePayload(options.body || {}, { partial: true });
-  if (parsed.error) throw createHttpError(400, parsed.error, 'PRINT_TEMPLATE_VALIDATION_ERROR');
+  if (parsed.error) throw createHttpError(400, parsed.error, parsed.code || 'PRINT_TEMPLATE_VALIDATION_ERROR', parsed.details || null);
   const payload = { ...parsed.value };
   if (Object.keys(payload).length === 0) throw createHttpError(400, 'Không có dữ liệu cập nhật mẫu in hóa đơn.', 'PRINT_TEMPLATE_EMPTY_UPDATE');
   payload.updated_by = userId;
@@ -483,6 +759,16 @@ async function updatePrintTemplate(options = {}) {
   const existing = await getTemplateRowById(accountId, id);
   if (!existing) throw createHttpError(404, 'Không tìm thấy mẫu in hóa đơn.', 'PRINT_TEMPLATE_NOT_FOUND');
   await ensureNoDuplicateTemplate(accountId, payload, id);
+
+  const layoutTouched = hasOwn(payload, 'layout_json') || hasOwn(payload, 'settings_json') || hasOwn(payload, 'template_schema_version');
+  if (layoutTouched) {
+    payload.revision = (parsePositiveInteger(existing.revision) || 1) + 1;
+    if (Number(payload.template_schema_version) >= 2) {
+      payload.published_at = new Date().toISOString().slice(0, 23).replace('T', ' ');
+      payload.draft_layout_json = null;
+      payload.draft_settings_json = null;
+    }
+  }
 
   const makeUpdatePayload = () => ({ ...payload });
   const wantsDefault = payload.is_default === 1;
@@ -501,6 +787,276 @@ async function updatePrintTemplate(options = {}) {
       await query(update.sql, update.params);
       return getTemplateRowById(accountId, id);
     })();
+
+  return serializePrintTemplate(row);
+}
+
+function parseExpectedRevision(body = {}) {
+  const revisionInput = pickBodyValue(body, ['revision', 'expected_revision', 'expectedRevision', 'current_revision', 'currentRevision']);
+  return revisionInput.provided ? parsePositiveInteger(revisionInput.value) : null;
+}
+
+function requireExpectedRevision(expectedRevision, actionLabel = 'lưu mẫu in') {
+  if (expectedRevision) return expectedRevision;
+  throw createHttpError(
+    400,
+    `Thiếu revision hiện tại khi ${actionLabel}. Vui lòng tải chi tiết template trước khi thao tác.`,
+    'PRINT_TEMPLATE_REVISION_REQUIRED'
+  );
+}
+
+function assertRevisionMatches(row, expectedRevision) {
+  const requiredRevision = requireExpectedRevision(expectedRevision);
+  const currentRevision = parsePositiveInteger(row?.revision) || 1;
+  if (currentRevision !== requiredRevision) {
+    throw createHttpError(
+      409,
+      'Mẫu in hóa đơn đã được cập nhật ở phiên khác. Vui lòng tải lại trước khi lưu.',
+      'PRINT_TEMPLATE_REVISION_CONFLICT',
+      { expected_revision: requiredRevision, current_revision: currentRevision }
+    );
+  }
+}
+
+function parseDraftPayload(body = {}) {
+  const result = {
+    expectedRevision: parseExpectedRevision(body),
+    layoutProvided: false,
+    settingsProvided: false,
+    editorMetaProvided: false,
+    layout: null,
+    settings: null,
+    editorMeta: undefined,
+  };
+
+  const layoutInput = pickBodyValue(body, ['draft_layout_json', 'layout_json', 'layout', 'draftLayout', 'layoutJson']);
+  if (layoutInput.provided) {
+    const parsed = parseJsonObjectInput(layoutInput.value, 'draft_layout_json', DEFAULT_LAYOUT_V2, { allowNull: false });
+    if (parsed.error) throw createHttpError(400, parsed.error, 'PRINT_TEMPLATE_VALIDATION_ERROR');
+    result.layoutProvided = true;
+    result.layout = validateV2LayoutOrThrow(parsed.value, 'draft_layout_json');
+  }
+
+  const settingsInput = pickBodyValue(body, ['draft_settings_json', 'settings_json', 'settings', 'draftSettings', 'settingsJson']);
+  if (settingsInput.provided) {
+    const parsed = parseJsonObjectInput(settingsInput.value, 'draft_settings_json', DEFAULT_SETTINGS_V2, { allowNull: false });
+    if (parsed.error) throw createHttpError(400, parsed.error, 'PRINT_TEMPLATE_VALIDATION_ERROR');
+    result.settingsProvided = true;
+    result.settings = validateV2SettingsOrThrow(parsed.value, 'draft_settings_json');
+  }
+
+  const editorMetaInput = pickBodyValue(body, ['editor_meta_json', 'editor_meta', 'editorMeta', 'meta']);
+  if (editorMetaInput.provided) {
+    result.editorMetaProvided = true;
+    if (editorMetaInput.value === null || editorMetaInput.value === '') {
+      result.editorMeta = null;
+    } else {
+      const parsed = parseJsonObjectInput(editorMetaInput.value, 'editor_meta_json', {}, { allowNull: true });
+      if (parsed.error) throw createHttpError(400, parsed.error, 'PRINT_TEMPLATE_VALIDATION_ERROR');
+      result.editorMeta = validateEditorMetaOrThrow(parsed.value);
+    }
+  }
+
+  if (!result.layoutProvided && !result.settingsProvided && !result.editorMetaProvided) {
+    throw createHttpError(400, 'Không có dữ liệu draft để autosave.', 'PRINT_TEMPLATE_EMPTY_AUTOSAVE');
+  }
+
+  return result;
+}
+
+function buildDynamicUpdateSql(payload, accountId, id, options = {}) {
+  const assignments = [];
+  const params = [];
+  for (const [column, value] of Object.entries(payload)) {
+    assignments.push(`${column} = ?`);
+    params.push(value);
+  }
+  if (options.lastAutosavedAt === true) assignments.push('last_autosaved_at = UTC_TIMESTAMP(3)');
+  if (options.publishedAt === true) assignments.push('published_at = UTC_TIMESTAMP(3)');
+  assignments.push('updated_at = UTC_TIMESTAMP(3)');
+  return {
+    sql: `UPDATE print_templates SET ${assignments.join(', ')} WHERE account_id = ? AND id = ? AND deleted_at IS NULL`,
+    params: [...params, accountId, id],
+  };
+}
+
+async function autosavePrintTemplateDraft(options = {}) {
+  await ensureReady();
+  const accountId = normalizeAccountId(options.accountId);
+  const userId = normalizeUserId(options.userId);
+  const id = parseId(options.id);
+  if (!id) throw createHttpError(400, 'ID mẫu in hóa đơn không hợp lệ.', 'PRINT_TEMPLATE_INVALID_ID');
+  const parsed = parseDraftPayload(options.body || {});
+
+  const row = await withTemplateTransaction(async connection => {
+    const locked = await getTemplateRowById(accountId, id, { connection, forUpdate: true });
+    if (!locked) throw createHttpError(404, 'Không tìm thấy mẫu in hóa đơn.', 'PRINT_TEMPLATE_NOT_FOUND');
+    requireExpectedRevision(parsed.expectedRevision, 'autosave draft mẫu in hóa đơn');
+    assertRevisionMatches(locked, parsed.expectedRevision);
+
+    const currentRevision = parsePositiveInteger(locked.revision) || 1;
+    const nextRevision = currentRevision + 1;
+    const publishedLayout = parseJsonObject(locked.layout_json, {});
+    const publishedSettings = parseJsonObject(locked.settings_json, {});
+    const existingDraftLayout = parseNullableJsonObject(locked.draft_layout_json);
+    const existingDraftSettings = parseNullableJsonObject(locked.draft_settings_json);
+    const publishedDocument = toEditorV2Document({
+      layout: publishedLayout,
+      settings: publishedSettings,
+      template: { ...locked, revision: currentRevision, has_draft: Boolean(existingDraftLayout) },
+    });
+
+    const nextDraftLayout = parsed.layoutProvided
+      ? parsed.layout
+      : (existingDraftLayout || publishedDocument.layout);
+    const nextDraftSettingsSource = parsed.settingsProvided
+      ? parsed.settings
+      : (existingDraftSettings || publishedDocument.settings || buildDefaultV2Settings({ revision: nextRevision, hasDraft: true, sourceSchemaVersion: 2 }));
+    const nextDraftSettings = mergeSettingsPublishState(nextDraftSettingsSource, { revision: nextRevision, hasDraft: true, sourceSchemaVersion: 2 });
+    const normalizedSettings = validateV2SettingsOrThrow(nextDraftSettings, 'draft_settings_json');
+
+    const payload = {
+      draft_layout_json: JSON.stringify(nextDraftLayout),
+      draft_settings_json: JSON.stringify(mergeSettingsPublishState(normalizedSettings, { revision: nextRevision, hasDraft: true, sourceSchemaVersion: 2 })),
+      revision: nextRevision,
+      updated_by: userId,
+    };
+    if (parsed.editorMetaProvided) payload.editor_meta_json = jsonStringifyOrNull(parsed.editorMeta);
+
+    const update = buildDynamicUpdateSql(payload, accountId, id, { lastAutosavedAt: true });
+    await connection.execute(update.sql, update.params);
+    return getTemplateRowById(accountId, id, { connection });
+  });
+
+  return serializePrintTemplate(row);
+}
+
+function parsePublishPayloadSafe(body = {}) {
+  const result = {
+    expectedRevision: parseExpectedRevision(body),
+    layoutProvided: false,
+    settingsProvided: false,
+    editorMetaProvided: false,
+    layout: null,
+    settings: null,
+    editorMeta: undefined,
+    statusProvided: false,
+    status: '',
+  };
+
+  const layoutInput = pickBodyValue(body, ['draft_layout_json', 'layout_json', 'layout', 'draftLayout', 'layoutJson']);
+  if (layoutInput.provided) {
+    const parsed = parseJsonObjectInput(layoutInput.value, 'layout_json', DEFAULT_LAYOUT_V2, { allowNull: false });
+    if (parsed.error) throw createHttpError(400, parsed.error, 'PRINT_TEMPLATE_VALIDATION_ERROR');
+    result.layoutProvided = true;
+    result.layout = validateV2LayoutOrThrow(parsed.value, 'layout_json');
+  }
+
+  const settingsInput = pickBodyValue(body, ['draft_settings_json', 'settings_json', 'settings', 'draftSettings', 'settingsJson']);
+  if (settingsInput.provided) {
+    const parsed = parseJsonObjectInput(settingsInput.value, 'settings_json', DEFAULT_SETTINGS_V2, { allowNull: false });
+    if (parsed.error) throw createHttpError(400, parsed.error, 'PRINT_TEMPLATE_VALIDATION_ERROR');
+    result.settingsProvided = true;
+    result.settings = validateV2SettingsOrThrow(parsed.value, 'settings_json');
+  }
+
+  const editorMetaInput = pickBodyValue(body, ['editor_meta_json', 'editor_meta', 'editorMeta', 'meta']);
+  if (editorMetaInput.provided) {
+    result.editorMetaProvided = true;
+    if (editorMetaInput.value === null || editorMetaInput.value === '') {
+      result.editorMeta = null;
+    } else {
+      const parsed = parseJsonObjectInput(editorMetaInput.value, 'editor_meta_json', {}, { allowNull: true });
+      if (parsed.error) throw createHttpError(400, parsed.error, 'PRINT_TEMPLATE_VALIDATION_ERROR');
+      result.editorMeta = validateEditorMetaOrThrow(parsed.value);
+    }
+  }
+
+  const statusInput = pickBodyValue(body, ['status']);
+  if (statusInput.provided) {
+    result.statusProvided = true;
+    result.status = normalizeStatus(statusInput.value);
+  }
+
+  return result;
+}
+
+async function publishPrintTemplateDraft(options = {}) {
+  await ensureReady();
+  const accountId = normalizeAccountId(options.accountId);
+  const userId = normalizeUserId(options.userId);
+  const id = parseId(options.id);
+  if (!id) throw createHttpError(400, 'ID mẫu in hóa đơn không hợp lệ.', 'PRINT_TEMPLATE_INVALID_ID');
+  const parsed = parsePublishPayloadSafe(options.body || {});
+
+  const row = await withTemplateTransaction(async connection => {
+    const locked = await getTemplateRowById(accountId, id, { connection, forUpdate: true });
+    if (!locked) throw createHttpError(404, 'Không tìm thấy mẫu in hóa đơn.', 'PRINT_TEMPLATE_NOT_FOUND');
+    requireExpectedRevision(parsed.expectedRevision, 'publish mẫu in hóa đơn');
+    assertRevisionMatches(locked, parsed.expectedRevision);
+
+    const currentRevision = parsePositiveInteger(locked.revision) || 1;
+    const nextRevision = currentRevision + 1;
+    const draftLayout = parseNullableJsonObject(locked.draft_layout_json);
+    const draftSettings = parseNullableJsonObject(locked.draft_settings_json);
+    const layoutToPublish = parsed.layoutProvided ? parsed.layout : draftLayout;
+    if (!layoutToPublish) throw createHttpError(400, 'Không có draft layout để publish.', 'PRINT_TEMPLATE_NO_DRAFT_TO_PUBLISH');
+    const normalizedLayout = validateV2LayoutOrThrow(layoutToPublish, 'layout_json');
+    const settingsToPublish = parsed.settingsProvided
+      ? parsed.settings
+      : (draftSettings || buildDefaultV2Settings({ revision: nextRevision, hasDraft: false, sourceSchemaVersion: 2 }));
+    const normalizedSettings = mergeSettingsPublishState(validateV2SettingsOrThrow(settingsToPublish, 'settings_json'), {
+      revision: nextRevision,
+      hasDraft: false,
+      sourceSchemaVersion: 2,
+    });
+
+    const payload = {
+      layout_json: JSON.stringify(normalizedLayout),
+      settings_json: JSON.stringify(normalizedSettings),
+      template_schema_version: 2,
+      draft_layout_json: null,
+      draft_settings_json: null,
+      revision: nextRevision,
+      paper_size: extractPaperSizeFromLayout(normalizedLayout, locked.paper_size),
+      orientation: extractOrientationFromLayout(normalizedLayout, locked.orientation),
+      status: parsed.statusProvided ? parsed.status : (normalizeStatus(locked.status) === 'draft' ? 'active' : normalizeStatus(locked.status)),
+      updated_by: userId,
+    };
+    if (parsed.editorMetaProvided) payload.editor_meta_json = jsonStringifyOrNull(parsed.editorMeta);
+
+    const update = buildDynamicUpdateSql(payload, accountId, id, { publishedAt: true });
+    await connection.execute(update.sql, update.params);
+    return getTemplateRowById(accountId, id, { connection });
+  });
+
+  return serializePrintTemplate(row);
+}
+
+async function discardPrintTemplateDraft(options = {}) {
+  await ensureReady();
+  const accountId = normalizeAccountId(options.accountId);
+  const userId = normalizeUserId(options.userId);
+  const id = parseId(options.id);
+  if (!id) throw createHttpError(400, 'ID mẫu in hóa đơn không hợp lệ.', 'PRINT_TEMPLATE_INVALID_ID');
+  const expectedRevision = parseExpectedRevision(options.body || {});
+
+  const row = await withTemplateTransaction(async connection => {
+    const locked = await getTemplateRowById(accountId, id, { connection, forUpdate: true });
+    if (!locked) throw createHttpError(404, 'Không tìm thấy mẫu in hóa đơn.', 'PRINT_TEMPLATE_NOT_FOUND');
+    requireExpectedRevision(expectedRevision, 'hủy draft mẫu in hóa đơn');
+    assertRevisionMatches(locked, expectedRevision);
+    const nextRevision = (parsePositiveInteger(locked.revision) || 1) + 1;
+    const payload = {
+      draft_layout_json: null,
+      draft_settings_json: null,
+      revision: nextRevision,
+      updated_by: userId,
+    };
+    const update = buildDynamicUpdateSql(payload, accountId, id);
+    await connection.execute(update.sql, update.params);
+    return getTemplateRowById(accountId, id, { connection });
+  });
 
   return serializePrintTemplate(row);
 }
@@ -558,6 +1114,7 @@ async function attachLogoToPrintTemplate(options = {}) {
 
   const existing = await getTemplateRowById(accountId, id);
   if (!existing) throw createHttpError(404, 'Không tìm thấy mẫu in hóa đơn.', 'PRINT_TEMPLATE_NOT_FOUND');
+  const nextRevision = (parsePositiveInteger(existing.revision) || 1) + 1;
 
   const payload = {
     header_logo: nullableText(options.headerLogo, 1024),
@@ -565,6 +1122,7 @@ async function attachLogoToPrintTemplate(options = {}) {
     logo_path: nullableText(options.logoPath, 1024),
     logo_mime: nullableText(options.logoMime, 100),
     logo_size: Number(options.logoSize) || null,
+    revision: nextRevision,
     updated_by: userId,
   };
   const update = buildUpdateSql(payload, accountId, id);
@@ -585,6 +1143,7 @@ async function removeLogoFromPrintTemplate(options = {}) {
 
   const existing = await getTemplateRowById(accountId, id);
   if (!existing) throw createHttpError(404, 'Không tìm thấy mẫu in hóa đơn.', 'PRINT_TEMPLATE_NOT_FOUND');
+  const nextRevision = (parsePositiveInteger(existing.revision) || 1) + 1;
 
   const payload = {
     header_logo: null,
@@ -592,6 +1151,7 @@ async function removeLogoFromPrintTemplate(options = {}) {
     logo_path: null,
     logo_mime: null,
     logo_size: null,
+    revision: nextRevision,
     updated_by: userId,
   };
   const update = buildUpdateSql(payload, accountId, id);
@@ -630,13 +1190,27 @@ async function resolveInvoicePrintTemplate(options = {}) {
     return serializePrintTemplateForInvoice(byId);
   }
   const defaultTemplate = await getDefaultPrintTemplate({ accountId });
-  if (!defaultTemplate) return null;
-  return serializePrintTemplateForInvoice(defaultTemplate);
+  if (defaultTemplate) {
+    const row = await getTemplateRowById(accountId, defaultTemplate.id);
+    return serializePrintTemplateForInvoice(row);
+  }
+  const rows = await query(
+    `SELECT * FROM print_templates
+      WHERE account_id = ?
+        AND deleted_at IS NULL
+        AND status = 'active'
+      ORDER BY updated_at DESC, id DESC
+      LIMIT 1`,
+    [accountId]
+  );
+  return serializePrintTemplateForInvoice(rows?.[0] || null);
 }
 
 module.exports = {
   DEFAULT_LAYOUT_JSON,
   DEFAULT_SETTINGS_JSON,
+  DEFAULT_LAYOUT_V2,
+  DEFAULT_SETTINGS_V2,
   createHttpError,
   parseId,
   parseBooleanFlag,
@@ -646,8 +1220,12 @@ module.exports = {
   listPrintTemplates,
   getPrintTemplateById,
   getDefaultPrintTemplate,
+  getCurrentPrintTemplate,
   createPrintTemplate,
   updatePrintTemplate,
+  autosavePrintTemplateDraft,
+  publishPrintTemplateDraft,
+  discardPrintTemplateDraft,
   setDefaultPrintTemplate,
   softDeletePrintTemplate,
   attachLogoToPrintTemplate,

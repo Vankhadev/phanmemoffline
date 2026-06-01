@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.4.1 - 2026-06-01
+## v1.4.2 - 2026-06-01
 
 ### Tính năng và cải tiến
 
@@ -10,15 +10,15 @@
 
 ### QA và build
 
-- Đồng bộ version phát hành 1.4.1 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
+- Đồng bộ version phát hành 1.4.2 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
 - Kiểm tra cú pháp các file backend quan trọng mới/sửa bằng node --check.
 - Kiểm tra khả năng resolve driver mysql2/promise trong backend cho module mẫu in hóa đơn.
 - Build frontend production để xác nhận bundle Vite hợp lệ trước khi tạo tag phát hành.
 
 ### Lưu ý quan trọng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.1-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.1-ia32.exe`.
+- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.2-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.2-ia32.exe`.
 - Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
 - Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
 

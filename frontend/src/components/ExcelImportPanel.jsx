@@ -3,6 +3,8 @@ import * as XLSX from 'xlsx';
 import { AlertTriangle, CheckCircle, Download, Eye, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, UploadCloud } from 'lucide-react';
 import { excelImportApi, getApiErrorMessage } from '../utils/apiClient';
 
+import { NEGATIVE_STOCK_LIMIT } from '../utils/negativeStock';
+
 const IMPORT_FIELDS = {
   products: [
     { key: 'row_type', label: 'Loại dòng' },
@@ -112,12 +114,12 @@ const TEMPLATE_ROWS = {
       'Giá sỉ': 110000,
       'Giá lẻ': 150000,
       'Giá VIP': 130000,
-      'Tồn kho': 0,
+      'Tồn kho': -5,
       'Đơn vị': 'cái',
       'Thuộc tính 1': '',
       'Thuộc tính 2': '',
       'Thuộc tính 3': '',
-      'Mô tả': 'Sản phẩm cha, Parent SKU để trống',
+      'Mô tả': 'Sản phẩm cha, Parent SKU để trống; ví dụ tồn âm trong ngưỡng cho phép',
       'Ảnh': '',
       'Trạng thái': 'Có',
     },
@@ -199,7 +201,7 @@ const GUIDE_ROWS = {
     ['SKU', 'Có', 'SKU/mã sản phẩm hoặc SKU biến thể, không được trùng sai loại.'],
     ['Parent SKU', 'Có với VARIANT', 'Phải khớp SKU sản phẩm cha trong file hoặc đã có trong hệ thống.'],
     ['Tên sản phẩm', 'Có với bản ghi mới', 'Tên sản phẩm cha hoặc tên biến thể.'],
-    ['Giá/Tồn kho', 'Không', 'Nhập số không âm; tồn kho là số nguyên.'],
+    ['Giá/Tồn kho', 'Không', `Giá nhập số không âm; tồn kho có thể âm đến ${NEGATIVE_STOCK_LIMIT} (ví dụ -5, -20, -100) và phải là số nguyên; thấp hơn ngưỡng sẽ bị backend chặn.`],
     ['Danh mục text / Default category id', 'Không', 'Khớp danh mục hiện có theo tên/từ khóa hoặc id.'],
     ['Supplier id', 'Không', 'Nếu nhập thì id nhà cung cấp phải tồn tại.'],
   ],
@@ -208,7 +210,7 @@ const GUIDE_ROWS = {
     ['Mã đơn hàng', 'Có', 'Các dòng cùng mã đơn sẽ được gom thành một đơn nhiều sản phẩm.'],
     ['Mã khách hàng / Tên / SĐT / Email / Nhóm khách', 'Nên có mã khách hàng', 'Khách phải tồn tại; nếu có nhóm khách thì phải khớp loại khách để tránh import nhầm khách lẻ/khách sỉ.'],
     ['SKU hoặc Tên sản phẩm', 'Có', 'Sản phẩm/biến thể phải tồn tại trong hệ thống.'],
-    ['Số lượng', 'Có', 'Số lượng phải lớn hơn 0.'],
+    ['Số lượng', 'Có', `Số lượng bán phải lớn hơn 0; có thể bán khi tồn hiện tại 0/âm nếu tồn dự kiến không nhỏ hơn ${NEGATIVE_STOCK_LIMIT}. Backend sẽ chặn nếu vượt ngưỡng.`],
     ['Đơn giá / Giảm giá / Thành tiền', 'Không', 'Nếu tổng tiền file khác tổng chi tiết, hệ thống ưu tiên tính lại từ chi tiết.'],
     ['Trạng thái thanh toán / Phương thức / Trạng thái đơn', 'Không', 'Hỗ trợ paid/unpaid/partial, cash/bank/debt, pending/completed/cancelled.'],
   ],
@@ -547,6 +549,9 @@ export default function ExcelImportPanel({
         <div>
           <h3 className="font-bold flex items-center gap-2"><UploadCloud size={18} className="text-blue-600" /> {title || `Import ${dataType === 'invoices' ? 'hóa đơn/đơn hàng' : 'sản phẩm'} từ Excel/CSV`}</h3>
           <p className="text-xs text-gray-600 mt-1">{description || 'Frontend parse file bằng xlsx rồi gửi JSON rows cho backend preview/commit, không upload binary.'}</p>
+          <p className="mt-1 text-[11px] font-medium text-orange-700">
+            Nghiệp vụ âm kho: hệ thống cho phép tồn âm đến {NEGATIVE_STOCK_LIMIT}; hóa đơn/import bị chặn nếu tồn dự kiến thấp hơn ngưỡng này.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => downloadTemplate('xlsx')} className="px-3 py-2 rounded-lg border border-blue-300 bg-white text-blue-700 hover:bg-blue-50 text-xs font-medium flex items-center gap-1.5"><Download size={14} /> Tải mẫu Excel</button>

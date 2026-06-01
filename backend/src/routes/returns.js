@@ -3,8 +3,13 @@
  */
 const express = require('express');
 const router = express.Router();
-const { getAll, getOne, insert, update, now, db } = require('../db/database');
+const { getAll, getOne, insert, update, now, db, withAtomicDbWrite } = require('../db/database');
 const { v4: uuidv4 } = require('uuid');
+const {
+  assertCanApplyProductStockDelta,
+  logNegativeStockTransition,
+  logNegativeStockLimitViolation,
+} = require('../utils/negativeStock');
 
 function genReturnCode() {
   const d = new Date();
@@ -28,35 +33,56 @@ router.get('/:id', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { partner_id, user_id, note, details } = req.body;
-  const return_code = genReturnCode();
-  const return_id = insert('return_logs', {
-    return_code,
-    partner_id: partner_id || null,
-    user_id:   user_id   || null,
-    note:      note      || '',
-    created_at: now(),
-  });
+  try {
+    const result = withAtomicDbWrite(() => {
+      const { partner_id, user_id, note, details } = req.body;
+      const return_code = genReturnCode();
+      const return_id = insert('return_logs', {
+        return_code,
+        partner_id: partner_id || null,
+        user_id:   user_id   || null,
+        note:      note      || '',
+        created_at: now(),
+      }, { skipSave: true });
 
-  for (const d of (details || [])) {
-    insert('return_details', {
-      return_id,
-      product_id:   d.product_id   || null,
-      product_name: d.product_name || '',
-      sku:          d.sku        || '',
-      quantity:     +d.quantity   || 1,
-      unit_price:  +d.unit_price || 0,
-      reason:      d.reason      || '',
-      line_total:  (+d.quantity || 1) * (+d.unit_price || 0),
+      for (const d of (details || [])) {
+        const quantity = +d.quantity || 1;
+        insert('return_details', {
+          return_id,
+          product_id:   d.product_id   || null,
+          product_name: d.product_name || '',
+          sku:          d.sku        || '',
+          quantity,
+          unit_price:  +d.unit_price || 0,
+          reason:      d.reason      || '',
+          line_total:  quantity * (+d.unit_price || 0),
+        }, { skipSave: true });
+        // Trừ tồn kho khi trả hàng về nhà cung cấp, cho phép âm đến policy chung (-100)
+        if (d.product_id) {
+          const p = getOne('products', pr => Number(pr.id) === Number(d.product_id));
+          if (p) {
+            const validation = assertCanApplyProductStockDelta({
+              productId: p.id,
+              detail: { product_name: d.product_name || p.name, product_sku: d.sku || p.sku },
+              delta: -quantity,
+              quantity,
+              operation: 'trả hàng nhà cung cấp',
+            });
+            update('products', p.id, { stock: validation.projectedStock, updated_at: now() }, { skipSave: true });
+            logNegativeStockTransition({ ...validation, source: 'returns', return_id }, { skipSave: true });
+          }
+        }
+      }
+
+      return { ok: true, return_id, return_code };
     });
-    // Trừ tồn kho khi trả hàng
-    if (d.product_id) {
-      const p = getOne('products', pr => pr.id === d.product_id);
-      if (p) update('products', p.id, { stock: Math.max(0, (p.stock || 0) - (+d.quantity || 1)) });
-    }
-  }
 
-  res.json({ ok: true, return_id, return_code });
+    res.json(result);
+  } catch (err) {
+    const status = err.status || err.statusCode || 500;
+    logNegativeStockLimitViolation(err, { source: 'returns_create' });
+    res.status(status).json({ error: 'Lỗi khi tạo phiếu trả hàng', detail: err.message, code: err.code });
+  }
 });
 
 module.exports = router;

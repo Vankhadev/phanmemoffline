@@ -11,8 +11,12 @@ const {
   listPrintTemplates,
   getPrintTemplateById,
   getDefaultPrintTemplate,
+  getCurrentPrintTemplate,
   createPrintTemplate,
   updatePrintTemplate,
+  autosavePrintTemplateDraft,
+  publishPrintTemplateDraft,
+  discardPrintTemplateDraft,
   setDefaultPrintTemplate,
   softDeletePrintTemplate,
   attachLogoToPrintTemplate,
@@ -42,14 +46,22 @@ function sendError(res, error, fallbackMessage = 'Lỗi xử lý mẫu in hóa �
     error: message,
     message,
     code: error?.code || (status === 503 ? 'PRINT_TEMPLATES_MYSQL_UNAVAILABLE' : 'PRINT_TEMPLATES_ERROR'),
+    ...(error?.details ? { details: error.details } : {}),
   });
 }
 
 function runLogoUpload(req, res) {
   return new Promise((resolve, reject) => {
-    const upload = uploadPrintTemplateLogo.single('logo');
+    const upload = uploadPrintTemplateLogo.fields([
+      { name: 'logo', maxCount: 1 },
+      { name: 'file', maxCount: 1 },
+      { name: 'asset', maxCount: 1 },
+    ]);
     upload(req, res, error => {
-      if (!error) return resolve();
+      if (!error) {
+        req.file = req.files?.logo?.[0] || req.files?.file?.[0] || req.files?.asset?.[0] || null;
+        return resolve();
+      }
       if (error instanceof multer.MulterError) {
         if (error.code === 'LIMIT_FILE_SIZE') {
           error.status = 413;
@@ -98,6 +110,30 @@ router.get('/default', async (req, res) => {
   }
 });
 
+router.get('/current', async (req, res) => {
+  try {
+    const item = await getCurrentPrintTemplate({
+      accountId: getAccountId(req),
+      templateId: req.query.template_id || req.query.templateId || req.query.id,
+    });
+    res.json({ ok: true, item, data: item });
+  } catch (error) {
+    sendError(res, error, 'Lỗi lấy mẫu in hóa đơn hiện hành');
+  }
+});
+
+router.get('/active', async (req, res) => {
+  try {
+    const item = await getCurrentPrintTemplate({
+      accountId: getAccountId(req),
+      templateId: req.query.template_id || req.query.templateId || req.query.id,
+    });
+    res.json({ ok: true, item, data: item });
+  } catch (error) {
+    sendError(res, error, 'Lỗi lấy mẫu in hóa đơn đang dùng');
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const item = await getPrintTemplateById({ accountId: getAccountId(req), id: req.params.id });
@@ -122,6 +158,42 @@ router.put('/:id', canManagePrintTemplates, async (req, res) => {
     res.json({ ok: true, item, data: item });
   } catch (error) {
     sendError(res, error, 'Lỗi cập nhật mẫu in hóa đơn');
+  }
+});
+
+router.patch('/:id/autosave', canManagePrintTemplates, async (req, res) => {
+  try {
+    const item = await autosavePrintTemplateDraft({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id, body: req.body || {} });
+    res.json({ ok: true, item, data: item, revision: item.revision, has_draft: item.has_draft, last_autosaved_at: item.last_autosaved_at });
+  } catch (error) {
+    sendError(res, error, 'Lỗi autosave draft mẫu in hóa đơn');
+  }
+});
+
+router.post('/:id/autosave', canManagePrintTemplates, async (req, res) => {
+  try {
+    const item = await autosavePrintTemplateDraft({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id, body: req.body || {} });
+    res.json({ ok: true, item, data: item, revision: item.revision, has_draft: item.has_draft, last_autosaved_at: item.last_autosaved_at });
+  } catch (error) {
+    sendError(res, error, 'Lỗi autosave draft mẫu in hóa đơn');
+  }
+});
+
+router.post('/:id/publish', canManagePrintTemplates, async (req, res) => {
+  try {
+    const item = await publishPrintTemplateDraft({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id, body: req.body || {} });
+    res.json({ ok: true, item, data: item, revision: item.revision, has_draft: item.has_draft, published_at: item.published_at });
+  } catch (error) {
+    sendError(res, error, 'Lỗi publish mẫu in hóa đơn');
+  }
+});
+
+router.post('/:id/discard-draft', canManagePrintTemplates, async (req, res) => {
+  try {
+    const item = await discardPrintTemplateDraft({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id, body: req.body || {} });
+    res.json({ ok: true, item, data: item, revision: item.revision, has_draft: item.has_draft });
+  } catch (error) {
+    sendError(res, error, 'Lỗi hủy draft mẫu in hóa đơn');
   }
 });
 
@@ -164,7 +236,15 @@ router.post('/:id/logo', canManagePrintTemplates, async (req, res) => {
     });
 
     await cleanupLogoIfUnused(getAccountId(req), result.previousLogoPath, req.params.id);
-    res.json({ ok: true, item: result.item, data: result.item, logo_url: publicUrl });
+    res.json({
+      ok: true,
+      item: result.item,
+      data: result.item,
+      logo_url: publicUrl,
+      logo_path: uploadedLogoPath,
+      logo: result.item.logo,
+      revision: result.item.revision,
+    });
   } catch (error) {
     if (uploadedLogoPath) deleteUploadedLogoFile(uploadedLogoPath);
     sendError(res, error, 'Lỗi upload logo mẫu in hóa đơn');

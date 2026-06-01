@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import HelpModal from '../components/HelpModal';
-import PrintTemplateFormModal from '../components/invoice-print/PrintTemplateFormModal';
+import PrintTemplateEditorModal from '../components/invoice-print/PrintTemplateEditorModal';
 import { buildTemplateJsonFromSettings, DEFAULT_INVOICE_TEMPLATE_SETTINGS, normalizePrintTemplate } from '../components/invoice-print/templateDefaults';
 import { apiJson, customerTypesApi, featuresApi, getApiErrorMessage, printTemplatesApi, usersApi } from '../utils/apiClient';
 
@@ -933,34 +933,57 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     });
   }, []);
 
-  const openAddPrintTemplate = () => {
-    setPrintTemplateEdit(null);
-    setPrintTemplateForm(normalizePrintTemplateForm({
-      template_name: `Mẫu in hóa đơn ${printTemplates.length + 1}`,
-      paper_size: 'A5',
-      orientation: 'portrait',
-    }, storeForm));
-    setPrintTemplateNotice(null);
-    setPrintTemplateLogoFile(null);
-    setPrintTemplateLogoPreviewUrl(current => {
-      revokeObjectUrl(current);
-      return '';
-    });
-    setShowPrintTemplateModal(true);
+  const openAddPrintTemplate = async () => {
+    if (!canManagePrintTemplates) return;
+    setPrintTemplateSaving(true);
+    setPrintTemplatesNotice(null);
+    try {
+      const data = await printTemplatesApi.create({
+        template_name: `Mẫu in hóa đơn ${printTemplates.length + 1}`,
+        description: 'Thiết kế bằng editor mẫu in Canva-like.',
+        shop_name: storeForm.name,
+        shop_address: storeForm.address,
+        shop_phone: storeForm.phone,
+        paper_size: 'A5',
+        orientation: 'portrait',
+        status: 'draft',
+        is_default: printTemplates.length === 0,
+      });
+      const saved = data?.item || data?.data || data;
+      await loadPrintTemplates();
+      setPrintTemplateEdit(saved);
+      setShowPrintTemplateModal(true);
+      setTimedNotice('print-templates', setPrintTemplatesNotice, {
+        tone: 'success',
+        message: 'Đã tạo mẫu in mới. Editor đang mở để thiết kế và autosave draft.',
+      }, 3000);
+    } catch (error) {
+      setTimedNotice('print-templates', setPrintTemplatesNotice, {
+        tone: 'error',
+        message: getErrorMessage(error, 'Không thể tạo mẫu in hóa đơn.'),
+      });
+    } finally {
+      if (mountedRef.current) setPrintTemplateSaving(false);
+    }
   };
 
   const openEditPrintTemplate = (template) => {
-    const normalized = normalizePrintTemplate(template);
-    setPrintTemplateEdit(normalized);
-    setPrintTemplateForm(normalizePrintTemplateForm(normalized, storeForm));
+    setPrintTemplateEdit(template);
     setPrintTemplateNotice(null);
-    setPrintTemplateLogoFile(null);
-    setPrintTemplateLogoPreviewUrl(current => {
-      revokeObjectUrl(current);
-      return '';
-    });
     setShowPrintTemplateModal(true);
   };
+
+  const handlePrintTemplateEditorSaved = useCallback((template) => {
+    if (!template) return;
+    const item = normalizePrintTemplate(template);
+    setPrintTemplateEdit(template);
+    setPrintTemplates(current => {
+      if (!Array.isArray(current) || current.length === 0) return [item];
+      const exists = current.some(row => String(row.id) === String(item.id));
+      if (!exists) return [item, ...current];
+      return current.map(row => (String(row.id) === String(item.id) ? { ...row, ...item } : row));
+    });
+  }, []);
 
   const handlePrintTemplateLogoChange = (event) => {
     const file = event.target.files?.[0] || null;
@@ -1582,7 +1605,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                 <FileText size={18} /> Mẫu in hóa đơn ({printTemplates.length})
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Quản lý mẫu in dùng cho hóa đơn thật qua API /api/print-templates, có preview realtime bằng dữ liệu mẫu cục bộ.
+                Quản lý mẫu in dùng cho hóa đơn thật qua API /api/print-templates, editor Canva-like autosave draft theo revision và preview bằng hóa đơn thật.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1595,8 +1618,8 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                 <Loader2 size={14} className={printTemplatesLoading ? 'animate-spin' : ''} /> Tải lại
               </button>
               {canManagePrintTemplates && (
-                <button type="button" onClick={openAddPrintTemplate} className="btn-primary inline-flex min-h-10 items-center gap-2 text-sm">
-                  <Plus size={14} /> Thêm mẫu in
+                <button type="button" onClick={openAddPrintTemplate} disabled={printTemplateSaving} className="btn-primary inline-flex min-h-10 items-center gap-2 text-sm disabled:opacity-60">
+                  {printTemplateSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Thêm mẫu in
                 </button>
               )}
             </div>
@@ -1642,7 +1665,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                     {canManagePrintTemplates ? (
                       <>
                         <button type="button" onClick={() => openEditPrintTemplate(template)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100">
-                          <Edit2 size={12} /> Sửa
+                          <Edit2 size={12} /> Mở editor
                         </button>
                         {!template.is_default && (
                           <button type="button" onClick={() => handleSetDefaultPrintTemplate(template)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-100">
@@ -2013,21 +2036,12 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
       )}
 
       {showPrintTemplateModal && canManagePrintTemplates && (
-        <PrintTemplateFormModal
+        <PrintTemplateEditorModal
           show={showPrintTemplateModal}
-          form={printTemplateForm}
-          edit={printTemplateEdit}
-          saving={printTemplateSaving}
-          notice={printTemplateNotice}
-          logoFile={printTemplateLogoFile}
-          logoPreviewUrl={printTemplateLogoPreviewUrl}
-          previewTemplate={previewTemplate}
+          template={printTemplateEdit}
           canManage={canManagePrintTemplates}
           onClose={closePrintTemplateModal}
-          onSave={handleSavePrintTemplate}
-          onFieldChange={updatePrintTemplateField}
-          onLogoChange={handlePrintTemplateLogoChange}
-          onRemoveLogo={handleRemovePrintTemplateLogo}
+          onSaved={handlePrintTemplateEditorSaved}
         />
       )}
 
@@ -2083,9 +2097,9 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
             <div>
               <h3 className="mb-2 font-bold text-gray-800">Tab Mẫu in hóa đơn</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Danh sách mẫu in lấy từ API thật <strong>/api/print-templates</strong>, không dùng mock cho CRUD.</li>
-                <li>Có thể thêm, sửa, xóa, đặt mặc định và upload/xóa logo theo từng mẫu.</li>
-                <li>Modal chỉnh mẫu có preview realtime bằng hóa đơn mẫu cục bộ để kiểm tra font, scale, khổ giấy, QR, chữ ký, ghi chú và công nợ.</li>
+                <li>Danh sách mẫu in lấy từ API thật <strong>/api/print-templates</strong>, không dùng mock cho CRUD hoặc editor chính thức.</li>
+                <li>Editor Canva-like hỗ trợ kéo thả, resize, zoom, grid, snap, autosave draft theo revision, publish và discard draft.</li>
+                <li>Preview editor và renderer in dùng dữ liệu hóa đơn thật từ API <strong>/api/invoices/:idOrCode/print</strong>; logo upload/xóa qua asset endpoint riêng.</li>
               </ul>
             </div>
 

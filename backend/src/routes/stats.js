@@ -4,6 +4,10 @@
 const express = require('express');
 const router = express.Router();
 const { getAll, today, normalizeDateKey, normalizeNumber, isCompletedInvoiceStatus } = require('../db/database');
+const {
+  NEGATIVE_STOCK_LIMIT,
+  NEGATIVE_STOCK_WARNING_THRESHOLD,
+} = require('../utils/negativeStock');
 
 function normalizeDailyStatsRow(row = {}) {
   return {
@@ -18,6 +22,40 @@ function getNormalizedDailyStatsRows() {
   return getAll('daily_stats')
     .map(normalizeDailyStatsRow)
     .filter(row => row.stat_date);
+}
+
+function serializeStockAlertProduct(product = {}) {
+  return {
+    id: product.id,
+    sku: product.sku || '',
+    name: product.name || product.product_name || `ID ${product.id}`,
+    stock: Number(product.stock) || 0,
+    parent_id: product.parent_id || null,
+    active: product.active === 0 ? 0 : 1,
+  };
+}
+
+function buildNegativeStockDashboardStats() {
+  const products = getAll('products', product => product && product.active !== 0);
+  const negativeProducts = products
+    .map(serializeStockAlertProduct)
+    .filter(product => product.stock < 0)
+    .sort((a, b) => a.stock - b.stock || String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
+  const nearLimitProducts = negativeProducts.filter(product => product.stock <= NEGATIVE_STOCK_WARNING_THRESHOLD && product.stock >= NEGATIVE_STOCK_LIMIT);
+  const breachedProducts = negativeProducts.filter(product => product.stock < NEGATIVE_STOCK_LIMIT);
+
+  return {
+    minimum_allowed_stock: NEGATIVE_STOCK_LIMIT,
+    warning_threshold: NEGATIVE_STOCK_WARNING_THRESHOLD,
+    negative_count: negativeProducts.length,
+    near_limit_count: nearLimitProducts.length,
+    breached_count: breachedProducts.length,
+    lowest_stock: negativeProducts.length > 0 ? negativeProducts[0].stock : 0,
+    total_negative_stock: negativeProducts.reduce((sum, product) => sum + product.stock, 0),
+    products: negativeProducts.slice(0, 20),
+    near_limit_products: nearLimitProducts.slice(0, 20),
+    breached_products: breachedProducts.slice(0, 20),
+  };
 }
 
 router.get('/', (req, res) => {
@@ -52,7 +90,19 @@ router.get('/summary', (req, res) => {
       return acc;
     }, { revenue: 0, orders: 0 });
 
-  res.json({ today: todayStats, month: monthStats, allTime });
+  const negativeStock = buildNegativeStockDashboardStats();
+
+  res.json({
+    today: todayStats,
+    month: monthStats,
+    allTime,
+    stock: { negative_stock: negativeStock },
+    negativeStock,
+  });
+});
+
+router.get('/stock-alerts', (_req, res) => {
+  res.json({ ok: true, negativeStock: buildNegativeStockDashboardStats() });
 });
 
 const PRODUCT_REPORT_TIMEZONE = 'Asia/Saigon';

@@ -6,7 +6,7 @@ const { closePrintTemplatesPool, getPrintTemplatesMySqlStatus } = require('../sr
 async function main() {
   try {
     const result = await ensurePrintTemplatesSchema({ failSoft: false });
-    console.log('[KHA PRINT TEMPLATES MYSQL] Đã khởi tạo schema:', JSON.stringify(result));
+    console.log('[KHA PRINT TEMPLATES MYSQL] Đã khởi tạo schema layout v2/draft/revision:', JSON.stringify(result));
   } catch (error) {
     const status = getPrintTemplatesMySqlStatus();
     console.error('[KHA PRINT TEMPLATES MYSQL] Không thể khởi tạo schema print_templates.');

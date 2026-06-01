@@ -7,6 +7,14 @@ import {
 import { buildCategoriesById, filterProductTree, normalizeSearchText, getProductDisplayName, getProductVariants, getVariantIdentity } from '../utils/productSearch';
 import { attachClientOrderMetadata, generateClientOrderId } from '../utils/clientOrderId';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
+import {
+  NEGATIVE_STOCK_LIMIT,
+  NEGATIVE_STOCK_LIMIT_MESSAGE,
+  buildSaleStockValidation,
+  formatStockValue,
+  getSaleStockStateForLine,
+  getStockDisplayMeta,
+} from '../utils/negativeStock';
 
 const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
 const COMBO_REFRESH_STALE_MS = 30 * 1000;
@@ -132,6 +140,8 @@ export default function CreateOrder({ user, store }) {
   const [categories, setCategories] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [cart, setCart] = useState([]);
+  const [editBaselineCart, setEditBaselineCart] = useState([]);
+  const [stockToast, setStockToast] = useState(null);
   const [productSearch, setProductSearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [priceType, setPriceType] = useState('retail');
@@ -180,6 +190,17 @@ export default function CreateOrder({ user, store }) {
   const customerDropdownRef = useRef();
   const comboLastFetchedAtRef = useRef(0);
   const comboFetchInFlightRef = useRef(null);
+  const lastStockLimitToastRef = useRef('');
+
+  useEffect(() => {
+    if (!stockToast) return undefined;
+    const timer = window.setTimeout(() => setStockToast(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [stockToast]);
+
+  const showStockLimitToast = (message = NEGATIVE_STOCK_LIMIT_MESSAGE) => {
+    setStockToast({ id: Date.now(), message });
+  };
 
   const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
   const getCartRowKey = (item, idx) => `cart-row-${String(item?.id ?? item?._cartKey ?? item?.combo_id ?? item?.product_id ?? 'item')}-${idx}`;
@@ -511,6 +532,36 @@ export default function CreateOrder({ user, store }) {
     return null;
   };
 
+  const getProductStockById = (productId, line = {}) => {
+    const product = getProductById(productId);
+    if (product && Number.isFinite(Number(product.stock))) return Number(product.stock);
+    const fallback = Number(line?.current_stock ?? line?.currentStock ?? line?.max_stock ?? line?.stock);
+    return Number.isFinite(fallback) ? fallback : 0;
+  };
+
+  const cartStockValidation = useMemo(() => buildSaleStockValidation(cart, {
+    baselineLines: editingInvoiceId ? editBaselineCart : [],
+    getProductStockById,
+    getLineKey: getCartRowKey,
+  }), [cart, editBaselineCart, editingInvoiceId, products]);
+  const hasCartStockError = cartStockValidation.hasInvalid;
+  const guardCartStockBeforeSubmit = () => {
+    if (!hasCartStockError) return true;
+    showStockLimitToast(cartStockValidation.firstError?.message || NEGATIVE_STOCK_LIMIT_MESSAGE);
+    return false;
+  };
+
+  useEffect(() => {
+    if (!hasCartStockError) {
+      lastStockLimitToastRef.current = '';
+      return;
+    }
+    const message = cartStockValidation.firstError?.message || NEGATIVE_STOCK_LIMIT_MESSAGE;
+    if (lastStockLimitToastRef.current === message) return;
+    lastStockLimitToastRef.current = message;
+    showStockLimitToast(message);
+  }, [hasCartStockError, cartStockValidation.firstError?.message]);
+
   // Thêm biến thể với số lượng
   const addVariantItem = (v) => {
     const qty = normalizeDecimalQuantity(variantQty[v.id], 1);
@@ -725,6 +776,7 @@ export default function CreateOrder({ user, store }) {
 
   const handleCreateOrder = async () => {
     if (cart.length === 0) { alert('Chưa có sản phẩm nào!'); return; }
+    if (!guardCartStockBeforeSubmit()) return;
     setCreating(true);
     const clientOrderId = generateClientOrderId();
     const orderPayload = attachClientOrderMetadata({
@@ -807,6 +859,7 @@ export default function CreateOrder({ user, store }) {
 
       setLastInvoice(inv);
       setEditingInvoiceId(null);
+      setEditBaselineCart([]);
       setCreating(false);
       fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
     };
@@ -837,10 +890,12 @@ export default function CreateOrder({ user, store }) {
     if (!lastInvoice) return;
     setEditingInvoiceId(lastInvoice.id || null);
     setSelectedCustomer(lastInvoice.selectedCustomer || null);
-    setCart((lastInvoice.cart || []).map((item, idx) => ({
+    const baselineCart = (lastInvoice.cart || []).map((item, idx) => ({
       ...item,
       id: item.id || `${Date.now()}_${idx}`,
-    })));
+    }));
+    setEditBaselineCart(baselineCart);
+    setCart(baselineCart.map(item => ({ ...item })));
     setVatPercent(+(lastInvoice.vatPercent || lastInvoice.vat_percent || 0));
     setDiscountAmount(+(lastInvoice.discountAmount || lastInvoice.discount_amount || 0));
     setDeliveryDate(lastInvoice.delivery_date || '');
@@ -855,6 +910,7 @@ export default function CreateOrder({ user, store }) {
   const handleSaveEdit = async () => {
     if (!editingInvoiceId) { alert('Không tìm thấy đơn hàng để cập nhật!'); return; }
     if (cart.length === 0) { alert('Chưa có sản phẩm nào!'); return; }
+    if (!guardCartStockBeforeSubmit()) return;
     setCreating(true);
     const payload = {
       customer_id: selectedCustomer?.id || null,
@@ -925,6 +981,7 @@ export default function CreateOrder({ user, store }) {
 
       setLastInvoice(updatedInvoice);
       setEditingInvoiceId(null);
+      setEditBaselineCart([]);
       setCreating(false);
       fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
       window.dispatchEvent(new CustomEvent('kha-order-created', { detail: updatedInvoice }));
@@ -952,6 +1009,8 @@ export default function CreateOrder({ user, store }) {
     setLastInvoice(null);
     setEditingInvoiceId(null);
     setCart([]);
+    setEditBaselineCart([]);
+    setStockToast(null);
     setProductSearch('');
     setShowProductPanel(false);
     setExpandedParents({});
@@ -974,6 +1033,13 @@ export default function CreateOrder({ user, store }) {
   return (
     <div className="min-h-screen bg-gray-100 p-3 sm:p-4 pb-36 lg:pb-4">
       <style>{`@keyframes slideUp{from{transform:translateY(120%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+      {stockToast && (
+        <div className="toast-stack">
+          <div className="toast-card border-red-200 bg-red-50 text-red-700">
+            ⚠️ {stockToast.message}
+          </div>
+        </div>
+      )}
 
       {/* ===== HEADER ===== */}
       <div className="flex flex-col gap-3 mb-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1005,14 +1071,14 @@ export default function CreateOrder({ user, store }) {
           {editingInvoiceId ? (
             <button
               onClick={handleSaveEdit}
-              disabled={cart.length === 0 || creating}
+              disabled={cart.length === 0 || creating || hasCartStockError}
               className="px-3 sm:px-5 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
               {creating ? ' Đang lưu...' : 'Lưu thay đổi'}
             </button>
           ) : (
             <button
               onClick={handleCreateOrder}
-              disabled={cart.length === 0 || creating}
+              disabled={cart.length === 0 || creating || hasCartStockError}
               className="px-3 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
               {creating ? ' Đang tạo...' : 'Tạo Đơn Hàng'}
             </button>
@@ -1254,22 +1320,21 @@ export default function CreateOrder({ user, store }) {
                     const displayName = isVariant ? getProductDisplayName(item, parent) : getProductDisplayName(item);
                     const categoryName = isVariant ? (getCategoryName(item) || getCategoryName(parent)) : getCategoryName(item);
                     const supplierName = isVariant ? getSupplierName(item.supplier_id || parent?.supplier_id) : getSupplierName(item.supplier_id);
+                    const stockMeta = getStockDisplayMeta(item.stock);
 
                     return (
                       <div
                         key={`search-${item._rowKey}`}
-                        className={`border rounded-lg p-3 cursor-pointer ${isVariant ? 'hover:border-blue-500' : 'hover:border-green-500'} hover:shadow-sm ${item.stock <= 0 ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
+                        className={`border rounded-lg p-3 cursor-pointer ${isVariant ? 'hover:border-blue-500' : 'hover:border-green-500'} hover:shadow-sm ${stockMeta.cardClass}`}
                         onClick={() => {
-                          if (item.stock > 0) {
-                            addProduct(item);
-                            setProductSearch('');
-                          }
+                          addProduct(item);
+                          setProductSearch('');
                         }}
                       >
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             {isVariant && <span className="text-gray-300 shrink-0">⊙</span>}
-                            <div className={`flex-1 min-w-0 ${item.stock <= 0 ? 'text-red-500' : isVariant ? 'text-blue-600' : 'text-gray-800'}`}>
+                            <div className={`flex-1 min-w-0 ${stockMeta.isNegative || stockMeta.isNearLimit ? stockMeta.nameClass : (isVariant ? 'text-blue-600' : 'text-gray-800')}`}>
                               <div className="text-xs font-medium truncate flex items-center gap-2">
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${isVariant ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{isVariant ? 'Variant' : 'Sản phẩm'}</span>
                                 <span className="truncate">{displayName}</span>
@@ -1280,11 +1345,9 @@ export default function CreateOrder({ user, store }) {
                           </div>
                           <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                             <div className="text-[10px] text-gray-400">SKU: {item.sku || '—'}</div>
-                            {item.stock <= 0 ? (
-                              <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
-                            ) : (
-                              <div className={`text-[10px] ${item.stock <= 3 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>Còn: {item.stock}</div>
-                            )}
+                            <div className={`text-[10px] ${stockMeta.textClass}`}>{stockMeta.display}</div>
+                            {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>Âm kho</div>}
+                            {stockMeta.isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">Gần -100</div>}
                             <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(item))}</div>
                           </div>
                         </div>
@@ -1331,10 +1394,13 @@ export default function CreateOrder({ user, store }) {
                     const isCombo = isComboOrderItem(item);
                     const comboItems = getComboLineItems(item);
                     const isExpanded = Boolean(expandedComboRows[rowKey]);
+                    const stockState = getSaleStockStateForLine(cartStockValidation, item);
+                    const rowStockInvalid = Boolean(stockState?.invalid);
+                    const rowNearLimit = Boolean(stockState?.nearLimit);
 
                     return (
                       <Fragment key={rowKey}>
-                        <tr className={`align-middle ${!isCombo && item.max_stock <= 0 ? 'bg-red-50' : ''}`}>
+                        <tr className={`align-middle ${rowStockInvalid ? 'bg-red-50 ring-1 ring-red-200' : rowNearLimit ? 'bg-orange-50' : ''}`}>
                           <td className="text-center text-gray-500 font-medium">{idx + 1}</td>
                           <td>
                             <div className="font-medium flex items-center gap-1 min-w-0">
@@ -1359,16 +1425,17 @@ export default function CreateOrder({ user, store }) {
                             {isCombo && (
                               <div className="text-[10px] text-purple-500 mt-0.5 truncate max-w-xs">{getComboItemSummary(item)}</div>
                             )}
-                            {!isCombo && item.max_stock <= 0 && (
-                              <div className="text-xs font-bold text-red-600 mt-0.5">⚠️ Hết hàng</div>
+                            {!isCombo && stockState && (
+                              <div className={`text-xs font-semibold mt-0.5 ${rowStockInvalid ? 'text-red-600' : rowNearLimit ? 'text-orange-700' : 'text-gray-500'}`}>
+                                Dự kiến {formatStockValue(stockState.projectedStock)}{rowStockInvalid ? ` · ${NEGATIVE_STOCK_LIMIT_MESSAGE}` : rowNearLimit ? ` · gần ngưỡng ${NEGATIVE_STOCK_LIMIT}` : ''}
+                              </div>
                             )}
                           </td>
                           <td>
-                            <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal" max={isCombo ? undefined : item.max_stock}
+                            <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal"
                               value={item.quantity}
-                              disabled={!isCombo && item.max_stock <= 0}
                               onChange={e => updateCartItem(item.id, 'quantity', e.target.value)}
-                              className={`pos-table-input text-center ${!isCombo && item.max_stock <= 0 ? 'bg-red-100 text-red-400 border-red-200' : ''}`} />
+                              className={`pos-table-input text-center ${rowStockInvalid ? 'bg-red-100 text-red-700 border-red-300' : rowNearLimit ? 'bg-orange-50 text-orange-700 border-orange-300' : ''}`} />
                           </td>
                           <td>
                             <input type="number" min="0"
@@ -1504,23 +1571,22 @@ export default function CreateOrder({ user, store }) {
                     const displayName = isVariant ? getProductDisplayName(item, parent) : getProductDisplayName(item);
                     const categoryName = isVariant ? (getCategoryName(item) || getCategoryName(parent)) : getCategoryName(item);
                     const supplierName = isVariant ? getSupplierName(item.supplier_id || parent?.supplier_id) : getSupplierName(item.supplier_id);
+                    const stockMeta = getStockDisplayMeta(item.stock);
 
                     return (
                       <div
                         key={`panel-${item._rowKey}`}
-                        className={`border rounded-lg p-3 cursor-pointer ${isVariant ? 'hover:border-blue-500' : 'hover:border-green-500'} hover:shadow-sm ${item.stock <= 0 ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
+                        className={`border rounded-lg p-3 cursor-pointer ${isVariant ? 'hover:border-blue-500' : 'hover:border-green-500'} hover:shadow-sm ${stockMeta.cardClass}`}
                         onClick={() => {
-                          if (item.stock > 0) {
-                            addProduct(item);
-                            setShowProductPanel(false);
-                            setProductSearch('');
-                          }
+                          addProduct(item);
+                          setShowProductPanel(false);
+                          setProductSearch('');
                         }}
                       >
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             {isVariant && <span className="text-gray-300 shrink-0">⊙</span>}
-                            <div className={`flex-1 min-w-0 ${item.stock <= 0 ? 'text-red-500' : isVariant ? 'text-blue-600' : 'text-gray-800'}`}>
+                            <div className={`flex-1 min-w-0 ${stockMeta.isNegative || stockMeta.isNearLimit ? stockMeta.nameClass : (isVariant ? 'text-blue-600' : 'text-gray-800')}`}>
                               <div className="text-xs font-medium truncate flex items-center gap-2">
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${isVariant ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{isVariant ? 'Variant' : 'Sản phẩm'}</span>
                                 <span className="truncate">{displayName}</span>
@@ -1531,11 +1597,9 @@ export default function CreateOrder({ user, store }) {
                           </div>
                           <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                             <div className="text-[10px] text-gray-400">SKU: {item.sku || '—'}</div>
-                            {item.stock <= 0 ? (
-                              <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
-                            ) : (
-                              <div className={`text-[10px] ${item.stock <= 3 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>Còn: {item.stock}</div>
-                            )}
+                            <div className={`text-[10px] ${stockMeta.textClass}`}>{stockMeta.display}</div>
+                            {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>Âm kho</div>}
+                            {stockMeta.isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">Gần -100</div>}
                             <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(item))}</div>
                           </div>
                         </div>
@@ -1627,9 +1691,14 @@ export default function CreateOrder({ user, store }) {
                   {formatVND(Math.max(0, remainingAmount))}
                 </span>
               </div>
+              {hasCartStockError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                  {cartStockValidation.summaryMessage || NEGATIVE_STOCK_LIMIT_MESSAGE}
+                </div>
+              )}
               <button
                 onClick={editingInvoiceId ? handleSaveEdit : handleCreateOrder}
-                disabled={cart.length === 0 || creating}
+                disabled={cart.length === 0 || creating || hasCartStockError}
                 className={`w-full mt-2 py-2.5 disabled:bg-gray-300 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${editingInvoiceId ? 'bg-green-600 hover:bg-green-700' : 'bg-green-600 hover:bg-green-700'}`}>
                 {creating ? (editingInvoiceId ? ' Đang lưu...' : ' Đang tạo...') : (editingInvoiceId ? ' Lưu thay đổi' : 'Tạo đơn hàng')}
               </button>
@@ -1780,31 +1849,29 @@ export default function CreateOrder({ user, store }) {
                 <button onClick={() => setShowVariantPicker(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
               </div>
               <div className="flex-1 overflow-auto p-4 space-y-2">
-                {(showVariantPicker.variants || []).map(v => (
-                  <div key={v.id} className={`flex flex-col gap-3 border rounded-lg p-3 hover:border-blue-400 bg-white sm:flex-row sm:items-center ${v.stock <= 0 ? 'opacity-50' : ''}`}>
+                {(showVariantPicker.variants || []).map(v => {
+                  const stockMeta = getStockDisplayMeta(v.stock);
+                  return (
+                  <div key={v.id} className={`flex flex-col gap-3 border rounded-lg p-3 hover:border-blue-400 sm:flex-row sm:items-center ${stockMeta.cardClass}`}>
                     <div className="flex-1 min-w-0">
-                      <div className={`font-medium text-sm truncate ${v.stock <= 0 ? 'text-red-500' : 'text-gray-800'}`}>{getProductDisplayName(v, showVariantPicker)}</div>
-                      {v.stock <= 0 ? (
-                        <div className="text-xs text-red-500 font-bold">Hết hàng</div>
-                      ) : (
-                        <div className={`text-xs ${v.stock <= 3 ? 'text-red-500 font-bold' : 'text-gray-400'}`}>SKU: {v.sku || '—'} · Còn: {v.stock}</div>
-                      )}
+                      <div className={`font-medium text-sm truncate ${stockMeta.isNegative || stockMeta.isNearLimit ? stockMeta.nameClass : 'text-gray-800'}`}>{getProductDisplayName(v, showVariantPicker)}</div>
+                      <div className={`text-xs ${stockMeta.textClass}`}>SKU: {v.sku || '—'} · {stockMeta.display}</div>
                       <div className="text-sm font-bold text-blue-600 mt-0.5">{formatVND(getPrice(v))}</div>
                     </div>
                     <div className="flex items-center gap-2 sm:shrink-0">
-                      <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal" max={v.stock}
+                      <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal"
                         value={variantQty[v.id] || 1}
-                        onChange={e => setVariantQty(q => ({ ...q, [v.id]: clampDecimalQuantity(e.target.value, v.stock, 1) }))}
+                        onChange={e => setVariantQty(q => ({ ...q, [v.id]: normalizeDecimalQuantity(e.target.value, 1) }))}
                         className="w-16 text-center border rounded px-2 py-1.5 text-sm font-medium" />
                       <button
                         onClick={() => { addVariantItem(v); setShowVariantPicker(null); }}
-                        disabled={v.stock <= 0}
-                        className={`px-4 py-1.5 rounded-lg text-sm font-medium ${v.stock <= 0 ? 'bg-gray-300 text-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
-                        {v.stock <= 0 ? 'Hết hàng' : '+ Thêm'}
+                        className="px-4 py-1.5 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white">
+                        + Thêm
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {(showVariantPicker.variants || []).length === 0 && (
                   <div className="text-center text-gray-400 py-8">Sản phẩm này không có biến thể</div>
                 )}
@@ -1852,7 +1919,7 @@ export default function CreateOrder({ user, store }) {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Số lượng tồn</label>
-                    <input className="input-field w-full" type="number" min="0" value={newProduct.stock} onChange={e => setNewProduct(p => ({ ...p, stock: e.target.value }))} placeholder="0" />
+                    <input className="input-field w-full" type="number" min={NEGATIVE_STOCK_LIMIT} value={newProduct.stock} onChange={e => setNewProduct(p => ({ ...p, stock: e.target.value }))} placeholder="0" />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

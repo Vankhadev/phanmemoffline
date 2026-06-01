@@ -5,6 +5,11 @@ const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, remove, now } = require('../db/database');
 const { v4: uuidv4 } = require('uuid');
+const {
+  assertCanApplyProductStockDelta,
+  logNegativeStockTransition,
+  logNegativeStockLimitViolation,
+} = require('../utils/negativeStock');
 
 function genImportCode() {
   const d = new Date();
@@ -124,12 +129,8 @@ function replaceImportDetails(importId, details) {
   return savedDetails;
 }
 
-function applyStockForImport(importLog, details) {
-  if (!importLog || importLog.stock_applied === true || importLog.stock_rolled_back === true) {
-    return { applied: false, items: [] };
-  }
-
-  const appliedItems = [];
+function buildApplyStockOperations(details, operation = 'áp dụng phiếu nhập') {
+  const grouped = new Map();
   for (const d of details || []) {
     const stockProductId = getStockProductId(d);
     if (!stockProductId) continue;
@@ -139,12 +140,44 @@ function applyStockForImport(importLog, details) {
     const quantity = Math.max(0, toNumber(d.quantity, 0));
     if (quantity <= 0) continue;
 
-    const changes = { stock: toNumber(product.stock, 0) + quantity, updated_at: now() };
+    const key = Number(product.id);
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.quantity += quantity;
+      existing.detail = d;
+    } else {
+      grouped.set(key, { product, detail: d, quantity });
+    }
+  }
+
+  return Array.from(grouped.values()).map(item => ({
+    ...item,
+    validation: assertCanApplyProductStockDelta({
+      productId: item.product.id,
+      detail: { product_name: item.detail.product_name || item.product.name, product_sku: item.detail.sku || item.product.sku },
+      delta: item.quantity,
+      quantity: item.quantity,
+      operation,
+    }),
+  }));
+}
+
+function applyStockForImport(importLog, details) {
+  if (!importLog || importLog.stock_applied === true || importLog.stock_rolled_back === true) {
+    return { applied: false, items: [] };
+  }
+
+  const operations = buildApplyStockOperations(details, 'áp dụng phiếu nhập');
+  const appliedItems = [];
+  for (const operation of operations) {
+    const d = operation.detail;
+    const changes = { stock: operation.validation.projectedStock, updated_at: now() };
     if (d.import_price) changes.import_price = Math.max(0, toNumber(d.import_price, 0));
     if (d.wholesale_price) changes.wholesale_price = Math.max(0, toNumber(d.wholesale_price, 0));
     if (d.retail_price) changes.retail_price = Math.max(0, toNumber(d.retail_price, 0));
-    update('products', product.id, changes);
-    appliedItems.push({ product_id: product.id, quantity });
+    update('products', operation.product.id, changes);
+    logNegativeStockTransition({ ...operation.validation, source: 'import_apply', import_id: importLog.id }, { skipSave: true });
+    appliedItems.push({ product_id: operation.product.id, quantity: operation.quantity, final_stock: operation.validation.projectedStock });
   }
 
   const applied = appliedItems.length > 0;
@@ -164,21 +197,30 @@ function rollbackStockForImport(importLog, details) {
     return { rolledBack: false, items: [] };
   }
 
-  const rolledBackItems = [];
-  for (const d of details || []) {
-    const stockProductId = getStockProductId(d);
-    if (!stockProductId) continue;
-    const product = getOne('products', p => Number(p.id) === Number(stockProductId));
+  const operations = [];
+  const quantityByProductId = aggregateStockQuantities(details);
+  for (const [productId, quantity] of quantityByProductId.entries()) {
+    const product = getOne('products', p => Number(p.id) === Number(productId));
     if (!product) continue;
 
-    const quantity = Math.max(0, toNumber(d.quantity, 0));
-    if (quantity <= 0) continue;
+    const validation = assertCanApplyProductStockDelta({
+      productId: product.id,
+      detail: { product_name: product.name, product_sku: product.sku },
+      delta: -quantity,
+      quantity,
+      operation: 'rollback phiếu nhập',
+    });
+    operations.push({ product, quantity, validation });
+  }
 
-    update('products', product.id, {
-      stock: toNumber(product.stock, 0) - quantity,
+  const rolledBackItems = [];
+  for (const operation of operations) {
+    update('products', operation.product.id, {
+      stock: operation.validation.projectedStock,
       updated_at: now(),
     });
-    rolledBackItems.push({ product_id: product.id, quantity });
+    logNegativeStockTransition({ ...operation.validation, source: 'import_rollback', import_id: importLog.id }, { skipSave: true });
+    rolledBackItems.push({ product_id: operation.product.id, quantity: operation.quantity, final_stock: operation.validation.projectedStock });
   }
 
   return { rolledBack: rolledBackItems.length > 0, items: rolledBackItems };
@@ -194,6 +236,7 @@ function applyStockDeltaForUpdatedDetails(importLog, oldDetails, newDetails) {
   const productIds = new Set([...oldMap.keys(), ...newMap.keys()]);
   const changedItems = [];
 
+  const operations = [];
   for (const productId of productIds) {
     const oldQuantity = toNumber(oldMap.get(productId), 0);
     const newQuantity = toNumber(newMap.get(productId), 0);
@@ -203,11 +246,28 @@ function applyStockDeltaForUpdatedDetails(importLog, oldDetails, newDetails) {
     const product = getOne('products', p => Number(p.id) === Number(productId));
     if (!product) continue;
 
-    update('products', product.id, {
-      stock: toNumber(product.stock, 0) + delta,
+    const validation = assertCanApplyProductStockDelta({
+      productId: product.id,
+      detail: { product_name: product.name, product_sku: product.sku },
+      delta,
+      operation: 'cập nhật delta phiếu nhập',
+    });
+    operations.push({ product, oldQuantity, newQuantity, delta, validation });
+  }
+
+  for (const operation of operations) {
+    update('products', operation.product.id, {
+      stock: operation.validation.projectedStock,
       updated_at: now(),
     });
-    changedItems.push({ product_id: product.id, old_quantity: oldQuantity, new_quantity: newQuantity, delta });
+    logNegativeStockTransition({ ...operation.validation, source: 'import_delta_update', import_id: importLog.id }, { skipSave: true });
+    changedItems.push({
+      product_id: operation.product.id,
+      old_quantity: operation.oldQuantity,
+      new_quantity: operation.newQuantity,
+      delta: operation.delta,
+      final_stock: operation.validation.projectedStock,
+    });
   }
 
   if (changedItems.length > 0) {
@@ -302,7 +362,13 @@ function softDeleteImport(importLog, reason = 'deleted') {
   }
 
   const details = getAll('import_details', d => d.import_id === importLog.id);
-  const rollbackResult = rollbackStockForImport(importLog, details);
+  let rollbackResult;
+  try {
+    rollbackResult = rollbackStockForImport(importLog, details);
+  } catch (error) {
+    logNegativeStockLimitViolation(error, { source: 'import_soft_delete', import_id: importLog.id });
+    throw error;
+  }
   const rolledBackAt = rollbackResult.rolledBack ? now() : (importLog.stock_rolled_back_at || null);
 
   update('import_logs', importLog.id, {
@@ -393,6 +459,10 @@ router.post('/', (req, res) => {
     const import_code = requestedCode || genImportCode();
     const createdAt = now();
 
+    if (normalizedStatus === 'received') {
+      buildApplyStockOperations(Array.isArray(details) ? details : [], 'áp dụng phiếu nhập');
+    }
+
     const import_id = insert('import_logs', {
       import_code,
       partner_id: partner_id || null,
@@ -440,7 +510,9 @@ router.post('/', (req, res) => {
       stock_items: stockResult.items,
     });
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi tạo phiếu nhập', detail: err.message });
+    const status = err.status || err.statusCode || 500;
+    logNegativeStockLimitViolation(err, { source: 'import_create' });
+    res.status(status).json({ error: 'Lỗi khi tạo phiếu nhập', detail: err.message, code: err.code });
   }
 });
 
@@ -470,8 +542,13 @@ router.put('/:idOrCode', (req, res) => {
     let stockResult = { applied: false, items: [], mode: 'none' };
 
     if (itemsChanged && importLog.stock_applied === true && importLog.stock_rolled_back !== true && nextStatus === 'received') {
-      const deltaResult = applyStockDeltaForUpdatedDetails(importLog, oldDetails, incomingDetails);
-      stockResult = { ...deltaResult, mode: 'delta' };
+      try {
+        const deltaResult = applyStockDeltaForUpdatedDetails(importLog, oldDetails, incomingDetails);
+        stockResult = { ...deltaResult, mode: 'delta' };
+      } catch (error) {
+        logNegativeStockLimitViolation(error, { source: 'import_update_delta', import_id: importLog.id });
+        throw error;
+      }
     }
 
     let savedDetails = oldDetails;
@@ -492,12 +569,24 @@ router.put('/:idOrCode', (req, res) => {
     };
 
     if (nextStatus === 'received' && importLog.stock_applied !== true && importLog.stock_rolled_back !== true) {
+      try {
+        buildApplyStockOperations(savedDetails, 'áp dụng phiếu nhập');
+      } catch (error) {
+        logNegativeStockLimitViolation(error, { source: 'import_update_apply', import_id: importLog.id });
+        throw error;
+      }
       update('import_logs', importLog.id, changes);
       const refreshedBeforeStock = getOne('import_logs', i => i.id === importLog.id);
       const applyResult = applyStockForImport(refreshedBeforeStock, savedDetails);
       stockResult = { ...applyResult, mode: 'apply' };
     } else if (nextStatus === 'draft' && importLog.stock_applied === true && importLog.stock_rolled_back !== true) {
-      const rollbackResult = rollbackStockForImport(importLog, oldDetails);
+      let rollbackResult;
+      try {
+        rollbackResult = rollbackStockForImport(importLog, oldDetails);
+      } catch (error) {
+        logNegativeStockLimitViolation(error, { source: 'import_update_rollback_to_draft', import_id: importLog.id });
+        throw error;
+      }
       Object.assign(changes, {
         stock_status: rollbackResult.rolledBack ? 'rolled_back' : 'rollback_not_needed',
         stock_rolled_back: true,
@@ -534,7 +623,9 @@ router.put('/:idOrCode', (req, res) => {
       details: finalDetails,
     });
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi cập nhật phiếu nhập', detail: err.message });
+    const status = err.status || err.statusCode || 500;
+    logNegativeStockLimitViolation(err, { source: 'import_update' });
+    res.status(status).json({ error: 'Lỗi khi cập nhật phiếu nhập', detail: err.message, code: err.code });
   }
 });
 
@@ -555,7 +646,13 @@ router.post('/:idOrCode/cancel', (req, res) => {
     }
 
     const details = getAll('import_details', d => d.import_id === importLog.id);
-    const rollbackResult = rollbackStockForImport(importLog, details);
+    let rollbackResult;
+    try {
+      rollbackResult = rollbackStockForImport(importLog, details);
+    } catch (error) {
+      logNegativeStockLimitViolation(error, { source: 'import_cancel', import_id: importLog.id });
+      throw error;
+    }
     const rolledBackAt = rollbackResult.rolledBack ? now() : (importLog.stock_rolled_back_at || null);
 
     const voidedPaymentEntry = voidImportPaymentCashBook(importLog);
@@ -584,7 +681,9 @@ router.post('/:idOrCode/cancel', (req, res) => {
       stock_rolled_back: importLog.stock_applied === true,
     });
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi hủy phiếu nhập', detail: err.message });
+    const status = err.status || err.statusCode || 500;
+    logNegativeStockLimitViolation(err, { source: 'import_cancel' });
+    res.status(status).json({ error: 'Lỗi khi hủy phiếu nhập', detail: err.message, code: err.code });
   }
 });
 
@@ -657,7 +756,9 @@ router.delete('/bulk', (req, res) => {
 
     res.json({ ok: true, deleted_count: deletedCount, rollback_count: rollbackCount, not_found: notFound, results });
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi xóa hàng loạt phiếu nhập', detail: err.message });
+    const status = err.status || err.statusCode || 500;
+    logNegativeStockLimitViolation(err, { source: 'import_bulk_delete' });
+    res.status(status).json({ error: 'Lỗi khi xóa hàng loạt phiếu nhập', detail: err.message, code: err.code });
   }
 });
 
@@ -669,7 +770,9 @@ router.delete('/:idOrCode', (req, res) => {
     if (!result.ok) return res.status(result.status || 500).json({ error: result.error || 'Không thể xóa phiếu nhập' });
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi xóa phiếu nhập', detail: err.message });
+    const status = err.status || err.statusCode || 500;
+    logNegativeStockLimitViolation(err, { source: 'import_delete' });
+    res.status(status).json({ error: 'Lỗi khi xóa phiếu nhập', detail: err.message, code: err.code });
   }
 });
 

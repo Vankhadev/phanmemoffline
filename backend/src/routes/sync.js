@@ -3,6 +3,11 @@ const router = express.Router();
 const { getAll, getOne, insert, update, remove, now, getSyncVersions } = require('../db/database');
 const { requireAuth, requirePermission, requireAnyPermission, publicSession } = require('../middleware/auth');
 const { createInvoiceFromPayload } = require('../services/invoiceCreationService');
+const {
+  assertProductStockValueWithinLimit,
+  logNegativeStockTransition,
+  logNegativeStockLimitViolation,
+} = require('../utils/negativeStock');
 
 const PULL_TABLES = [
   'store_info',
@@ -223,6 +228,18 @@ function upsertProductFromSync(payload, req) {
   const nextSku = String(row.sku || '').trim();
   row.updated_at = row.updated_at || now();
 
+  if (Object.prototype.hasOwnProperty.call(row, 'stock')) {
+    const normalizedStock = Number(row.stock);
+    row.stock = Number.isFinite(normalizedStock) ? normalizedStock : 0;
+    assertProductStockValueWithinLimit({
+      productId: existing?.id || payload.id || null,
+      productName: row.name || existing?.name || row.sku || payload.sku || 'Sản phẩm',
+      stock: row.stock,
+      currentStock: existing?.id ? existing.stock : null,
+      operation: 'đồng bộ tồn kho sản phẩm',
+    });
+  }
+
   if (existing) {
     if (existing.parent_id) {
       row.parent_id = toOptionalNumber(row.parent_id) || existing.parent_id;
@@ -231,7 +248,18 @@ function upsertProductFromSync(payload, req) {
       row.parent_id = null;
       if (!nextSku || hasProductVariants(existing.id)) row.sku = existing.sku || '';
     }
-    update('products', existing.id, row);
+    const updated = update('products', existing.id, row);
+    if ((Number(updated?.stock) || 0) < 0) {
+      logNegativeStockTransition({
+        productId: updated.id,
+        productName: updated.name || updated.sku || 'Sản phẩm',
+        currentStock: Number(existing.stock) || 0,
+        changeQuantity: (Number(updated.stock) || 0) - (Number(existing.stock) || 0),
+        projectedStock: Number(updated.stock) || 0,
+        operation: 'đồng bộ tồn kho sản phẩm',
+        source: 'sync_products',
+      });
+    }
     return { id: existing.id, action: 'updated' };
   }
 
@@ -255,6 +283,16 @@ function upsertProductFromSync(payload, req) {
     active: row.active === undefined ? 1 : row.active,
     created_at: row.created_at || now(),
   });
+  if ((Number(row.stock) || 0) < 0) {
+    logNegativeStockTransition({
+      productId: id,
+      productName: row.name || row.sku || 'Sản phẩm',
+      currentStock: null,
+      projectedStock: Number(row.stock) || 0,
+      operation: 'đồng bộ tồn kho sản phẩm',
+      source: 'sync_products',
+    });
+  }
   return { id, action: 'created' };
 }
 
@@ -349,12 +387,14 @@ function createPendingOrderFromSync(payload, req) {
       idempotent: result.idempotent === true,
     };
   } catch (err) {
+    logNegativeStockLimitViolation(err, { source: 'sync_orders', client_order_id: payload.client_order_id || '' });
     return {
       id: null,
       invoice_code: payload.invoice_code || '',
       client_order_id: payload.client_order_id || '',
       action: 'error',
       error: err.message,
+      code: err.code || 'SYNC_ORDER_ERROR',
     };
   }
 }
@@ -447,8 +487,13 @@ router.post('/sync/push', requireAuth, requirePermission('sync.manage'), (req, r
   }
 
   for (const product of productInputs) {
-    const result = upsertSimpleRowFromSync('products', product, req);
-    if (result) products.push(result);
+    try {
+      const result = upsertSimpleRowFromSync('products', product, req);
+      if (result) products.push(result);
+    } catch (err) {
+      logNegativeStockLimitViolation(err, { source: 'sync_products' });
+      products.push({ id: product?.id || null, sku: product?.sku || '', action: 'error', error: err.message, code: err.code || 'SYNC_PRODUCT_ERROR' });
+    }
   }
 
   for (const imp of importInputs) {

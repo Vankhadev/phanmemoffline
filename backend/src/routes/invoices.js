@@ -18,6 +18,7 @@ const {
 const {
   getInvoiceDetailProductId,
   validateNegativeStockForDetails,
+  logNegativeStockLimitViolation,
 } = require('../utils/negativeStock');
 const { resolveInvoicePrintTemplate } = require('../services/printTemplateService');
 
@@ -26,60 +27,6 @@ const { resolveInvoicePrintTemplate } = require('../services/printTemplateServic
 // ─────────────────────────────────────────────
 function genInvoiceCode() {
   return `HD${String(getNextSeq('invoice_seq')).padStart(5, '0')}`;
-}
-
-// ─────────────────────────────────────────────
-// Helper: trừ tồn kho cho product HOẶC variant
-// ─────────────────────────────────────────────
-function deductStock(productOrVariantId, quantity) {
-  // ① Thử trừ biến thể trước (biến thể lưu trong bảng products với parent_id != null)
-  const variant = getOne('products', v => Number(v.id) === Number(productOrVariantId) && v.parent_id != null);
-  if (variant) {
-    update('products', variant.id, {
-      stock: (Number(variant.stock) || 0) - quantity,
-    });
-    return;
-  }
-  // ② Thử trừ sản phẩm cha (parent_id là null)
-  const product = getOne('products', p => Number(p.id) === Number(productOrVariantId) && !p.parent_id);
-  if (product) {
-    update('products', product.id, {
-      stock: (Number(product.stock) || 0) - quantity,
-    });
-    return;
-  }
-}
-
-// ─────────────────────────────────────────────
-// Helper: hoàn tồn kho cho product HOẶC variant
-// ─────────────────────────────────────────────
-function restoreStock(productOrVariantId, quantity) {
-  // ① Thử hoàn biến thể trước
-  const variant = getOne('products', v => v.id === productOrVariantId && v.parent_id != null);
-  if (variant) {
-    update('products', variant.id, {
-      stock: (variant.stock || 0) + quantity,
-    });
-    return;
-  }
-  // ② Thử hoàn sản phẩm cha
-  const product = getOne('products', p => p.id === productOrVariantId && !p.parent_id);
-  if (product) {
-    update('products', product.id, {
-      stock: (product.stock || 0) + quantity,
-    });
-  }
-}
-
-// ─────────────────────────────────────────────
-// Helper: lấy tồn kho thực tế (product hoặc variant)
-// ─────────────────────────────────────────────
-function getStock(productOrVariantId) {
-  const variant = getOne('products', v => Number(v.id) === Number(productOrVariantId) && v.parent_id != null);
-  if (variant) return { stock: Number(variant.stock) || 0, name: variant.name };
-  const product = getOne('products', p => Number(p.id) === Number(productOrVariantId) && !p.parent_id);
-  if (product) return { stock: Number(product.stock) || 0, name: product.name };
-  return { stock: 0, name: `ID ${productOrVariantId}` };
 }
 
 // ─────────────────────────────────────────────
@@ -103,10 +50,11 @@ function collectProductQuantities(details = []) {
 
 function validateStockForInvoiceEditDetails(newDetails = [], oldDetails = []) {
   try {
-    validateNegativeStockForDetails(newDetails, {
+    return validateNegativeStockForDetails(newDetails, {
       restoredByProductId: collectProductQuantities(oldDetails),
     });
   } catch (error) {
+    logNegativeStockLimitViolation(error, { source: 'invoice_edit', operation: 'validate_invoice_edit_details' }, { skipSave: true });
     if (error?.status) throw error;
     const err = new Error(error?.message || 'Không thể kiểm tra tồn kho trước khi cập nhật đơn hàng');
     err.status = 400;
@@ -311,7 +259,21 @@ async function attachPrintTemplateToPayload(payload, req) {
       accountId: resolvePrintTemplateAccountId(req, payload),
       templateId: parsePrintTemplateQueryId(req?.query || {}),
     });
-    return { ...payload, template: template || null };
+    return {
+      ...payload,
+      template: template || null,
+      metadata: {
+        ...payload.metadata,
+        print_template: template ? {
+          id: template.id,
+          code: template.code,
+          schema_version: template.schema_version || template.template_schema_version || 1,
+          revision: template.revision || null,
+          published_at: template.published_at || null,
+          source: 'mysql',
+        } : null,
+      },
+    };
   } catch (error) {
     console.warn(`[KHA INVOICE PRINT] Không thể tải mẫu in hóa đơn từ MySQL, tiếp tục dùng layout in hiện tại: ${error.message}`);
     return {
@@ -612,7 +574,8 @@ router.post('/', async (req, res) => {
     });
   } catch (err) {
     const status = err.status || 500;
-    res.status(status).json({ error: 'Lỗi khi tạo đơn: ' + err.message });
+    logNegativeStockLimitViolation(err, { source: 'invoice_create' });
+    res.status(status).json({ error: 'Lỗi khi tạo đơn: ' + err.message, code: err.code });
   }
 });
 
@@ -699,7 +662,8 @@ router.put('/:id', async (req, res) => {
     res.json(result);
   } catch (err) {
     const status = err.status || 500;
-    res.status(status).json({ error: 'Lỗi khi sửa đơn: ' + err.message });
+    logNegativeStockLimitViolation(err, { source: 'invoice_update', invoice_id: req.params.id });
+    res.status(status).json({ error: 'Lỗi khi sửa đơn: ' + err.message, code: err.code });
   }
 });
 

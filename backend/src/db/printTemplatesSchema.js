@@ -23,6 +23,13 @@ CREATE TABLE IF NOT EXISTS print_templates (
   css_style MEDIUMTEXT NULL,
   layout_json JSON NULL,
   settings_json JSON NULL,
+  template_schema_version INT UNSIGNED NOT NULL DEFAULT 1,
+  draft_layout_json JSON NULL,
+  draft_settings_json JSON NULL,
+  editor_meta_json JSON NULL,
+  revision INT UNSIGNED NOT NULL DEFAULT 1,
+  last_autosaved_at DATETIME(3) NULL,
+  published_at DATETIME(3) NULL,
   paper_size VARCHAR(20) NOT NULL DEFAULT 'A5',
   orientation VARCHAR(20) NOT NULL DEFAULT 'portrait',
   status VARCHAR(20) NOT NULL DEFAULT 'active',
@@ -56,6 +63,13 @@ const REQUIRED_COLUMNS = [
   ['css_style', 'MEDIUMTEXT NULL'],
   ['layout_json', 'JSON NULL'],
   ['settings_json', 'JSON NULL'],
+  ['template_schema_version', 'INT UNSIGNED NOT NULL DEFAULT 1'],
+  ['draft_layout_json', 'JSON NULL'],
+  ['draft_settings_json', 'JSON NULL'],
+  ['editor_meta_json', 'JSON NULL'],
+  ['revision', 'INT UNSIGNED NOT NULL DEFAULT 1'],
+  ['last_autosaved_at', 'DATETIME(3) NULL'],
+  ['published_at', 'DATETIME(3) NULL'],
   ['paper_size', "VARCHAR(20) NOT NULL DEFAULT 'A5'"],
   ['orientation', "VARCHAR(20) NOT NULL DEFAULT 'portrait'"],
   ['status', "VARCHAR(20) NOT NULL DEFAULT 'active'"],
@@ -120,6 +134,26 @@ async function ensureMissingIndexes() {
   }
 }
 
+async function ensureSoftMigrationDefaults() {
+  await query(`
+    UPDATE print_templates
+       SET revision = 1
+     WHERE revision IS NULL OR revision < 1
+  `);
+  await query(`
+    UPDATE print_templates
+       SET template_schema_version = 1
+     WHERE template_schema_version IS NULL OR template_schema_version < 1
+  `);
+  await query(`
+    UPDATE print_templates
+       SET published_at = COALESCE(updated_at, created_at, UTC_TIMESTAMP(3))
+     WHERE published_at IS NULL
+       AND deleted_at IS NULL
+       AND layout_json IS NOT NULL
+  `);
+}
+
 async function runEnsurePrintTemplatesSchema() {
   if (!isPrintTemplatesMySqlConfigured()) {
     throw createUnavailableError('Chưa cấu hình MySQL cho module mẫu in hóa đơn. Backend vẫn chạy, nhưng API /api/print-templates sẽ trả lỗi cấu hình cho tới khi thiết lập env MySQL.');
@@ -128,6 +162,7 @@ async function runEnsurePrintTemplatesSchema() {
   await query(CREATE_PRINT_TEMPLATES_TABLE_SQL);
   await ensureMissingColumns();
   await ensureMissingIndexes();
+  await ensureSoftMigrationDefaults();
   schemaReady = true;
   return { ok: true, configured: true, table: 'print_templates' };
 }

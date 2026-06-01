@@ -981,7 +981,7 @@ function getSyncVersions(accountId = getActiveAccountId()) {
   return versions;
 }
 
-function auditLog(action, meta = {}) {
+function auditLog(action, meta = {}, options = {}) {
   try {
     const context = getActiveContext();
     return insert('audit_logs', {
@@ -990,7 +990,7 @@ function auditLog(action, meta = {}) {
       account_id: meta.account_id || context.account_id || context.account?.id || getActiveAccountId(),
       user_id: meta.user_id || context.user_id || context.user?.id || null,
       created_at: now(),
-    }, { skipTouch: true });
+    }, { skipTouch: true, skipSave: options.skipSave === true });
   } catch (_error) {
     return null;
   }

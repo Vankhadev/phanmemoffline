@@ -8,6 +8,13 @@ const {
   normalizePaymentMethod,
 } = require('../db/database');
 const { normalizeSearchText, parseKeywordList } = require('../utils/productSearch');
+const {
+  NEGATIVE_STOCK_LIMIT,
+  NEGATIVE_STOCK_LIMIT_MESSAGE,
+  assertProductStockValueWithinLimit,
+  logNegativeStockTransition,
+  logNegativeStockLimitViolation,
+} = require('../utils/negativeStock');
 
 const MAX_IMPORT_ROWS = 5000;
 const IMPORT_TYPES = Object.freeze(['products', 'customers', 'invoices']);
@@ -196,9 +203,10 @@ function normalizeSingleNumericSeparator(raw, separator) {
 
 function parseNumber(value, fieldLabel, line, errors, options = {}) {
   if (!hasValue(value)) return undefined;
+  const allowNegative = options.allowNegative === true;
   if (typeof value === 'number') {
-    if (!Number.isFinite(value) || value < 0 || (options.integer && !Number.isInteger(value))) {
-      errors.push({ line, field: fieldLabel, message: `${fieldLabel} phải là ${options.integer ? 'số nguyên ' : ''}không âm` });
+    if (!Number.isFinite(value) || (!allowNegative && value < 0) || (options.integer && !Number.isInteger(value))) {
+      errors.push({ line, field: fieldLabel, message: `${fieldLabel} phải là ${options.integer ? 'số nguyên ' : ''}${allowNegative ? 'hợp lệ' : 'không âm'}` });
       return undefined;
     }
     return value;
@@ -233,8 +241,8 @@ function parseNumber(value, fieldLabel, line, errors, options = {}) {
     return undefined;
   }
   const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0 || (options.integer && !Number.isInteger(n))) {
-    errors.push({ line, field: fieldLabel, message: `${fieldLabel} phải là ${options.integer ? 'số nguyên ' : ''}không âm` });
+  if (!Number.isFinite(n) || (!allowNegative && n < 0) || (options.integer && !Number.isInteger(n))) {
+    errors.push({ line, field: fieldLabel, message: `${fieldLabel} phải là ${options.integer ? 'số nguyên ' : ''}${allowNegative ? 'hợp lệ' : 'không âm'}` });
     return undefined;
   }
   return n;
@@ -452,7 +460,7 @@ function normalizeProductRow(raw, index, mapping) {
     wholesale_price: parseNumber(getCell(raw, 'products', 'wholesale_price', mapping), 'Giá sỉ', line, errors),
     retail_price: parseNumber(getCell(raw, 'products', 'retail_price', mapping), 'Giá lẻ', line, errors),
     vip_price: parseNumber(getCell(raw, 'products', 'vip_price', mapping), 'Giá VIP', line, errors),
-    stock: parseNumber(getCell(raw, 'products', 'stock', mapping), 'Tồn kho', line, errors, { integer: true }),
+    stock: parseNumber(getCell(raw, 'products', 'stock', mapping), 'Tồn kho', line, errors, { integer: true, allowNegative: true }),
     default_category_id: parseNumber(getCell(raw, 'products', 'default_category_id', mapping), 'Default category id', line, errors, { integer: true }),
     supplier_id: parseNumber(getCell(raw, 'products', 'supplier_id', mapping), 'Supplier id', line, errors, { integer: true }),
     active: normalizeProductStatus(getCell(raw, 'products', 'active', mapping)),
@@ -469,6 +477,9 @@ function normalizeProductRow(raw, index, mapping) {
   }
   if (row.supplier_id !== undefined && !findSupplierById(row.supplier_id)) {
     errors.push({ line, field: 'Supplier id', message: `Nhà cung cấp id ${row.supplier_id} không tồn tại hoặc đã bị khóa.` });
+  }
+  if (row.stock !== undefined && row.stock < NEGATIVE_STOCK_LIMIT) {
+    errors.push({ line, field: 'Tồn kho', message: `${NEGATIVE_STOCK_LIMIT_MESSAGE}. Tồn kho import không được nhỏ hơn ${NEGATIVE_STOCK_LIMIT}.` });
   }
   return { row, errors };
 }
@@ -551,6 +562,22 @@ function buildProductPreview(rows, mapping = {}, mode = 'upsert') {
   return { items, summary: finalizePreviewSummary(items, 'products'), warnings: [] };
 }
 
+function logProductStockChangeIfNegative(product, previousStock = null, source = 'excel_import', options = {}) {
+  const finalStock = Number(product?.stock) || 0;
+  if (!product || finalStock >= 0) return null;
+  const normalizedPreviousStock = previousStock === undefined || previousStock === null ? null : (Number(previousStock) || 0);
+  return logNegativeStockTransition({
+    productId: product.id || null,
+    productName: product.name || product.sku || 'Sản phẩm',
+    currentStock: normalizedPreviousStock,
+    changeQuantity: normalizedPreviousStock === null ? undefined : finalStock - normalizedPreviousStock,
+    projectedStock: finalStock,
+    operation: options.operation || 'import Excel tồn kho sản phẩm',
+    source,
+    reference_id: options.reference_id || null,
+  }, { skipSave: options.skipSave === true });
+}
+
 function productPayloadFromRow(row, existing = {}, parent = null) {
   const payload = {};
   const categoryText = row.category !== undefined && row.category !== null && String(row.category).trim() !== ''
@@ -580,6 +607,15 @@ function productPayloadFromRow(row, existing = {}, parent = null) {
   if (row.active !== undefined) payload.active = row.active;
   else if (!existing?.id) payload.active = 1;
   payload.sync_source = existing?.sync_source || parent?.sync_source || 'excel_import';
+  if (Object.prototype.hasOwnProperty.call(payload, 'stock')) {
+    assertProductStockValueWithinLimit({
+      productId: existing?.id || row.local_id || null,
+      productName: payload.name || row.name || existing?.name || parent?.name || row.sku || 'Sản phẩm',
+      stock: payload.stock,
+      currentStock: existing?.id ? existing.stock : null,
+      operation: 'import Excel tồn kho sản phẩm',
+    });
+  }
   return payload;
 }
 
@@ -601,13 +637,15 @@ function commitProductRows(preview) {
     const existing = getOne('products', p => !p.parent_id && normalizeSkuKey(p.sku) === normalizeSkuKey(item.sku));
     const payload = { ...productPayloadFromRow(item, existing || null), parent_id: null, updated_at: timestamp };
     if (existing) {
-      update('products', existing.id, payload);
+      const updated = update('products', existing.id, payload);
+      logProductStockChangeIfNegative(updated, existing.stock, 'excel_import_products');
       item.local_id = existing.id;
       summary.updated += 1;
       summary.updatedParents += 1;
       committed.push({ ...item, action: ACTION_UPDATE, status: ACTION_UPDATE, local_id: existing.id });
     } else {
       const id = insert('products', { ...payload, active: payload.active === undefined ? 1 : payload.active, created_at: timestamp, updated_at: timestamp });
+      logProductStockChangeIfNegative({ id, ...payload }, null, 'excel_import_products');
       item.local_id = id;
       summary.created += 1;
       summary.createdParents += 1;
@@ -631,13 +669,15 @@ function commitProductRows(preview) {
     const existing = existingBySku || existingByName;
     const payload = { ...productPayloadFromRow(item, existing || null, parent), parent_id: parent.id, updated_at: timestamp };
     if (existing) {
-      update('products', existing.id, payload);
+      const updated = update('products', existing.id, payload);
+      logProductStockChangeIfNegative(updated, existing.stock, 'excel_import_products');
       item.local_id = existing.id;
       summary.updated += 1;
       summary.updatedVariants += 1;
       committed.push({ ...item, action: ACTION_UPDATE, status: ACTION_UPDATE, local_id: existing.id });
     } else {
       const id = insert('products', { ...payload, active: payload.active === undefined ? 1 : payload.active, created_at: timestamp, updated_at: timestamp });
+      logProductStockChangeIfNegative({ id, ...payload, parent_id: parent.id }, null, 'excel_import_products');
       item.local_id = id;
       summary.created += 1;
       summary.createdVariants += 1;
@@ -1128,9 +1168,20 @@ function commitImport(body = {}, req = null) {
   });
 
   let commitResult;
-  if (type === 'customers') commitResult = commitCustomerRows(preview);
-  else if (type === 'invoices') commitResult = commitInvoiceRows(preview);
-  else commitResult = commitProductRows(preview);
+  try {
+    if (type === 'customers') commitResult = commitCustomerRows(preview);
+    else if (type === 'invoices') commitResult = commitInvoiceRows(preview);
+    else commitResult = commitProductRows(preview);
+  } catch (error) {
+    logNegativeStockLimitViolation(error, { source: 'excel_import_commit', data_type: type });
+    update('excel_import_runs', runId, {
+      status: 'failed',
+      error_rows: preview.summary.totalRows || preview.summary.errorRows || 1,
+      errors_json: JSON.stringify([{ message: error.message, code: error.code || 'EXCEL_IMPORT_ERROR' }]),
+      updated_at: now(),
+    });
+    throw error;
+  }
 
   const finalItems = preview.items.map(item => {
     const committed = commitResult.committed.find(row => Number(row.line) === Number(item.line) && Number(row.rowIndex) === Number(item.rowIndex));

@@ -1,9 +1,17 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiJson, apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT, requestSyncCheck } from '../utils/apiClient';
 import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud, Printer, FileDown } from 'lucide-react';
 import { getProductDisplayName } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
+import {
+  NEGATIVE_STOCK_LIMIT,
+  NEGATIVE_STOCK_LIMIT_MESSAGE,
+  buildSaleStockValidation,
+  formatStockValue,
+  getSaleStockStateForLine,
+  getStockDisplayMeta,
+} from '../utils/negativeStock';
 
 const API = resolveApiUrl('');
 
@@ -140,9 +148,12 @@ export default function OrderList() {
   const [editForm, setEditForm] = useState({});
   const [editDetails, setEditDetails] = useState([]);
   const [editProducts, setEditProducts] = useState([]);
+  const [editBaselineDetails, setEditBaselineDetails] = useState([]);
   const [editProductSearch, setEditProductSearch] = useState('');
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [stockToast, setStockToast] = useState(null);
+  const lastStockLimitToastRef = useRef('');
 
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
@@ -190,13 +201,19 @@ export default function OrderList() {
     }
   }, [readOfflineOrders, refreshOrderState]);
 
-  // Load products for picker
+  // Load products for edit validation/picker
   useEffect(() => {
-    if (!showProductPicker) return;
+    if (!showProductPicker && !showEdit) return;
     apiJson('/products/all/with-variants', {}, 'Không tải được sản phẩm.')
       .then(data => setEditProducts(Array.isArray(data) ? data : []))
       .catch(() => setEditProducts([]));
-  }, [showProductPicker]);
+  }, [showProductPicker, showEdit]);
+
+  useEffect(() => {
+    if (!stockToast) return undefined;
+    const timer = window.setTimeout(() => setStockToast(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [stockToast]);
 
   // Kiểm tra server + load dữ liệu
   useEffect(() => {
@@ -400,6 +417,52 @@ export default function OrderList() {
     navigate(`/hoa-don-in/${encodeURIComponent(getInvoicePrintTarget(inv))}${quick ? '?print=1' : ''}`);
   };
 
+  const getEditDetailRowKey = (detail, index) => String(detail?.id ?? `${detail?.product_id || detail?.variant_id || 'line'}:${index}`);
+
+  const getEditProductById = (id) => {
+    const numericId = Number(id);
+    if (!Number.isFinite(numericId) || numericId <= 0) return null;
+    for (const product of editProducts || []) {
+      if (Number(product?.id) === numericId) return product;
+      const variant = (product?.variants || []).find(item => Number(item?.id) === numericId);
+      if (variant) return variant;
+    }
+    return null;
+  };
+
+  const getEditProductStockById = (productId, line = {}) => {
+    const product = getEditProductById(productId);
+    if (product && Number.isFinite(Number(product.stock))) return Number(product.stock);
+    const fallback = Number(line?.current_stock ?? line?.currentStock ?? line?.max_stock ?? line?.stock);
+    return Number.isFinite(fallback) ? fallback : 0;
+  };
+
+  const editStockValidation = useMemo(() => buildSaleStockValidation(editDetails, {
+    baselineLines: showEdit?._isOffline ? [] : editBaselineDetails,
+    getProductStockById: getEditProductStockById,
+    getLineKey: getEditDetailRowKey,
+  }), [editDetails, editBaselineDetails, editProducts, showEdit]);
+  const hasEditStockError = editStockValidation.hasInvalid;
+  const showStockLimitToast = (message = NEGATIVE_STOCK_LIMIT_MESSAGE) => {
+    setStockToast({ id: Date.now(), message });
+  };
+  const guardEditStockBeforeSubmit = () => {
+    if (!hasEditStockError) return true;
+    showStockLimitToast(editStockValidation.firstError?.message || NEGATIVE_STOCK_LIMIT_MESSAGE);
+    return false;
+  };
+
+  useEffect(() => {
+    if (!showEdit || !hasEditStockError) {
+      lastStockLimitToastRef.current = '';
+      return;
+    }
+    const message = editStockValidation.firstError?.message || NEGATIVE_STOCK_LIMIT_MESSAGE;
+    if (lastStockLimitToastRef.current === message) return;
+    lastStockLimitToastRef.current = message;
+    showStockLimitToast(message);
+  }, [showEdit, hasEditStockError, editStockValidation.firstError?.message]);
+
   // Mở xem chi tiết
   const openView = async (inv) => {
     if (inv._isOffline) {
@@ -438,7 +501,9 @@ export default function OrderList() {
         discount_amount: c.discount_amount || 0,
         line_total: c.line_total || 0,
       })) || [];
-      setEditDetails(mergeDuplicateProducts(cartDetails));
+      const nextDetails = mergeDuplicateProducts(cartDetails);
+      setEditDetails(nextDetails);
+      setEditBaselineDetails([]);
       setEditForm({
         customer_id: inv.customer_id || null,
         customer_name: inv.customer_name || 'Khách lẻ',
@@ -467,7 +532,9 @@ export default function OrderList() {
     // ── ONLINE: fetch từ server ──
     try {
       const data = await apiJson(`/invoices/${inv.id}`, {}, 'Không tải được đơn hàng!');
-      setEditDetails(mergeDuplicateProducts(data.details || []));
+      const nextDetails = mergeDuplicateProducts(data.details || []);
+      setEditDetails(nextDetails);
+      setEditBaselineDetails(nextDetails.map(item => ({ ...item })));
       setEditForm({
         customer_id: data.customer_id || inv.customer_id || null,
         customer_name: data.customer_name || inv.customer_name || '',
@@ -563,6 +630,9 @@ export default function OrderList() {
       discount_amount: 0,
       discount_percent: 0,
       line_total: p.retail_price || 0,
+      max_stock: p.stock,
+      current_stock: p.stock,
+      stock: p.stock,
       _new: true,
     };
     setEditDetails(prev => {
@@ -582,6 +652,7 @@ export default function OrderList() {
   // Lưu sửa
   const handleSaveEdit = async () => {
     if (editDetails.length === 0) { alert('Chưa có sản phẩm nào!'); return; }
+    if (!guardEditStockBeforeSubmit()) return;
     setSaveLoading(true);
 
     // ── OFFLINE: cập nhật localStorage ──
@@ -669,6 +740,7 @@ export default function OrderList() {
           sameOrderIdentity(o, showEdit) ? updated : o
         ));
         setShowEdit(null);
+        setEditBaselineDetails([]);
         alert('✅ Đơn offline đã được cập nhật!');
       } catch {
         alert('⚠️ Lỗi khi lưu đơn offline!');
@@ -701,6 +773,7 @@ export default function OrderList() {
       };
       await apiJsonChecked(`/invoices/${showEdit.id}`, { method: 'PUT', body: payload }, 'Không thể lưu đơn hàng.');
       setShowEdit(null);
+      setEditBaselineDetails([]);
       notifyOrderChanged({ reason: 'order-updated', invoice_id: showEdit.id });
       await fetchInvoices();
       apiJson('/products/all/with-variants').catch(() => { });
@@ -780,6 +853,13 @@ export default function OrderList() {
 
   return (
     <div className="min-w-0 space-y-4">
+      {stockToast && (
+        <div className="toast-stack">
+          <div className="toast-card border-red-200 bg-red-50 text-red-700">
+            ⚠️ {stockToast.message}
+          </div>
+        </div>
+      )}
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-900 px-5 py-5 text-white">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -859,7 +939,7 @@ export default function OrderList() {
         <ExcelImportPanel
           dataType="invoices"
           title="Import hóa đơn/đơn hàng từ Excel/CSV"
-          description="Preview/validate đơn hàng và chi tiết sản phẩm trước khi commit; khách hàng và sản phẩm phải tồn tại, một đơn nhiều dòng được gom theo mã đơn."
+          description={`Preview/validate đơn hàng và chi tiết sản phẩm trước khi commit; cho phép bán khi tồn 0/âm nếu tồn dự kiến không thấp hơn ${NEGATIVE_STOCK_LIMIT}, một đơn nhiều dòng được gom theo mã đơn.`}
           onCommitted={async () => {
             setLoading(true);
             await fetchInvoices().finally(() => setLoading(false));
@@ -1343,7 +1423,7 @@ export default function OrderList() {
                 <h2 className="text-lg font-bold text-gray-800">Sửa đơn hàng</h2>
                 <p className="text-xs text-gray-500 font-mono">{displayOrderCode(showEdit.invoice_code)}</p>
               </div>
-              <button onClick={() => setShowEdit(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={() => { setShowEdit(null); setEditBaselineDetails([]); }} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
 
             <div className="flex-1 overflow-auto p-5 space-y-4">
@@ -1416,18 +1496,27 @@ export default function OrderList() {
                       </tr>
                     </thead>
                     <tbody>
-                      {editDetails.map((d, idx) => (
-                        <tr key={`${d.id || d.product_id || d.product_sku || 'edit-detail'}-${idx}`} className="border-b last:border-b-0 hover:bg-gray-50 text-xs">
+                      {editDetails.map((d, idx) => {
+                        const stockState = getSaleStockStateForLine(editStockValidation, d);
+                        const rowStockInvalid = Boolean(stockState?.invalid);
+                        const rowNearLimit = Boolean(stockState?.nearLimit);
+                        return (
+                        <tr key={`${d.id || d.product_id || d.product_sku || 'edit-detail'}-${idx}`} className={`border-b last:border-b-0 hover:bg-gray-50 text-xs ${rowStockInvalid ? 'bg-red-50 ring-1 ring-red-200' : rowNearLimit ? 'bg-orange-50' : ''}`}>
                           <td className="py-2 px-3 text-center text-gray-400">{idx + 1}</td>
                           <td className="py-2 px-3">
                             <div className="font-medium text-gray-800">{getProductDisplayName(d)}</div>
                             <div className="text-[10px] text-gray-400">{d.product_sku}</div>
+                            {stockState && (
+                              <div className={`text-[10px] font-semibold mt-0.5 ${rowStockInvalid ? 'text-red-600' : rowNearLimit ? 'text-orange-700' : 'text-gray-500'}`}>
+                                Dự kiến {formatStockValue(stockState.projectedStock)}{rowStockInvalid ? ` · ${NEGATIVE_STOCK_LIMIT_MESSAGE}` : rowNearLimit ? ` · gần ngưỡng ${NEGATIVE_STOCK_LIMIT}` : ''}
+                              </div>
+                            )}
                           </td>
                           <td className="py-2 px-3 text-center">
                             <input type="number" min="1"
                               value={d.quantity}
                               onChange={e => updateDetail(idx, 'quantity', +e.target.value)}
-                              className="w-16 text-center border rounded px-1 py-1 text-sm" />
+                              className={`w-16 text-center border rounded px-1 py-1 text-sm ${rowStockInvalid ? 'bg-red-100 text-red-700 border-red-300' : rowNearLimit ? 'bg-orange-50 text-orange-700 border-orange-300' : ''}`} />
                           </td>
                           <td className="py-2 px-3 text-right">
                             <input type="number" min="0"
@@ -1450,7 +1539,8 @@ export default function OrderList() {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                       {editDetails.length === 0 && (
                         <tr>
                           <td colSpan={7} className="text-center text-gray-400 py-8">
@@ -1508,16 +1598,21 @@ export default function OrderList() {
                     </div>
                   </div>
                 </div>
+                {hasEditStockError && (
+                  <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                    {editStockValidation.summaryMessage || NEGATIVE_STOCK_LIMIT_MESSAGE}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Footer */}
             <div className="px-5 py-4 border-t bg-gray-50 rounded-b-xl flex flex-col gap-2 sm:flex-row">
-              <button onClick={() => setShowEdit(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">
+              <button onClick={() => { setShowEdit(null); setEditBaselineDetails([]); }} className="flex-1 py-2.5 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">
                 Hủy
               </button>
               <button onClick={handleSaveEdit}
-                disabled={editDetails.length === 0 || saveLoading}
+                disabled={editDetails.length === 0 || saveLoading || hasEditStockError}
                 className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold">
                 {saveLoading ? '⏳ Đang lưu...' : '💾 Lưu thay đổi'}
               </button>
@@ -1565,11 +1660,11 @@ export default function OrderList() {
                       <div key={parent.id}>
                         {/* Parent Product Row */}
                         <div
-                          className={`border rounded-lg p-3 cursor-pointer hover:border-blue-500 hover:shadow-sm ${parent.stock <= 0 ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
+                          className={`border rounded-lg p-3 cursor-pointer hover:border-blue-500 hover:shadow-sm ${getStockDisplayMeta(parent.stock).cardClass}`}
                           onClick={() => {
                             if (hasVariants) {
                               setExpandedParents(prev => ({ ...prev, [parent.id]: !prev[parent.id] }));
-                            } else if (parent.stock > 0) {
+                            } else {
                               addDetailFromPicker(parent);
                             }
                           }}
@@ -1585,11 +1680,9 @@ export default function OrderList() {
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
                               <div className="text-[10px] text-gray-400">{parent.sku || '—'}</div>
-                              {parent.stock <= 0 ? (
-                                <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
-                              ) : (
-                                <div className={`text-[10px] ${parent.stock <= 3 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>Còn: {parent.stock}</div>
-                              )}
+                              <div className={`text-[10px] ${getStockDisplayMeta(parent.stock).textClass}`}>{getStockDisplayMeta(parent.stock).display}</div>
+                              {getStockDisplayMeta(parent.stock).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(parent.stock).badgeClass}`}>Âm kho</div>}
+                              {getStockDisplayMeta(parent.stock).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">Gần -100</div>}
                               <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(parent.retail_price)}</div>
                             </div>
                           </div>
@@ -1601,10 +1694,10 @@ export default function OrderList() {
                             {parent.variants.map(variant => (
                               <div
                                 key={variant.id}
-                                className={`border rounded-lg p-2 cursor-pointer hover:border-blue-500 hover:shadow-sm ${variant.stock <= 0 ? 'opacity-50 bg-gray-50' : 'bg-white'}`}
+                                className={`border rounded-lg p-2 cursor-pointer hover:border-blue-500 hover:shadow-sm ${getStockDisplayMeta(variant.stock).cardClass}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (variant.stock > 0) addDetailFromPicker({ ...variant, is_variant: true, parent_id: parent.id, parent_name: parent.name, parent });
+                                  addDetailFromPicker({ ...variant, is_variant: true, parent_id: parent.id, parent_name: parent.name, parent });
                                 }}
                               >
                                 <div className="flex items-center justify-between">
@@ -1614,11 +1707,9 @@ export default function OrderList() {
                                   </div>
                                   <div className="flex items-center gap-3 shrink-0">
                                     <div className="text-[10px] text-gray-400">{variant.sku || '—'}</div>
-                                    {variant.stock <= 0 ? (
-                                      <div className="text-[10px] text-red-500 font-bold">Hết hàng</div>
-                                    ) : (
-                                      <div className={`text-[10px] ${variant.stock <= 3 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>Còn: {variant.stock}</div>
-                                    )}
+                                    <div className={`text-[10px] ${getStockDisplayMeta(variant.stock).textClass}`}>{getStockDisplayMeta(variant.stock).display}</div>
+                                    {getStockDisplayMeta(variant.stock).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(variant.stock).badgeClass}`}>Âm kho</div>}
+                                    {getStockDisplayMeta(variant.stock).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">Gần -100</div>}
                                     <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(variant.retail_price)}</div>
                                   </div>
                                 </div>
