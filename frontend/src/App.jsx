@@ -129,7 +129,7 @@ const ROUTE_PERMISSIONS = {
   '/bang-luong-nhan-vien': ['payrolls.read'],
   '/bao-cao-theo-don-hang': ['invoices.read'],
   '/bao-cao-theo-san-pham': ['stats.read'],
-  '/cai-dat': ['settings.read', 'settings.manage', 'store.read', 'store.manage', 'users.read', 'users.manage', 'customers.read', 'customers.manage', 'updates.read', 'updates.manage'],
+  '/cai-dat': ['settings.read', 'settings.manage', 'store.read', 'store.manage', 'users.read', 'users.manage', 'customers.read', 'customers.manage', 'updates.read', 'updates.manage', 'print_templates.read', 'print_templates.manage'],
 };
 
 function resolvePermissionRoute(route) {

@@ -12,6 +12,8 @@ const { version: APP_VERSION } = require('../../package.json');
 // --- Load DB & helpers ---
 const { upsertDailyStats, today, now, DB_PATH, isCancelledInvoiceStatus, isCompletedInvoiceStatus } = require('./db/database');
 const { requireAuth, requireAnyPermission, requirePermission } = require('./middleware/auth');
+const { ensurePrintTemplatesSchema } = require('./db/printTemplatesSchema');
+const { PRINT_TEMPLATE_UPLOAD_DIR, PUBLIC_PRINT_TEMPLATE_UPLOAD_PATH, ensureUploadDir } = require('./middleware/printTemplateUpload');
 
 // --- Routes ---
 const storeRoutes     = require('./routes/store');
@@ -32,6 +34,7 @@ const productCategoriesRoutes = require('./routes/productCategories');
 const featuresRoutes = require('./routes/features');
 const updatesRoutes = require('./routes/updates');
 const excelImportsRoutes = require('./routes/excelImports');
+const printTemplatesRoutes = require('./routes/printTemplates');
 
 // ============================================================
 //  EXPRESS APP
@@ -131,6 +134,16 @@ app.use(cors({
 app.use('/api/products/import-excel-rows', express.json({ limit: '25mb' }));
 app.use('/api/excel-imports', express.json({ limit: '25mb' }));
 app.use(express.json());
+try {
+  ensureUploadDir();
+} catch (error) {
+  console.warn(`[KHA PRINT TEMPLATE LOGO] Không thể tạo thư mục upload logo: ${error.message}`);
+}
+app.use(PUBLIC_PRINT_TEMPLATE_UPLOAD_PATH, express.static(PRINT_TEMPLATE_UPLOAD_DIR, {
+  fallthrough: true,
+  etag: true,
+  maxAge: '1d',
+}));
 
 app.use((err, req, res, next) => {
   if (!err) return next();
@@ -203,6 +216,7 @@ app.use('/api/product-categories', requireAuth, requireAnyPermission(['products.
 app.use('/api/features', featuresRoutes);
 app.use('/api/updates', updatesRoutes);
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);
+app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
 
 // ----- Dashboard -----
 function buildDashboardPayload() {
@@ -294,8 +308,23 @@ cron.schedule('0 2 * * *', () => {
 // ============================================================
 //  START SERVER
 // ============================================================
-app.listen(PORT, HOST, () => {
-  console.log(`
+async function bootstrapPrintTemplateSchema() {
+  try {
+    const result = await ensurePrintTemplatesSchema({ failSoft: true });
+    if (result?.ok) {
+      console.log('[KHA PRINT TEMPLATES MYSQL] Schema print_templates đã sẵn sàng.');
+    } else {
+      console.warn(`[KHA PRINT TEMPLATES MYSQL] Bỏ qua bootstrap schema print_templates: ${result?.error || 'chưa cấu hình MySQL'}`);
+    }
+  } catch (error) {
+    console.warn(`[KHA PRINT TEMPLATES MYSQL] Không thể bootstrap schema print_templates, backend vẫn tiếp tục chạy: ${error.message}`);
+  }
+}
+
+async function startServer() {
+  await bootstrapPrintTemplateSchema();
+  app.listen(PORT, HOST, () => {
+    console.log(`
 ----------------------------------------------
 📡 KHA Backend listening at http://${HOST}:${PORT}
 ----------------------------------------------
@@ -303,4 +332,10 @@ DB path: ${DB_PATH}
 Started: ${SERVER_STARTED_AT}
 ----------------------------------------------
 `);
+  });
+}
+
+startServer().catch(error => {
+  console.error('[KHA SERVER] Lỗi khởi động không mong muốn:', error);
+  process.exit(1);
 });

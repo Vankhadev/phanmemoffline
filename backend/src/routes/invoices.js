@@ -19,6 +19,7 @@ const {
   getInvoiceDetailProductId,
   validateNegativeStockForDetails,
 } = require('../utils/negativeStock');
+const { resolveInvoicePrintTemplate } = require('../services/printTemplateService');
 
 // ─────────────────────────────────────────────
 // Helper: tạo mã đơn tự động HD000001
@@ -282,6 +283,51 @@ function buildPrintItem(detail = {}, index = 0, productsById = new Map()) {
   };
 }
 
+function parsePrintTemplateQueryId(query = {}) {
+  const raw = query.template_id ?? query.templateId ?? query.print_template_id ?? query.printTemplateId;
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function resolvePrintTemplateAccountId(req, payload = {}) {
+  const candidates = [
+    req?.accountId,
+    req?.account?.id,
+    req?.user?.account_id,
+    payload?.metadata?.account_id,
+    getActiveAccountId(),
+  ];
+  for (const candidate of candidates) {
+    const id = Number(candidate);
+    if (Number.isInteger(id) && id > 0) return id;
+  }
+  return 1;
+}
+
+async function attachPrintTemplateToPayload(payload, req) {
+  if (!payload) return payload;
+  try {
+    const template = await resolveInvoicePrintTemplate({
+      accountId: resolvePrintTemplateAccountId(req, payload),
+      templateId: parsePrintTemplateQueryId(req?.query || {}),
+    });
+    return { ...payload, template: template || null };
+  } catch (error) {
+    console.warn(`[KHA INVOICE PRINT] Không thể tải mẫu in hóa đơn từ MySQL, tiếp tục dùng layout in hiện tại: ${error.message}`);
+    return {
+      ...payload,
+      template: null,
+      metadata: {
+        ...payload.metadata,
+        print_template_error: {
+          code: error.code || 'PRINT_TEMPLATE_UNAVAILABLE',
+          message: 'Không thể tải mẫu in hóa đơn từ MySQL; backend đã dùng luồng in hiện tại.',
+        },
+      },
+    };
+  }
+}
+
 function findInvoiceForPrint(idOrCode) {
   const raw = String(idOrCode || '').trim();
   const numericId = Number(raw);
@@ -346,6 +392,7 @@ function buildInvoicePrintPayload(idOrCode) {
     items: details,
     totals,
     payment,
+    template: null,
     signatures: {
       seller: {
         label: 'Bên giao hàng',
@@ -521,7 +568,8 @@ router.get('/:idOrCode/print', async (req, res) => {
   try {
     const payload = await Promise.resolve(buildInvoicePrintPayload(req.params.idOrCode));
     if (!payload) return res.status(404).json({ ok: false, error: 'Không tìm thấy hóa đơn để in' });
-    res.json({ ok: true, ...payload });
+    const payloadWithTemplate = await attachPrintTemplateToPayload(payload, req);
+    res.json({ ok: true, ...payloadWithTemplate });
   } catch (err) {
     res.status(500).json({ ok: false, error: 'Lỗi khi lấy dữ liệu in hóa đơn: ' + err.message });
   }

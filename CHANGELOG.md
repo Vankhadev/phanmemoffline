@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.4.1 - 2026-06-01
+
+### Tính năng và cải tiến
+
+- Bổ sung module quản lý mẫu in hóa đơn với API backend, schema MySQL, upload asset an toàn và service CRUD/kích hoạt mẫu in.
+- Cập nhật frontend quản lý mẫu in hóa đơn gồm danh sách mẫu, form cấu hình, xem trước renderer và dữ liệu mẫu để kiểm tra bố cục.
+- Kết nối điều hướng, thiết lập, API client và dữ liệu in hóa đơn để module mẫu in mới hoạt động ổn định trong luồng hiện tại.
+
+### QA và build
+
+- Đồng bộ version phát hành 1.4.1 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
+- Kiểm tra cú pháp các file backend quan trọng mới/sửa bằng node --check.
+- Kiểm tra khả năng resolve driver mysql2/promise trong backend cho module mẫu in hóa đơn.
+- Build frontend production để xác nhận bundle Vite hợp lệ trước khi tạo tag phát hành.
+
+### Lưu ý quan trọng
+
+- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.1-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.1-ia32.exe`.
+- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
+- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+
 ## v1.4.0 - 2026-06-01
 
 ### Tính năng và cải tiến

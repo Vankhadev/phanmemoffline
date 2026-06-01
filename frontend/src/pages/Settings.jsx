@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle,
   Edit2,
+  FileText,
   HelpCircle,
+  Image,
   Loader2,
   Package,
   Plus,
   Settings2,
+  Star,
   Store,
   Tag,
   Trash2,
@@ -14,7 +17,9 @@ import {
   X,
 } from 'lucide-react';
 import HelpModal from '../components/HelpModal';
-import { apiJson, customerTypesApi, featuresApi, getApiErrorMessage, usersApi } from '../utils/apiClient';
+import PrintTemplateFormModal from '../components/invoice-print/PrintTemplateFormModal';
+import { buildTemplateJsonFromSettings, DEFAULT_INVOICE_TEMPLATE_SETTINGS, normalizePrintTemplate } from '../components/invoice-print/templateDefaults';
+import { apiJson, customerTypesApi, featuresApi, getApiErrorMessage, printTemplatesApi, usersApi } from '../utils/apiClient';
 
 const INITIAL_STORE_FORM = Object.freeze({
   name: '',
@@ -36,6 +41,33 @@ const INITIAL_EMP_FORM = Object.freeze({
 const INITIAL_TYPE_FORM = Object.freeze({
   name: '',
   color: '#3b82f6',
+});
+
+const INITIAL_PRINT_TEMPLATE_FORM = Object.freeze({
+  template_name: '',
+  description: '',
+  shop_name: '',
+  shop_address: '',
+  shop_phone: '',
+  logo_url: '',
+  paper_size: 'A5',
+  orientation: 'portrait',
+  status: 'active',
+  is_default: false,
+  fontSize: DEFAULT_INVOICE_TEMPLATE_SETTINGS.fontSize,
+  scale: DEFAULT_INVOICE_TEMPLATE_SETTINGS.scale,
+  previewZoom: DEFAULT_INVOICE_TEMPLATE_SETTINGS.previewZoom,
+  showLogo: DEFAULT_INVOICE_TEMPLATE_SETTINGS.showLogo,
+  showQr: DEFAULT_INVOICE_TEMPLATE_SETTINGS.showQr,
+  showSignature: DEFAULT_INVOICE_TEMPLATE_SETTINGS.showSignature,
+  showNote: DEFAULT_INVOICE_TEMPLATE_SETTINGS.showNote,
+  showDebt: DEFAULT_INVOICE_TEMPLATE_SETTINGS.showDebt,
+  lineSpacing: DEFAULT_INVOICE_TEMPLATE_SETTINGS.lineSpacing,
+  paddingMm: DEFAULT_INVOICE_TEMPLATE_SETTINGS.paddingMm,
+  marginMm: DEFAULT_INVOICE_TEMPLATE_SETTINGS.marginMm,
+  tableWidthPercent: DEFAULT_INVOICE_TEMPLATE_SETTINGS.tableWidthPercent,
+  tableBorder: DEFAULT_INVOICE_TEMPLATE_SETTINGS.tableBorder,
+  tableBorderWidthMm: DEFAULT_INVOICE_TEMPLATE_SETTINGS.tableBorderWidthMm,
 });
 
 const NEGATIVE_STOCK_FEATURE_KEY = 'negative_stock_exports';
@@ -264,6 +296,108 @@ function sanitizeTypePayload(form = {}) {
   };
 }
 
+function clampFormNumber(value, min, max, fallback) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(min, numeric));
+}
+
+function normalizePrintTemplateForm(payload = {}, fallbackStore = {}) {
+  const item = normalizePrintTemplate(payload);
+  const settings = item.settings || DEFAULT_INVOICE_TEMPLATE_SETTINGS;
+  const storePayload = normalizeStorePayload(fallbackStore);
+  return {
+    ...INITIAL_PRINT_TEMPLATE_FORM,
+    template_name: String(item.template_name || payload?.template_name || payload?.name || ''),
+    description: String(item.description || ''),
+    shop_name: String(item.shop_name || settings.storeName || storePayload.name || ''),
+    shop_address: String(item.shop_address || settings.storeAddress || storePayload.address || ''),
+    shop_phone: String(item.shop_phone || settings.storePhone || storePayload.phone || ''),
+    logo_url: String(item.logo_url || item.header_logo || payload?.logo_url || payload?.header_logo || ''),
+    paper_size: ['A4', 'A5', 'K80'].includes(String(item.paper_size || settings.paperSize || '').toUpperCase()) ? String(item.paper_size || settings.paperSize).toUpperCase() : 'A5',
+    orientation: settings.orientation === 'landscape' ? 'landscape' : 'portrait',
+    status: item.status || 'active',
+    is_default: Boolean(item.is_default),
+    fontSize: clampFormNumber(settings.fontSize, 7, 16, DEFAULT_INVOICE_TEMPLATE_SETTINGS.fontSize),
+    scale: clampFormNumber(settings.scale, 0.55, 1.6, DEFAULT_INVOICE_TEMPLATE_SETTINGS.scale),
+    previewZoom: clampFormNumber(settings.previewZoom, 0.4, 1.8, DEFAULT_INVOICE_TEMPLATE_SETTINGS.previewZoom),
+    showLogo: Boolean(settings.showLogo),
+    showQr: Boolean(settings.showQr),
+    showSignature: Boolean(settings.showSignature),
+    showNote: Boolean(settings.showNote),
+    showDebt: Boolean(settings.showDebt),
+    lineSpacing: clampFormNumber(settings.lineSpacing, 1, 2.2, DEFAULT_INVOICE_TEMPLATE_SETTINGS.lineSpacing),
+    paddingMm: clampFormNumber(settings.paddingMm, 0, 24, DEFAULT_INVOICE_TEMPLATE_SETTINGS.paddingMm),
+    marginMm: clampFormNumber(settings.marginMm, 0, 20, DEFAULT_INVOICE_TEMPLATE_SETTINGS.marginMm),
+    tableWidthPercent: clampFormNumber(settings.tableWidthPercent, 60, 100, DEFAULT_INVOICE_TEMPLATE_SETTINGS.tableWidthPercent),
+    tableBorder: Boolean(settings.tableBorder),
+    tableBorderWidthMm: clampFormNumber(settings.tableBorderWidthMm, 0, 1, DEFAULT_INVOICE_TEMPLATE_SETTINGS.tableBorderWidthMm),
+  };
+}
+
+function sanitizePrintTemplatePayload(form = {}) {
+  const paperSize = ['A4', 'A5', 'K80'].includes(String(form.paper_size || '').toUpperCase()) ? String(form.paper_size).toUpperCase() : 'A5';
+  const orientation = paperSize === 'K80' ? 'portrait' : (form.orientation === 'landscape' ? 'landscape' : 'portrait');
+  const settingsInput = {
+    fontSize: clampFormNumber(form.fontSize, 7, 16, DEFAULT_INVOICE_TEMPLATE_SETTINGS.fontSize),
+    scale: clampFormNumber(form.scale, 0.55, 1.6, DEFAULT_INVOICE_TEMPLATE_SETTINGS.scale),
+    previewZoom: clampFormNumber(form.previewZoom, 0.4, 1.8, DEFAULT_INVOICE_TEMPLATE_SETTINGS.previewZoom),
+    paperSize,
+    orientation,
+    showLogo: Boolean(form.showLogo),
+    showQr: Boolean(form.showQr),
+    showSignature: Boolean(form.showSignature),
+    showNote: Boolean(form.showNote),
+    showDebt: Boolean(form.showDebt),
+    lineSpacing: clampFormNumber(form.lineSpacing, 1, 2.2, DEFAULT_INVOICE_TEMPLATE_SETTINGS.lineSpacing),
+    paddingMm: clampFormNumber(form.paddingMm, 0, 24, DEFAULT_INVOICE_TEMPLATE_SETTINGS.paddingMm),
+    marginMm: clampFormNumber(form.marginMm, 0, 20, DEFAULT_INVOICE_TEMPLATE_SETTINGS.marginMm),
+    tableWidthPercent: clampFormNumber(form.tableWidthPercent, 60, 100, DEFAULT_INVOICE_TEMPLATE_SETTINGS.tableWidthPercent),
+    tableBorder: Boolean(form.tableBorder),
+    tableBorderWidthMm: clampFormNumber(form.tableBorderWidthMm, 0, 1, DEFAULT_INVOICE_TEMPLATE_SETTINGS.tableBorderWidthMm),
+    storeName: String(form.shop_name || '').trim(),
+    storeAddress: String(form.shop_address || '').trim(),
+    storePhone: String(form.shop_phone || '').trim(),
+  };
+  const json = buildTemplateJsonFromSettings(settingsInput);
+  return {
+    template_name: String(form.template_name || '').trim(),
+    description: String(form.description || '').trim(),
+    shop_name: settingsInput.storeName,
+    shop_address: settingsInput.storeAddress,
+    shop_phone: settingsInput.storePhone,
+    paper_size: paperSize,
+    orientation,
+    status: form.status || 'active',
+    is_default: Boolean(form.is_default),
+    layout_json: json.layout_json,
+    settings_json: json.settings_json,
+  };
+}
+
+function buildPreviewPrintTemplate(form = {}, edit = null, logoPreviewUrl = '') {
+  const payload = sanitizePrintTemplatePayload(form);
+  return normalizePrintTemplate({
+    ...(edit || {}),
+    ...payload,
+    id: edit?.id || null,
+    logo_url: logoPreviewUrl || form.logo_url || edit?.logo_url || edit?.header_logo || '',
+    header_logo: logoPreviewUrl || form.logo_url || edit?.header_logo || edit?.logo_url || '',
+  });
+}
+
+function revokeObjectUrl(value) {
+  if (typeof window === 'undefined') return;
+  const url = String(value || '');
+  if (url.startsWith('blob:')) window.URL.revokeObjectURL(url);
+}
+
+function normalizePrintTemplatesResponse(data) {
+  if (Array.isArray(data)) return data.map(item => normalizePrintTemplate(item));
+  const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
+  return items.map(item => normalizePrintTemplate(item));
+}
+
 function normalizeNegativeStockFeature(feature = null) {
   const featureKey = String(feature?.feature_key || feature?.key || NEGATIVE_STOCK_FEATURE_KEY).trim() || NEGATIVE_STOCK_FEATURE_KEY;
   return {
@@ -346,6 +480,8 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   const canViewNegativeStock = canAccessSection(['features.read', 'features.manage']);
   const canManageNegativeStock = canAccessSection(['features.manage']);
   const canViewUpdates = canAccessSection(['updates.read', 'updates.manage', 'settings.read', 'settings.manage']);
+  const canViewPrintTemplates = canAccessSection(['print_templates.read', 'print_templates.manage']);
+  const canManagePrintTemplates = canAccessSection(['print_templates.manage']);
 
   const [tab, setTab] = useState('store');
   const [showHelp, setShowHelp] = useState(false);
@@ -384,6 +520,17 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   const [updateBusy, setUpdateBusy] = useState('');
   const [updateResult, setUpdateResult] = useState(null);
   const [updateNotice, setUpdateNotice] = useState('');
+
+  const [printTemplates, setPrintTemplates] = useState([]);
+  const [printTemplatesLoading, setPrintTemplatesLoading] = useState(false);
+  const [printTemplatesNotice, setPrintTemplatesNotice] = useState(null);
+  const [showPrintTemplateModal, setShowPrintTemplateModal] = useState(false);
+  const [printTemplateEdit, setPrintTemplateEdit] = useState(null);
+  const [printTemplateForm, setPrintTemplateForm] = useState(() => normalizePrintTemplateForm({}, store));
+  const [printTemplateSaving, setPrintTemplateSaving] = useState(false);
+  const [printTemplateNotice, setPrintTemplateNotice] = useState(null);
+  const [printTemplateLogoFile, setPrintTemplateLogoFile] = useState(null);
+  const [printTemplateLogoPreviewUrl, setPrintTemplateLogoPreviewUrl] = useState('');
 
   const getErrorMessage = useCallback(
     (error, fallback = 'Thao tác thất bại.') => getApiErrorMessage(error?.data || error, error?.message || fallback),
@@ -462,6 +609,18 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     }
   }, []);
 
+  const loadPrintTemplates = useCallback(async () => {
+    if (mountedRef.current) setPrintTemplatesLoading(true);
+    try {
+      const data = await printTemplatesApi.list();
+      const items = normalizePrintTemplatesResponse(data);
+      if (mountedRef.current) setPrintTemplates(items);
+      return items;
+    } finally {
+      if (mountedRef.current) setPrintTemplatesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (storeDirty) return;
     setStoreForm(current => ({ ...current, ...normalizeStorePayload(store) }));
@@ -477,6 +636,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
         ...(canViewEmployees ? [{ label: 'nhân viên', promise: loadEmployees() }] : []),
         ...(canViewCustomerTypes ? [{ label: 'loại khách hàng', promise: loadCustomerTypes() }] : []),
         ...(canViewNegativeStock ? [{ label: 'xuất âm tồn kho', promise: loadNegativeStockFeature() }] : []),
+        ...(canViewPrintTemplates ? [{ label: 'mẫu in hóa đơn', promise: loadPrintTemplates() }] : []),
       ];
 
       if (sections.length === 0) {
@@ -509,7 +669,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     return () => {
       cancelled = true;
     };
-  }, [canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewStore, getErrorMessage, loadCustomerTypes, loadEmployees, loadNegativeStockFeature, loadStore, setTimedNotice]);
+  }, [canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewPrintTemplates, canViewStore, getErrorMessage, loadCustomerTypes, loadEmployees, loadNegativeStockFeature, loadPrintTemplates, loadStore, setTimedNotice]);
 
   useEffect(() => {
     if (!window.khaDesktop?.isElectron) return undefined;
@@ -564,6 +724,18 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     setTypeForm(normalizeTypeForm());
     setTypeNotice(null);
   }, []);
+
+  const closePrintTemplateModal = useCallback(() => {
+    setShowPrintTemplateModal(false);
+    setPrintTemplateEdit(null);
+    setPrintTemplateForm(normalizePrintTemplateForm({}, store));
+    setPrintTemplateNotice(null);
+    setPrintTemplateLogoFile(null);
+    setPrintTemplateLogoPreviewUrl(current => {
+      revokeObjectUrl(current);
+      return '';
+    });
+  }, [store]);
 
   const updateStoreField = useCallback((field, value) => {
     setStoreDirty(true);
@@ -753,6 +925,156 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     }
   };
 
+  const updatePrintTemplateField = useCallback((field, value) => {
+    setPrintTemplateForm(current => {
+      const next = { ...current, [field]: value };
+      if (field === 'paper_size' && String(value).toUpperCase() === 'K80') next.orientation = 'portrait';
+      return next;
+    });
+  }, []);
+
+  const openAddPrintTemplate = () => {
+    setPrintTemplateEdit(null);
+    setPrintTemplateForm(normalizePrintTemplateForm({
+      template_name: `Mẫu in hóa đơn ${printTemplates.length + 1}`,
+      paper_size: 'A5',
+      orientation: 'portrait',
+    }, storeForm));
+    setPrintTemplateNotice(null);
+    setPrintTemplateLogoFile(null);
+    setPrintTemplateLogoPreviewUrl(current => {
+      revokeObjectUrl(current);
+      return '';
+    });
+    setShowPrintTemplateModal(true);
+  };
+
+  const openEditPrintTemplate = (template) => {
+    const normalized = normalizePrintTemplate(template);
+    setPrintTemplateEdit(normalized);
+    setPrintTemplateForm(normalizePrintTemplateForm(normalized, storeForm));
+    setPrintTemplateNotice(null);
+    setPrintTemplateLogoFile(null);
+    setPrintTemplateLogoPreviewUrl(current => {
+      revokeObjectUrl(current);
+      return '';
+    });
+    setShowPrintTemplateModal(true);
+  };
+
+  const handlePrintTemplateLogoChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    setPrintTemplateLogoFile(file);
+    setPrintTemplateLogoPreviewUrl(current => {
+      revokeObjectUrl(current);
+      return file ? window.URL.createObjectURL(file) : '';
+    });
+  };
+
+  const handleRemovePrintTemplateLogo = async () => {
+    if (printTemplateEdit?.id && !printTemplateLogoPreviewUrl && printTemplateForm.logo_url) {
+      if (!window.confirm('Xóa logo đang lưu trên mẫu in này?')) return;
+      setPrintTemplateSaving(true);
+      setPrintTemplateNotice(null);
+      try {
+        const data = await printTemplatesApi.removeLogo(printTemplateEdit.id);
+        const item = normalizePrintTemplate(data?.item || data?.data || data);
+        setPrintTemplateEdit(item);
+        setPrintTemplateForm(current => ({ ...normalizePrintTemplateForm(item, storeForm), logo_url: '' }));
+        await loadPrintTemplates();
+        setPrintTemplateNotice({ tone: 'success', message: 'Đã xóa logo mẫu in.' });
+      } catch (error) {
+        setPrintTemplateNotice({ tone: 'error', message: getErrorMessage(error, 'Không thể xóa logo mẫu in.') });
+      } finally {
+        if (mountedRef.current) setPrintTemplateSaving(false);
+      }
+      return;
+    }
+
+    setPrintTemplateLogoFile(null);
+    setPrintTemplateLogoPreviewUrl(current => {
+      revokeObjectUrl(current);
+      return '';
+    });
+    setPrintTemplateForm(current => ({ ...current, logo_url: '' }));
+  };
+
+  const handleSavePrintTemplate = async () => {
+    const payload = sanitizePrintTemplatePayload(printTemplateForm);
+    if (!payload.template_name) {
+      setPrintTemplateNotice({ tone: 'error', message: 'Vui lòng nhập tên mẫu in hóa đơn.' });
+      return;
+    }
+
+    setPrintTemplateSaving(true);
+    setPrintTemplateNotice(null);
+    try {
+      let data;
+      if (printTemplateEdit?.id) data = await printTemplatesApi.update(printTemplateEdit.id, payload);
+      else data = await printTemplatesApi.create(payload);
+
+      let saved = normalizePrintTemplate(data?.item || data?.data || data);
+      if (printTemplateLogoFile && saved.id) {
+        const logoData = await printTemplatesApi.uploadLogo(saved.id, printTemplateLogoFile);
+        saved = normalizePrintTemplate(logoData?.item || logoData?.data || logoData);
+      }
+
+      await loadPrintTemplates();
+      closePrintTemplateModal();
+      setTimedNotice('print-templates', setPrintTemplatesNotice, {
+        tone: 'success',
+        message: printTemplateEdit?.id ? 'Đã cập nhật mẫu in hóa đơn.' : 'Đã tạo mẫu in hóa đơn mới.',
+      }, 3000);
+    } catch (error) {
+      setPrintTemplateNotice({
+        tone: 'error',
+        message: getErrorMessage(error, printTemplateEdit?.id ? 'Không thể cập nhật mẫu in hóa đơn.' : 'Không thể tạo mẫu in hóa đơn.'),
+      });
+    } finally {
+      if (mountedRef.current) setPrintTemplateSaving(false);
+    }
+  };
+
+  const handleDeletePrintTemplate = async (template) => {
+    if (!window.confirm(`Xóa mẫu in "${template.template_name || template.name || ''}"?`)) return;
+    setPrintTemplatesNotice(null);
+    try {
+      await printTemplatesApi.remove(template.id);
+      await loadPrintTemplates();
+      setTimedNotice('print-templates', setPrintTemplatesNotice, {
+        tone: 'success',
+        message: 'Đã xóa mẫu in hóa đơn.',
+      }, 3000);
+    } catch (error) {
+      setTimedNotice('print-templates', setPrintTemplatesNotice, {
+        tone: 'error',
+        message: getErrorMessage(error, 'Không thể xóa mẫu in hóa đơn.'),
+      });
+    }
+  };
+
+  const handleSetDefaultPrintTemplate = async (template) => {
+    setPrintTemplatesNotice(null);
+    try {
+      await printTemplatesApi.setDefault(template.id);
+      await loadPrintTemplates();
+      setTimedNotice('print-templates', setPrintTemplatesNotice, {
+        tone: 'success',
+        message: 'Đã đặt mẫu in mặc định.',
+      }, 3000);
+    } catch (error) {
+      setTimedNotice('print-templates', setPrintTemplatesNotice, {
+        tone: 'error',
+        message: getErrorMessage(error, 'Không thể đặt mẫu in mặc định.'),
+      });
+    }
+  };
+
+  const previewTemplate = useMemo(
+    () => buildPreviewPrintTemplate(printTemplateForm, printTemplateEdit, printTemplateLogoPreviewUrl),
+    [printTemplateEdit, printTemplateForm, printTemplateLogoPreviewUrl],
+  );
+
   const handleToggleNegativeStock = async () => {
     const nextEnabled = !negativeStockFeature.active;
     const payload = {
@@ -872,9 +1194,10 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     if (canViewEmployees) nextTabs.push({ key: 'employees', label: 'Nhân viên', icon: <Users size={16} /> });
     if (canViewCustomerTypes) nextTabs.push({ key: 'customer-types', label: 'Loại khách', icon: <Tag size={16} /> });
     if (canViewNegativeStock) nextTabs.push({ key: 'negative-stock', label: 'Xuất âm', icon: <Package size={16} /> });
+    if (canViewPrintTemplates) nextTabs.push({ key: 'print-templates', label: 'Mẫu in hóa đơn', icon: <FileText size={16} /> });
     if (canViewUpdates) nextTabs.push({ key: 'updates', label: 'Cập nhật', icon: <Settings2 size={16} /> });
     return nextTabs;
-  }, [canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewStore, canViewUpdates]);
+  }, [canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewPrintTemplates, canViewStore, canViewUpdates]);
 
   useEffect(() => {
     if (!tabs.length) return;
@@ -1251,6 +1574,96 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
         </div>
       )}
 
+      {!initialLoading && tab === 'print-templates' && (
+        <div className="card space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="font-bold flex items-center gap-2">
+                <FileText size={18} /> Mẫu in hóa đơn ({printTemplates.length})
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Quản lý mẫu in dùng cho hóa đơn thật qua API /api/print-templates, có preview realtime bằng dữ liệu mẫu cục bộ.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={loadPrintTemplates}
+                disabled={printTemplatesLoading}
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                <Loader2 size={14} className={printTemplatesLoading ? 'animate-spin' : ''} /> Tải lại
+              </button>
+              {canManagePrintTemplates && (
+                <button type="button" onClick={openAddPrintTemplate} className="btn-primary inline-flex min-h-10 items-center gap-2 text-sm">
+                  <Plus size={14} /> Thêm mẫu in
+                </button>
+              )}
+            </div>
+          </div>
+
+          <SectionNotice notice={printTemplatesNotice} />
+
+          {printTemplatesLoading ? (
+            <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
+              <div className="inline-flex items-center gap-2">
+                <Loader2 size={16} className="animate-spin" /> Đang tải danh sách mẫu in...
+              </div>
+            </div>
+          ) : printTemplates.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">
+              Chưa có mẫu in hóa đơn. Nhấn “Thêm mẫu in” để tạo mẫu đầu tiên.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              {printTemplates.map(template => (
+                <div key={template.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-bold text-gray-900">{template.template_name || template.name || 'Mẫu in hóa đơn'}</h3>
+                        {template.is_default && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700"><Star size={12} /> Mặc định</span>}
+                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{template.paper_size} · {template.orientation === 'landscape' ? 'Ngang' : 'Dọc'}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-600">{template.description || template.shop_name || 'Không có mô tả.'}</p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                        <span>Font {template.settings.fontSize}pt</span>
+                        <span>Scale {Math.round(template.settings.scale * 100)}%</span>
+                        <span>Padding {template.settings.paddingMm}mm</span>
+                        <span>Bảng {template.settings.tableWidthPercent}%</span>
+                      </div>
+                    </div>
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-slate-50 text-slate-400">
+                      {template.logo_url ? <img src={template.logo_url} alt="Logo mẫu in" className="h-full w-full object-contain" /> : <Image size={20} />}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {canManagePrintTemplates ? (
+                      <>
+                        <button type="button" onClick={() => openEditPrintTemplate(template)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100">
+                          <Edit2 size={12} /> Sửa
+                        </button>
+                        {!template.is_default && (
+                          <button type="button" onClick={() => handleSetDefaultPrintTemplate(template)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-100">
+                            <Star size={12} /> Đặt mặc định
+                          </button>
+                        )}
+                        <button type="button" onClick={() => handleDeletePrintTemplate(template)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-100">
+                          <Trash2 size={12} /> Xóa
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-gray-400">Tài khoản chỉ có quyền xem mẫu in.</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {!initialLoading && tab === 'updates' && (
         <div className="space-y-4">
           <div className="card">
@@ -1599,6 +2012,25 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
         </div>
       )}
 
+      {showPrintTemplateModal && canManagePrintTemplates && (
+        <PrintTemplateFormModal
+          show={showPrintTemplateModal}
+          form={printTemplateForm}
+          edit={printTemplateEdit}
+          saving={printTemplateSaving}
+          notice={printTemplateNotice}
+          logoFile={printTemplateLogoFile}
+          logoPreviewUrl={printTemplateLogoPreviewUrl}
+          previewTemplate={previewTemplate}
+          canManage={canManagePrintTemplates}
+          onClose={closePrintTemplateModal}
+          onSave={handleSavePrintTemplate}
+          onFieldChange={updatePrintTemplateField}
+          onLogoChange={handlePrintTemplateLogoChange}
+          onRemoveLogo={handleRemovePrintTemplateLogo}
+        />
+      )}
+
       <HelpModal
         show={showHelp}
         title="Hướng dẫn sử dụng Cài đặt hệ thống"
@@ -1608,7 +2040,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
             <div>
               <h3 className="mb-2 font-bold text-gray-800">Tổng quan</h3>
               <p>
-                Trang Cài đặt cho phép cấu hình thông tin cửa hàng, quản lý nhân viên, loại khách hàng, bật/tắt xuất âm tồn kho và cập nhật ứng dụng Electron.
+                Trang Cài đặt cho phép cấu hình thông tin cửa hàng, quản lý nhân viên, loại khách hàng, bật/tắt xuất âm tồn kho, mẫu in hóa đơn và cập nhật ứng dụng Electron.
               </p>
             </div>
 
@@ -1645,6 +2077,15 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                 <li>Khi bật, hệ thống cho xuất vượt tồn nhưng không thấp hơn giới hạn cố định {NEGATIVE_STOCK_LIMIT}.</li>
                 <li>Khi tắt, mọi thao tác làm tồn kho nhỏ hơn 0 sẽ bị backend từ chối.</li>
                 <li>Người dùng không chỉnh sửa giới hạn âm từ giao diện, chỉ xem mô tả và trạng thái bật/tắt.</li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="mb-2 font-bold text-gray-800">Tab Mẫu in hóa đơn</h3>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Danh sách mẫu in lấy từ API thật <strong>/api/print-templates</strong>, không dùng mock cho CRUD.</li>
+                <li>Có thể thêm, sửa, xóa, đặt mặc định và upload/xóa logo theo từng mẫu.</li>
+                <li>Modal chỉnh mẫu có preview realtime bằng hóa đơn mẫu cục bộ để kiểm tra font, scale, khổ giấy, QR, chữ ký, ghi chú và công nợ.</li>
               </ul>
             </div>
 

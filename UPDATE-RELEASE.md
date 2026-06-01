@@ -8,40 +8,46 @@
 - File manifest legacy [`release/update-manifest.json`](release/update-manifest.json:1) vẫn được giữ để tooling ngoài app có thể đọc SHA256/size theo từng kiến trúc.
 - Bản Windows phát hành cả hai kiến trúc: `x64` và `ia32`. Tên asset luôn có hậu tố kiến trúc để tránh người dùng Windows 32-bit tải nhầm bản x64.
 
-## Bảng phát hành chính thức v1.4.0
+## Bảng phát hành chính thức v1.4.1
 
 | Hạng mục | Nội dung |
 | --- | --- |
-| Phiên bản | 1.4.0 |
+| Phiên bản | 1.4.1 |
 | Ngày phát hành | 2026-06-01 |
 | Kênh phát hành | GitHub Release latest cho Windows x64 và ia32 |
 | Trạng thái | Sẵn sàng công bố cho người dùng |
 
 ### Ghi chú thay đổi tổng quan
 
-Bản 1.4.0 tập trung hoàn thiện luồng in hóa đơn theo trang in riêng, cải thiện danh sách đơn hàng/offline, bổ sung nghiệp vụ bảng lương nhân viên và đồng bộ metadata phát hành Windows.
+Bản 1.4.1 tập trung hoàn thiện module quản lý mẫu in hóa đơn, bổ sung API/backend schema MySQL, màn quản trị/xem trước mẫu in ở frontend và xác nhận QA/build cho luồng phát hành.
 
 ### Phát hành
 
-- Đồng bộ version 1.4.0 trong package root, backend, frontend và các lockfile tương ứng.
-- Cập nhật tài liệu release, manifest ví dụ, tên asset và tag kiểm tra theo v1.4.0.
+- Đồng bộ version 1.4.1 trong package root, backend, frontend và các lockfile tương ứng.
+- Cập nhật changelog, tài liệu release, manifest ví dụ, tên asset và tag kiểm tra theo v1.4.1.
 - GitHub Actions build/publish lại bộ cài riêng cho Windows x64 và ia32 kèm latest.yml/update-manifest.json từ artifact thực tế.
+
+### QA và build
+
+- Chạy `node --check` cho các file backend mới/sửa quan trọng của module mẫu in hóa đơn.
+- Kiểm tra `mysql2/promise` resolve trong thư mục backend để xác nhận driver MySQL sẵn sàng.
+- Chạy `npm run build` trong frontend để xác nhận bundle Vite production hợp lệ.
 
 ### Lưu ý quan trọng cho người dùng
 
-- Windows 10/11 64-bit: dùng `banhangoffline-setup-v1.4.0-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn”: dùng `banhangoffline-setup-v1.4.0-ia32.exe`.
+- Windows 10/11 64-bit: dùng `banhangoffline-setup-v1.4.1-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn”: dùng `banhangoffline-setup-v1.4.1-ia32.exe`.
 - Chỉ tải từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên file, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
 - Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
 
 ## Asset GitHub Release bắt buộc
 
-Khi phát hành version `1.4.0`, release cần tối thiểu các asset:
+Khi phát hành version `1.4.1`, release cần tối thiểu các asset:
 
-- `banhangoffline-setup-v1.4.0-x64.exe`
-- `banhangoffline-setup-v1.4.0-x64.exe.blockmap`
-- `banhangoffline-setup-v1.4.0-ia32.exe`
-- `banhangoffline-setup-v1.4.0-ia32.exe.blockmap`
+- `banhangoffline-setup-v1.4.1-x64.exe`
+- `banhangoffline-setup-v1.4.1-x64.exe.blockmap`
+- `banhangoffline-setup-v1.4.1-ia32.exe`
+- `banhangoffline-setup-v1.4.1-ia32.exe.blockmap`
 - `latest.yml`
 - `update-manifest.json`
 
@@ -96,7 +102,7 @@ Script [`verify-windows-release.ps1`](scripts/verify-windows-release.ps1:1) ki�
 Tag release theo version trong [`package.json`](package.json:3):
 
 ```cmd
-git tag v1.4.0
+git tag v1.4.1
 git push origin main --tags
 ```
 
@@ -107,15 +113,15 @@ Workflow [`release-windows.yml`](.github/workflows/release-windows.yml:1) sẽ b
 Chỉ chạy sau khi local verify thành công:
 
 ```cmd
-gh release create v1.4.0 release/banhangoffline-setup-v1.4.0-x64.exe release/banhangoffline-setup-v1.4.0-x64.exe.blockmap release/banhangoffline-setup-v1.4.0-ia32.exe release/banhangoffline-setup-v1.4.0-ia32.exe.blockmap release/latest.yml release/update-manifest.json --title "BanHangOffline v1.4.0" --generate-notes --latest
+gh release create v1.4.1 release/banhangoffline-setup-v1.4.1-x64.exe release/banhangoffline-setup-v1.4.1-x64.exe.blockmap release/banhangoffline-setup-v1.4.1-ia32.exe release/banhangoffline-setup-v1.4.1-ia32.exe.blockmap release/latest.yml release/update-manifest.json --title "BanHangOffline v1.4.1" --generate-notes --latest
 ```
 
-Nếu release đã tồn tại, dùng `gh release upload v1.4.0 ... --clobber` có chủ đích sau khi kiểm tra file đúng.
+Nếu release đã tồn tại, dùng `gh release upload v1.4.1 ... --clobber` có chủ đích sau khi kiểm tra file đúng.
 
 ## Kiểm tra remote sau khi publish
 
 ```cmd
-powershell -ExecutionPolicy Bypass -File scripts/verify-windows-release.ps1 -Mode remote -Version 1.4.0 -Tag v1.4.0 -Arch x64,ia32
+powershell -ExecutionPolicy Bypass -File scripts/verify-windows-release.ps1 -Mode remote -Version 1.4.1 -Tag v1.4.1 -Arch x64,ia32
 ```
 
 Remote verify cần xác nhận:
@@ -127,10 +133,10 @@ Remote verify cần xác nhận:
 
 ## Hướng dẫn cho người dùng phổ thông
 
-- Máy Windows 10/11 thông thường: tải `banhangoffline-setup-v1.4.0-x64.exe`.
-- Máy Windows 32-bit hoặc báo lỗi “Ứng dụng này không thể chạy trên PC của bạn”: tải `banhangoffline-setup-v1.4.0-ia32.exe`.
+- Máy Windows 10/11 thông thường: tải `banhangoffline-setup-v1.4.1-x64.exe`.
+- Máy Windows 32-bit hoặc báo lỗi “Ứng dụng này không thể chạy trên PC của bạn”: tải `banhangoffline-setup-v1.4.1-ia32.exe`.
 - Chỉ tải từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`.
-- Nếu trình duyệt/SmartScreen/antivirus cảnh báo, kiểm tra tên file và nguồn tải trước. Không chạy file nếu tên không đúng `banhangoffline-setup-v1.4.0-x64.exe` hoặc `banhangoffline-setup-v1.4.0-ia32.exe`.
+- Nếu trình duyệt/SmartScreen/antivirus cảnh báo, kiểm tra tên file và nguồn tải trước. Không chạy file nếu tên không đúng `banhangoffline-setup-v1.4.1-x64.exe` hoặc `banhangoffline-setup-v1.4.1-ia32.exe`.
 - Nếu tải được file rất nhỏ hoặc mở ra trang HTML, hãy xóa file đó và tải lại từ nút/link release chính thức.
 
 ## Test cập nhật trong app
@@ -143,23 +149,16 @@ Remote verify cần xác nhận:
 
 ## Rollback
 
-- Nếu release lỗi, tạo tag và release mới thay thế, ví dụ `v1.3.10`.
+- Nếu release lỗi, tạo tag và release mới thay thế, ví dụ `v1.4.2`.
 - Không chỉnh tay metadata updater đã public nếu asset đã được cache rộng rãi.
 - Nếu bắt buộc thay asset trong cùng tag, phải upload lại đồng bộ installer, blockmap, [`latest.yml`](release/latest.yml:1) và [`update-manifest.json`](release/update-manifest.json:1), rồi chạy remote verify lại.
 
 ## Checklist trước khi release
 
-- [`package.json`](package.json:3)
-- [`package-lock.json`](package-lock.json:3)
-- [`frontend/package.json`](frontend/package.json:3)
-- [`frontend/package-lock.json`](frontend/package-lock.json:3)
-- [`backend/package.json`](backend/package.json:3)
-- [`backend/package-lock.json`](backend/package-lock.json:3)
-- [`release/latest.yml`](release/latest.yml:1)
-- [`release/update-manifest.json`](release/update-manifest.json:1)
-- [`release/update-manifest.example.json`](release/update-manifest.example.json:1)
-- [`scripts/generate-latest-yml.js`](scripts/generate-latest-yml.js:1)
-- [`scripts/generate-update-manifest.js`](scripts/generate-update-manifest.js:1)
-- [`scripts/verify-windows-release.ps1`](scripts/verify-windows-release.ps1:1)
-- [`frontend/src/pages/Settings.jsx`](frontend/src/pages/Settings.jsx:51)
-- [`README.md`](README.md:3)
+- [ ] `package.json`, `package-lock.json`, `backend/package.json`, `backend/package-lock.json`, `frontend/package.json`, `frontend/package-lock.json` cùng version.
+- [ ] `npm run build:frontend` thành công.
+- [ ] Build đủ installer x64 và ia32.
+- [ ] `release/latest.yml` và `release/update-manifest.json` sinh từ artifact thực tế.
+- [ ] `scripts/verify-windows-release.ps1 -Mode local -Arch x64,ia32` thành công.
+- [ ] Tag Git khớp version trong package root.
+- [ ] GitHub Actions publish đủ asset và remote verify thành công.

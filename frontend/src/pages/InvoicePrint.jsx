@@ -4,6 +4,8 @@ import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { ArrowLeft, Download, Loader, Printer, RefreshCw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
+import InvoiceTemplateRenderer, { buildInvoicePageStyle } from '../components/invoice-print/InvoiceTemplateRenderer';
+import { getPaperDimensions, normalizeTemplateSettings } from '../components/invoice-print/templateDefaults';
 import { getApiErrorMessage, invoicesApi } from '../utils/apiClient';
 
 const PRINT_SETTINGS_KEY = 'kha.invoicePrintA5.settings';
@@ -11,11 +13,6 @@ const SCALE_PRESETS = [0.8, 0.9, 1, 1.1, 1.2];
 const MIN_SCALE = 0.6;
 const MAX_SCALE = 1.4;
 const SCALE_STEP = 0.1;
-
-const PAGE_DIMENSIONS = {
-  portrait: { width: 148, height: 210, label: 'Dọc A5' },
-  landscape: { width: 210, height: 148, label: 'Ngang A5' },
-};
 
 function clamp(value, min, max) {
   const numericValue = Number(value);
@@ -28,15 +25,16 @@ function normalizeScale(value) {
 }
 
 function readPrintSettings() {
-  if (typeof window === 'undefined') return { scale: 1, orientation: 'portrait' };
+  if (typeof window === 'undefined') return { scale: 1, orientation: 'portrait', orientationOverride: false };
   try {
     const parsed = JSON.parse(window.localStorage.getItem(PRINT_SETTINGS_KEY) || '{}');
     return {
       scale: normalizeScale(parsed.scale || 1),
       orientation: parsed.orientation === 'landscape' ? 'landscape' : 'portrait',
+      orientationOverride: parsed.orientationOverride === true,
     };
   } catch (_error) {
-    return { scale: 1, orientation: 'portrait' };
+    return { scale: 1, orientation: 'portrait', orientationOverride: false };
   }
 }
 
@@ -49,28 +47,6 @@ function writePrintSettings(settings) {
   }
 }
 
-function formatVND(value) {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(Number(value) || 0);
-}
-
-function formatQuantity(value) {
-  const number = Number(value) || 0;
-  return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(number);
-}
-
-function formatDateTime(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 function sanitizeFileName(value) {
   return String(value || 'hoa-don')
     .trim()
@@ -78,34 +54,48 @@ function sanitizeFileName(value) {
     .replace(/^_+|_+$/g, '') || 'hoa-don';
 }
 
-function isRenderableImage(value) {
-  return /^(data:image\/|https?:\/\/|blob:|file:)/i.test(String(value || '').trim());
-}
-
 function getErrorMessage(error, fallback) {
   return getApiErrorMessage(error?.data, error?.message || fallback);
 }
 
-function InfoLine({ label, value, strong = false }) {
-  if (!value) return null;
-  return (
-    <div className="invoice-info-line">
-      <span>{label}</span>
-      <b className={strong ? 'invoice-strong' : ''}>{value}</b>
-    </div>
-  );
+function getBackendTemplate(data) {
+  return data?.template || data?.print_template || data?.printTemplate || null;
 }
 
-function MoneyLine({ label, value, highlight = false, negative = false }) {
-  if (!value && value !== 0) return null;
-  const amount = Number(value) || 0;
-  if (!highlight && amount === 0 && negative) return null;
-  return (
-    <div className={`invoice-money-line ${highlight ? 'invoice-money-total' : ''}`}>
-      <span>{label}</span>
-      <b>{negative && amount > 0 ? '-' : ''}{formatVND(amount)}</b>
-    </div>
-  );
+function buildFallbackTemplate(settings) {
+  return {
+    id: null,
+    template_name: 'Mẫu A5 mặc định',
+    paper_size: 'A5',
+    orientation: settings.orientation || 'portrait',
+    settings_json: {
+      schema_version: 1,
+      paperSize: 'A5',
+      orientation: settings.orientation || 'portrait',
+      scale: settings.scale || 1,
+      previewZoom: settings.scale || 1,
+      showLogo: true,
+      showQr: true,
+      showSignature: true,
+      showNote: true,
+      showDebt: true,
+      lineSpacing: 1.35,
+      paddingMm: 8,
+      marginMm: 0,
+      tableWidthPercent: 100,
+      tableBorder: true,
+      tableBorderWidthMm: 0.22,
+    },
+  };
+}
+
+function buildRendererSettingsOverride(settings, hasBackendTemplate) {
+  const override = {
+    scale: settings.scale,
+    previewZoom: settings.scale,
+  };
+  if (!hasBackendTemplate || settings.orientationOverride) override.orientation = settings.orientation;
+  return override;
 }
 
 export default function InvoicePrint() {
@@ -113,6 +103,7 @@ export default function InvoicePrint() {
   const { idOrCode = '' } = useParams();
   const [searchParams] = useSearchParams();
   const autoPrint = searchParams.get('print') === '1';
+  const templateId = searchParams.get('template_id') || searchParams.get('templateId') || '';
   const printRef = useRef(null);
   const autoPrintedRef = useRef(false);
   const [data, setData] = useState(null);
@@ -122,8 +113,27 @@ export default function InvoicePrint() {
   const [printError, setPrintError] = useState('');
   const [settings, setSettings] = useState(() => readPrintSettings());
 
-  const page = PAGE_DIMENSIONS[settings.orientation] || PAGE_DIMENSIONS.portrait;
   const invoiceCode = data?.invoice?.invoice_code || idOrCode || 'hoa-don';
+  const backendTemplate = getBackendTemplate(data);
+  const hasBackendTemplate = Boolean(backendTemplate);
+  const activeTemplate = backendTemplate || buildFallbackTemplate(settings);
+  const settingsOverride = useMemo(
+    () => buildRendererSettingsOverride(settings, hasBackendTemplate),
+    [hasBackendTemplate, settings],
+  );
+  const templateSettings = useMemo(
+    () => normalizeTemplateSettings({
+      ...activeTemplate,
+      settings_json: {
+        ...(activeTemplate?.settings_json || activeTemplate?.settings || {}),
+        ...settingsOverride,
+      },
+      paper_size: activeTemplate?.paper_size,
+      orientation: settingsOverride.orientation || activeTemplate?.orientation,
+    }),
+    [activeTemplate, settingsOverride],
+  );
+  const page = getPaperDimensions(templateSettings.paperSize, templateSettings.orientation);
   const scalePercent = Math.round(settings.scale * 100);
 
   useEffect(() => {
@@ -141,7 +151,7 @@ export default function InvoicePrint() {
     setError('');
     setPrintError('');
     try {
-      const payload = await invoicesApi.printData(idOrCode);
+      const payload = await invoicesApi.printData(idOrCode, templateId ? { template_id: templateId } : {});
       setData(payload);
     } catch (err) {
       setData(null);
@@ -149,43 +159,17 @@ export default function InvoicePrint() {
     } finally {
       setLoading(false);
     }
-  }, [idOrCode]);
+  }, [idOrCode, templateId]);
 
   useEffect(() => {
     autoPrintedRef.current = false;
     loadInvoice();
   }, [loadInvoice]);
 
-  const pageStyle = useMemo(() => `
-    @page { size: A5 ${settings.orientation}; margin: 0; }
-    html, body {
-      width: ${page.width}mm !important;
-      min-height: ${page.height}mm !important;
-      height: auto !important;
-      margin: 0 auto !important;
-      padding: 0 !important;
-      background: #fff !important;
-      overflow: visible !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    .invoice-a5-sheet {
-      width: ${page.width}mm !important;
-      min-height: ${page.height}mm !important;
-      margin: 0 !important;
-      border: 0 !important;
-      border-radius: 0 !important;
-      box-shadow: none !important;
-      overflow: visible !important;
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-    .invoice-sheet-inner {
-      transform-origin: top left !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-  `, [page.height, page.width, settings.orientation]);
+  const pageStyle = useMemo(
+    () => buildInvoicePageStyle(activeTemplate, settingsOverride),
+    [activeTemplate, settingsOverride],
+  );
 
   const handlePrintInvoice = useReactToPrint({
     contentRef: printRef,
@@ -216,8 +200,12 @@ export default function InvoicePrint() {
   }, []);
 
   const toggleOrientation = useCallback(() => {
-    setSettings(prev => ({ ...prev, orientation: prev.orientation === 'portrait' ? 'landscape' : 'portrait' }));
-  }, []);
+    setSettings(prev => ({
+      ...prev,
+      orientation: templateSettings.orientation === 'portrait' ? 'landscape' : 'portrait',
+      orientationOverride: true,
+    }));
+  }, [templateSettings.orientation]);
 
   const handleDownloadPdf = useCallback(async () => {
     const element = printRef.current;
@@ -236,7 +224,7 @@ export default function InvoicePrint() {
         windowHeight: element.scrollHeight,
       });
 
-      const pdf = new jsPDF({ orientation: settings.orientation, unit: 'mm', format: 'a5', compress: true });
+      const pdf = new jsPDF({ orientation: page.orientation, unit: 'mm', format: [page.width, page.height], compress: true });
       const imgData = canvas.toDataURL('image/png', 1);
       const pdfWidth = page.width;
       const pdfHeight = page.height;
@@ -249,7 +237,7 @@ export default function InvoicePrint() {
 
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
-        pdf.addPage('a5', settings.orientation);
+        pdf.addPage([page.width, page.height], page.orientation);
         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
         heightLeft -= pdfHeight;
       }
@@ -260,18 +248,7 @@ export default function InvoicePrint() {
     } finally {
       setPdfLoading(false);
     }
-  }, [data, invoiceCode, page.height, page.width, settings.orientation]);
-
-  const store = data?.store || {};
-  const customer = data?.customer || {};
-  const invoice = data?.invoice || {};
-  const items = data?.items || [];
-  const totals = data?.totals || {};
-  const payment = data?.payment || {};
-  const signatures = data?.signatures || {};
-  const metadata = data?.metadata || {};
-  const logoVisible = isRenderableImage(store.logo_url);
-  const qrVisible = isRenderableImage(payment.qr_image);
+  }, [data, invoiceCode, page.height, page.orientation, page.width]);
 
   return (
     <div className="invoice-print-page">
@@ -281,8 +258,11 @@ export default function InvoicePrint() {
             <ArrowLeft size={16} /> Quay lại
           </button>
           <div>
-            <h1>In hóa đơn A5</h1>
-            <p>{invoiceCode ? `Mã/ID: ${invoiceCode}` : 'Preview gọi dữ liệu thật từ API backend'}</p>
+            <h1>In hóa đơn {page.paperSize}</h1>
+            <p>
+              {invoiceCode ? `Mã/ID: ${invoiceCode}` : 'Preview gọi dữ liệu thật từ API backend'}
+              {hasBackendTemplate ? ` · Mẫu: ${activeTemplate.template_name || activeTemplate.name || activeTemplate.id}` : ' · Fallback A5'}
+            </p>
           </div>
         </div>
 
@@ -321,9 +301,11 @@ export default function InvoicePrint() {
           <button type="button" onClick={resetScale} className="invoice-toolbar-btn invoice-toolbar-btn-light">
             Reset 100%
           </button>
-          <button type="button" onClick={toggleOrientation} className="invoice-toolbar-btn invoice-toolbar-btn-light">
-            <RotateCw size={16} /> {page.label}
-          </button>
+          {page.paperSize !== 'K80' && (
+            <button type="button" onClick={toggleOrientation} className="invoice-toolbar-btn invoice-toolbar-btn-light">
+              <RotateCw size={16} /> {page.label}
+            </button>
+          )}
           <button type="button" onClick={loadInvoice} disabled={loading} className="invoice-toolbar-btn invoice-toolbar-btn-light">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Tải lại
           </button>
@@ -356,156 +338,16 @@ export default function InvoicePrint() {
         </div>
       ) : (
         <main className="invoice-preview-shell">
-          <article
-            ref={printRef}
-            className={`invoice-a5-sheet invoice-a5-${settings.orientation}`}
-            style={{
-              '--invoice-scale': settings.scale,
-              '--invoice-page-width': `${page.width}mm`,
-              '--invoice-page-height': `${page.height}mm`,
-              width: `${page.width * settings.scale}mm`,
-              minHeight: `${page.height * settings.scale}mm`,
-            }}
-          >
-            <div className="invoice-sheet-inner">
-              <header className="invoice-header">
-                <div className="invoice-store-block">
-                  <div className="invoice-logo-box">
-                    {logoVisible ? (
-                      <img src={store.logo_url} alt="Logo cửa hàng" crossOrigin="anonymous" />
-                    ) : (
-                      <span>{String(store.name || 'POS').slice(0, 2).toUpperCase()}</span>
-                    )}
-                  </div>
-                  <div className="invoice-store-text">
-                    <h2>{store.name || 'Cửa hàng'}</h2>
-                    {store.address && <p>{store.address}</p>}
-                    <div className="invoice-store-meta">
-                      {store.phone && <span>ĐT: {store.phone}</span>}
-                      {store.email && <span>Email: {store.email}</span>}
-                      {store.tax_code && <span>MST: {store.tax_code}</span>}
-                    </div>
-                  </div>
-                </div>
-                <div className="invoice-title-block">
-                  <h1>HÓA ĐƠN BÁN HÀNG</h1>
-                  <div className="invoice-code">{invoice.invoice_code || '—'}</div>
-                  <div className="invoice-date">Ngày lập: {formatDateTime(invoice.created_at)}</div>
-                </div>
-              </header>
-
-              <section className="invoice-info-grid">
-                <div className="invoice-info-card">
-                  <h3>Thông tin khách hàng</h3>
-                  <InfoLine label="Tên khách" value={customer.name || 'Khách lẻ'} strong />
-                  <InfoLine label="Điện thoại" value={customer.phone} />
-                  <InfoLine label="Địa chỉ" value={customer.address} />
-                  <InfoLine label="Mã số thuế" value={customer.tax_code} />
-                </div>
-                <div className="invoice-info-card">
-                  <h3>Thông tin đơn hàng</h3>
-                  <InfoLine label="Thanh toán" value={payment.method_label || invoice.payment_method} strong />
-                  <InfoLine label="Trạng thái" value={invoice.status} />
-                  <InfoLine label="Ngày giao" value={invoice.delivery_date} />
-                  <InfoLine label="Người tạo" value={metadata.user_name} />
-                </div>
-              </section>
-
-              <section className="invoice-items-section">
-                <table className="invoice-items-table">
-                  <thead>
-                    <tr>
-                      <th className="invoice-col-no">STT</th>
-                      <th>Tên sản phẩm</th>
-                      <th className="invoice-col-qty">SL</th>
-                      <th className="invoice-col-money">Đơn giá</th>
-                      <th className="invoice-col-money">Thành tiền</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item, index) => (
-                      <tr key={`${item.id || item.product_id || item.sku || 'item'}-${index}`}>
-                        <td className="invoice-col-no">{index + 1}</td>
-                        <td>
-                          <div className="invoice-item-name">{item.name || 'Sản phẩm'}</div>
-                          {(item.sku || item.unit || item.note) && (
-                            <div className="invoice-item-meta">
-                              {item.sku && <span>SKU: {item.sku}</span>}
-                              {item.unit && <span>ĐVT: {item.unit}</span>}
-                              {item.note && <span>{item.note}</span>}
-                            </div>
-                          )}
-                        </td>
-                        <td className="invoice-col-qty">{formatQuantity(item.quantity)}</td>
-                        <td className="invoice-col-money">{formatVND(item.unit_price)}</td>
-                        <td className="invoice-col-money invoice-line-total">{formatVND(item.line_total)}</td>
-                      </tr>
-                    ))}
-                    {items.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="invoice-empty-row">Không có sản phẩm trong hóa đơn.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </section>
-
-              <section className="invoice-summary-grid">
-                <div className="invoice-payment-card">
-                  <h3>Thanh toán / QR</h3>
-                  {qrVisible ? (
-                    <img className="invoice-qr-image" src={payment.qr_image} alt="QR thanh toán" crossOrigin="anonymous" />
-                  ) : payment.qr_image ? (
-                    <div className="invoice-qr-text">{payment.qr_image}</div>
-                  ) : (
-                    <div className="invoice-qr-placeholder">Không có QR thanh toán</div>
-                  )}
-                  <div className="invoice-bank-info">
-                    {payment.bank_name && <div>Ngân hàng: <b>{payment.bank_name}</b></div>}
-                    {payment.bank_account && <div>STK: <b>{payment.bank_account}</b></div>}
-                    {payment.bank_account_name && <div>Chủ TK: <b>{payment.bank_account_name}</b></div>}
-                    {payment.transfer_content && <div>Nội dung CK: <b>{payment.transfer_content}</b></div>}
-                    {payment.qr_text && <div className="invoice-qr-note">{payment.qr_text}</div>}
-                  </div>
-                </div>
-
-                <div className="invoice-totals-card">
-                  <MoneyLine label="Tổng tiền hàng" value={totals.subtotal} />
-                  {Number(totals.vat_amount) > 0 && <MoneyLine label={`VAT (${Number(totals.vat_percent) || 0}%)`} value={totals.vat_amount} />}
-                  {Number(totals.discount_amount) > 0 && <MoneyLine label="Giảm giá" value={totals.discount_amount} negative />}
-                  {Number(totals.delivery_fee) > 0 && <MoneyLine label="Phí giao hàng" value={totals.delivery_fee} />}
-                  <MoneyLine label="Thành tiền" value={totals.total} highlight />
-                  {Number(totals.paid_amount) > 0 && <MoneyLine label="Đã thanh toán" value={totals.paid_amount} />}
-                  {Number(totals.remaining_amount) > 0 && <MoneyLine label="Còn phải trả" value={totals.remaining_amount} />}
-                  {Number(totals.change_amount) > 0 && <MoneyLine label="Tiền thừa" value={totals.change_amount} />}
-                </div>
-              </section>
-
-              {invoice.note && (
-                <section className="invoice-note-box">
-                  <b>Ghi chú:</b> {invoice.note}
-                </section>
-              )}
-
-              <section className="invoice-signatures">
-                <div>
-                  <h3>{signatures.buyer?.label || 'Khách hàng'}</h3>
-                  <p>(Ký và ghi rõ họ tên)</p>
-                  <b>{signatures.buyer?.name || ''}</b>
-                </div>
-                <div>
-                  <h3>{signatures.seller?.label || 'Người bán'}</h3>
-                  <p>(Ký và ghi rõ họ tên)</p>
-                  <b>{signatures.seller?.name || ''}</b>
-                </div>
-              </section>
-
-              <footer className="invoice-footer">
-                <span>Cảm ơn quý khách!</span>
-                <span>In lúc: {formatDateTime(metadata.printed_at || new Date().toISOString())}</span>
-              </footer>
-            </div>
-          </article>
+          <div className="invoice-print-preview-frame">
+            <InvoiceTemplateRenderer
+              ref={printRef}
+              payload={data}
+              template={activeTemplate}
+              settingsOverride={settingsOverride}
+              printScale={settings.scale}
+              previewZoom={settings.scale}
+            />
+          </div>
         </main>
       )}
     </div>

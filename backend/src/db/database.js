@@ -97,6 +97,8 @@ const DEFAULT_PERMISSIONS = [
   ['sync.manage', 'Quản lý đồng bộ', 'Đẩy/kéo dữ liệu đồng bộ'],
   ['settings.read', 'Xem thiết lập', 'Xem thiết lập hệ thống'],
   ['settings.manage', 'Quản lý thiết lập', 'Cập nhật thiết lập hệ thống'],
+  ['print_templates.read', 'Xem mẫu in hóa đơn', 'Xem danh sách và chi tiết mẫu in hóa đơn'],
+  ['print_templates.manage', 'Quản lý mẫu in hóa đơn', 'Tạo, sửa, xóa, đặt mặc định và upload logo mẫu in hóa đơn'],
 ];
 
 const DEFAULT_USER_PERMISSION_KEYS = [
@@ -534,7 +536,7 @@ function seedDefaultRolePermissions() {
   const roleMap = {
     admin: allKeys,
     owner: allKeys,
-    manager: allKeys.filter(key => !key.endsWith('.manage') || !['admin_panel.manage', 'features.manage', 'updates.manage', 'users.manage'].includes(key)),
+    manager: allKeys.filter(key => !key.endsWith('.manage') || !['admin_panel.manage', 'features.manage', 'updates.manage', 'users.manage', 'print_templates.manage'].includes(key)),
     user: DEFAULT_USER_PERMISSION_KEYS.map(normalizePermissionKey),
   };
 

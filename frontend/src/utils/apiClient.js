@@ -230,7 +230,7 @@ function logResolvedApiBase(details) {
 function shouldUseDevApiProxyPath(pathname) {
   if (!pathname || !pathname.startsWith('/')) return false;
   if (pathname === '/api' || pathname.startsWith('/api/')) return false;
-  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|excel-imports|store|stats|cash-book|cashbook|payrolls|partners|combos|sync|features|updates|dashboard)(\/|\?|$)/i.test(pathname);
+  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|excel-imports|store|stats|cash-book|cashbook|payrolls|partners|combos|sync|features|updates|print-templates|dashboard)(\/|\?|$)/i.test(pathname);
 }
 
 function normalizeDevApiProxyPath(input) {
@@ -632,11 +632,40 @@ export const invoicesApi = {
     return apiJson(`/invoices${suffix}`, {}, 'Không thể tải danh sách đơn hàng.');
   },
   detail(id) { return apiJson(`/invoices/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết đơn hàng.'); },
-  printData(idOrCode) { return apiJsonChecked(`/invoices/${encodeURIComponent(idOrCode)}/print`, {}, 'Không thể tải dữ liệu in hóa đơn.'); },
+  printData(idOrCode, params = {}) {
+    const query = new URLSearchParams();
+    const templateId = params.template_id ?? params.templateId;
+    if (templateId !== undefined && templateId !== null && String(templateId).trim()) query.set('template_id', String(templateId).trim());
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiJsonChecked(`/invoices/${encodeURIComponent(idOrCode)}/print${suffix}`, {}, 'Không thể tải dữ liệu in hóa đơn.');
+  },
   create(payload = {}) { return apiJsonChecked('/invoices', { method: 'POST', body: payload }, 'Không thể tạo đơn hàng.'); },
   update(id, payload = {}) { return apiJsonChecked(`/invoices/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật đơn hàng.'); },
   remove(id) { return apiJsonChecked(`/invoices/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể hủy đơn hàng.'); },
   confirm(id) { return apiJsonChecked(`/invoices/${encodeURIComponent(id)}/confirm`, { method: 'PATCH' }, 'Không thể xác nhận thanh toán.'); },
+};
+
+export const printTemplatesApi = {
+  list(params = {}) {
+    const query = new URLSearchParams();
+    if (params.includeDeleted) query.set('include_deleted', '1');
+    if (params.status) query.set('status', params.status);
+    if (params.q) query.set('q', params.q);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiJsonChecked(`/print-templates${suffix}`, {}, 'Không thể tải danh sách mẫu in hóa đơn.');
+  },
+  default() { return apiJsonChecked('/print-templates/default', {}, 'Không thể tải mẫu in hóa đơn mặc định.'); },
+  detail(id) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết mẫu in hóa đơn.'); },
+  create(payload = {}) { return apiJsonChecked('/print-templates', { method: 'POST', body: payload }, 'Không thể tạo mẫu in hóa đơn.'); },
+  update(id, payload = {}) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật mẫu in hóa đơn.'); },
+  remove(id) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể xóa mẫu in hóa đơn.'); },
+  setDefault(id) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}/set-default`, { method: 'POST' }, 'Không thể đặt mẫu in hóa đơn mặc định.'); },
+  uploadLogo(id, file) {
+    const formData = new FormData();
+    formData.append('logo', file);
+    return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}/logo`, { method: 'POST', body: formData }, 'Không thể upload logo mẫu in hóa đơn.');
+  },
+  removeLogo(id) { return apiJsonChecked(`/print-templates/${encodeURIComponent(id)}/logo`, { method: 'DELETE' }, 'Không thể xóa logo mẫu in hóa đơn.'); },
 };
 
 export const authApi = {
