@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.4.3 - 2026-06-02
+
+### Phát hành
+
+- Đồng bộ version phát hành 1.4.3 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
+- Cập nhật changelog, tài liệu release, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.4.3.
+- Giữ nguyên metadata production generated cho tới khi có installer v1.4.3 thực tế để sinh lại SHA/size an toàn.
+
+### Lưu ý quan trọng
+
+- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.3-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.3-ia32.exe`.
+- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
+- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+
 ## v1.4.2 - 2026-06-01
 
 ### Tính năng và cải tiến
