@@ -6,11 +6,12 @@ const {
   remove,
   now,
   normalizePaymentMethod,
+  withAtomicDbWrite,
 } = require('../db/database');
 const { normalizeSearchText, parseKeywordList } = require('../utils/productSearch');
 const {
-  NEGATIVE_STOCK_LIMIT,
-  NEGATIVE_STOCK_LIMIT_MESSAGE,
+  getMinimumAllowedProductStock,
+  getNegativeStockLimitMessage,
   assertProductStockValueWithinLimit,
   logNegativeStockTransition,
   logNegativeStockLimitViolation,
@@ -478,8 +479,9 @@ function normalizeProductRow(raw, index, mapping) {
   if (row.supplier_id !== undefined && !findSupplierById(row.supplier_id)) {
     errors.push({ line, field: 'Supplier id', message: `Nhà cung cấp id ${row.supplier_id} không tồn tại hoặc đã bị khóa.` });
   }
-  if (row.stock !== undefined && row.stock < NEGATIVE_STOCK_LIMIT) {
-    errors.push({ line, field: 'Tồn kho', message: `${NEGATIVE_STOCK_LIMIT_MESSAGE}. Tồn kho import không được nhỏ hơn ${NEGATIVE_STOCK_LIMIT}.` });
+  const minimumAllowedStock = getMinimumAllowedProductStock();
+  if (row.stock !== undefined && row.stock < minimumAllowedStock) {
+    errors.push({ line, field: 'Tồn kho', message: `${getNegativeStockLimitMessage()}. Tồn kho import không được nhỏ hơn ${minimumAllowedStock}.` });
   }
   return { row, errors };
 }
@@ -1148,103 +1150,105 @@ function commitImport(body = {}, req = null) {
   const fileName = safeString(body.fileName || body.file_name || 'excel-import.xlsx', 260);
   const sheetName = safeString(body.sheetName || body.sheet_name || '', 120);
 
-  const runId = insert('excel_import_runs', {
-    file_name: fileName,
-    sheet_name: sheetName,
-    data_type: type,
-    mode,
-    status: 'running',
-    total_rows: preview.summary.totalRows,
-    success_rows: 0,
-    error_rows: preview.summary.errorRows,
-    skipped_rows: preview.summary.skippedRows + preview.summary.duplicateRows,
-    user_id: req?.user?.id || null,
-    user_name: req?.user?.name || req?.user?.email || '',
-    summary_json: JSON.stringify(preview.summary),
-    errors_json: JSON.stringify(preview.items.flatMap(item => item.errors || [])),
-    warnings_json: JSON.stringify(preview.items.flatMap(item => item.warnings || [])),
-    created_at: now(),
-    updated_at: now(),
-  });
-
-  let commitResult;
-  try {
-    if (type === 'customers') commitResult = commitCustomerRows(preview);
-    else if (type === 'invoices') commitResult = commitInvoiceRows(preview);
-    else commitResult = commitProductRows(preview);
-  } catch (error) {
-    logNegativeStockLimitViolation(error, { source: 'excel_import_commit', data_type: type });
-    update('excel_import_runs', runId, {
-      status: 'failed',
-      error_rows: preview.summary.totalRows || preview.summary.errorRows || 1,
-      errors_json: JSON.stringify([{ message: error.message, code: error.code || 'EXCEL_IMPORT_ERROR' }]),
+  return withAtomicDbWrite(() => {
+    const runId = insert('excel_import_runs', {
+      file_name: fileName,
+      sheet_name: sheetName,
+      data_type: type,
+      mode,
+      status: 'running',
+      total_rows: preview.summary.totalRows,
+      success_rows: 0,
+      error_rows: preview.summary.errorRows,
+      skipped_rows: preview.summary.skippedRows + preview.summary.duplicateRows,
+      user_id: req?.user?.id || null,
+      user_name: req?.user?.name || req?.user?.email || '',
+      summary_json: JSON.stringify(preview.summary),
+      errors_json: JSON.stringify(preview.items.flatMap(item => item.errors || [])),
+      warnings_json: JSON.stringify(preview.items.flatMap(item => item.warnings || [])),
+      created_at: now(),
       updated_at: now(),
     });
-    throw error;
-  }
 
-  const finalItems = preview.items.map(item => {
-    const committed = commitResult.committed.find(row => Number(row.line) === Number(item.line) && Number(row.rowIndex) === Number(item.rowIndex));
-    return committed || item;
+    let commitResult;
+    try {
+      if (type === 'customers') commitResult = commitCustomerRows(preview);
+      else if (type === 'invoices') commitResult = commitInvoiceRows(preview);
+      else commitResult = commitProductRows(preview);
+    } catch (error) {
+      logNegativeStockLimitViolation(error, { source: 'excel_import_commit', data_type: type });
+      update('excel_import_runs', runId, {
+        status: 'failed',
+        error_rows: preview.summary.totalRows || preview.summary.errorRows || 1,
+        errors_json: JSON.stringify([{ message: error.message, code: error.code || 'EXCEL_IMPORT_ERROR' }]),
+        updated_at: now(),
+      });
+      throw error;
+    }
+
+    const finalItems = preview.items.map(item => {
+      const committed = commitResult.committed.find(row => Number(row.line) === Number(item.line) && Number(row.rowIndex) === Number(item.rowIndex));
+      return committed || item;
+    });
+
+    for (const item of finalItems) {
+      const sourceRow = rows.find(row => Number(row.index) === Number(item.rowIndex))?.row || item.raw || {};
+      insertHistoryDetail(runId, item, sourceRow);
+    }
+
+    const finalSummary = {
+      ...preview.summary,
+      ...commitResult.summary,
+      totalRows: preview.summary.totalRows,
+      errorRows: commitResult.summary.errorRows || 0,
+      skippedRows: commitResult.summary.skippedRows || 0,
+    };
+    finalSummary.errors = commitResult.summary.errors || 0;
+    finalSummary.successRows = commitResult.summary.successRows || 0;
+    finalSummary.validRows = commitResult.summary.validRows || 0;
+
+    const status = finalSummary.successRows > 0
+      ? (finalSummary.errors > 0 || finalSummary.skippedRows > 0 ? 'partial' : 'success')
+      : (finalSummary.errors > 0 ? 'failed' : 'skipped');
+    const errors = finalItems.flatMap(item => item.errors || []);
+    const warnings = finalItems.flatMap(item => item.warnings || []);
+
+    update('excel_import_runs', runId, {
+      status,
+      success_rows: finalSummary.successRows,
+      error_rows: finalSummary.errorRows,
+      skipped_rows: finalSummary.skippedRows,
+      summary_json: JSON.stringify(finalSummary),
+      errors_json: JSON.stringify(errors),
+      warnings_json: JSON.stringify(warnings),
+      updated_at: now(),
+    });
+
+    return {
+      ok: status !== 'failed',
+      partial: status === 'partial',
+      resource: type,
+      resources: [type],
+      dataType: type,
+      mode,
+      run_id: runId,
+      fileName,
+      sheetName,
+      status,
+      summary: finalSummary,
+      items: finalItems,
+      results: finalItems,
+      errors,
+      warnings,
+      receivedColumns,
+      progress: { totalRows: finalSummary.totalRows, validRows: finalSummary.validRows },
+      message: status === 'success'
+        ? 'Import Excel hoàn tất.'
+        : status === 'partial'
+          ? 'Import Excel hoàn tất một phần; chỉ các dòng hợp lệ được ghi.'
+          : 'Không có dòng hợp lệ nào được ghi.',
+    };
   });
-
-  for (const item of finalItems) {
-    const sourceRow = rows.find(row => Number(row.index) === Number(item.rowIndex))?.row || item.raw || {};
-    insertHistoryDetail(runId, item, sourceRow);
-  }
-
-  const finalSummary = {
-    ...preview.summary,
-    ...commitResult.summary,
-    totalRows: preview.summary.totalRows,
-    errorRows: commitResult.summary.errorRows || 0,
-    skippedRows: commitResult.summary.skippedRows || 0,
-  };
-  finalSummary.errors = commitResult.summary.errors || 0;
-  finalSummary.successRows = commitResult.summary.successRows || 0;
-  finalSummary.validRows = commitResult.summary.validRows || 0;
-
-  const status = finalSummary.successRows > 0
-    ? (finalSummary.errors > 0 || finalSummary.skippedRows > 0 ? 'partial' : 'success')
-    : (finalSummary.errors > 0 ? 'failed' : 'skipped');
-  const errors = finalItems.flatMap(item => item.errors || []);
-  const warnings = finalItems.flatMap(item => item.warnings || []);
-
-  update('excel_import_runs', runId, {
-    status,
-    success_rows: finalSummary.successRows,
-    error_rows: finalSummary.errorRows,
-    skipped_rows: finalSummary.skippedRows,
-    summary_json: JSON.stringify(finalSummary),
-    errors_json: JSON.stringify(errors),
-    warnings_json: JSON.stringify(warnings),
-    updated_at: now(),
-  });
-
-  return {
-    ok: status !== 'failed',
-    partial: status === 'partial',
-    resource: type,
-    resources: [type],
-    dataType: type,
-    mode,
-    run_id: runId,
-    fileName,
-    sheetName,
-    status,
-    summary: finalSummary,
-    items: finalItems,
-    results: finalItems,
-    errors,
-    warnings,
-    receivedColumns,
-    progress: { totalRows: finalSummary.totalRows, validRows: finalSummary.validRows },
-    message: status === 'success'
-      ? 'Import Excel hoàn tất.'
-      : status === 'partial'
-        ? 'Import Excel hoàn tất một phần; chỉ các dòng hợp lệ được ghi.'
-        : 'Không có dòng hợp lệ nào được ghi.',
-  };
 }
 
 function listHistory(limit = 50) {

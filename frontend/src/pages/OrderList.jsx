@@ -5,13 +5,15 @@ import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Squa
 import { getProductDisplayName } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
 import {
-  NEGATIVE_STOCK_LIMIT,
   NEGATIVE_STOCK_LIMIT_MESSAGE,
   buildSaleStockValidation,
   formatStockValue,
+  getNegativeStockLimitLabel,
+  getNegativeStockNearLimitLabel,
   getSaleStockStateForLine,
   getStockDisplayMeta,
 } from '../utils/negativeStock';
+import useNegativeStockSettings from '../utils/useNegativeStockSettings';
 
 const API = resolveApiUrl('');
 
@@ -160,6 +162,10 @@ export default function OrderList() {
   const [expandedParents, setExpandedParents] = useState({});
   const [showHelp, setShowHelp] = useState(false);
   const [showExcelImport, setShowExcelImport] = useState(false);
+
+  const { settings: negativeStockSettings } = useNegativeStockSettings();
+  const negativeStockLimitLabel = useMemo(() => getNegativeStockLimitLabel(negativeStockSettings), [negativeStockSettings]);
+  const negativeStockNearLimitLabel = useMemo(() => getNegativeStockNearLimitLabel(negativeStockSettings), [negativeStockSettings]);
 
   const notifyOrderChanged = (detail = {}) => {
     window.dispatchEvent(new CustomEvent('kha-order-created', {
@@ -441,7 +447,8 @@ export default function OrderList() {
     baselineLines: showEdit?._isOffline ? [] : editBaselineDetails,
     getProductStockById: getEditProductStockById,
     getLineKey: getEditDetailRowKey,
-  }), [editDetails, editBaselineDetails, editProducts, showEdit]);
+    settings: negativeStockSettings,
+  }), [editDetails, editBaselineDetails, editProducts, negativeStockSettings, showEdit]);
   const hasEditStockError = editStockValidation.hasInvalid;
   const showStockLimitToast = (message = NEGATIVE_STOCK_LIMIT_MESSAGE) => {
     setStockToast({ id: Date.now(), message });
@@ -939,7 +946,8 @@ export default function OrderList() {
         <ExcelImportPanel
           dataType="invoices"
           title="Import hóa đơn/đơn hàng từ Excel/CSV"
-          description={`Preview/validate đơn hàng và chi tiết sản phẩm trước khi commit; cho phép bán khi tồn 0/âm nếu tồn dự kiến không thấp hơn ${NEGATIVE_STOCK_LIMIT}, một đơn nhiều dòng được gom theo mã đơn.`}
+          description={`Preview/validate đơn hàng và chi tiết sản phẩm trước khi commit; cho phép bán khi tồn 0/âm nếu tồn dự kiến không thấp hơn ${negativeStockLimitLabel}, một đơn nhiều dòng được gom theo mã đơn.`}
+          negativeStockSettings={negativeStockSettings}
           onCommitted={async () => {
             setLoading(true);
             await fetchInvoices().finally(() => setLoading(false));
@@ -1508,7 +1516,7 @@ export default function OrderList() {
                             <div className="text-[10px] text-gray-400">{d.product_sku}</div>
                             {stockState && (
                               <div className={`text-[10px] font-semibold mt-0.5 ${rowStockInvalid ? 'text-red-600' : rowNearLimit ? 'text-orange-700' : 'text-gray-500'}`}>
-                                Dự kiến {formatStockValue(stockState.projectedStock)}{rowStockInvalid ? ` · ${NEGATIVE_STOCK_LIMIT_MESSAGE}` : rowNearLimit ? ` · gần ngưỡng ${NEGATIVE_STOCK_LIMIT}` : ''}
+                                Dự kiến {formatStockValue(stockState.projectedStock)}{rowStockInvalid ? ` · ${NEGATIVE_STOCK_LIMIT_MESSAGE}` : rowNearLimit ? ` · ${negativeStockNearLimitLabel || `gần ngưỡng ${negativeStockLimitLabel}`}` : ''}
                               </div>
                             )}
                           </td>
@@ -1660,7 +1668,7 @@ export default function OrderList() {
                       <div key={parent.id}>
                         {/* Parent Product Row */}
                         <div
-                          className={`border rounded-lg p-3 cursor-pointer hover:border-blue-500 hover:shadow-sm ${getStockDisplayMeta(parent.stock).cardClass}`}
+                          className={`border rounded-lg p-3 cursor-pointer hover:border-blue-500 hover:shadow-sm ${getStockDisplayMeta(parent.stock, negativeStockSettings).cardClass}`}
                           onClick={() => {
                             if (hasVariants) {
                               setExpandedParents(prev => ({ ...prev, [parent.id]: !prev[parent.id] }));
@@ -1680,9 +1688,9 @@ export default function OrderList() {
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
                               <div className="text-[10px] text-gray-400">{parent.sku || '—'}</div>
-                              <div className={`text-[10px] ${getStockDisplayMeta(parent.stock).textClass}`}>{getStockDisplayMeta(parent.stock).display}</div>
-                              {getStockDisplayMeta(parent.stock).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(parent.stock).badgeClass}`}>Âm kho</div>}
-                              {getStockDisplayMeta(parent.stock).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">Gần -100</div>}
+                              <div className={`text-[10px] ${getStockDisplayMeta(parent.stock, negativeStockSettings).textClass}`}>{getStockDisplayMeta(parent.stock, negativeStockSettings).display}</div>
+                              {getStockDisplayMeta(parent.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(parent.stock, negativeStockSettings).badgeClass}`}>Âm kho</div>}
+                              {getStockDisplayMeta(parent.stock, negativeStockSettings).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">{getStockDisplayMeta(parent.stock, negativeStockSettings).extraLabel || negativeStockNearLimitLabel || `Gần ${negativeStockLimitLabel}`}</div>}
                               <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(parent.retail_price)}</div>
                             </div>
                           </div>
@@ -1694,7 +1702,7 @@ export default function OrderList() {
                             {parent.variants.map(variant => (
                               <div
                                 key={variant.id}
-                                className={`border rounded-lg p-2 cursor-pointer hover:border-blue-500 hover:shadow-sm ${getStockDisplayMeta(variant.stock).cardClass}`}
+                                className={`border rounded-lg p-2 cursor-pointer hover:border-blue-500 hover:shadow-sm ${getStockDisplayMeta(variant.stock, negativeStockSettings).cardClass}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   addDetailFromPicker({ ...variant, is_variant: true, parent_id: parent.id, parent_name: parent.name, parent });
@@ -1707,9 +1715,9 @@ export default function OrderList() {
                                   </div>
                                   <div className="flex items-center gap-3 shrink-0">
                                     <div className="text-[10px] text-gray-400">{variant.sku || '—'}</div>
-                                    <div className={`text-[10px] ${getStockDisplayMeta(variant.stock).textClass}`}>{getStockDisplayMeta(variant.stock).display}</div>
-                                    {getStockDisplayMeta(variant.stock).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(variant.stock).badgeClass}`}>Âm kho</div>}
-                                    {getStockDisplayMeta(variant.stock).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">Gần -100</div>}
+                                    <div className={`text-[10px] ${getStockDisplayMeta(variant.stock, negativeStockSettings).textClass}`}>{getStockDisplayMeta(variant.stock, negativeStockSettings).display}</div>
+                                    {getStockDisplayMeta(variant.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(variant.stock, negativeStockSettings).badgeClass}`}>Âm kho</div>}
+                                    {getStockDisplayMeta(variant.stock, negativeStockSettings).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">{getStockDisplayMeta(variant.stock, negativeStockSettings).extraLabel || negativeStockNearLimitLabel || `Gần ${negativeStockLimitLabel}`}</div>}
                                     <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(variant.retail_price)}</div>
                                   </div>
                                 </div>

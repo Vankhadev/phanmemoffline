@@ -127,6 +127,7 @@ function TableProperties({ document, onUpdateTable, onUpdateElement }) {
           <ColorField label="Header text" value={style.headerColor || '#0f172a'} onChange={value => updateStyle({ headerColor: value })} />
         </div>
         <ToggleField label="Auto height theo số dòng" checked={frame.h === 'auto'} onChange={value => updateFrame({ h: value ? 'auto' : 32 })} />
+        <ToggleField label="Border bảng" checked={style.tableBorder !== false} onChange={value => updateStyle({ tableBorder: value, borderWidthMm: value ? (style.borderWidthMm ?? 0.22) : 0 })} />
         <ToggleField label="Header repeat khi in" checked={table.headerRepeat !== false} onChange={value => onUpdateTable?.({ headerRepeat: value })} />
         <ToggleField label="Cho phép qua trang" checked={table.allowPageBreak !== false} onChange={value => onUpdateTable?.({ allowPageBreak: value })} />
       </section>
@@ -228,10 +229,64 @@ export default function PropertiesPanel({
             <AlignField value={element.style?.align || 'left'} onChange={value => updateElementStyle({ align: value })} />
             <ToggleField label="Bold" checked={element.style?.bold === true} onChange={value => updateElementStyle({ bold: value })} />
           </section>
+          {element.type === 'storeInfo' && (
+            <section>
+              <h4>Thông tin cửa hàng</h4>
+              <div className="invoice-editor-prop-grid">
+                <TextField label="Nhãn SĐT" value={element.style?.storePhoneLabel || ''} onChange={value => updateElementStyle({ storePhoneLabel: value })} />
+              </div>
+              <ToggleField label="Hiện tên cửa hàng" checked={element.style?.showStoreName !== false} onChange={value => updateElementStyle({ showStoreName: value })} />
+              <ToggleField label="Hiện địa chỉ" checked={element.style?.showStoreAddress !== false} onChange={value => updateElementStyle({ showStoreAddress: value })} />
+              <ToggleField label="Hiện số điện thoại" checked={element.style?.showStorePhone !== false} onChange={value => updateElementStyle({ showStorePhone: value })} />
+              <ToggleField label="Hiện email" checked={element.style?.showStoreEmail !== false} onChange={value => updateElementStyle({ showStoreEmail: value })} />
+              <ToggleField label="Hiện mã số thuế" checked={element.style?.showStoreTaxCode !== false} onChange={value => updateElementStyle({ showStoreTaxCode: value })} />
+            </section>
+          )}
+          {element.type === 'invoiceTitle' && (
+            <section>
+              <h4>Tiêu đề hóa đơn</h4>
+              <TextField label="Tiêu đề" value={element.style?.titleText || ''} onChange={value => updateElementStyle({ titleText: value })} />
+              <TextField label="Tiêu đề phụ" value={element.style?.subtitleText || ''} onChange={value => updateElementStyle({ subtitleText: value })} />
+              <ToggleField label="Hiện tiêu đề" checked={element.style?.showTitle !== false} onChange={value => updateElementStyle({ showTitle: value })} />
+              <ToggleField label="Hiện tiêu đề phụ" checked={element.style?.showSubtitle !== false} onChange={value => updateElementStyle({ showSubtitle: value })} />
+              <ToggleField label="Hiện mã hóa đơn" checked={element.style?.showInvoiceCode !== false} onChange={value => updateElementStyle({ showInvoiceCode: value })} />
+            </section>
+          )}
+          {element.type === 'customerInfo' && (
+            <section>
+              <h4>Thông tin khách hàng</h4>
+              <div className="invoice-editor-prop-grid">
+                <TextField label="Nhãn tên" value={element.style?.customerNameLabel || ''} onChange={value => updateElementStyle({ customerNameLabel: value })} />
+                <TextField label="Nhãn SĐT" value={element.style?.customerPhoneLabel || ''} onChange={value => updateElementStyle({ customerPhoneLabel: value })} />
+                <TextField label="Nhãn địa chỉ" value={element.style?.customerAddressLabel || ''} onChange={value => updateElementStyle({ customerAddressLabel: value })} />
+                <TextField label="Nhãn MST" value={element.style?.customerTaxCodeLabel || ''} onChange={value => updateElementStyle({ customerTaxCodeLabel: value })} />
+              </div>
+              <ToggleField label="Hiện tên khách" checked={element.style?.showCustomerName !== false} onChange={value => updateElementStyle({ showCustomerName: value })} />
+              <ToggleField label="Hiện SĐT" checked={element.style?.showCustomerPhone !== false} onChange={value => updateElementStyle({ showCustomerPhone: value })} />
+              <ToggleField label="Hiện địa chỉ" checked={element.style?.showCustomerAddress !== false} onChange={value => updateElementStyle({ showCustomerAddress: value })} />
+              <ToggleField label="Hiện MST" checked={element.style?.showCustomerTaxCode !== false} onChange={value => updateElementStyle({ showCustomerTaxCode: value })} />
+              <ToggleField label="Hiện loại khách" checked={element.style?.showCustomerType === true} onChange={value => updateElementStyle({ showCustomerType: value })} />
+            </section>
+          )}
+          {element.type === 'invoiceMeta' && (
+            <section>
+              <h4>Thông tin đơn hàng</h4>
+              <div className="invoice-editor-prop-grid">
+                <TextField label="Nhãn mã đơn" value={element.style?.orderCodeLabel || ''} onChange={value => updateElementStyle({ orderCodeLabel: value })} />
+                <TextField label="Nhãn ngày" value={element.style?.orderDateLabel || ''} onChange={value => updateElementStyle({ orderDateLabel: value })} />
+                <TextField label="Nhãn nhân viên" value={element.style?.sellerLabelShort || ''} onChange={value => updateElementStyle({ sellerLabelShort: value })} />
+              </div>
+              <ToggleField label="Hiện mã đơn" checked={element.style?.showOrderCode !== false} onChange={value => updateElementStyle({ showOrderCode: value })} />
+              <ToggleField label="Hiện ngày giờ" checked={element.style?.showOrderDate !== false} onChange={value => updateElementStyle({ showOrderDate: value })} />
+              <ToggleField label="Hiện nhân viên" checked={element.style?.showSeller !== false} onChange={value => updateElementStyle({ showSeller: value })} />
+              <ToggleField label="Hiện nguồn đơn" checked={element.style?.showOrderSource === true} onChange={value => updateElementStyle({ showOrderSource: value })} />
+            </section>
+          )}
           {(element.type === 'customText' || element.type === 'text' || element.type === 'footerText') && (
             <section>
-              <h4>Nội dung</h4>
+              <h4>{element.type === 'footerText' ? 'Footer hóa đơn' : 'Nội dung'}</h4>
               <TextField label="Text" multiline value={element.style?.text || ''} onChange={value => updateElementStyle({ text: value })} />
+              {element.type === 'footerText' && <p className="invoice-editor-prop-note">Có thể dùng biến {'{time}'}, {'{date}'}, {'{invoiceCode}'}, {'{customerName}'}, {'{storeName}'}.</p>}
             </section>
           )}
           {(element.type === 'image' || element.type === 'logo') && (
@@ -242,19 +297,17 @@ export default function PropertiesPanel({
               {element.type === 'logo' && <p className="invoice-editor-prop-note">Logo lấy từ API upload field logo và bind template.logo; không nhúng binary vào layout JSON.</p>}
             </section>
           )}
-          {element.type === 'paymentQr' && (
-            <section>
-              <h4>QR / ngân hàng</h4>
-              <NumberField label="QR size" value={element.style?.qrSizeMm ?? 17} min={8} max={40} step={0.5} onChange={value => updateElementStyle({ qrSizeMm: Number(value) || 17 })} />
-              <ToggleField label="Hiện icon" checked={element.style?.showIcon !== false} onChange={value => updateElementStyle({ showIcon: value })} />
-              <SelectField label="Icon" value={element.style?.icon || 'qr'} options={[{ value: 'qr', label: 'QR' }, { value: 'bank', label: 'Ngân hàng' }, { value: 'none', label: 'Không icon' }]} onChange={value => updateElementStyle({ icon: value, showIcon: value !== 'none' })} />
-            </section>
-          )}
           {element.type === 'signatures' && (
             <section>
               <h4>Chữ ký / con dấu</h4>
-              <NumberField label="Khoảng cách" value={element.style?.signatureGapMm ?? 10} min={0} max={40} step={0.5} onChange={value => updateElementStyle({ signatureGapMm: Number(value) || 0 })} />
-              <NumberField label="Khoảng trống ký" value={element.style?.blankHeightMm ?? 10} min={0} max={40} step={0.5} onChange={value => updateElementStyle({ blankHeightMm: Number(value) || 0 })} />
+              <div className="invoice-editor-prop-grid">
+                <TextField label="Nhãn bên khách" value={element.style?.buyerLabel || ''} onChange={value => updateElementStyle({ buyerLabel: value })} />
+                <TextField label="Nhãn bên bán" value={element.style?.sellerLabel || ''} onChange={value => updateElementStyle({ sellerLabel: value })} />
+                <TextField label="Gợi ý ký khách" value={element.style?.buyerHint || ''} onChange={value => updateElementStyle({ buyerHint: value })} />
+                <TextField label="Gợi ý ký bán" value={element.style?.sellerHint || ''} onChange={value => updateElementStyle({ sellerHint: value })} />
+                <NumberField label="Khoảng cách" value={element.style?.signatureGapMm ?? 10} min={0} max={40} step={0.5} onChange={value => updateElementStyle({ signatureGapMm: Number(value) || 0 })} />
+                <NumberField label="Khoảng trống ký" value={element.style?.blankHeightMm ?? 10} min={0} max={40} step={0.5} onChange={value => updateElementStyle({ blankHeightMm: Number(value) || 0 })} />
+              </div>
             </section>
           )}
         </div>

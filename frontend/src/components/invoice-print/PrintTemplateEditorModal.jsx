@@ -12,7 +12,16 @@ import { buildEditorMeta, getEditorPaperDimensions } from './editor/templateSche
 import { getApiErrorMessage, invoicesApi, printTemplatesApi } from '../../utils/apiClient';
 
 function normalizeApiItem(data) {
-  return data?.item || data?.data || data || null;
+  if (!data) return null;
+  if (data.item && typeof data.item === 'object' && !Array.isArray(data.item)) return data.item;
+  if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+    if (data.data.item && typeof data.data.item === 'object' && !Array.isArray(data.data.item)) return data.data.item;
+    if (data.data.template && typeof data.data.template === 'object' && !Array.isArray(data.data.template)) return data.data.template;
+    if (data.data.id || data.data.template_name || data.data.editor_document || data.data.layout_json) return data.data;
+  }
+  if (data.template && typeof data.template === 'object' && !Array.isArray(data.template)) return data.template;
+  if (data.id || data.template_name || data.editor_document || data.layout_json) return data;
+  return null;
 }
 
 function buildNotice(tone, message) {
@@ -94,16 +103,26 @@ export default function PrintTemplateEditorModal({
       const listData = await invoicesApi.list({ limit: 1, meta: 1 });
       const latest = getInvoiceListItems(listData)[0] || null;
       if (!latest) {
-        setPreviewPayload(null);
-        setPreviewError('Chưa có hóa đơn thật để preview. Editor vẫn lưu layout, trang in sẽ dùng dữ liệu thật khi có hóa đơn.');
+        setPreviewPayload({});
+        setPreviewError('Chưa có hóa đơn thật để preview. Editor vẫn hiển thị realtime bằng dữ liệu rỗng an toàn; mẫu in vẫn load/lưu qua API thật /api/print-templates.');
         return;
       }
       const idOrCode = latest.invoice_code || latest.id;
+      if (!idOrCode) {
+        setPreviewPayload({});
+        setPreviewError('Hóa đơn mới nhất thiếu mã/ID để gọi API preview. Editor vẫn hiển thị realtime bằng dữ liệu rỗng an toàn.');
+        return;
+      }
       const payload = await invoicesApi.printData(idOrCode, templateId ? { template_id: templateId } : {});
+      if (!payload || !payload.invoice) {
+        setPreviewPayload({});
+        setPreviewError('API preview hóa đơn trả dữ liệu chưa đầy đủ. Editor vẫn hiển thị realtime bằng dữ liệu rỗng an toàn.');
+        return;
+      }
       setPreviewPayload(payload);
     } catch (error) {
-      setPreviewPayload(null);
-      setPreviewError(getErrorMessage(error, 'Không thể tải hóa đơn thật để preview.'));
+      setPreviewPayload({});
+      setPreviewError(`${getErrorMessage(error, 'Không thể tải hóa đơn thật để preview.')} Editor vẫn hiển thị realtime bằng dữ liệu rỗng an toàn.`);
     } finally {
       setPreviewLoading(false);
     }
@@ -429,12 +448,12 @@ export default function PrintTemplateEditorModal({
               />
               <section className="invoice-editor-render-preview">
                 <div className="invoice-editor-panel-title">Preview renderer in thật</div>
-                {previewPayload ? (
+                {previewPayload !== null ? (
                   <div className="invoice-print-preview-frame invoice-editor-render-preview-frame">
                     <InvoiceTemplateRenderer payload={previewPayload} template={previewTemplate} previewZoom={0.38} renderMode="editor-preview" />
                   </div>
                 ) : (
-                  <div className="invoice-editor-empty-preview">Chưa có hóa đơn thật để render preview.</div>
+                  <div className="invoice-editor-empty-preview">Chưa có dữ liệu hóa đơn để render preview.</div>
                 )}
               </section>
             </div>

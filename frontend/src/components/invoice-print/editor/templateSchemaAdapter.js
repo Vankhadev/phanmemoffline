@@ -27,17 +27,56 @@ export const DEFAULT_TABLE_COLUMNS = Object.freeze([
   { key: 'lineTotal', label: 'Thành tiền', widthMm: 22, align: 'right' },
 ]);
 
+const TABLE_COLUMN_MIN_WIDTHS = Object.freeze({
+  no: 6,
+  name: 26,
+  sku: 12,
+  unit: 9,
+  qty: 10,
+  quantity: 10,
+  unitPrice: 15,
+  discount: 14,
+  lineTotal: 16,
+  note: 14,
+});
+
+export function fitTableColumnsToFrame(columns = DEFAULT_TABLE_COLUMNS, frameWidthMm = 100) {
+  const available = Math.max(24, Number(frameWidthMm) || 100);
+  const source = Array.isArray(columns) && columns.length ? columns : DEFAULT_TABLE_COLUMNS;
+  const cloned = source.map((column, index) => {
+    const fallback = DEFAULT_TABLE_COLUMNS[index] || DEFAULT_TABLE_COLUMNS[1];
+    return {
+      ...fallback,
+      ...cloneJson(column || fallback),
+      widthMm: roundMm(clampNumber(column?.widthMm, 4, 120, fallback.widthMm || 18)),
+    };
+  });
+  const total = cloned.reduce((sum, column) => sum + (Number(column.widthMm) || 0), 0);
+  if (!total || total <= available) return cloned;
+
+  const scale = available / total;
+  let scaled = cloned.map(column => {
+    const minWidth = TABLE_COLUMN_MIN_WIDTHS[column.key] || 8;
+    return { ...column, widthMm: roundMm(Math.max(minWidth, (Number(column.widthMm) || minWidth) * scale)) };
+  });
+  const scaledTotal = scaled.reduce((sum, column) => sum + (Number(column.widthMm) || 0), 0);
+  if (scaledTotal <= available) return scaled;
+
+  const forceScale = available / scaledTotal;
+  scaled = scaled.map(column => ({ ...column, widthMm: roundMm(Math.max(4, (Number(column.widthMm) || 4) * forceScale)) }));
+  return scaled;
+}
+
 export const ELEMENT_DEFINITIONS = Object.freeze([
   { type: 'logo', label: 'Logo hóa đơn', group: 'Thương hiệu', zoneId: 'header' },
   { type: 'storeInfo', label: 'Thông tin cửa hàng', group: 'Thương hiệu', zoneId: 'header' },
   { type: 'invoiceTitle', label: 'Tiêu đề hóa đơn', group: 'Đơn hàng', zoneId: 'header' },
   { type: 'customerInfo', label: 'Thông tin khách hàng', group: 'Khách hàng', zoneId: 'header' },
   { type: 'invoiceMeta', label: 'Thông tin đơn hàng', group: 'Đơn hàng', zoneId: 'header' },
-  { type: 'paymentQr', label: 'Hình thức thanh toán / QR', group: 'Thanh toán', zoneId: 'footer' },
-  { type: 'totals', label: 'Khu vực thanh toán', group: 'Thanh toán', zoneId: 'footer' },
-  { type: 'note', label: 'Ghi chú', group: 'Footer', zoneId: 'footer' },
-  { type: 'signatures', label: 'Chữ ký / con dấu', group: 'Footer', zoneId: 'footer' },
-  { type: 'footerText', label: 'Footer cảm ơn', group: 'Footer', zoneId: 'footer' },
+  { type: 'totals', label: 'Khu vực tổng tiền', group: 'Thanh toán', zoneId: 'footer' },
+  { type: 'note', label: 'Ghi chú hóa đơn', group: 'Footer', zoneId: 'footer' },
+  { type: 'footerText', label: 'Footer hóa đơn', group: 'Footer', zoneId: 'footer' },
+  { type: 'signatures', label: 'Chữ ký / con dấu', group: 'Footer', zoneId: 'signatures' },
   { type: 'customText', label: 'Text tùy chỉnh', group: 'Tự do', zoneId: 'header' },
   { type: 'image', label: 'Ảnh URL', group: 'Tự do', zoneId: 'header' },
   { type: 'line', label: 'Đường kẻ', group: 'Trang trí', zoneId: 'header' },
@@ -47,7 +86,7 @@ export const ELEMENT_DEFINITIONS = Object.freeze([
 const VALID_ELEMENT_TYPES = new Set(ELEMENT_DEFINITIONS.map(item => item.type));
 const VALID_TABLE_COLUMN_KEYS = new Set(Object.keys(TABLE_COLUMN_LABELS));
 const VALID_ALIGN = new Set(['left', 'center', 'right']);
-const VALID_PAPER_SIZES = new Set(['A4', 'A5', 'K80', 'K58']);
+const VALID_PAPER_SIZES = new Set(['A4', 'A5', 'K80', 'K57', 'K58']);
 
 export function isPlainObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
@@ -80,7 +119,8 @@ function uniqueId(prefix = 'element') {
 }
 
 export function normalizePaperSize(value, fallback = 'A5') {
-  const paperSize = cleanText(value || fallback, 20).toUpperCase();
+  const requested = cleanText(value || fallback, 20).toUpperCase();
+  const paperSize = requested === 'K58' ? 'K57' : requested;
   return VALID_PAPER_SIZES.has(paperSize) ? paperSize : fallback;
 }
 
@@ -151,25 +191,55 @@ function defaultStyleForType(type) {
         backgroundColor: '#eff6ff',
       };
     case 'storeInfo':
-      return { ...commonText, fontSizePt: 8.3, bold: true, uppercase: true };
-    case 'invoiceTitle':
-      return { ...commonText, fontSizePt: 13, bold: true, align: 'right', color: '#0f172a' };
-    case 'customerInfo':
-      return { ...commonText, fontSizePt: 7.8, lineHeight: 1.2, labelWidthMm: 18, bold: false };
-    case 'invoiceMeta':
-      return { ...commonText, fontSizePt: 7.8, lineHeight: 1.2, labelWidthMm: 18, align: 'right' };
-    case 'paymentQr':
       return {
         ...commonText,
-        fontSizePt: 7.5,
-        qrSizeMm: 17,
-        showIcon: true,
-        icon: 'qr',
-        paddingMm: 1.2,
-        borderWidthMm: 0.2,
-        borderColor: '#e2e8f0',
-        borderRadiusMm: 2,
-        backgroundColor: '#ffffff',
+        fontSizePt: 8.3,
+        bold: true,
+        uppercase: true,
+        showStoreName: true,
+        showStoreAddress: true,
+        showStorePhone: true,
+        showStoreEmail: true,
+        showStoreTaxCode: true,
+        storePhoneLabel: 'ĐT',
+      };
+    case 'invoiceTitle':
+      return { ...commonText, fontSizePt: 13, bold: true, align: 'right', color: '#0f172a', titleText: 'HÓA ĐƠN', subtitleText: 'BÁN HÀNG', showTitle: true, showSubtitle: true, showInvoiceCode: true };
+    case 'customerInfo':
+      return {
+        ...commonText,
+        fontSizePt: 7.8,
+        lineHeight: 1.2,
+        labelWidthMm: 18,
+        bold: false,
+        showCustomerName: true,
+        showCustomerPhone: true,
+        showCustomerAddress: true,
+        showCustomerTaxCode: true,
+        showCustomerType: false,
+        customerNameLabel: 'Khách',
+        customerPhoneLabel: 'SĐT',
+        customerAddressLabel: 'Địa chỉ',
+        customerTaxCodeLabel: 'MST',
+        customerTypeLabel: 'Loại khách',
+      };
+    case 'invoiceMeta':
+      return {
+        ...commonText,
+        fontSizePt: 7.8,
+        lineHeight: 1.2,
+        labelWidthMm: 18,
+        align: 'right',
+        showOrderCode: true,
+        showOrderDate: true,
+        showPaymentMethod: false,
+        showSeller: true,
+        showOrderSource: false,
+        orderCodeLabel: 'Mã đơn',
+        orderDateLabel: 'Ngày',
+        paymentMethodLabel: 'Thanh toán',
+        sellerLabelShort: 'NV',
+        orderSourceLabel: 'Nguồn',
       };
     case 'totals':
       return {
@@ -184,9 +254,9 @@ function defaultStyleForType(type) {
     case 'note':
       return { ...commonText, fontSizePt: 7.8, color: '#78350f', backgroundColor: '#fffbeb', paddingMm: 1.4, borderRadiusMm: 2 };
     case 'signatures':
-      return { ...commonText, fontSizePt: 8, align: 'center', signatureGapMm: 10, blankHeightMm: 10 };
+      return { ...commonText, fontSizePt: 8, align: 'center', signatureGapMm: 10, blankHeightMm: 12, buyerLabel: 'Khách hàng', sellerLabel: 'Người bán', buyerHint: '(Ký và ghi rõ họ tên)', sellerHint: '(Ký và ghi rõ họ tên)' };
     case 'footerText':
-      return { ...commonText, fontSizePt: 7.2, align: 'center', color: '#64748b' };
+      return { ...commonText, text: 'Cảm ơn quý khách! · Hẹn gặp lại', fontSizePt: 7.2, align: 'center', color: '#64748b' };
     case 'line':
     case 'separator':
       return { color: '#cbd5e1', borderWidthMm: 0.25, opacity: 1 };
@@ -312,7 +382,8 @@ function normalizeZones(input, canvas) {
 
   if (!zones.some(zone => zone.id === 'header')) zones.unshift({ id: 'header', type: 'absolute', frame: { x: safe, y: safe, w: contentWidth, h: 34 } });
   if (!zones.some(zone => zone.id === 'body')) zones.push({ id: 'body', type: 'flow', frame: { x: safe, y: safe + 38, w: contentWidth, h: Math.max(24, page.height - safe * 2 - 76) } });
-  if (!zones.some(zone => zone.id === 'footer')) zones.push({ id: 'footer', type: 'absolute', frame: { x: safe, y: Math.max(safe + 80, page.height - safe - 34), w: contentWidth, h: 34 } });
+  if (!zones.some(zone => zone.id === 'footer')) zones.push({ id: 'footer', type: 'absolute', frame: { x: safe, y: Math.max(safe + 80, page.height - safe - 54), w: contentWidth, h: 34 } });
+  if (!zones.some(zone => zone.id === 'signatures')) zones.push({ id: 'signatures', type: 'absolute', frame: { x: safe, y: Math.max(safe + 100, page.height - safe - 18), w: contentWidth, h: 18 } });
   return zones;
 }
 
@@ -335,15 +406,18 @@ function defaultZonesForCanvas(canvas) {
   const contentWidth = Math.max(20, page.width - safe * 2);
   const gap = canvas.pageSize.startsWith('K') ? 3 : 4;
   const headerHeight = Math.min(page.height * 0.25, canvas.pageSize.startsWith('K') ? 42 : 34);
-  const footerHeight = Math.min(page.height * 0.25, canvas.pageSize.startsWith('K') ? 48 : 34);
+  const footerHeight = Math.min(page.height * 0.25, canvas.pageSize.startsWith('K') ? 44 : 34);
+  const signatureHeight = Math.min(page.height * 0.16, canvas.pageSize.startsWith('K') ? 24 : 18);
   const headerY = safe;
   const bodyY = headerY + headerHeight + gap;
-  const footerY = Math.max(bodyY + 20, page.height - safe - footerHeight);
+  const signatureY = Math.max(bodyY + 28, page.height - safe - signatureHeight);
+  const footerY = Math.max(bodyY + 20, signatureY - gap - footerHeight);
   const bodyHeight = Math.max(24, footerY - bodyY - gap);
   return [
     { id: 'header', type: 'absolute', frame: { x: safe, y: headerY, w: contentWidth, h: headerHeight } },
     { id: 'body', type: 'flow', frame: { x: safe, y: bodyY, w: contentWidth, h: bodyHeight } },
     { id: 'footer', type: 'absolute', frame: { x: safe, y: footerY, w: contentWidth, h: footerHeight } },
+    { id: 'signatures', type: 'absolute', frame: { x: safe, y: signatureY, w: contentWidth, h: signatureHeight } },
   ].map(zone => ({ ...zone, frame: normalizeFrame(zone.frame, zone.frame) }));
 }
 
@@ -356,10 +430,9 @@ function defaultFrameForType(type, zone = {}) {
     case 'invoiceTitle': return { x: Math.max(0, zw - Math.min(44, zw * 0.38)), y: 0, w: Math.min(44, zw), h: Math.min(18, zh) };
     case 'customerInfo': return { x: 0, y: Math.max(0, zh - 11), w: Math.max(24, Math.min(76, zw * 0.58)), h: Math.min(11, zh) };
     case 'invoiceMeta': return { x: Math.max(0, zw - Math.max(24, zw * 0.36)), y: Math.max(0, zh - 11), w: Math.max(24, zw * 0.36), h: Math.min(11, zh) };
-    case 'paymentQr': return { x: 0, y: 0, w: Math.min(32, zw * 0.36), h: Math.min(30, zh) };
     case 'totals': return { x: Math.max(0, zw - Math.min(54, zw * 0.42)), y: 0, w: Math.min(54, zw), h: Math.min(25, zh) };
-    case 'note': return { x: Math.min(34, zw * 0.34), y: 0, w: Math.max(22, Math.min(42, zw * 0.32)), h: Math.min(22, zh) };
-    case 'signatures': return { x: 0, y: Math.max(0, zh - Math.min(18, zh)), w: zw, h: Math.min(18, zh) };
+    case 'note': return { x: Math.min(34, zw * 0.34), y: 0, w: Math.max(22, Math.min(42, zw * 0.32)), h: Math.min(18, zh) };
+    case 'signatures': return { x: 0, y: 0, w: zw, h: Math.min(18, zh) };
     case 'footerText': return { x: 0, y: Math.max(0, zh - 8), w: zw, h: Math.min(8, zh) };
     case 'line': return { x: 0, y: Math.min(6, zh / 2), w: Math.min(40, zw), h: 1 };
     case 'rectangle': return { x: 0, y: 0, w: Math.min(35, zw), h: Math.min(14, zh) };
@@ -396,22 +469,23 @@ export function createDefaultEditorDocument(options = {}) {
   const header = zonesById.get('header');
   const body = zonesById.get('body');
   const footer = zonesById.get('footer');
+  const signatures = zonesById.get('signatures');
   const headerW = header.frame.w;
   const footerW = footer.frame.w;
+  const signatureW = signatures.frame.w;
   const logoSize = Math.min(22, header.frame.h - 2, headerW * 0.24);
   const tableFrame = { x: 0, y: 0, w: body.frame.w, h: 'auto' };
 
   const elements = [
-    makeElement('logo', 'logo', 'header', { x: 0, y: 0, w: logoSize, h: logoSize }, { bindings: { source: 'template.logo' }, zIndex: 10 }),
-    makeElement('storeInfo', 'storeInfo', 'header', { x: logoSize + 2, y: 0, w: Math.max(28, Math.min(52, headerW * 0.42)), h: Math.min(24, header.frame.h) }, { zIndex: 20 }),
-    makeElement('invoiceTitle', 'invoiceTitle', 'header', { x: Math.max(0, headerW - Math.max(38, headerW * 0.34)), y: 0, w: Math.max(38, headerW * 0.34), h: Math.min(18, header.frame.h) }, { zIndex: 30 }),
-    makeElement('customerInfo', 'customerInfo', 'header', { x: 0, y: Math.max(0, header.frame.h - 11), w: Math.max(42, headerW * 0.58), h: 10 }, { zIndex: 40 }),
-    makeElement('invoiceMeta', 'invoiceMeta', 'header', { x: Math.max(0, headerW * 0.62), y: Math.max(0, header.frame.h - 11), w: Math.max(32, headerW * 0.38), h: 10 }, { zIndex: 45 }),
-    makeElement('paymentQr', 'paymentQr', 'footer', { x: 0, y: 0, w: Math.min(32, footerW * 0.36), h: Math.min(30, footer.frame.h) }, { zIndex: 10 }),
-    makeElement('totals', 'totals', 'footer', { x: Math.max(0, footerW - Math.max(44, footerW * 0.42)), y: 0, w: Math.max(44, footerW * 0.42), h: Math.min(25, footer.frame.h) }, { zIndex: 20 }),
-    makeElement('note', 'note', 'footer', { x: Math.min(34, footerW * 0.33), y: 0, w: Math.max(24, footerW * 0.28), h: Math.min(22, footer.frame.h) }, { zIndex: 15 }),
-    makeElement('signatures', 'signatures', 'footer', { x: 0, y: Math.max(0, footer.frame.h - 18), w: footerW, h: Math.min(14, footer.frame.h) }, { zIndex: 30 }),
+    makeElement('logo', 'logo', 'header', { x: 0, y: 0, w: logoSize, h: logoSize }, { bindings: { source: 'template.logo' }, zIndex: 10, visible: false }),
+    makeElement('storeInfo', 'storeInfo', 'header', { x: 0, y: 0, w: Math.max(54, headerW * 0.48), h: Math.min(22, header.frame.h) }, { zIndex: 20 }),
+    makeElement('invoiceTitle', 'invoiceTitle', 'header', { x: Math.max(0, headerW - Math.max(42, headerW * 0.34)), y: 0, w: Math.max(42, headerW * 0.34), h: Math.min(14, header.frame.h) }, { zIndex: 30, style: { titleText: 'HÓA ĐƠN BÁN HÀNG', showSubtitle: false, showInvoiceCode: false, align: 'right', fontSizePt: 13 } }),
+    makeElement('customerInfo', 'customerInfo', 'header', { x: 0, y: Math.max(0, header.frame.h - 11), w: Math.max(50, headerW * 0.62), h: 10 }, { zIndex: 40 }),
+    makeElement('invoiceMeta', 'invoiceMeta', 'header', { x: Math.max(0, headerW * 0.64), y: Math.max(0, header.frame.h - 11), w: Math.max(32, headerW * 0.36), h: 10 }, { zIndex: 45, style: { showPaymentMethod: false, showSeller: false } }),
+    makeElement('totals', 'totals', 'footer', { x: Math.max(0, footerW - Math.max(46, footerW * 0.42)), y: 0, w: Math.max(46, footerW * 0.42), h: Math.min(23, footer.frame.h) }, { zIndex: 20 }),
+    makeElement('note', 'note', 'footer', { x: 0, y: 0, w: Math.max(28, footerW * 0.42), h: Math.min(18, footer.frame.h) }, { zIndex: 15 }),
     makeElement('footerText', 'footerText', 'footer', { x: 0, y: Math.max(0, footer.frame.h - 5), w: footerW, h: Math.min(5, footer.frame.h) }, { zIndex: 35 }),
+    makeElement('signatures', 'signatures', 'signatures', { x: 0, y: 0, w: signatureW, h: Math.min(16, signatures.frame.h) }, { zIndex: 30 }),
     defaultTableStyleElement(body, tableFrame),
   ];
 
@@ -426,7 +500,7 @@ export function createDefaultEditorDocument(options = {}) {
       frame: tableFrame,
       headerRepeat: true,
       allowPageBreak: true,
-      columns: cloneJson(DEFAULT_TABLE_COLUMNS),
+      columns: fitTableColumnsToFrame(DEFAULT_TABLE_COLUMNS, body.frame.w),
     },
     theme: {
       primaryColor: '#111827',
@@ -503,18 +577,19 @@ export function normalizeEditorDocument(input = {}, template = {}) {
   const canvas = normalizeCanvas(input.canvas, template);
   const zones = normalizeZones(input.zones, canvas);
   const zonesById = new Map(zones.map(zone => [zone.id, zone]));
-  const elementsSource = Array.isArray(input.elements) ? input.elements : [];
+  const elementsSource = Array.isArray(input.elements) ? input.elements.filter(element => element?.type !== 'paymentQr') : [];
   const normalizedElements = elementsSource.map((element, index) => normalizeElement(element, zonesById, index));
   const bodyZone = zonesById.get('body') || zones[0];
   const tableSource = isPlainObject(input.table) ? input.table : {};
   const tableFrame = normalizeFrame(tableSource.frame, { x: 0, y: 0, w: bodyZone?.frame?.w || 100, h: 'auto' }, { allowAutoHeight: true });
+  const normalizedTableFrame = clampFrameToZone(tableFrame, zonesById.get(tableSource.zoneId) || bodyZone, { minW: 12, minH: 8 });
   const table = {
     id: cleanText(tableSource.id, 80) || 'itemsTable',
     zoneId: zonesById.has(tableSource.zoneId) ? tableSource.zoneId : (bodyZone?.id || 'body'),
-    frame: clampFrameToZone(tableFrame, zonesById.get(tableSource.zoneId) || bodyZone, { minW: 12, minH: 8 }),
+    frame: normalizedTableFrame,
     headerRepeat: tableSource.headerRepeat !== false,
     allowPageBreak: tableSource.allowPageBreak !== false,
-    columns: (Array.isArray(tableSource.columns) && tableSource.columns.length ? tableSource.columns : DEFAULT_TABLE_COLUMNS).map(normalizeColumn),
+    columns: fitTableColumnsToFrame((Array.isArray(tableSource.columns) && tableSource.columns.length ? tableSource.columns : DEFAULT_TABLE_COLUMNS).map(normalizeColumn), normalizedTableFrame.w),
   };
 
   const existingTableStyle = normalizedElements.find(element => element.id === TABLE_STYLE_ELEMENT_ID);

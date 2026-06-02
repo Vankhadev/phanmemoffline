@@ -19,6 +19,10 @@ export default defineConfig({
         target: `http://${backendHost}:${backendPort}`,
         changeOrigin: true,
       },
+      '/static': {
+        target: `http://${backendHost}:${backendPort}`,
+        changeOrigin: true,
+      },
     },
   },
   build: {

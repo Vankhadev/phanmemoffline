@@ -3,14 +3,15 @@
  */
 const express = require('express');
 const router = express.Router();
-const { getAll, getOne, insert, update, replaceTable, now } = require('../db/database');
+const { getAll, getOne, insert, update, replaceTable, now, withAtomicDbWrite } = require('../db/database');
 const { normalizeSearchText, parseKeywordList, searchFlatProducts } = require('../utils/productSearch');
 const {
-  NEGATIVE_STOCK_LIMIT,
-  NEGATIVE_STOCK_LIMIT_MESSAGE,
+  getMinimumAllowedProductStock,
+  getNegativeStockLimitMessage,
   assertProductStockValueWithinLimit,
   logNegativeStockTransition,
   logNegativeStockLimitViolation,
+  buildNegativeStockErrorResponse,
 } = require('../utils/negativeStock');
 
 function getCategories() {
@@ -630,8 +631,9 @@ function normalizeExcelImportRow(row, index, errors) {
     supplier_id: parseImportId(getImportCell(row, IMPORT_COLUMN_ALIASES.supplier_id), 'Supplier id', line, numericErrors),
     active: parseImportBoolean(getImportCell(row, IMPORT_COLUMN_ALIASES.active), 'Hoạt động', line, numericErrors),
   };
-  if (parsed.stock !== undefined && parsed.stock < NEGATIVE_STOCK_LIMIT) {
-    errors.push({ line, field: 'Tồn kho', message: `${NEGATIVE_STOCK_LIMIT_MESSAGE}. Tồn kho import không được nhỏ hơn ${NEGATIVE_STOCK_LIMIT}.` });
+  const minimumAllowedStock = getMinimumAllowedProductStock();
+  if (parsed.stock !== undefined && parsed.stock < minimumAllowedStock) {
+    errors.push({ line, field: 'Tồn kho', message: `${getNegativeStockLimitMessage()}. Tồn kho import không được nhỏ hơn ${minimumAllowedStock}.` });
   }
   errors.push(...numericErrors);
   return parsed;
@@ -905,15 +907,16 @@ router.post('/import-excel-rows', (req, res) => {
       });
     }
 
-    const previousProducts = getAll('products');
-    const previousProductsById = new Map(previousProducts.map(product => [Number(product.id), product]));
-    const nextProducts = previousProducts.map(product => ({ ...product }));
-    let nextId = nextProducts.reduce((max, product) => Math.max(max, Number(product.id) || 0), 0) + 1;
-    const parentBySku = new Map(nextProducts.filter(product => product.sku && !product.parent_id).map(product => [normalizeSkuKey(product.sku), product]));
-    const variantByLegacySku = new Map(nextProducts.filter(product => product.sku && product.parent_id).map(product => [normalizeSkuKey(product.sku), product]));
-    const byId = new Map(nextProducts.map(product => [product.id, product]));
-    summary = createImportSummary({ totalRows: rawRows.length, validRows: rows.length });
-    const timestamp = now();
+    const result = withAtomicDbWrite(() => {
+      const previousProducts = getAll('products');
+      const previousProductsById = new Map(previousProducts.map(product => [Number(product.id), product]));
+      const nextProducts = previousProducts.map(product => ({ ...product }));
+      let nextId = nextProducts.reduce((max, product) => Math.max(max, Number(product.id) || 0), 0) + 1;
+      const parentBySku = new Map(nextProducts.filter(product => product.sku && !product.parent_id).map(product => [normalizeSkuKey(product.sku), product]));
+      const variantByLegacySku = new Map(nextProducts.filter(product => product.sku && product.parent_id).map(product => [normalizeSkuKey(product.sku), product]));
+      const byId = new Map(nextProducts.map(product => [product.id, product]));
+      summary = createImportSummary({ totalRows: rawRows.length, validRows: rows.length });
+      const timestamp = now();
 
     const parentRows = rows.filter(row => row.type === 'PARENT');
     const variantRows = rows.filter(row => row.type === 'VARIANT');
@@ -993,7 +996,7 @@ router.post('/import-excel-rows', (req, res) => {
         logProductStockChangeIfNegative(product, previous?.stock ?? null, 'products_import_excel_rows');
       }
     }
-    res.json({
+      return {
       ok: true,
       error: null,
       detail: 'Dữ liệu đã được validate toàn bộ và ghi thành công, giữ đúng quan hệ sản phẩm cha - biến thể theo SKU.',
@@ -1003,7 +1006,10 @@ router.post('/import-excel-rows', (req, res) => {
       receivedColumns,
       summary,
       results: summary,
+    };
     });
+
+    res.json(result);
   } catch (err) {
     console.error('[KHA IMPORT EXCEL] Unexpected error:', err);
     logNegativeStockLimitViolation(err, { source: 'products_import_excel_rows' });
@@ -1057,35 +1063,43 @@ router.post('/', (req, res) => {
     if (!sku) return res.status(400).json({ error: 'Mã SKU không được để trống' });
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Tên sản phẩm không được để trống' });
 
-    const trimmedSku = normalizeSku(sku);
-    const existing = findActiveParentBySku(trimmedSku);
-    const skuConflict = findSkuConflictOutsideParentFamily(trimmedSku, existing?.id || null);
-    if (skuConflict) return res.status(400).json({ error: `SKU "${trimmedSku}" đã được sử dụng bởi sản phẩm khác` });
+    const result = withAtomicDbWrite(() => {
+      const trimmedSku = normalizeSku(sku);
+      const existing = findActiveParentBySku(trimmedSku);
+      const skuConflict = findSkuConflictOutsideParentFamily(trimmedSku, existing?.id || null);
+      if (skuConflict) {
+        const error = new Error(`SKU "${trimmedSku}" đã được sử dụng bởi sản phẩm khác`);
+        error.status = 400;
+        throw error;
+      }
 
-    const nowTime = now();
-    const finalData = {
-      ...productPayload({ ...req.body, sku: trimmedSku }, existing || {}),
-      parent_id: null,
-      active: existing ? existing.active : 1,
-      updated_at: nowTime,
-    };
+      const nowTime = now();
+      const finalData = {
+        ...productPayload({ ...req.body, sku: trimmedSku }, existing || {}),
+        parent_id: null,
+        active: existing ? existing.active : 1,
+        updated_at: nowTime,
+      };
 
-    if (existing) {
-      const parentSkuChanged = normalizeSku(existing.sku) !== normalizeSku(finalData.sku);
-      const updated = update('products', existing.id, finalData);
-      logProductStockChangeIfNegative(updated, existing.stock, 'products_api');
-      const reassignedVariantSkus = parentSkuChanged ? reassignVariantSkusToParentSequence(existing.id, finalData.sku, nowTime) : 0;
-      res.json({ ok: true, id: existing.id, message: 'Cập nhật sản phẩm thành công', action: 'updated', syncedVariants: reassignedVariantSkus, reassignedVariantSkus });
-    } else {
+      if (existing) {
+        const parentSkuChanged = normalizeSku(existing.sku) !== normalizeSku(finalData.sku);
+        const updated = update('products', existing.id, finalData);
+        logProductStockChangeIfNegative(updated, existing.stock, 'products_api');
+        const reassignedVariantSkus = parentSkuChanged ? reassignVariantSkusToParentSequence(existing.id, finalData.sku, nowTime) : 0;
+        return { ok: true, id: existing.id, message: 'Cập nhật sản phẩm thành công', action: 'updated', syncedVariants: reassignedVariantSkus, reassignedVariantSkus };
+      }
+
       finalData.created_at = nowTime;
       const id = insert('products', finalData);
       logProductStockChangeIfNegative({ id, ...finalData }, null, 'products_api');
-      res.json({ ok: true, id, message: 'Tạo sản phẩm thành công', action: 'created', syncedVariants: 0, reassignedVariantSkus: 0 });
-    }
+      return { ok: true, id, message: 'Tạo sản phẩm thành công', action: 'created', syncedVariants: 0, reassignedVariantSkus: 0 };
+    });
+
+    res.json(result);
   } catch (err) {
     const status = err.status || err.statusCode || 500;
     logNegativeStockLimitViolation(err, { source: 'products_api_create_or_update' });
-    res.status(status).json({ error: 'Lỗi khi lưu sản phẩm', detail: err.message, code: err.code });
+    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi lưu sản phẩm'));
   }
 });
 
@@ -1115,21 +1129,25 @@ router.put('/:id', (req, res) => {
       }
     }
 
-    const nowTime = now();
-    const changes = {
-      ...productPayload(requestBody, product, parent),
-      updated_at: nowTime,
-    };
+    const result = withAtomicDbWrite(() => {
+      const nowTime = now();
+      const changes = {
+        ...productPayload(requestBody, product, parent),
+        updated_at: nowTime,
+      };
 
-    const parentSkuChanged = !isVariant && normalizeSku(product.sku) !== normalizeSku(changes.sku);
-    const updated = update('products', id, changes);
-    logProductStockChangeIfNegative(updated, product.stock, 'products_api');
-    const reassignedVariantSkus = parentSkuChanged ? reassignVariantSkusToParentSequence(id, changes.sku, nowTime) : 0;
-    res.json({ ok: true, message: 'Cập nhật sản phẩm thành công', syncedVariants: reassignedVariantSkus, reassignedVariantSkus });
+      const parentSkuChanged = !isVariant && normalizeSku(product.sku) !== normalizeSku(changes.sku);
+      const updated = update('products', id, changes);
+      logProductStockChangeIfNegative(updated, product.stock, 'products_api');
+      const reassignedVariantSkus = parentSkuChanged ? reassignVariantSkusToParentSequence(id, changes.sku, nowTime) : 0;
+      return { ok: true, message: 'Cập nhật sản phẩm thành công', syncedVariants: reassignedVariantSkus, reassignedVariantSkus };
+    });
+
+    res.json(result);
   } catch (err) {
     const status = err.status || err.statusCode || 500;
     logNegativeStockLimitViolation(err, { source: 'products_api_update' });
-    res.status(status).json({ error: 'Lỗi khi cập nhật sản phẩm', detail: err.message, code: err.code });
+    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi cập nhật sản phẩm'));
   }
 });
 
@@ -1143,13 +1161,17 @@ router.delete('/:id', (req, res) => {
     const product = getOne('products', p => p.id === id && p.active !== 0);
     if (!product) return res.status(404).json({ error: 'Không tìm thấy sản phẩm' });
 
-    if (!product.parent_id) {
-      const variants = getAll('products', v => v.parent_id === id);
-      variants.forEach(v => update('products', v.id, { active: 0, updated_at: now() }));
-    }
+    const result = withAtomicDbWrite(() => {
+      if (!product.parent_id) {
+        const variants = getAll('products', v => v.parent_id === id);
+        variants.forEach(v => update('products', v.id, { active: 0, updated_at: now() }));
+      }
 
-    update('products', id, { active: 0, updated_at: now() });
-    res.json({ ok: true, message: product.parent_id ? 'Đã xóa biến thể' : 'Đã xóa sản phẩm và tất cả biến thể' });
+      update('products', id, { active: 0, updated_at: now() });
+      return { ok: true, message: product.parent_id ? 'Đã xóa biến thể' : 'Đã xóa sản phẩm và tất cả biến thể' };
+    });
+
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Lỗi khi xóa sản phẩm', detail: err.message });
   }
@@ -1190,23 +1212,26 @@ router.post('/:parentId/variants', (req, res) => {
     const { name } = req.body;
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Tên biến thể không được để trống' });
 
-    const generatedSku = generateNextVariantSku(parent.sku);
-    const payload = productPayload({ ...req.body, sku: generatedSku }, {}, parent);
-    const nowTime = now();
-    const id = insert('products', {
-      ...payload,
-      parent_id: parentId,
-      active: 1,
-      created_at: nowTime,
-      updated_at: nowTime,
+    const result = withAtomicDbWrite(() => {
+      const generatedSku = generateNextVariantSku(parent.sku);
+      const payload = productPayload({ ...req.body, sku: generatedSku }, {}, parent);
+      const nowTime = now();
+      const id = insert('products', {
+        ...payload,
+        parent_id: parentId,
+        active: 1,
+        created_at: nowTime,
+        updated_at: nowTime,
+      });
+      logProductStockChangeIfNegative({ id, ...payload, parent_id: parentId }, null, 'products_variant_api');
+      return { ok: true, id, sku: payload.sku, message: 'Tạo biến thể thành công' };
     });
-    logProductStockChangeIfNegative({ id, ...payload, parent_id: parentId }, null, 'products_variant_api');
 
-    res.json({ ok: true, id, sku: payload.sku, message: 'Tạo biến thể thành công' });
+    res.json(result);
   } catch (err) {
     const status = err.status || err.statusCode || 500;
     logNegativeStockLimitViolation(err, { source: 'products_variant_create' });
-    res.status(status).json({ error: 'Lỗi khi tạo biến thể', detail: err.message, code: err.code });
+    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi tạo biến thể'));
   }
 });
 
@@ -1223,18 +1248,22 @@ router.put('/variants/:id', (req, res) => {
     const parent = getOne('products', p => p.id === variant.parent_id && p.active !== 0);
     if (!parent) return res.status(400).json({ error: 'Không tìm thấy sản phẩm cha của biến thể' });
 
-    const changes = {
-      ...productPayload({ ...req.body, sku: normalizeSku(variant.sku) }, variant, parent),
-      updated_at: now(),
-    };
+    const result = withAtomicDbWrite(() => {
+      const changes = {
+        ...productPayload({ ...req.body, sku: normalizeSku(variant.sku) }, variant, parent),
+        updated_at: now(),
+      };
 
-    const updated = update('products', id, changes);
-    logProductStockChangeIfNegative(updated, variant.stock, 'products_variant_api');
-    res.json({ ok: true, message: 'Cập nhật biến thể thành công' });
+      const updated = update('products', id, changes);
+      logProductStockChangeIfNegative(updated, variant.stock, 'products_variant_api');
+      return { ok: true, message: 'Cập nhật biến thể thành công' };
+    });
+
+    res.json(result);
   } catch (err) {
     const status = err.status || err.statusCode || 500;
     logNegativeStockLimitViolation(err, { source: 'products_variant_update' });
-    res.status(status).json({ error: 'Lỗi khi cập nhật biến thể', detail: err.message, code: err.code });
+    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi cập nhật biến thể'));
   }
 });
 
@@ -1248,8 +1277,12 @@ router.delete('/variants/:id', (req, res) => {
     const variant = getOne('products', v => v.id === id && v.active !== 0 && v.parent_id != null);
     if (!variant) return res.status(404).json({ error: 'Không tìm thấy biến thể' });
 
-    update('products', id, { active: 0, updated_at: now() });
-    res.json({ ok: true, message: 'Đã xóa biến thể' });
+    const result = withAtomicDbWrite(() => {
+      update('products', id, { active: 0, updated_at: now() });
+      return { ok: true, message: 'Đã xóa biến thể' };
+    });
+
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Lỗi khi xóa biến thể', detail: err.message });
   }
@@ -1292,9 +1325,10 @@ router.post('/import', (req, res) => {
     const colMap = {};
     header.forEach((h, i) => { if (validFields.includes(h)) colMap[h] = i; });
 
-    const results = { created: 0, updated: 0, skipped: 0, errors: [] };
+    const result = withAtomicDbWrite(() => {
+      const results = { created: 0, updated: 0, skipped: 0, errors: [] };
 
-    for (let i = 1; i < lines.length; i++) {
+      for (let i = 1; i < lines.length; i++) {
       try {
         const vals = parseCSVLine(lines[i]);
         const base = {};
@@ -1331,7 +1365,10 @@ router.post('/import', (req, res) => {
       }
     }
 
-    res.json({ ok: true, results });
+      return { ok: true, results };
+    });
+
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Lỗi khi import CSV', detail: err.message });
   }

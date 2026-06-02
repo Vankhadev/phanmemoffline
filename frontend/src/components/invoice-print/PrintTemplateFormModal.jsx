@@ -159,14 +159,15 @@ export default function PrintTemplateFormModal({
                     <option value="A5">A5</option>
                     <option value="A4">A4</option>
                     <option value="K80">K80</option>
+                    <option value="K57">K57</option>
                   </ModalSelect>
-                  <ModalSelect id="print-orientation" label="Hướng in" value={form.orientation} onChange={updateText('orientation')} disabled={form.paper_size === 'K80'}>
+                  <ModalSelect id="print-orientation" label="Hướng in" value={form.orientation} onChange={updateText('orientation')} disabled={String(form.paper_size || '').toUpperCase().startsWith('K')}>
                     <option value="portrait">Dọc</option>
                     <option value="landscape">Ngang</option>
                   </ModalSelect>
                   <NumberInput id="print-font-size" label="Font size" min="7" max="16" step="0.5" suffix="pt" value={form.fontSize} onChange={updateNumber('fontSize')} />
-                  <NumberInput id="print-scale" label="Scale in" min="0.55" max="1.6" step="0.05" suffix="x" value={form.scale} onChange={updateNumber('scale')} />
-                  <NumberInput id="print-preview-zoom" label="Zoom preview" min="0.4" max="1.8" step="0.05" suffix="x" value={form.previewZoom} onChange={updateNumber('previewZoom')} />
+                  <NumberInput id="print-scale" label="Scale in" min="50" max="100" step="5" suffix="%" value={Math.round(Number(form.scale || 1) * 100)} onChange={event => onFieldChange('scale', (Number(event.target.value) || 100) / 100)} />
+                  <NumberInput id="print-preview-zoom" label="Zoom preview" min="50" max="100" step="5" suffix="%" value={Math.round(Number(form.previewZoom || 1) * 100)} onChange={event => onFieldChange('previewZoom', (Number(event.target.value) || 100) / 100)} />
                   <NumberInput id="print-line-spacing" label="Khoảng cách dòng" min="1" max="2.2" step="0.05" suffix="x" value={form.lineSpacing} onChange={updateNumber('lineSpacing')} />
                   <NumberInput id="print-padding" label="Padding" min="0" max="24" step="0.5" suffix="mm" value={form.paddingMm} onChange={updateNumber('paddingMm')} />
                   <NumberInput id="print-margin" label="Margin" min="0" max="20" step="0.5" suffix="mm" value={form.marginMm} onChange={updateNumber('marginMm')} />
@@ -179,7 +180,6 @@ export default function PrintTemplateFormModal({
                 <h3 className="font-bold text-slate-900 dark:text-slate-100">Bật/tắt thành phần</h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <ToggleField label="Logo" description="Hiện logo cửa hàng" checked={Boolean(form.showLogo)} onChange={updateBool('showLogo')} />
-                  <ToggleField label="QR thanh toán" description="Hiện khối QR/ngân hàng" checked={Boolean(form.showQr)} onChange={updateBool('showQr')} />
                   <ToggleField label="Chữ ký" description="Người nhận/người viết hóa đơn" checked={Boolean(form.showSignature)} onChange={updateBool('showSignature')} />
                   <ToggleField label="Ghi chú" description="Hiện ghi chú hóa đơn" checked={Boolean(form.showNote)} onChange={updateBool('showNote')} />
                   <ToggleField label="Công nợ" description="Hiện số còn phải trả" checked={Boolean(form.showDebt)} onChange={updateBool('showDebt')} />

@@ -4,10 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const { getAll, today, normalizeDateKey, normalizeNumber, isCompletedInvoiceStatus } = require('../db/database');
-const {
-  NEGATIVE_STOCK_LIMIT,
-  NEGATIVE_STOCK_WARNING_THRESHOLD,
-} = require('../utils/negativeStock');
+const { getNegativeStockPolicy } = require('../utils/negativeStock');
 
 function normalizeDailyStatsRow(row = {}) {
   return {
@@ -36,17 +33,23 @@ function serializeStockAlertProduct(product = {}) {
 }
 
 function buildNegativeStockDashboardStats() {
+  const policy = getNegativeStockPolicy();
   const products = getAll('products', product => product && product.active !== 0);
   const negativeProducts = products
     .map(serializeStockAlertProduct)
     .filter(product => product.stock < 0)
     .sort((a, b) => a.stock - b.stock || String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
-  const nearLimitProducts = negativeProducts.filter(product => product.stock <= NEGATIVE_STOCK_WARNING_THRESHOLD && product.stock >= NEGATIVE_STOCK_LIMIT);
-  const breachedProducts = negativeProducts.filter(product => product.stock < NEGATIVE_STOCK_LIMIT);
+  const nearLimitProducts = policy.enabled
+    ? negativeProducts.filter(product => product.stock <= policy.warningThreshold && product.stock >= policy.minimumAllowedStock)
+    : [];
+  const breachedProducts = negativeProducts.filter(product => product.stock < policy.minimumAllowedStock);
 
   return {
-    minimum_allowed_stock: NEGATIVE_STOCK_LIMIT,
-    warning_threshold: NEGATIVE_STOCK_WARNING_THRESHOLD,
+    enabled: policy.enabled,
+    negative_stock_enabled: policy.enabled,
+    negative_stock_limit: policy.negative_stock_limit,
+    minimum_allowed_stock: policy.minimumAllowedStock,
+    warning_threshold: policy.warningThreshold,
     negative_count: negativeProducts.length,
     near_limit_count: nearLimitProducts.length,
     breached_count: breachedProducts.length,

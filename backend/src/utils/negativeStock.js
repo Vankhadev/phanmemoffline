@@ -1,41 +1,94 @@
-const { getOne, auditLog } = require('../db/database');
+const { getAll, getOne, update, auditLog, withAtomicDbWrite } = require('../db/database');
 const { resolveInvoiceDetailDisplayFields } = require('./productDisplayName');
-
-const FEATURE_TABLE = 'feature_catalog';
-const NEGATIVE_STOCK_FEATURE_KEY = 'negative_stock_exports';
-const NEGATIVE_STOCK_LIMIT = -100;
-const NEGATIVE_STOCK_WARNING_THRESHOLD = -80;
-const NEGATIVE_STOCK_LIMIT_MESSAGE = `Sản phẩm đã vượt mức xuất âm cho phép (${NEGATIVE_STOCK_LIMIT})`;
-
-function normalizeFeatureKey(value) {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-}
+const {
+  NEGATIVE_STOCK_FEATURE_KEY,
+  DEFAULT_NEGATIVE_STOCK_LIMIT,
+  findFeatureByKey,
+  getNegativeStockSettings,
+} = require('../services/settingsService');
 
 function toStockNumber(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
 
+const productStockRowLocks = new Set();
+
+function normalizeProductStockLockKey(productId) {
+  const numericId = Number(productId);
+  return Number.isFinite(numericId) && numericId > 0 ? String(numericId) : String(productId || '').trim();
+}
+
+function withProductStockRowLock(productId, callback) {
+  const lockKey = normalizeProductStockLockKey(productId);
+  if (!lockKey) return callback();
+
+  if (productStockRowLocks.has(lockKey)) {
+    const error = new Error(`Sản phẩm ID ${productId} đang được cập nhật tồn kho, vui lòng thử lại.`);
+    error.status = 409;
+    error.statusCode = 409;
+    error.code = 'PRODUCT_STOCK_ROW_LOCKED';
+    error.details = { product_id: productId };
+    throw error;
+  }
+
+  productStockRowLocks.add(lockKey);
+  try {
+    return callback();
+  } finally {
+    productStockRowLocks.delete(lockKey);
+  }
+}
+
+function getNegativeStockPolicy() {
+  const settings = getNegativeStockSettings();
+  const positiveLimit = Math.max(0, Math.trunc(toStockNumber(settings.negative_stock_limit, DEFAULT_NEGATIVE_STOCK_LIMIT)));
+  const minimumAllowedStock = settings.negative_stock_enabled ? -positiveLimit : 0;
+  const warningThreshold = settings.negative_stock_enabled && positiveLimit > 0
+    ? -Math.max(1, Math.floor(positiveLimit * 0.8))
+    : 0;
+
+  return {
+    enabled: Boolean(settings.negative_stock_enabled),
+    negative_stock_enabled: Boolean(settings.negative_stock_enabled),
+    negativeStockEnabled: Boolean(settings.negative_stock_enabled),
+    positiveLimit,
+    negative_stock_limit: positiveLimit,
+    negativeStockLimit: positiveLimit,
+    minimumAllowedStock,
+    minimum_allowed_stock: minimumAllowedStock,
+    runtime_minimum_stock: minimumAllowedStock,
+    warningThreshold,
+    warning_threshold: warningThreshold,
+    feature_key: NEGATIVE_STOCK_FEATURE_KEY,
+  };
+}
+
 function getNegativeStockFeature() {
-  return getOne(
-    FEATURE_TABLE,
-    row => row
-      && !row.deleted_at
-      && normalizeFeatureKey(row.feature_key || row.key || row.code) === NEGATIVE_STOCK_FEATURE_KEY,
-    { skipAccountScope: true },
-  );
+  return findFeatureByKey(NEGATIVE_STOCK_FEATURE_KEY);
 }
 
 function isNegativeStockEnabled() {
-  return true;
+  return getNegativeStockPolicy().enabled;
 }
 
 function getMinimumAllowedProductStock() {
-  return NEGATIVE_STOCK_LIMIT;
+  return getNegativeStockPolicy().minimumAllowedStock;
+}
+
+function getNegativeStockLimit() {
+  return -getMinimumAllowedProductStock();
+}
+
+function getNegativeStockWarningThreshold() {
+  return getNegativeStockPolicy().warningThreshold;
+}
+
+const NEGATIVE_STOCK_LIMIT_ERROR_MESSAGE = 'Số lượng xuất vượt quá giới hạn âm cho phép';
+
+function getNegativeStockLimitMessage() {
+  const policy = getNegativeStockPolicy();
+  return `${NEGATIVE_STOCK_LIMIT_ERROR_MESSAGE} (tối thiểu ${policy.minimumAllowedStock})`;
 }
 
 function isComboDetail(detail = {}) {
@@ -47,14 +100,81 @@ function getInvoiceDetailProductId(detail = {}) {
   return detail.product_id || detail.variant_id || null;
 }
 
+function getComboDetailId(detail = {}) {
+  const id = Number(detail.combo_id || detail.comboId || detail.id);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function getComboComponentProductId(component = {}) {
+  const id = Number(component.variant_id || component.variantId || component.product_id || component.productId);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function getComboComponentQuantity(component = {}) {
+  const quantity = Number(component.quantity ?? component.qty ?? component.quantity_in_combo ?? component.combo_quantity);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
+function buildComboComponentDetail(comboDetail = {}, component = {}, productId = null) {
+  const comboName = comboDetail.product_name || comboDetail.name || comboDetail.combo_name || 'Combo';
+  return {
+    ...component,
+    product_id: productId || component.product_id || component.variant_id || null,
+    variant_id: component.variant_id || null,
+    product_name: component.product_name || component.name || component.parent_name || component.variant_name || component.sku || `Thành phần combo ${comboName}`,
+    name: component.name || component.product_name || component.variant_name || component.parent_name || `Thành phần combo ${comboName}`,
+    product_sku: component.product_sku || component.sku || '',
+    sku: component.sku || component.product_sku || '',
+    combo_id: comboDetail.combo_id || comboDetail.comboId || comboDetail.id || null,
+    combo_name: comboName,
+    type: 'product',
+    item_type: component.item_type === 'variant' ? 'variant' : 'product',
+  };
+}
+
+function getComboStockTargets(detail = {}) {
+  const comboId = getComboDetailId(detail);
+  if (!comboId) return [];
+  const comboQuantity = Math.max(0, Number(detail.quantity) || 0);
+  if (comboQuantity <= 0) return [];
+
+  return getAll('combo_items', item => Number(item.combo_id) === Number(comboId))
+    .map(component => {
+      const productId = getComboComponentProductId(component);
+      if (!productId) return null;
+      const quantity = getComboComponentQuantity(component) * comboQuantity;
+      if (!Number.isFinite(quantity) || quantity <= 0) return null;
+      return {
+        productId,
+        quantity,
+        detail: buildComboComponentDetail(detail, component, productId),
+        sourceDetail: detail,
+        comboId,
+      };
+    })
+    .filter(Boolean);
+}
+
+function getStockTargetsForInvoiceDetail(detail = {}) {
+  if (isComboDetail(detail)) return getComboStockTargets(detail);
+
+  const productId = Number(getInvoiceDetailProductId(detail));
+  if (!Number.isFinite(productId) || productId <= 0) return [];
+  const quantity = Math.max(0, Number(detail.quantity) || 0);
+  if (quantity <= 0) return [];
+  return [{ productId, quantity, detail, sourceDetail: detail, comboId: null }];
+}
+
 function collectRequestedProductQuantities(details = []) {
   const requiredByProductId = new Map();
   for (const detail of details || []) {
-    const productId = Number(getInvoiceDetailProductId(detail));
-    if (!Number.isFinite(productId) || productId <= 0) continue;
-    const quantity = Math.max(0, Number(detail.quantity) || 0);
-    if (quantity <= 0) continue;
-    requiredByProductId.set(productId, (requiredByProductId.get(productId) || 0) + quantity);
+    for (const target of getStockTargetsForInvoiceDetail(detail)) {
+      const productId = Number(target.productId);
+      if (!Number.isFinite(productId) || productId <= 0) continue;
+      const quantity = Math.max(0, Number(target.quantity) || 0);
+      if (quantity <= 0) continue;
+      requiredByProductId.set(productId, (requiredByProductId.get(productId) || 0) + quantity);
+    }
   }
   return requiredByProductId;
 }
@@ -86,14 +206,16 @@ function buildNegativeStockErrorMessage({
   minimumAllowedStock = getMinimumAllowedProductStock(),
   operation = 'cập nhật tồn kho',
 }) {
+  const policy = getNegativeStockPolicy();
   const parts = [];
   if (currentStock !== undefined && currentStock !== null) parts.push(`Tồn hiện tại: ${currentStock}`);
   if (exportQuantity !== undefined && Number(exportQuantity) > 0) parts.push(`số lượng xuất: ${exportQuantity}`);
   if (changeQuantity !== undefined && Number(changeQuantity) !== 0) parts.push(`thay đổi tồn kho: ${changeQuantity}`);
   if (projectedStock !== undefined && projectedStock !== null) parts.push(`tồn cuối dự kiến: ${projectedStock}`);
+  parts.push(`số lượng âm cho phép: ${policy.negative_stock_limit}`);
   parts.push(`giới hạn tối thiểu: ${minimumAllowedStock}`);
 
-  return `${NEGATIVE_STOCK_LIMIT_MESSAGE}. Không thể ${operation} cho "${productName || 'Sản phẩm'}". ${parts.join(', ')}.`;
+  return `${getNegativeStockLimitMessage()}. Không thể ${operation} cho "${productName || 'Sản phẩm'}". ${parts.join(', ')}.`;
 }
 
 function createStockValidationError({
@@ -106,6 +228,7 @@ function createStockValidationError({
   minimumAllowedStock = getMinimumAllowedProductStock(),
   operation,
 }) {
+  const policy = getNegativeStockPolicy();
   const error = new Error(buildNegativeStockErrorMessage({
     productName,
     currentStock,
@@ -127,7 +250,8 @@ function createStockValidationError({
     projected_stock: projectedStock,
     final_stock: projectedStock,
     minimum_allowed_stock: minimumAllowedStock,
-    negative_stock_enabled: true,
+    negative_stock_enabled: policy.enabled,
+    negative_stock_limit: policy.negative_stock_limit,
     operation: operation || 'stock_update',
   };
   return error;
@@ -144,6 +268,7 @@ function assertProjectedProductStock({
   minimumAllowedStock = getMinimumAllowedProductStock(),
   operation = 'cập nhật tồn kho',
 }) {
+  const policy = getNegativeStockPolicy();
   const hasCurrentStock = currentStock !== undefined && currentStock !== null;
   const normalizedCurrentStock = hasCurrentStock ? toStockNumber(currentStock, 0) : null;
   const normalizedDelta = delta !== undefined ? toStockNumber(delta, 0) : undefined;
@@ -156,7 +281,7 @@ function assertProjectedProductStock({
   const normalizedExportQuantity = exportQuantity !== undefined
     ? Math.max(0, toStockNumber(exportQuantity, 0))
     : (normalizedChangeQuantity < 0 ? Math.abs(normalizedChangeQuantity) : undefined);
-  const normalizedMinimum = toStockNumber(minimumAllowedStock, NEGATIVE_STOCK_LIMIT);
+  const normalizedMinimum = toStockNumber(minimumAllowedStock, policy.minimumAllowedStock);
 
   if (normalizedProjectedStock < normalizedMinimum) {
     throw createStockValidationError({
@@ -179,7 +304,9 @@ function assertProjectedProductStock({
     changeQuantity: normalizedChangeQuantity,
     projectedStock: normalizedProjectedStock,
     minimumAllowedStock: normalizedMinimum,
-    negativeStockEnabled: true,
+    negativeStockEnabled: policy.enabled,
+    negative_stock_enabled: policy.enabled,
+    negative_stock_limit: policy.negative_stock_limit,
     operation,
   };
 }
@@ -225,6 +352,32 @@ function assertCanApplyProductStockDelta({ productId, detail = {}, delta = 0, qu
   });
 }
 
+function applyProductStockDeltaLocked({
+  productId,
+  detail = {},
+  delta = 0,
+  quantity,
+  operation = 'cập nhật tồn kho',
+  changes = {},
+  options = {},
+  source = '',
+  meta = {},
+}) {
+  // Cơ chế phù hợp với JSON DB offline: mọi lần trừ/cộng tồn đều chạy trong
+  // transaction `withAtomicDbWrite` và giữ row-lock in-process theo product id.
+  // Vì backend Node xử lý synchronous trong một process, lock này ngăn re-entrant
+  // write cùng sản phẩm; transaction rollback snapshot nếu validate/update lỗi.
+  return withAtomicDbWrite(() => withProductStockRowLock(productId, () => {
+    const validation = assertCanApplyProductStockDelta({ productId, detail, delta, quantity, operation });
+    const updated = update('products', validation.productId, {
+      ...(changes || {}),
+      stock: validation.projectedStock,
+    }, { skipSave: options.skipSave === true });
+    logNegativeStockTransition({ ...validation, ...(meta || {}), source }, { skipSave: options.skipSave === true });
+    return { updated, validation };
+  }));
+}
+
 function assertCanExportProductStock({ productId, detail = {}, requiredQuantity = 0, restoredQuantity = 0 }) {
   const snapshot = getProductStockSnapshot(productId, detail);
   if (!snapshot) {
@@ -259,9 +412,11 @@ function validateNegativeStockForDetails(details = [], options = {}) {
   const validations = [];
 
   for (const detail of details || []) {
-    const productId = Number(getInvoiceDetailProductId(detail));
-    if (!Number.isFinite(productId) || productId <= 0 || detailByProductId.has(productId)) continue;
-    detailByProductId.set(productId, detail);
+    for (const target of getStockTargetsForInvoiceDetail(detail)) {
+      const productId = Number(target.productId);
+      if (!Number.isFinite(productId) || productId <= 0 || detailByProductId.has(productId)) continue;
+      detailByProductId.set(productId, target.detail || detail);
+    }
   }
 
   for (const [productId, requiredQuantity] of requiredByProductId.entries()) {
@@ -278,10 +433,12 @@ function validateNegativeStockForDetails(details = [], options = {}) {
 
 function logStockAuditEvent(action, meta = {}, options = {}) {
   try {
+    const policy = getNegativeStockPolicy();
     return auditLog(action, {
       ...(meta || {}),
-      negative_stock_limit: NEGATIVE_STOCK_LIMIT,
-      minimum_allowed_stock: getMinimumAllowedProductStock(),
+      negative_stock_enabled: policy.enabled,
+      negative_stock_limit: policy.negative_stock_limit,
+      minimum_allowed_stock: policy.minimumAllowedStock,
     }, { skipSave: options.skipSave === true });
   } catch (_error) {
     return null;
@@ -315,29 +472,69 @@ function logNegativeStockLimitViolation(error, meta = {}, options = {}) {
   return logStockAuditEvent('stock.negative_stock_limit_blocked', {
     ...details,
     ...(meta || {}),
-    message: error?.message || NEGATIVE_STOCK_LIMIT_MESSAGE,
+    message: error?.message || getNegativeStockLimitMessage(),
     code: error?.code || 'NEGATIVE_STOCK_LIMIT_EXCEEDED',
   }, options);
 }
 
+function isNegativeStockLimitError(error) {
+  if (!error) return false;
+  const details = error.details || {};
+  const projectedStock = details.projected_stock ?? details.final_stock ?? details.projectedStock;
+  return error.code === 'NEGATIVE_STOCK_LIMIT_EXCEEDED'
+    || (projectedStock !== undefined && toStockNumber(projectedStock, 0) < getMinimumAllowedProductStock());
+}
+
+function buildNegativeStockErrorResponse(error, fallback = 'Lỗi kiểm tra tồn kho') {
+  if (isNegativeStockLimitError(error)) {
+    return {
+      ok: false,
+      error: NEGATIVE_STOCK_LIMIT_ERROR_MESSAGE,
+      message: NEGATIVE_STOCK_LIMIT_ERROR_MESSAGE,
+      detail: error?.message || getNegativeStockLimitMessage(),
+      code: error?.code || 'NEGATIVE_STOCK_LIMIT_EXCEEDED',
+      details: error?.details || undefined,
+    };
+  }
+
+  return {
+    ok: false,
+    error: fallback,
+    message: error?.message || fallback,
+    detail: error?.message || fallback,
+    code: error?.code || undefined,
+    details: error?.details || undefined,
+  };
+}
+
 module.exports = {
   NEGATIVE_STOCK_FEATURE_KEY,
-  NEGATIVE_STOCK_LIMIT,
-  NEGATIVE_STOCK_WARNING_THRESHOLD,
-  NEGATIVE_STOCK_LIMIT_MESSAGE,
+  get NEGATIVE_STOCK_LIMIT() { return getMinimumAllowedProductStock(); },
+  get NEGATIVE_STOCK_WARNING_THRESHOLD() { return getNegativeStockWarningThreshold(); },
+  NEGATIVE_STOCK_LIMIT_MESSAGE: NEGATIVE_STOCK_LIMIT_ERROR_MESSAGE,
+  NEGATIVE_STOCK_LIMIT_ERROR_MESSAGE,
   getNegativeStockFeature,
+  getNegativeStockPolicy,
+  getNegativeStockLimit,
+  getNegativeStockWarningThreshold,
+  getNegativeStockLimitMessage,
   isNegativeStockEnabled,
   getMinimumAllowedProductStock,
   toStockNumber,
   isComboDetail,
   getInvoiceDetailProductId,
   collectRequestedProductQuantities,
+  getStockTargetsForInvoiceDetail,
   assertProjectedProductStock,
   assertProductStockValueWithinLimit,
   assertCanApplyProductStockDelta,
   assertCanExportProductStock,
+  withProductStockRowLock,
+  applyProductStockDeltaLocked,
   validateNegativeStockForDetails,
   logStockAuditEvent,
   logNegativeStockTransition,
   logNegativeStockLimitViolation,
+  isNegativeStockLimitError,
+  buildNegativeStockErrorResponse,
 };

@@ -12,7 +12,7 @@ export default function LayerPanel({
   const layers = [
     { id: 'itemsTable', type: 'itemsTable', visible: true, locked: false, zIndex: 0, label: 'Khung sản phẩm / bảng hàng hóa' },
     ...[...(document.elements || [])]
-      .filter(element => element.id !== TABLE_STYLE_ELEMENT_ID)
+      .filter(element => element.id !== TABLE_STYLE_ELEMENT_ID && element.type !== 'paymentQr')
       .sort((a, b) => (Number(b.zIndex) || 0) - (Number(a.zIndex) || 0))
       .map(element => ({ ...element, label: getElementLabel(element) })),
   ];

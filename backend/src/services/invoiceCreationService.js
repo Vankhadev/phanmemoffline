@@ -15,8 +15,7 @@ const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayNa
 const {
   getInvoiceDetailProductId,
   validateNegativeStockForDetails,
-  assertCanApplyProductStockDelta,
-  logNegativeStockTransition,
+  applyProductStockDeltaLocked,
   logNegativeStockLimitViolation,
 } = require('../utils/negativeStock');
 
@@ -145,34 +144,28 @@ function deductStock(productOrVariantId, quantity, options = {}) {
 
   const variant = getOne('products', v => Number(v.id) === Number(productOrVariantId) && v.parent_id != null);
   if (variant) {
-    const validation = assertCanApplyProductStockDelta({
+    return applyProductStockDeltaLocked({
       productId: variant.id,
       detail: { product_name: variant.name, product_sku: variant.sku },
       delta: -normalizedQuantity,
       quantity: normalizedQuantity,
       operation: 'xuất kho hóa đơn',
-    });
-    const updated = update('products', variant.id, {
-      stock: validation.projectedStock,
-    }, writeOptions);
-    logNegativeStockTransition({ ...validation, source: options.source || 'invoice' }, writeOptions);
-    return updated;
+      options: writeOptions,
+      source: options.source || 'invoice',
+    }).updated;
   }
 
   const product = getOne('products', p => Number(p.id) === Number(productOrVariantId) && !p.parent_id);
   if (product) {
-    const validation = assertCanApplyProductStockDelta({
+    return applyProductStockDeltaLocked({
       productId: product.id,
       detail: { product_name: product.name, product_sku: product.sku },
       delta: -normalizedQuantity,
       quantity: normalizedQuantity,
       operation: 'xuất kho hóa đơn',
-    });
-    const updated = update('products', product.id, {
-      stock: validation.projectedStock,
-    }, writeOptions);
-    logNegativeStockTransition({ ...validation, source: options.source || 'invoice' }, writeOptions);
-    return updated;
+      options: writeOptions,
+      source: options.source || 'invoice',
+    }).updated;
   }
   return null;
 }

@@ -6,9 +6,9 @@ const router = express.Router();
 const { getAll, getOne, insert, update, now, db, withAtomicDbWrite } = require('../db/database');
 const { v4: uuidv4 } = require('uuid');
 const {
-  assertCanApplyProductStockDelta,
-  logNegativeStockTransition,
+  applyProductStockDeltaLocked,
   logNegativeStockLimitViolation,
+  buildNegativeStockErrorResponse,
 } = require('../utils/negativeStock');
 
 function genReturnCode() {
@@ -57,19 +57,21 @@ router.post('/', (req, res) => {
           reason:      d.reason      || '',
           line_total:  quantity * (+d.unit_price || 0),
         }, { skipSave: true });
-        // Trừ tồn kho khi trả hàng về nhà cung cấp, cho phép âm đến policy chung (-100)
+        // Trừ tồn kho khi trả hàng về nhà cung cấp theo policy xuất âm cấu hình động.
         if (d.product_id) {
           const p = getOne('products', pr => Number(pr.id) === Number(d.product_id));
           if (p) {
-            const validation = assertCanApplyProductStockDelta({
+            applyProductStockDeltaLocked({
               productId: p.id,
               detail: { product_name: d.product_name || p.name, product_sku: d.sku || p.sku },
               delta: -quantity,
               quantity,
               operation: 'trả hàng nhà cung cấp',
+              changes: { updated_at: now() },
+              options: { skipSave: true },
+              source: 'returns',
+              meta: { return_id },
             });
-            update('products', p.id, { stock: validation.projectedStock, updated_at: now() }, { skipSave: true });
-            logNegativeStockTransition({ ...validation, source: 'returns', return_id }, { skipSave: true });
           }
         }
       }
@@ -81,7 +83,7 @@ router.post('/', (req, res) => {
   } catch (err) {
     const status = err.status || err.statusCode || 500;
     logNegativeStockLimitViolation(err, { source: 'returns_create' });
-    res.status(status).json({ error: 'Lỗi khi tạo phiếu trả hàng', detail: err.message, code: err.code });
+    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi tạo phiếu trả hàng'));
   }
 });
 

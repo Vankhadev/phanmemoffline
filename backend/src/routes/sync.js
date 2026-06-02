@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { getAll, getOne, insert, update, remove, now, getSyncVersions } = require('../db/database');
+const { getAll, getOne, insert, update, remove, now, getSyncVersions, withAtomicDbWrite } = require('../db/database');
 const { requireAuth, requirePermission, requireAnyPermission, publicSession } = require('../middleware/auth');
 const { createInvoiceFromPayload } = require('../services/invoiceCreationService');
 const {
   assertProductStockValueWithinLimit,
   logNegativeStockTransition,
   logNegativeStockLimitViolation,
+  buildNegativeStockErrorResponse,
 } = require('../utils/negativeStock');
 
 const PULL_TABLES = [
@@ -26,6 +27,7 @@ const PULL_TABLES = [
   'return_logs',
   'return_details',
   'daily_stats',
+  'system_settings',
 ];
 
 const SIMPLE_PUSH_FIELDS = {
@@ -388,13 +390,17 @@ function createPendingOrderFromSync(payload, req) {
     };
   } catch (err) {
     logNegativeStockLimitViolation(err, { source: 'sync_orders', client_order_id: payload.client_order_id || '' });
+    const errorResponse = buildNegativeStockErrorResponse(err, 'Lỗi đồng bộ đơn hàng');
     return {
       id: null,
       invoice_code: payload.invoice_code || '',
       client_order_id: payload.client_order_id || '',
       action: 'error',
-      error: err.message,
-      code: err.code || 'SYNC_ORDER_ERROR',
+      error: errorResponse.error || err.message,
+      message: errorResponse.message || errorResponse.error || err.message,
+      detail: errorResponse.detail || err.message,
+      details: errorResponse.details || undefined,
+      code: errorResponse.code || err.code || 'SYNC_ORDER_ERROR',
     };
   }
 }
@@ -453,81 +459,94 @@ router.post('/sync/pull', requireAuth, requirePermission('sync.read'), (req, res
 router.post('/sync/push', requireAuth, requirePermission('sync.manage'), (req, res) => {
   const body = req.body || {};
   const pending = body.pending || body;
-  const customerInputs = Array.isArray(pending.customers) ? pending.customers : [];
-  const orderInputs = Array.isArray(pending.orders) ? pending.orders : [];
-  const partnerInputs = Array.isArray(pending.partners) ? pending.partners : [];
-  const productInputs = Array.isArray(pending.products) ? pending.products : [];
-  const categoryInputs = Array.isArray(pending.product_categories) ? pending.product_categories : [];
-  const importInputs = Array.isArray(pending.imports) ? pending.imports : [];
-  const importLogInputs = Array.isArray(pending.import_logs) ? pending.import_logs : [];
-  const importDetailInputs = Array.isArray(pending.import_details) ? pending.import_details : [];
+  const result = withAtomicDbWrite(() => {
+    const customerInputs = Array.isArray(pending.customers) ? pending.customers : [];
+    const orderInputs = Array.isArray(pending.orders) ? pending.orders : [];
+    const partnerInputs = Array.isArray(pending.partners) ? pending.partners : [];
+    const productInputs = Array.isArray(pending.products) ? pending.products : [];
+    const categoryInputs = Array.isArray(pending.product_categories) ? pending.product_categories : [];
+    const importInputs = Array.isArray(pending.imports) ? pending.imports : [];
+    const importLogInputs = Array.isArray(pending.import_logs) ? pending.import_logs : [];
+    const importDetailInputs = Array.isArray(pending.import_details) ? pending.import_details : [];
 
-  const customers = [];
-  const orders = [];
-  const partners = [];
-  const products = [];
-  const product_categories = [];
-  const imports = [];
-  const import_logs = [];
-  const import_details = [];
+    const customers = [];
+    const orders = [];
+    const partners = [];
+    const products = [];
+    const product_categories = [];
+    const imports = [];
+    const import_logs = [];
+    const import_details = [];
 
-  for (const customer of customerInputs) {
-    const result = upsertCustomerFromSync(customer, req);
-    if (result) customers.push(result);
-  }
-
-  for (const partner of partnerInputs) {
-    const result = upsertSimpleRowFromSync('partners', partner, req);
-    if (result) partners.push(result);
-  }
-
-  for (const category of categoryInputs) {
-    const result = upsertSimpleRowFromSync('product_categories', category, req);
-    if (result) product_categories.push(result);
-  }
-
-  for (const product of productInputs) {
-    try {
-      const result = upsertSimpleRowFromSync('products', product, req);
-      if (result) products.push(result);
-    } catch (err) {
-      logNegativeStockLimitViolation(err, { source: 'sync_products' });
-      products.push({ id: product?.id || null, sku: product?.sku || '', action: 'error', error: err.message, code: err.code || 'SYNC_PRODUCT_ERROR' });
+    for (const customer of customerInputs) {
+      const rowResult = upsertCustomerFromSync(customer, req);
+      if (rowResult) customers.push(rowResult);
     }
-  }
 
-  for (const imp of importInputs) {
-    const result = upsertImportFromSync(imp, req);
-    if (result) imports.push(result);
-  }
+    for (const partner of partnerInputs) {
+      const rowResult = upsertSimpleRowFromSync('partners', partner, req);
+      if (rowResult) partners.push(rowResult);
+    }
 
-  for (const importLog of importLogInputs) {
-    const result = upsertSimpleRowFromSync('import_logs', importLog, req);
-    if (result) import_logs.push(result);
-  }
+    for (const category of categoryInputs) {
+      const rowResult = upsertSimpleRowFromSync('product_categories', category, req);
+      if (rowResult) product_categories.push(rowResult);
+    }
 
-  for (const importDetail of importDetailInputs) {
-    const result = upsertSimpleRowFromSync('import_details', importDetail, req);
-    if (result) import_details.push(result);
-  }
+    for (const product of productInputs) {
+      try {
+        const rowResult = upsertSimpleRowFromSync('products', product, req);
+        if (rowResult) products.push(rowResult);
+      } catch (err) {
+        logNegativeStockLimitViolation(err, { source: 'sync_products' });
+        const errorResponse = buildNegativeStockErrorResponse(err, 'Lỗi đồng bộ tồn kho sản phẩm');
+        products.push({
+          id: product?.id || null,
+          sku: product?.sku || '',
+          action: 'error',
+          error: errorResponse.error || err.message,
+          message: errorResponse.message || errorResponse.error || err.message,
+          detail: errorResponse.detail || err.message,
+          details: errorResponse.details || undefined,
+          code: errorResponse.code || err.code || 'SYNC_PRODUCT_ERROR',
+        });
+      }
+    }
 
-  for (const order of orderInputs) {
-    const result = createPendingOrderFromSync(order, req);
-    if (result) orders.push(result);
-  }
+    for (const imp of importInputs) {
+      const rowResult = upsertImportFromSync(imp, req);
+      if (rowResult) imports.push(rowResult);
+    }
 
-  const supportedKeys = ['customers', 'orders', 'partners', 'products', 'product_categories', 'imports', 'import_logs', 'import_details'];
-  const unsupported = Object.keys(pending).filter(key => !supportedKeys.includes(key));
-  res.json({
-    ok: true,
-    accepted: { customers, orders, partners, products, product_categories, imports, import_logs, import_details },
-    unsupported,
-    message: unsupported.length > 0
-      ? 'Server đã nhận các nhóm dữ liệu chính; các khóa chưa hỗ trợ được bỏ qua để tránh mất dữ liệu.'
-      : 'Đồng bộ push dữ liệu chính hoàn tất.',
-    syncVersions: getSyncVersions(req.accountId),
-    serverTime: now(),
+    for (const importLog of importLogInputs) {
+      const rowResult = upsertSimpleRowFromSync('import_logs', importLog, req);
+      if (rowResult) import_logs.push(rowResult);
+    }
+
+    for (const importDetail of importDetailInputs) {
+      const rowResult = upsertSimpleRowFromSync('import_details', importDetail, req);
+      if (rowResult) import_details.push(rowResult);
+    }
+
+    for (const order of orderInputs) {
+      const rowResult = createPendingOrderFromSync(order, req);
+      if (rowResult) orders.push(rowResult);
+    }
+
+    const supportedKeys = ['customers', 'orders', 'partners', 'products', 'product_categories', 'imports', 'import_logs', 'import_details'];
+    const unsupported = Object.keys(pending).filter(key => !supportedKeys.includes(key));
+    return {
+      ok: true,
+      accepted: { customers, orders, partners, products, product_categories, imports, import_logs, import_details },
+      unsupported,
+      message: unsupported.length > 0
+        ? 'Server đã nhận các nhóm dữ liệu chính; các khóa chưa hỗ trợ được bỏ qua để tránh mất dữ liệu.'
+        : 'Đồng bộ push dữ liệu chính hoàn tất.',
+      syncVersions: getSyncVersions(req.accountId),
+      serverTime: now(),
+    };
   });
+  res.json(result);
 });
 
 module.exports = router;

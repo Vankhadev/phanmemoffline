@@ -19,7 +19,14 @@ import {
 import HelpModal from '../components/HelpModal';
 import PrintTemplateEditorModal from '../components/invoice-print/PrintTemplateEditorModal';
 import { buildTemplateJsonFromSettings, DEFAULT_INVOICE_TEMPLATE_SETTINGS, normalizePrintTemplate } from '../components/invoice-print/templateDefaults';
-import { apiJson, customerTypesApi, featuresApi, getApiErrorMessage, printTemplatesApi, usersApi } from '../utils/apiClient';
+import { apiJson, customerTypesApi, getApiErrorMessage, printTemplatesApi, settingsApi, usersApi } from '../utils/apiClient';
+import {
+  cacheNegativeStockSettings,
+  getNegativeStockAdminLimitLabel,
+  getNegativeStockLimitLabel,
+  getNegativeStockRuntimeSummary,
+  normalizeNegativeStockSettings,
+} from '../utils/negativeStock';
 
 const INITIAL_STORE_FORM = Object.freeze({
   name: '',
@@ -58,7 +65,7 @@ const INITIAL_PRINT_TEMPLATE_FORM = Object.freeze({
   scale: DEFAULT_INVOICE_TEMPLATE_SETTINGS.scale,
   previewZoom: DEFAULT_INVOICE_TEMPLATE_SETTINGS.previewZoom,
   showLogo: DEFAULT_INVOICE_TEMPLATE_SETTINGS.showLogo,
-  showQr: DEFAULT_INVOICE_TEMPLATE_SETTINGS.showQr,
+  showQr: false,
   showSignature: DEFAULT_INVOICE_TEMPLATE_SETTINGS.showSignature,
   showNote: DEFAULT_INVOICE_TEMPLATE_SETTINGS.showNote,
   showDebt: DEFAULT_INVOICE_TEMPLATE_SETTINGS.showDebt,
@@ -70,11 +77,8 @@ const INITIAL_PRINT_TEMPLATE_FORM = Object.freeze({
   tableBorderWidthMm: DEFAULT_INVOICE_TEMPLATE_SETTINGS.tableBorderWidthMm,
 });
 
-const NEGATIVE_STOCK_FEATURE_KEY = 'negative_stock_exports';
-const NEGATIVE_STOCK_LIMIT = -10;
 const NEGATIVE_STOCK_FEATURE_NAME = 'Xuất âm tồn kho';
-const NEGATIVE_STOCK_FEATURE_DESCRIPTION = 'Bật để cho phép xuất vượt tồn kho đến giới hạn cố định trong code.';
-const NEGATIVE_STOCK_FEATURE_CATEGORY = 'Kho hàng';
+const NEGATIVE_STOCK_FEATURE_DESCRIPTION = 'Admin có thể chỉnh số lượng tồn âm tối đa trực tiếp từ giao diện.';
 const RELEASE_VERSION = '1.3.8';
 const RELEASE_DOWNLOAD_BASE_URL = 'https://github.com/Vankhadev/phanmemoffline/releases/latest/download/';
 const WINDOWS_INSTALLERS = Object.freeze([
@@ -314,15 +318,15 @@ function normalizePrintTemplateForm(payload = {}, fallbackStore = {}) {
     shop_address: String(item.shop_address || settings.storeAddress || storePayload.address || ''),
     shop_phone: String(item.shop_phone || settings.storePhone || storePayload.phone || ''),
     logo_url: String(item.logo_url || item.header_logo || payload?.logo_url || payload?.header_logo || ''),
-    paper_size: ['A4', 'A5', 'K80'].includes(String(item.paper_size || settings.paperSize || '').toUpperCase()) ? String(item.paper_size || settings.paperSize).toUpperCase() : 'A5',
+    paper_size: ['A4', 'A5', 'K80', 'K57', 'K58'].includes(String(item.paper_size || settings.paperSize || '').toUpperCase()) ? (String(item.paper_size || settings.paperSize).toUpperCase() === 'K58' ? 'K57' : String(item.paper_size || settings.paperSize).toUpperCase()) : 'A5',
     orientation: settings.orientation === 'landscape' ? 'landscape' : 'portrait',
     status: item.status || 'active',
     is_default: Boolean(item.is_default),
     fontSize: clampFormNumber(settings.fontSize, 7, 16, DEFAULT_INVOICE_TEMPLATE_SETTINGS.fontSize),
-    scale: clampFormNumber(settings.scale, 0.55, 1.6, DEFAULT_INVOICE_TEMPLATE_SETTINGS.scale),
-    previewZoom: clampFormNumber(settings.previewZoom, 0.4, 1.8, DEFAULT_INVOICE_TEMPLATE_SETTINGS.previewZoom),
+    scale: clampFormNumber(settings.scale, 0.5, 1, DEFAULT_INVOICE_TEMPLATE_SETTINGS.scale),
+    previewZoom: clampFormNumber(settings.previewZoom, 0.5, 1, DEFAULT_INVOICE_TEMPLATE_SETTINGS.previewZoom),
     showLogo: Boolean(settings.showLogo),
-    showQr: Boolean(settings.showQr),
+    showQr: false,
     showSignature: Boolean(settings.showSignature),
     showNote: Boolean(settings.showNote),
     showDebt: Boolean(settings.showDebt),
@@ -336,16 +340,17 @@ function normalizePrintTemplateForm(payload = {}, fallbackStore = {}) {
 }
 
 function sanitizePrintTemplatePayload(form = {}) {
-  const paperSize = ['A4', 'A5', 'K80'].includes(String(form.paper_size || '').toUpperCase()) ? String(form.paper_size).toUpperCase() : 'A5';
-  const orientation = paperSize === 'K80' ? 'portrait' : (form.orientation === 'landscape' ? 'landscape' : 'portrait');
+  const requestedPaperSize = String(form.paper_size || '').toUpperCase();
+  const paperSize = ['A4', 'A5', 'K80', 'K57', 'K58'].includes(requestedPaperSize) ? (requestedPaperSize === 'K58' ? 'K57' : requestedPaperSize) : 'A5';
+  const orientation = paperSize.startsWith('K') ? 'portrait' : (form.orientation === 'landscape' ? 'landscape' : 'portrait');
   const settingsInput = {
     fontSize: clampFormNumber(form.fontSize, 7, 16, DEFAULT_INVOICE_TEMPLATE_SETTINGS.fontSize),
-    scale: clampFormNumber(form.scale, 0.55, 1.6, DEFAULT_INVOICE_TEMPLATE_SETTINGS.scale),
-    previewZoom: clampFormNumber(form.previewZoom, 0.4, 1.8, DEFAULT_INVOICE_TEMPLATE_SETTINGS.previewZoom),
+    scale: clampFormNumber(form.scale, 0.5, 1, DEFAULT_INVOICE_TEMPLATE_SETTINGS.scale),
+    previewZoom: clampFormNumber(form.previewZoom, 0.5, 1, DEFAULT_INVOICE_TEMPLATE_SETTINGS.previewZoom),
     paperSize,
     orientation,
     showLogo: Boolean(form.showLogo),
-    showQr: Boolean(form.showQr),
+    showQr: false,
     showSignature: Boolean(form.showSignature),
     showNote: Boolean(form.showNote),
     showDebt: Boolean(form.showDebt),
@@ -394,22 +399,31 @@ function revokeObjectUrl(value) {
 
 function normalizePrintTemplatesResponse(data) {
   if (Array.isArray(data)) return data.map(item => normalizePrintTemplate(item));
-  const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
-  return items.map(item => normalizePrintTemplate(item));
+  if (!data || typeof data !== 'object') return [];
+  const items = Array.isArray(data.items)
+    ? data.items
+    : Array.isArray(data.data)
+      ? data.data
+      : Array.isArray(data.templates)
+        ? data.templates
+        : [];
+  return items.filter(Boolean).map(item => normalizePrintTemplate(item));
 }
 
-function normalizeNegativeStockFeature(feature = null) {
-  const featureKey = String(feature?.feature_key || feature?.key || NEGATIVE_STOCK_FEATURE_KEY).trim() || NEGATIVE_STOCK_FEATURE_KEY;
-  return {
-    id: feature?.id || null,
-    feature_key: featureKey,
-    key: featureKey,
-    name: String(feature?.name || NEGATIVE_STOCK_FEATURE_NAME),
-    description: String(feature?.description || NEGATIVE_STOCK_FEATURE_DESCRIPTION),
-    category: String(feature?.category || NEGATIVE_STOCK_FEATURE_CATEGORY),
-    active: feature?.active === true || feature?.active === 1 || feature?.active === '1',
-    exists: Boolean(feature?.id),
-  };
+function normalizeNegativeStockLimitInput(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return '0';
+  const number = Number(text);
+  return Number.isInteger(number) && number >= 0 ? String(number) : text;
+}
+
+function getNegativeStockLimitInputError(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return 'Vui lòng nhập số lượng âm tối đa cho phép.';
+  if (!/^\d+$/.test(text)) return 'Số lượng âm tối đa phải là số nguyên không âm.';
+  const number = Number(text);
+  if (!Number.isInteger(number) || number < 0) return 'Số lượng âm tối đa phải là số nguyên không âm.';
+  return '';
 }
 
 function SectionNotice({ notice }) {
@@ -477,8 +491,8 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   const canManageEmployees = canAccessSection(['users.manage']);
   const canViewCustomerTypes = canAccessSection(['customers.read', 'customers.manage']);
   const canManageCustomerTypes = canAccessSection(['customers.manage']);
-  const canViewNegativeStock = canAccessSection(['features.read', 'features.manage']);
-  const canManageNegativeStock = canAccessSection(['features.manage']);
+  const canViewNegativeStock = canAccessSection(['settings.read', 'settings.manage', 'features.read', 'features.manage']);
+  const canManageNegativeStock = canAccessSection(['settings.manage', 'features.manage']);
   const canViewUpdates = canAccessSection(['updates.read', 'updates.manage', 'settings.read', 'settings.manage']);
   const canViewPrintTemplates = canAccessSection(['print_templates.read', 'print_templates.manage']);
   const canManagePrintTemplates = canAccessSection(['print_templates.manage']);
@@ -511,7 +525,8 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   const [typeSaving, setTypeSaving] = useState(false);
   const [typeNotice, setTypeNotice] = useState(null);
 
-  const [negativeStockFeature, setNegativeStockFeature] = useState(() => normalizeNegativeStockFeature());
+  const [negativeStockSettings, setNegativeStockSettings] = useState(() => normalizeNegativeStockSettings());
+  const [negativeStockLimitInput, setNegativeStockLimitInput] = useState(() => String(normalizeNegativeStockSettings().limit));
   const [negativeStockSaving, setNegativeStockSaving] = useState(false);
   const [negativeStockNotice, setNegativeStockNotice] = useState(null);
 
@@ -593,33 +608,53 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     }
   }, []);
 
-  const loadNegativeStockFeature = useCallback(async () => {
-    try {
-      const data = await featuresApi.detail(NEGATIVE_STOCK_FEATURE_KEY);
-      const feature = normalizeNegativeStockFeature(data?.item || data?.data || data);
-      if (mountedRef.current) setNegativeStockFeature(feature);
-      return feature;
-    } catch (error) {
-      if (error?.status === 404) {
-        const fallbackFeature = normalizeNegativeStockFeature();
-        if (mountedRef.current) setNegativeStockFeature(fallbackFeature);
-        return fallbackFeature;
-      }
-      throw error;
+  const applyNegativeStockSettings = useCallback((payload = {}) => {
+    const normalized = cacheNegativeStockSettings(payload);
+    if (mountedRef.current) {
+      setNegativeStockSettings(normalized);
+      setNegativeStockLimitInput(String(normalized.limit));
     }
+    return normalized;
   }, []);
+
+  const loadNegativeStockSettings = useCallback(async () => {
+    try {
+      const data = await settingsApi.get();
+      if (mountedRef.current) setNegativeStockNotice(null);
+      return applyNegativeStockSettings(data);
+    } catch (error) {
+      const message = getErrorMessage(error, 'Không thể tải cấu hình xuất âm tồn kho từ API /api/settings.');
+      const fallbackSettings = normalizeNegativeStockSettings();
+      if (mountedRef.current) {
+        setNegativeStockSettings(fallbackSettings);
+        setNegativeStockLimitInput(String(fallbackSettings.limit));
+        setTimedNotice('negative-stock', setNegativeStockNotice, { tone: 'error', message });
+      }
+      return fallbackSettings;
+    }
+  }, [applyNegativeStockSettings, getErrorMessage, setTimedNotice]);
 
   const loadPrintTemplates = useCallback(async () => {
     if (mountedRef.current) setPrintTemplatesLoading(true);
     try {
       const data = await printTemplatesApi.list();
       const items = normalizePrintTemplatesResponse(data);
-      if (mountedRef.current) setPrintTemplates(items);
+      if (mountedRef.current) {
+        setPrintTemplates(items);
+        setPrintTemplatesNotice(null);
+      }
       return items;
+    } catch (error) {
+      const message = getErrorMessage(error, 'API mẫu in hóa đơn đang ở trạng thái an toàn; chưa tải được danh sách mẫu in từ /api/print-templates.');
+      if (mountedRef.current) {
+        setPrintTemplates([]);
+        setTimedNotice('print-templates', setPrintTemplatesNotice, { tone: 'info', message });
+      }
+      return [];
     } finally {
       if (mountedRef.current) setPrintTemplatesLoading(false);
     }
-  }, []);
+  }, [getErrorMessage, setTimedNotice]);
 
   useEffect(() => {
     if (storeDirty) return;
@@ -635,7 +670,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
         ...(canViewStore ? [{ label: 'cửa hàng', promise: loadStore() }] : []),
         ...(canViewEmployees ? [{ label: 'nhân viên', promise: loadEmployees() }] : []),
         ...(canViewCustomerTypes ? [{ label: 'loại khách hàng', promise: loadCustomerTypes() }] : []),
-        ...(canViewNegativeStock ? [{ label: 'xuất âm tồn kho', promise: loadNegativeStockFeature() }] : []),
+        ...(canViewNegativeStock ? [{ label: 'xuất âm tồn kho', promise: loadNegativeStockSettings() }] : []),
         ...(canViewPrintTemplates ? [{ label: 'mẫu in hóa đơn', promise: loadPrintTemplates() }] : []),
       ];
 
@@ -669,7 +704,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     return () => {
       cancelled = true;
     };
-  }, [canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewPrintTemplates, canViewStore, getErrorMessage, loadCustomerTypes, loadEmployees, loadNegativeStockFeature, loadPrintTemplates, loadStore, setTimedNotice]);
+  }, [canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewPrintTemplates, canViewStore, getErrorMessage, loadCustomerTypes, loadEmployees, loadNegativeStockSettings, loadPrintTemplates, loadStore, setTimedNotice]);
 
   useEffect(() => {
     if (!window.khaDesktop?.isElectron) return undefined;
@@ -928,7 +963,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   const updatePrintTemplateField = useCallback((field, value) => {
     setPrintTemplateForm(current => {
       const next = { ...current, [field]: value };
-      if (field === 'paper_size' && String(value).toUpperCase() === 'K80') next.orientation = 'portrait';
+      if (field === 'paper_size' && String(value).toUpperCase().startsWith('K')) next.orientation = 'portrait';
       return next;
     });
   }, []);
@@ -1098,47 +1133,61 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     [printTemplateEdit, printTemplateForm, printTemplateLogoPreviewUrl],
   );
 
-  const handleToggleNegativeStock = async () => {
-    const nextEnabled = !negativeStockFeature.active;
-    const payload = {
-      feature_key: NEGATIVE_STOCK_FEATURE_KEY,
-      name: NEGATIVE_STOCK_FEATURE_NAME,
-      description: NEGATIVE_STOCK_FEATURE_DESCRIPTION,
-      category: NEGATIVE_STOCK_FEATURE_CATEGORY,
-      active: nextEnabled,
-      metadata: {},
-    };
+  const saveNegativeStockSettings = async ({ enabled = negativeStockSettings.enabled, limitInput = negativeStockLimitInput, successMessage = 'Đã lưu cấu hình xuất âm tồn kho.' } = {}) => {
+    const inputError = getNegativeStockLimitInputError(limitInput);
+    if (inputError) {
+      setTimedNotice('negative-stock', setNegativeStockNotice, {
+        tone: 'error',
+        message: inputError,
+      }, 5000);
+      return null;
+    }
 
+    const limit = Number(String(limitInput).trim());
     setNegativeStockSaving(true);
     setNegativeStockNotice(null);
     try {
-      let data;
-      if (negativeStockFeature.id) {
-        data = await featuresApi.update(negativeStockFeature.id, payload);
-      } else {
-        try {
-          data = await featuresApi.create(payload);
-        } catch (error) {
-          if (error?.status !== 409) throw error;
-          data = await featuresApi.update(NEGATIVE_STOCK_FEATURE_KEY, payload);
-        }
-      }
-
-      const savedFeature = normalizeNegativeStockFeature(data?.item || data?.data || data);
-      setNegativeStockFeature(savedFeature);
+      const payload = {
+        negative_stock_enabled: Boolean(enabled),
+        negative_stock_limit: limit,
+      };
+      const data = await settingsApi.update(payload);
+      const rawSettings = data?.settings || data?.data?.settings || data?.data || data || {};
+      const normalized = applyNegativeStockSettings({ ...payload, ...rawSettings });
       setTimedNotice('negative-stock', setNegativeStockNotice, {
         tone: 'success',
-        message: nextEnabled ? 'Đã bật cho phép xuất âm tồn kho.' : 'Đã tắt cho phép xuất âm tồn kho.',
+        message: successMessage,
       }, 3000);
+      return normalized;
     } catch (error) {
       setTimedNotice('negative-stock', setNegativeStockNotice, {
         tone: 'error',
-        message: getErrorMessage(error, 'Không thể lưu cấu hình xuất âm tồn kho.'),
+        message: getErrorMessage(error, 'Không thể lưu cấu hình xuất âm tồn kho qua API /api/settings.'),
       });
+      return null;
     } finally {
       if (mountedRef.current) setNegativeStockSaving(false);
     }
   };
+
+  const handleToggleNegativeStock = () => {
+    const nextEnabled = !negativeStockSettings.enabled;
+    return saveNegativeStockSettings({
+      enabled: nextEnabled,
+      successMessage: nextEnabled ? 'Đã bật cho phép xuất âm tồn kho.' : 'Đã tắt cho phép xuất âm tồn kho.',
+    });
+  };
+
+  const handleNegativeStockLimitChange = (event) => {
+    const nextValue = event.target.value;
+    if (nextValue === '' || /^\d+$/.test(nextValue)) setNegativeStockLimitInput(nextValue);
+  };
+
+  const handleNegativeStockLimitBlur = () => {
+    setNegativeStockLimitInput(current => normalizeNegativeStockLimitInput(current));
+  };
+
+  const handleSaveNegativeStockSettings = () => saveNegativeStockSettings();
 
   const runUpdateAction = async (busyKey, action) => {
     if (!window.khaDesktop?.updates) {
@@ -1243,6 +1292,16 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   const manifestSourceLabel = getManifestSourceLabel(updateState);
   const updateLogPath = updateState?.updateLogPath || '';
   const runtimeDiagnostics = updateState?.runtimeDiagnostics || null;
+  const negativeStockLimitInputError = getNegativeStockLimitInputError(negativeStockLimitInput);
+  const negativeStockPreviewLimit = negativeStockLimitInputError ? negativeStockSettings.limit : Number(negativeStockLimitInput);
+  const negativeStockPreviewSettings = normalizeNegativeStockSettings({
+    ...negativeStockSettings,
+    negative_stock_enabled: negativeStockSettings.enabled,
+    negative_stock_limit: negativeStockPreviewLimit,
+  });
+  const negativeStockAdminLimitLabel = getNegativeStockAdminLimitLabel(negativeStockPreviewSettings);
+  const negativeStockRuntimeLimitLabel = getNegativeStockLimitLabel(negativeStockPreviewSettings);
+  const negativeStockRuntimeSummary = getNegativeStockRuntimeSummary(negativeStockPreviewSettings);
 
   return (
     <div className="max-w-6xl">
@@ -1514,52 +1573,50 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
       )}
 
       {!initialLoading && tab === 'negative-stock' && (
-        <div className="card space-y-5">
+        <div className="card space-y-5 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <h2 className="font-bold flex items-center gap-2">
-                <Package size={18} /> Xuất âm tồn kho
+                <Package size={18} /> {NEGATIVE_STOCK_FEATURE_NAME}
               </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Quản lý việc cho phép xuất vượt tồn kho hiện có. Giới hạn âm là cố định trong code và không chỉnh sửa từ giao diện này.
+              <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                Quản lý việc cho phép xuất vượt tồn kho hiện có. {NEGATIVE_STOCK_FEATURE_DESCRIPTION}
               </p>
             </div>
-            <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${negativeStockFeature.active ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-100 text-slate-600'}`}>
-              <span className={`h-2 w-2 rounded-full ${negativeStockFeature.active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-              {negativeStockFeature.active ? 'Đang bật' : 'Đang tắt'}
+            <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${negativeStockSettings.enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200' : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'}`}>
+              <span className={`h-2 w-2 rounded-full ${negativeStockSettings.enabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+              {negativeStockSettings.enabled ? 'Đang bật' : 'Đang tắt'}
             </span>
           </div>
 
           <SectionNotice notice={negativeStockNotice} />
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <div className="font-semibold text-gray-800">Cho phép xuất âm tồn kho sản phẩm</div>
-                <p className="text-sm text-gray-600">
-                  Khi bật, hệ thống cho phép xuất vượt tồn kho hiện có nhưng không được thấp hơn <strong>{NEGATIVE_STOCK_LIMIT}</strong>. Khi tắt, hệ thống chặn mọi trường hợp làm tồn kho nhỏ hơn <strong>0</strong>.
-                </p>
-                <p className="text-xs text-gray-500">
-                  Giới hạn âm là hằng số cố định trong code để đảm bảo kiểm soát nghiệp vụ nhất quán giữa frontend và backend.
+                <div className="font-semibold text-gray-800 dark:text-slate-100">Cho phép xuất âm tồn kho sản phẩm</div>
+                <p className="text-sm text-gray-600 dark:text-slate-300">
+                  Khi bật, hệ thống cho phép xuất vượt tồn kho hiện có theo số lượng âm tối đa admin nhập. Khi tắt, hệ thống chặn mọi trường hợp làm tồn kho nhỏ hơn <strong>0</strong>.
                 </p>
               </div>
+
               <button
                 type="button"
                 role="switch"
-                aria-checked={negativeStockFeature.active}
-                aria-label={negativeStockFeature.active ? 'Tắt cho phép xuất âm tồn kho' : 'Bật cho phép xuất âm tồn kho'}
+                aria-checked={negativeStockSettings.enabled}
+                aria-label={negativeStockSettings.enabled ? 'Tắt cho phép xuất âm tồn kho' : 'Bật cho phép xuất âm tồn kho'}
                 aria-busy={negativeStockSaving}
                 onClick={handleToggleNegativeStock}
-                disabled={negativeStockSaving || !canManageNegativeStock}
-                className={`inline-flex min-h-14 w-full items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left shadow-sm transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 md:w-[280px] ${negativeStockFeature.active ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'} disabled:cursor-not-allowed disabled:opacity-60`}
+                disabled={negativeStockSaving || !canManageNegativeStock || Boolean(negativeStockLimitInputError)}
+                className={`inline-flex min-h-14 w-full items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left shadow-sm transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${negativeStockSettings.enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'} disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="text-sm font-semibold">
-                      {negativeStockFeature.active ? 'Đang bật' : 'Đang tắt'}
+                      {negativeStockSettings.enabled ? 'Đang bật' : 'Đang tắt'}
                     </span>
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${negativeStockFeature.active ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
-                      {negativeStockFeature.active ? 'ON' : 'OFF'}
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${negativeStockSettings.enabled ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'}`}>
+                      {negativeStockSettings.enabled ? 'ON' : 'OFF'}
                     </span>
                   </span>
                   <span className="mt-1 block text-xs font-medium opacity-80">
@@ -1567,8 +1624,8 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                   </span>
                 </span>
 
-                <span className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition-colors duration-200 ease-out ${negativeStockFeature.active ? 'bg-emerald-500' : 'bg-slate-300'} ${negativeStockSaving ? 'opacity-90' : ''}`}>
-                  <span className={`h-6 w-6 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-all duration-200 ease-out ${negativeStockFeature.active ? 'translate-x-6' : 'translate-x-0'} ${negativeStockSaving ? 'scale-95' : ''}`} />
+                <span className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition-colors duration-200 ease-out ${negativeStockSettings.enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'} ${negativeStockSaving ? 'opacity-90' : ''}`}>
+                  <span className={`h-6 w-6 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-all duration-200 ease-out ${negativeStockSettings.enabled ? 'translate-x-6' : 'translate-x-0'} ${negativeStockSaving ? 'scale-95' : ''}`} />
                   {negativeStockSaving && (
                     <span className="absolute inset-0 flex items-center justify-center">
                       <Loader2 size={14} className="animate-spin text-white/90" />
@@ -1576,21 +1633,75 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                   )}
                 </span>
               </button>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label htmlFor="negative-stock-limit" className="space-y-1">
+                  <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Số lượng âm tối đa cho phép</span>
+                  <input
+                    id="negative-stock-limit"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={negativeStockLimitInput}
+                    onChange={handleNegativeStockLimitChange}
+                    onBlur={handleNegativeStockLimitBlur}
+                    placeholder="Ví dụ: 10"
+                    disabled={negativeStockSaving || !canManageNegativeStock}
+                    aria-invalid={Boolean(negativeStockLimitInputError)}
+                    className={`input-field w-full rounded-xl ${negativeStockLimitInputError ? 'border-red-300 bg-red-50 text-red-700 focus:border-red-500 focus:ring-red-500/20' : 'dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100'}`}
+                  />
+                  {negativeStockLimitInputError ? (
+                    <span className="block text-xs font-medium text-red-600">{negativeStockLimitInputError}</span>
+                  ) : (
+                    <span className="block text-xs text-gray-500 dark:text-slate-400">Nhập 10 nghĩa là tồn tối thiểu -10. Giá trị hiện tại: {negativeStockAdminLimitLabel}; runtime dùng tồn tối thiểu {negativeStockRuntimeLimitLabel}.</span>
+                  )}
+                </label>
+
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+                  <div className="text-xs font-semibold uppercase tracking-wide opacity-80">Giới hạn hiện tại</div>
+                  <div className="mt-1 text-lg font-bold">{negativeStockAdminLimitLabel} → tồn tối thiểu {negativeStockRuntimeLimitLabel}</div>
+                  <div className="mt-1 text-xs">{negativeStockRuntimeSummary}</div>
+                </div>
+              </div>
             </div>
+
+            {canManageNegativeStock && (
+              <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={handleSaveNegativeStockSettings}
+                  disabled={negativeStockSaving || Boolean(negativeStockLimitInputError)}
+                  className="btn-success inline-flex min-h-10 items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {negativeStockSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                  {negativeStockSaving ? 'Đang lưu...' : 'Lưu giới hạn'}
+                </button>
+                <button
+                  type="button"
+                  onClick={loadNegativeStockSettings}
+                  disabled={negativeStockSaving}
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+                >
+                  Tải lại từ API
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
             <div className="font-semibold">Nguyên tắc áp dụng</div>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>Khi tắt: backend không cho xuất nếu tồn dự kiến nhỏ hơn 0.</li>
-              <li>Khi bật: backend cho phép tồn sau xuất giảm tối đa đến {NEGATIVE_STOCK_LIMIT}.</li>
+              <li>Khi bật: admin nhập {negativeStockAdminLimitLabel}, backend cho phép tồn sau xuất giảm tối đa đến {negativeStockRuntimeLimitLabel}.</li>
               <li>Nếu vượt giới hạn, backend trả lỗi rõ tên sản phẩm, tồn hiện tại, số lượng xuất và giới hạn tối thiểu.</li>
-              <li>Giao diện này chỉ bật/tắt tính năng, không cho chỉnh sửa mức giới hạn âm.</li>
+              <li>Frontend đọc/ghi trực tiếp qua API /api/settings và không còn dùng giới hạn hard-code.</li>
             </ul>
           </div>
 
           {!canManageNegativeStock && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
               Tài khoản hiện tại chỉ có quyền xem trạng thái xuất âm tồn kho và không thể thay đổi cấu hình này.
             </div>
           )}
@@ -2088,9 +2199,9 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
               <h3 className="mb-2 font-bold text-gray-800">Tab Xuất âm</h3>
               <ul className="list-disc space-y-1 pl-5">
                 <li>Dùng để bật/tắt cho phép xuất âm tồn kho sản phẩm.</li>
-                <li>Khi bật, hệ thống cho xuất vượt tồn nhưng không thấp hơn giới hạn cố định {NEGATIVE_STOCK_LIMIT}.</li>
+                <li>Khi bật, admin nhập số lượng âm tối đa; ví dụ nhập {negativeStockAdminLimitLabel} thì tồn tối thiểu runtime là {negativeStockRuntimeLimitLabel}.</li>
                 <li>Khi tắt, mọi thao tác làm tồn kho nhỏ hơn 0 sẽ bị backend từ chối.</li>
-                <li>Người dùng không chỉnh sửa giới hạn âm từ giao diện, chỉ xem mô tả và trạng thái bật/tắt.</li>
+                <li>Ô giới hạn lưu qua API /api/settings và được các màn hình bán hàng/kho dùng làm runtime settings.</li>
               </ul>
             </div>
 

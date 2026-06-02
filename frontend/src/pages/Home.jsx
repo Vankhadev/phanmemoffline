@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { AlertCircle, BarChart3, Calendar, FileText, HelpCircle, Layers, Package, PackageSearch, ShoppingCart, Store, TrendingUp } from 'lucide-react';
 import { ApiError, SYNC_UPDATED_EVENT, apiJsonChecked } from '../utils/apiClient';
 import HelpModal from '../components/HelpModal';
-import { NEGATIVE_STOCK_LIMIT, formatStockValue, getStockDisplayMeta } from '../utils/negativeStock';
+import { formatStockValue, getNegativeStockLimitLabel, getNegativeStockNearLimitLabel, getStockDisplayMeta } from '../utils/negativeStock';
+import useNegativeStockSettings from '../utils/useNegativeStockSettings';
 
 const EMPTY_STATS = {
   todayRevenue: 0,
@@ -48,7 +49,7 @@ function hasNegativeStockFields(data = {}) {
   );
 }
 
-function extractNegativeStockStats(data = {}) {
+function extractNegativeStockStats(data = {}, negativeStockSettings = undefined) {
   const summary = data?.summary || {};
   const negativeStock = data?.negativeStock
     || data?.negative_stock
@@ -70,8 +71,8 @@ function extractNegativeStockStats(data = {}) {
   const products = productCandidates
     .map(normalizeNegativeStockProduct)
     .filter(product => product.stock < 0);
-  const nearLimitProducts = products.filter(product => getStockDisplayMeta(product.stock).isNearLimit);
-  const breachedProducts = products.filter(product => getStockDisplayMeta(product.stock).isBreached);
+  const nearLimitProducts = products.filter(product => getStockDisplayMeta(product.stock, negativeStockSettings).isNearLimit);
+  const breachedProducts = products.filter(product => getStockDisplayMeta(product.stock, negativeStockSettings).isBreached);
   const lowestStock = products.length > 0 ? Math.min(...products.map(product => product.stock)) : 0;
 
   return {
@@ -121,6 +122,9 @@ export default function Home({ user, store = {} }) {
   const [showHelp, setShowHelp] = useState(false);
   const [statsMessage, setStatsMessage] = useState('');
   const [statsMessageTone, setStatsMessageTone] = useState('info');
+  const { settings: negativeStockSettings } = useNegativeStockSettings();
+  const negativeStockLimitLabel = useMemo(() => getNegativeStockLimitLabel(negativeStockSettings), [negativeStockSettings]);
+  const negativeStockNearLimitLabel = useMemo(() => getNegativeStockNearLimitLabel(negativeStockSettings), [negativeStockSettings]);
 
   const formatVND = useCallback((value) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -146,7 +150,7 @@ export default function Home({ user, store = {} }) {
         }
       }
       const summary = data?.summary || data || {};
-      const negativeStockInfo = extractNegativeStockStats(negativeStockSource);
+      const negativeStockInfo = extractNegativeStockStats(negativeStockSource, negativeStockSettings);
 
       setStats({
         todayRevenue: Number(summary.todayRevenue) || 0,
@@ -174,7 +178,7 @@ export default function Home({ user, store = {} }) {
     } finally {
       if (showSpinner) setLoading(false);
     }
-  }, []);
+  }, [negativeStockSettings]);
 
   useEffect(() => {
     fetchStats();
@@ -234,13 +238,13 @@ export default function Home({ user, store = {} }) {
       title: 'Âm kho',
       value: stats.negativeStockCount.toLocaleString('vi-VN'),
       sub: stats.negativeStockCount > 0
-        ? `${stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} gần ${NEGATIVE_STOCK_LIMIT} · thấp nhất ${formatStockValue(stats.lowestNegativeStock)}`
-        : `Không có sản phẩm âm kho; ngưỡng ${NEGATIVE_STOCK_LIMIT}`,
+        ? `${stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} ${negativeStockNearLimitLabel || `gần ${negativeStockLimitLabel}`} · thấp nhất ${formatStockValue(stats.lowestNegativeStock)}`
+        : `Không có sản phẩm âm kho; ngưỡng ${negativeStockLimitLabel}`,
       icon: AlertCircle,
       textColor: stats.negativeStockNearLimitCount > 0 ? 'text-orange-600' : 'text-red-600',
       bgColor: stats.negativeStockNearLimitCount > 0 ? 'bg-orange-50' : 'bg-red-50',
     },
-  ]), [formatVND, stats.lowStock, stats.lowestNegativeStock, stats.negativeStockCount, stats.negativeStockNearLimitCount, stats.outOfStock, stats.paidOrders, stats.todayOrders, stats.todayRevenue, stats.totalProducts]);
+  ]), [formatVND, negativeStockLimitLabel, negativeStockNearLimitLabel, stats.lowStock, stats.lowestNegativeStock, stats.negativeStockCount, stats.negativeStockNearLimitCount, stats.outOfStock, stats.paidOrders, stats.todayOrders, stats.todayRevenue, stats.totalProducts]);
 
   const quickActions = useMemo(() => ([
     {
@@ -363,12 +367,12 @@ export default function Home({ user, store = {} }) {
         <div className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${stats.negativeStockNearLimitCount > 0 ? 'border-orange-200 bg-orange-50 text-orange-900' : 'border-red-200 bg-red-50 text-red-800'}`}>
           <div className="font-bold">⚠️ Có {stats.negativeStockCount.toLocaleString('vi-VN')} sản phẩm đang âm kho</div>
           <div className="mt-1 text-xs">
-            {stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} sản phẩm gần ngưỡng {NEGATIVE_STOCK_LIMIT}; thấp nhất {formatStockValue(stats.lowestNegativeStock)}.
+            {stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} sản phẩm {negativeStockNearLimitLabel || `gần ngưỡng ${negativeStockLimitLabel}`}; thấp nhất {formatStockValue(stats.lowestNegativeStock)}.
           </div>
           {stats.negativeStockProducts.length > 0 ? (
             <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
               {stats.negativeStockProducts.slice(0, 6).map((product, index) => {
-                const stockMeta = getStockDisplayMeta(product.stock);
+                const stockMeta = getStockDisplayMeta(product.stock, negativeStockSettings);
                 return (
                   <div key={`${product.id || product.sku || product.name}-${index}`} className={`rounded-xl border px-3 py-2 ${stockMeta.isNearLimit ? 'border-orange-200 bg-white/70' : 'border-red-200 bg-white/70'}`}>
                     <div className={`truncate text-xs font-semibold ${stockMeta.nameClass}`}>{product.name}</div>
@@ -376,7 +380,7 @@ export default function Home({ user, store = {} }) {
                       <span className="text-gray-500">SKU: {product.sku || '—'}</span>
                       <span className={stockMeta.textClass}>{stockMeta.display}</span>
                       <span className={`rounded-full px-2 py-0.5 font-bold ${stockMeta.badgeClass}`}>Âm kho</span>
-                      {stockMeta.isNearLimit ? <span className="rounded-full border border-orange-200 bg-orange-100 px-2 py-0.5 font-bold text-orange-800">Gần -100</span> : null}
+                      {stockMeta.isNearLimit ? <span className="rounded-full border border-orange-200 bg-orange-100 px-2 py-0.5 font-bold text-orange-800">{stockMeta.extraLabel || negativeStockNearLimitLabel || `Gần ${negativeStockLimitLabel}`}</span> : null}
                     </div>
                   </div>
                 );
@@ -477,7 +481,7 @@ export default function Home({ user, store = {} }) {
                   <li><strong>Đơn hàng hôm nay:</strong> Số lượng đơn tạo trong ngày và số đã thanh toán</li>
                   <li><strong>Tổng sản phẩm:</strong> Tổng số sản phẩm trong kho, cả sản phẩm cha và biến thể</li>
                   <li><strong>Cảnh báo tồn kho:</strong> Số lượng sản phẩm tồn 0, sắp hết hoặc đang âm kho</li>
-                  <li><strong>Âm kho:</strong> Sản phẩm có tồn âm, cảnh báo gần ngưỡng {NEGATIVE_STOCK_LIMIT}</li>
+                  <li><strong>Âm kho:</strong> Sản phẩm có tồn âm, cảnh báo gần ngưỡng {negativeStockLimitLabel}</li>
                 </ul>
               </div>
 

@@ -16,7 +16,6 @@ const VALID_ELEMENT_TYPES = new Set([
   'invoiceTitle',
   'customerInfo',
   'invoiceMeta',
-  'paymentQr',
   'totals',
   'signatures',
   'note',
@@ -195,6 +194,7 @@ function normalizeElements(input, errors, zonesById) {
     seen.add(id);
 
     const type = cleanText(element.type, 40);
+    if (type === 'paymentQr') return;
     if (!VALID_ELEMENT_TYPES.has(type)) pushError(errors, `elements[${index}].type`, `Loại component không được hỗ trợ: ${type || '(trống)'}.`);
 
     const zoneId = cleanText(element.zoneId || element.zone_id, 80);

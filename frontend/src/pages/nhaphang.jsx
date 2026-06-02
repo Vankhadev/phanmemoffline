@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Search, Plus, X, Save, Package, Tag, FileText, LogOut, AlertCircle, CheckCircle, Building, Trash2, CreditCard, RotateCcw } from 'lucide-react';
 import { SYNC_UPDATED_EVENT, apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
+import NegativeStockInput from '../components/NegativeStockInput';
+import { getNegativeStockInputError, parseStockInputNumber } from '../utils/negativeStock';
 import { buildCategoriesById, categoryFields, getProductDisplayName, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
 
 const API = resolveApiUrl('');
@@ -674,6 +676,7 @@ const Nhaphang = ({ store }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [stockToast, setStockToast] = useState(null);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [isEditingOrder, setIsEditingOrder] = useState(false);
   const [orderHistory, setOrderHistory] = useState([]);
@@ -704,6 +707,16 @@ const Nhaphang = ({ store }) => {
 
     return prepareImportSearchResults(localResults, trimmedQuery, scopedProductTree);
   }, [allProducts, categoriesById, orderHistory, selectedSupplier]);
+
+  useEffect(() => {
+    if (!stockToast) return undefined;
+    const timer = setTimeout(() => setStockToast(null), 3400);
+    return () => clearTimeout(timer);
+  }, [stockToast]);
+
+  const showStockLimitToast = useCallback((message) => {
+    setStockToast({ id: Date.now(), message });
+  }, []);
 
   // Fetch suppliers/products/categories from API
   useEffect(() => {
@@ -900,8 +913,12 @@ const Nhaphang = ({ store }) => {
     if (!product.tenSP) errors.push('Tên sản phẩm là bắt buộc');
     if (!product.donVi) errors.push('Đơn vị là bắt buộc');
     if (!getImportRowKey(product)) errors.push('Dòng sản phẩm thiếu product_id, variant_id hoặc SKU hợp lệ');
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      errors.push('Số lượng nhập phải lớn hơn 0');
+    const quantityError = getNegativeStockInputError(product.soLuongNhap);
+    if (!Number.isFinite(quantity) || quantity === 0) {
+      errors.push('Số lượng nhập/xuất phải khác 0');
+    }
+    if (quantityError) {
+      errors.push(quantityError);
     }
     if (!Number.isFinite(importPrice) || importPrice < 0) {
       errors.push('Giá nhập phải lớn hơn hoặc bằng 0');
@@ -935,10 +952,15 @@ const Nhaphang = ({ store }) => {
   // Calculate thanhTien for a product
   const calculateThanhTien = (giaNhap, soLuong, chietKhau) => {
     const price = Math.max(0, Number(giaNhap) || 0);
-    const quantity = Math.max(0, Number(soLuong) || 0);
+    const quantity = Number.isFinite(Number(soLuong)) ? Number(soLuong) : 0;
     const discount = Math.min(100, Math.max(0, Number(chietKhau) || 0));
     const thanhTien = price * quantity;
     return thanhTien - (thanhTien * (discount / 100));
+  };
+
+  const normalizeEditableImportQuantity = (value, fallback = 1) => {
+    const quantity = parseStockInputNumber(value, fallback);
+    return Number.isFinite(quantity) && quantity !== 0 ? quantity : fallback;
   };
 
   const resetProductSearchState = (options = {}) => {
@@ -1026,7 +1048,7 @@ const Nhaphang = ({ store }) => {
   const buildSelectedProductDraft = (mappedProduct) => {
     const isEditingExistingRow = editingProductIndex !== null && products[editingProductIndex];
     const sourceRow = isEditingExistingRow ? products[editingProductIndex] : null;
-    const quantity = isEditingExistingRow ? Math.max(1, Number(sourceRow.soLuongNhap) || 1) : 1;
+    const quantity = isEditingExistingRow ? normalizeEditableImportQuantity(sourceRow.soLuongNhap, 1) : 1;
     const discount = isEditingExistingRow ? Math.min(100, Math.max(0, Number(sourceRow.chietKhau) || 0)) : 0;
     const importPrice = Math.max(0, getFirstFiniteNumber(mappedProduct.giaNhap, mappedProduct.import_price, mappedProduct.retail_price));
 
@@ -1113,7 +1135,7 @@ const Nhaphang = ({ store }) => {
     }
 
     const importPrice = Math.max(0, getFirstFiniteNumber(selectedProduct.giaNhap, selectedProduct.import_price, selectedProduct.retail_price));
-    const quantityToAdd = Math.max(0, Number(selectedProduct.soLuongNhap) || 0);
+    const quantityToAdd = parseStockInputNumber(selectedProduct.soLuongNhap, 0);
     const nextDiscount = Math.min(100, Math.max(0, Number(selectedProduct.chietKhau) || 0));
     const normalizedProduct = {
       ...selectedProduct,
@@ -1192,8 +1214,11 @@ const Nhaphang = ({ store }) => {
       const product = { ...item };
       const numericValue = Number(value);
       const safeValue = Number.isFinite(numericValue) ? numericValue : 0;
-
-      if (field === 'soLuongNhap' || field === 'chietKhau' || field === 'giaNhap') {
+      if (field === 'soLuongNhap') {
+        const quantityError = getNegativeStockInputError(value);
+        if (quantityError) showStockLimitToast(quantityError);
+        product.soLuongNhap = value;
+      } else if (field === 'chietKhau' || field === 'giaNhap') {
         product[field] = safeValue;
         if (field === 'giaNhap') product.import_price = safeValue;
       } else {
@@ -1201,7 +1226,7 @@ const Nhaphang = ({ store }) => {
       }
 
       const nextPrice = Math.max(0, getFirstFiniteNumber(product.giaNhap, product.import_price, product.retail_price));
-      const nextQuantity = Math.max(0, Number(product.soLuongNhap) || 0);
+      const nextQuantity = parseStockInputNumber(product.soLuongNhap, 0);
       const nextDiscount = Math.min(100, Math.max(0, Number(product.chietKhau) || 0));
       product.chietKhau = nextDiscount;
       product.thanhTien = calculateThanhTien(nextPrice, nextQuantity, nextDiscount);
@@ -1224,7 +1249,7 @@ const Nhaphang = ({ store }) => {
   // Calculate total quantity and discount
   const totalStats = useMemo(() => {
     return products.reduce((acc, p) => {
-      const quantity = Number(p.soLuongNhap) || 0;
+      const quantity = parseStockInputNumber(p.soLuongNhap, 0);
       const importPrice = Math.max(0, getFirstFiniteNumber(p.giaNhap, p.import_price, p.retail_price));
       const discount = Math.min(100, Math.max(0, Number(p.chietKhau) || 0));
       return {
@@ -1233,6 +1258,13 @@ const Nhaphang = ({ store }) => {
       };
     }, { quantity: 0, discountValue: 0 });
   }, [products]);
+
+  const selectedProductQuantityError = selectedProduct ? getNegativeStockInputError(selectedProduct.soLuongNhap) : '';
+  const productsQuantityError = useMemo(() => {
+    const invalid = products.find(product => getNegativeStockInputError(product.soLuongNhap));
+    return invalid ? getNegativeStockInputError(invalid.soLuongNhap) : '';
+  }, [products]);
+  const hasNegativeStockQuantityError = Boolean(productsQuantityError);
 
   const currentOrderDetailSignature = useMemo(
     () => buildPaymentDetailSignature(currentOrder?.chiTiet || []),
@@ -1372,7 +1404,7 @@ const Nhaphang = ({ store }) => {
       variant_id: toPayloadNumberId(p.variant_id),
       product_name: p.tenSP || '',
       sku: p.maSP || '',
-      quantity: Number(p.soLuongNhap) || 1,
+      quantity: parseStockInputNumber(p.soLuongNhap, 1),
       import_price: Math.max(0, getFirstFiniteNumber(p.giaNhap, p.import_price)),
       retail_price: Math.max(0, getFirstFiniteNumber(p.retail_price)),
       wholesale_price: Math.max(0, getFirstFiniteNumber(p.wholesale_price)),
@@ -1425,6 +1457,7 @@ const Nhaphang = ({ store }) => {
   const submitImportOrder = async (status) => {
     const errors = validateOrder();
     if (errors.length > 0) {
+      if (productsQuantityError) showStockLimitToast(productsQuantityError);
       setError(errors.join('\n'));
       setTimeout(() => setError(null), 5000);
       return;
@@ -1822,6 +1855,13 @@ const Nhaphang = ({ store }) => {
 
   return (
     <div className="min-h-full w-full min-w-0 bg-gray-100">
+      {stockToast && (
+        <div className="toast-stack">
+          <div className="toast-card border-red-200 bg-red-50 text-red-700">
+            ⚠️ {stockToast.message}
+          </div>
+        </div>
+      )}
       {/* Header khu vực nhập hàng */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -2109,7 +2149,7 @@ const Nhaphang = ({ store }) => {
 
             {/* Selected Product Card */}
             {selectedProduct && (
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className={`bg-white rounded-lg border shadow-sm ${selectedProductQuantityError ? 'border-red-300 ring-1 ring-red-200' : parseStockInputNumber(selectedProduct.soLuongNhap, 0) < 0 ? 'border-red-200 bg-red-50/40' : 'border-gray-200'}`}>
                 <div className="p-4 border-b border-gray-200 bg-blue-50 flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">
@@ -2130,25 +2170,24 @@ const Nhaphang = ({ store }) => {
                 </div>
                 <div className="p-4">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Số lượng</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={selectedProduct.soLuongNhap}
-                        onChange={(e) => {
-                          const nextQuantity = Math.max(1, Number(e.target.value) || 1);
-                          const nextPrice = Math.max(0, getFirstFiniteNumber(selectedProduct.giaNhap, selectedProduct.import_price, selectedProduct.retail_price));
-                          setSelectedProduct({
-                            ...selectedProduct,
-                            soLuongNhap: nextQuantity,
-                            thanhTien: calculateThanhTien(nextPrice, nextQuantity, selectedProduct.chietKhau)
-                          });
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                        disabled={saving}
-                      />
-                    </div>
+                    <NegativeStockInput
+                      id="import-selected-negative-stock"
+                      label="Số lượng"
+                      value={selectedProduct.soLuongNhap}
+                      error={selectedProductQuantityError}
+                      helper={selectedProductQuantityError ? '' : 'Cho phép nhập số dương hoặc số âm để nhập/xuất kho realtime.'}
+                      disabled={saving}
+                      onLimitError={showStockLimitToast}
+                      onChange={(nextValue) => {
+                        const nextQuantity = parseStockInputNumber(nextValue, 0);
+                        const nextPrice = Math.max(0, getFirstFiniteNumber(selectedProduct.giaNhap, selectedProduct.import_price, selectedProduct.retail_price));
+                        setSelectedProduct({
+                          ...selectedProduct,
+                          soLuongNhap: nextValue,
+                          thanhTien: calculateThanhTien(nextPrice, nextQuantity, selectedProduct.chietKhau)
+                        });
+                      }}
+                    />
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Đơn vị</label>
                       <input
@@ -2216,7 +2255,7 @@ const Nhaphang = ({ store }) => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                       onClick={() => handleAddProduct({ keepSearching: false })}
-                      disabled={saving}
+                      disabled={saving || Boolean(selectedProductQuantityError)}
                       className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm"
                     >
                       <Plus className="w-4 h-4" />
@@ -2224,7 +2263,7 @@ const Nhaphang = ({ store }) => {
                     </button>
                     <button
                       onClick={() => handleAddProduct({ keepSearching: true })}
-                      disabled={saving}
+                      disabled={saving || Boolean(selectedProductQuantityError)}
                       className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm"
                       title="Thêm sản phẩm và giữ nguyên ô tìm kiếm để nhập tiếp"
                     >
@@ -2271,8 +2310,11 @@ const Nhaphang = ({ store }) => {
                     <tbody className="divide-y divide-gray-200">
                       {products.map((product, index) => {
                         const displayPrice = Math.max(0, getFirstFiniteNumber(product.giaNhap, product.import_price, product.retail_price));
+                        const rowQuantityError = getNegativeStockInputError(product.soLuongNhap);
+                        const rowQuantityValue = parseStockInputNumber(product.soLuongNhap, 0);
+                        const rowQuantityNegative = Number.isFinite(rowQuantityValue) && rowQuantityValue < 0;
                         return (
-                          <tr key={`${getImportRowKey(product) || 'row'}-${index}`} className={`hover:bg-gray-50 ${editingProductIndex === index ? 'bg-blue-50' : ''}`}>
+                          <tr key={`${getImportRowKey(product) || 'row'}-${index}`} className={`hover:bg-gray-50 ${editingProductIndex === index ? 'bg-blue-50' : rowQuantityNegative ? 'bg-red-50/70' : ''}`}>
                             <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
                             <td className="px-4 py-3">
                               <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center overflow-hidden border border-gray-200">
@@ -2295,13 +2337,17 @@ const Nhaphang = ({ store }) => {
                               </button>
                             </td>
                             <td className="px-4 py-3">
-                              <input
-                                type="number"
-                                min="1"
+                              <NegativeStockInput
+                                id={`import-row-negative-stock-${index}`}
+                                label=""
                                 value={product.soLuongNhap}
-                                onChange={(e) => handleUpdateProduct(index, 'soLuongNhap', e.target.value)}
-                                className="w-full px-2 py-1 text-right text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                error={rowQuantityError}
+                                helper={rowQuantityError ? '' : rowQuantityNegative ? 'Âm kho' : ''}
+                                compact
+                                showBadge={rowQuantityNegative || Boolean(rowQuantityError)}
                                 disabled={saving}
+                                onLimitError={showStockLimitToast}
+                                onChange={(value) => handleUpdateProduct(index, 'soLuongNhap', value)}
                               />
                             </td>
                             <td className="px-4 py-3">
@@ -2517,7 +2563,7 @@ const Nhaphang = ({ store }) => {
                   {(!isEditingOrder || currentOrder?.trangThai === 'cho_nhap') && (
                     <button
                       onClick={handleCreateAndReceive}
-                      disabled={saving || products.length === 0 || !selectedSupplier}
+                      disabled={saving || products.length === 0 || !selectedSupplier || hasNegativeStockQuantityError}
                       className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2.5 px-4 rounded-md flex items-center justify-center gap-2 text-sm shadow-sm"
                     >
                       <Package className="w-4 h-4" />
@@ -2526,7 +2572,7 @@ const Nhaphang = ({ store }) => {
                   )}
                   <button
                     onClick={handleCreateOnly}
-                    disabled={saving || products.length === 0 || !selectedSupplier}
+                    disabled={saving || products.length === 0 || !selectedSupplier || hasNegativeStockQuantityError}
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 px-4 rounded-md flex items-center justify-center gap-2 text-sm shadow-sm"
                   >
                     <Save className="w-4 h-4" />

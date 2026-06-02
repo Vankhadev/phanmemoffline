@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ElementFrame from './ElementFrame';
+import { resolveBackendAssetUrl } from '../../../utils/apiClient';
 import {
   clampFrameToZone,
   getEditorPaperDimensions,
@@ -37,6 +38,16 @@ function isRenderableImage(value) {
   return /^(data:image\/|https?:\/\/|blob:|file:|\/static\/|\.\/|\/)/i.test(String(value || '').trim());
 }
 
+function resolveAssetUrl(value) {
+  const text = String(value || '').trim();
+  return text ? resolveBackendAssetUrl(text) : '';
+}
+
+function isStyleEnabled(style = {}, key, fallback = true) {
+  if (!Object.prototype.hasOwnProperty.call(style || {}, key)) return fallback;
+  return style[key] !== false && style[key] !== 0 && style[key] !== '0' && style[key] !== 'false';
+}
+
 function getInvoiceCode(payload = {}) {
   return payload.invoice?.invoice_code || payload.invoice?.code || payload.metadata?.invoice_code || 'HD-000000';
 }
@@ -65,7 +76,17 @@ function getItemValue(item = {}, key, index = 0) {
 }
 
 function buildLogoUrl(template = {}, payload = {}) {
-  return template.logo?.url || template.logo_url || template.logo_url_resolved || template.header_logo || payload.store?.logo_url || '';
+  return resolveAssetUrl(template.logo?.url || template.logo_url || template.logo_url_resolved || template.header_logo || payload.store?.logo_url || '');
+}
+
+function formatFooterTemplate(text, payload = {}) {
+  const printedAt = payload.metadata?.printed_at || new Date().toISOString();
+  return String(text || 'Cảm ơn quý khách! · In lúc {time} {date}')
+    .replace(/\{time\}/g, formatTime(printedAt))
+    .replace(/\{date\}/g, formatDate(printedAt))
+    .replace(/\{invoiceCode\}/g, getInvoiceCode(payload))
+    .replace(/\{customerName\}/g, payload.customer?.name || 'Khách lẻ')
+    .replace(/\{storeName\}/g, payload.store?.name || 'Cửa hàng');
 }
 
 function normalizeFontFamily(value) {
@@ -111,7 +132,6 @@ function ElementContent({ element, template, payload }) {
   const store = payload.store || {};
   const invoice = payload.invoice || {};
   const customer = payload.customer || {};
-  const payment = payload.payment || {};
   const totals = payload.totals || {};
   const signatures = payload.signatures || {};
   const logoUrl = buildLogoUrl(template, payload);
@@ -129,9 +149,11 @@ function ElementContent({ element, template, payload }) {
   if (element.type === 'storeInfo') {
     return (
       <div className="invoice-editor-preview-text" style={baseStyle}>
-        <b>{store.name || template.shop_name || 'Cửa hàng'}</b>
-        <span>{store.address || template.shop_address || 'Địa chỉ cửa hàng'}</span>
-        <span>ĐT: {store.phone || template.shop_phone || '—'}</span>
+        {isStyleEnabled(style, 'showStoreName') && <b>{store.name || template.shop_name || 'Cửa hàng'}</b>}
+        {isStyleEnabled(style, 'showStoreAddress') && <span>{store.address || template.shop_address || 'Địa chỉ cửa hàng'}</span>}
+        {isStyleEnabled(style, 'showStorePhone') && <span>{style.storePhoneLabel || 'ĐT'}: {store.phone || template.shop_phone || '—'}</span>}
+        {isStyleEnabled(style, 'showStoreEmail') && store.email && <span>Email: {store.email}</span>}
+        {isStyleEnabled(style, 'showStoreTaxCode') && store.tax_code && <span>MST: {store.tax_code}</span>}
       </div>
     );
   }
@@ -139,9 +161,9 @@ function ElementContent({ element, template, payload }) {
   if (element.type === 'invoiceTitle') {
     return (
       <div className="invoice-editor-preview-title" style={baseStyle}>
-        <b>HÓA ĐƠN</b>
-        <span>BÁN HÀNG</span>
-        <small>{invoiceCode}</small>
+        {isStyleEnabled(style, 'showTitle') && <b>{style.titleText || 'HÓA ĐƠN'}</b>}
+        {isStyleEnabled(style, 'showSubtitle') && <span>{style.subtitleText || 'BÁN HÀNG'}</span>}
+        {isStyleEnabled(style, 'showInvoiceCode') && <small>{invoiceCode}</small>}
       </div>
     );
   }
@@ -149,9 +171,11 @@ function ElementContent({ element, template, payload }) {
   if (element.type === 'customerInfo') {
     return (
       <div className="invoice-editor-preview-pairs" style={baseStyle}>
-        <div><span>Khách:</span><b>{customer.name || 'Khách lẻ'}</b></div>
-        <div><span>SĐT:</span><b>{customer.phone || '—'}</b></div>
-        <div><span>Địa chỉ:</span><b>{customer.address || '—'}</b></div>
+        {isStyleEnabled(style, 'showCustomerName') && <div><span>{style.customerNameLabel || 'Khách'}:</span><b>{customer.name || 'Khách lẻ'}</b></div>}
+        {isStyleEnabled(style, 'showCustomerPhone') && <div><span>{style.customerPhoneLabel || 'SĐT'}:</span><b>{customer.phone || '—'}</b></div>}
+        {isStyleEnabled(style, 'showCustomerAddress') && <div><span>{style.customerAddressLabel || 'Địa chỉ'}:</span><b>{customer.address || '—'}</b></div>}
+        {isStyleEnabled(style, 'showCustomerTaxCode') && <div><span>{style.customerTaxCodeLabel || 'MST'}:</span><b>{customer.tax_code || '—'}</b></div>}
+        {isStyleEnabled(style, 'showCustomerType', false) && <div><span>{style.customerTypeLabel || 'Loại khách'}:</span><b>{customer.customer_type || '—'}</b></div>}
       </div>
     );
   }
@@ -159,26 +183,15 @@ function ElementContent({ element, template, payload }) {
   if (element.type === 'invoiceMeta') {
     return (
       <div className="invoice-editor-preview-pairs" style={baseStyle}>
-        <div><span>Mã đơn:</span><b>{invoiceCode}</b></div>
-        <div><span>Ngày:</span><b>{formatDate(invoice.created_at)}</b></div>
-        <div><span>Thanh toán:</span><b>{payment.method_label || invoice.payment_method || '—'}</b></div>
+        {isStyleEnabled(style, 'showOrderCode') && <div><span>{style.orderCodeLabel || 'Mã đơn'}:</span><b>{invoiceCode}</b></div>}
+        {isStyleEnabled(style, 'showOrderDate') && <div><span>{style.orderDateLabel || 'Ngày'}:</span><b>{formatDate(invoice.created_at)} {formatTime(invoice.created_at)}</b></div>}
+        {isStyleEnabled(style, 'showSeller') && <div><span>{style.sellerLabelShort || 'NV'}:</span><b>{payload.metadata?.user_name || '—'}</b></div>}
+        {isStyleEnabled(style, 'showOrderSource', false) && <div><span>{style.orderSourceLabel || 'Nguồn'}:</span><b>{invoice.source || '—'}</b></div>}
       </div>
     );
   }
 
-  if (element.type === 'paymentQr') {
-    const qrImage = payment.qr_image || payment.qr || '';
-    const qrSize = style.qrSizeMm || 13;
-    return (
-      <div className="invoice-editor-preview-qr" style={baseStyle}>
-        <b>{style.showIcon === false ? '' : '▣ '}Thanh toán</b>
-        {qrImage && isRenderableImage(qrImage)
-          ? <img src={qrImage} alt="QR" style={{ width: `${qrSize}mm`, height: `${qrSize}mm` }} />
-          : <span className="invoice-editor-qr-placeholder" style={{ width: `${qrSize}mm`, height: `${qrSize}mm` }}>QR</span>}
-        <small>{payment.bank_name || 'Ngân hàng'} · {payment.bank_account || 'STK'}</small>
-      </div>
-    );
-  }
+  if (element.type === 'paymentQr') return null;
 
   if (element.type === 'totals') {
     const paid = Number(totals.paid_amount ?? totals.paid ?? 0) || 0;
@@ -200,14 +213,14 @@ function ElementContent({ element, template, payload }) {
   if (element.type === 'signatures') {
     return (
       <div className="invoice-editor-preview-signatures" style={{ ...baseStyle, gap: style.signatureGapMm !== undefined ? `${style.signatureGapMm}mm` : undefined }}>
-        <div><b>{signatures.buyer?.label || 'Người nhận'}</b><span>(Ký tên)</span></div>
-        <div><b>{signatures.seller?.label || 'Người bán'}</b><span>(Ký tên)</span></div>
+        <div><b>{style.buyerLabel || signatures.buyer?.label || 'Khách hàng'}</b><span>{style.buyerHint || '(Ký và ghi rõ họ tên)'}</span></div>
+        <div><b>{style.sellerLabel || signatures.seller?.label || 'Người bán'}</b><span>{style.sellerHint || '(Ký và ghi rõ họ tên)'}</span></div>
       </div>
     );
   }
 
   if (element.type === 'footerText') {
-    return <div className="invoice-editor-preview-footer" style={baseStyle}>Cảm ơn quý khách! · In lúc {formatTime(payload.metadata?.printed_at || new Date().toISOString())}</div>;
+    return <div className="invoice-editor-preview-footer" style={baseStyle}>{formatFooterTemplate(style.text, payload)}</div>;
   }
 
   if (element.type === 'line' || element.type === 'separator') {
@@ -220,7 +233,7 @@ function ElementContent({ element, template, payload }) {
 
   if (element.type === 'image') {
     return style.src && isRenderableImage(style.src)
-      ? <img className="invoice-editor-preview-image" src={style.src} alt={getElementLabel(element)} style={{ ...baseStyle, objectFit: style.objectFit || 'contain' }} />
+      ? <img className="invoice-editor-preview-image" src={resolveAssetUrl(style.src)} alt={getElementLabel(element)} style={{ ...baseStyle, objectFit: style.objectFit || 'contain' }} />
       : <div className="invoice-editor-preview-image-empty" style={baseStyle}>Ảnh</div>;
   }
 
@@ -277,7 +290,7 @@ function TablePreview({ document, payload, selected, zoom, snapEnabled, snapGrid
       <div
         className={`invoice-editor-table-frame ${selected ? 'is-selected' : ''}`}
         style={{
-          '--editor-table-border-width': `${tableStyle.borderWidthMm ?? 0.2}mm`,
+          '--editor-table-border-width': `${tableStyle.tableBorder === false ? 0 : (tableStyle.borderWidthMm ?? 0.2)}mm`,
           '--editor-table-border-color': tableStyle.borderColor || '#cbd5e1',
           '--editor-table-header-bg': tableStyle.headerBackgroundColor || '#e2e8f0',
           '--editor-table-header-color': tableStyle.headerColor || '#0f172a',
@@ -289,6 +302,9 @@ function TablePreview({ document, payload, selected, zoom, snapEnabled, snapGrid
       >
         {selected && <div className="invoice-editor-element-label">Khung sản phẩm</div>}
         <table>
+          <colgroup>
+            {columns.map((column, index) => <col key={`${column.key}-${index}`} style={{ width: `${column.widthMm}mm` }} />)}
+          </colgroup>
           <thead>
             <tr>{columns.map((column, index) => <th key={`${column.key}-${index}`} style={{ width: `${column.widthMm}mm`, textAlign: column.align }}>{column.label || TABLE_COLUMN_LABELS[column.key] || column.key}</th>)}</tr>
           </thead>
@@ -385,7 +401,7 @@ export default function EditorCanvas({
   const zones = useMemo(() => Array.isArray(document.zones) ? document.zones : [], [document.zones]);
   const zonesById = useMemo(() => new Map(zones.map(zone => [zone.id, zone])), [zones]);
   const visibleElements = useMemo(() => [...(document.elements || [])]
-    .filter(element => element.id !== TABLE_STYLE_ELEMENT_ID && element.visible !== false)
+    .filter(element => element.id !== TABLE_STYLE_ELEMENT_ID && element.type !== 'paymentQr' && element.visible !== false)
     .sort((a, b) => (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0)), [document.elements]);
   const snapTargets = useMemo(() => buildSnapTargets(document, page, selectedId), [document, page, selectedId]);
   const rulerXTicks = useMemo(() => buildRulerTicks(page.width, zoom, 'x'), [page.width, zoom]);

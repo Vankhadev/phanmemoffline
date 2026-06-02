@@ -1,6 +1,7 @@
 import { forwardRef, useMemo } from 'react';
 import { getPaperDimensions, normalizeTemplateSettings } from './templateDefaults';
 import { getActiveEditorDocument, getTableStyleElement, TABLE_COLUMN_LABELS } from './editor/templateSchemaAdapter';
+import { resolveBackendAssetUrl } from '../../utils/apiClient';
 
 function formatVND(value) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(Number(value) || 0);
@@ -27,6 +28,16 @@ function formatTime(value) {
 
 function isRenderableImage(value) {
   return /^(data:image\/|https?:\/\/|blob:|file:|\/static\/|\.\/|\/)/i.test(String(value || '').trim());
+}
+
+function resolveAssetUrl(value) {
+  const text = String(value || '').trim();
+  return text ? resolveBackendAssetUrl(text) : '';
+}
+
+function isStyleEnabled(style = {}, key, fallback = true) {
+  if (!Object.prototype.hasOwnProperty.call(style || {}, key)) return fallback;
+  return style[key] !== false && style[key] !== 0 && style[key] !== '0' && style[key] !== 'false';
 }
 
 function getItemName(item = {}) {
@@ -66,6 +77,22 @@ function safeObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
+function safeArray(value) {
+  return Array.isArray(value) ? value.filter(item => item && typeof item === 'object') : [];
+}
+
+function formatFooterTemplate(text, data) {
+  const metadata = data.metadata || {};
+  const invoice = data.invoice || {};
+  const printedAt = metadata.printed_at || new Date().toISOString();
+  return String(text || 'Cảm ơn quý khách! · In lúc {time} {date}')
+    .replace(/\{time\}/g, formatTime(printedAt))
+    .replace(/\{date\}/g, formatDate(printedAt))
+    .replace(/\{invoiceCode\}/g, invoice.invoice_code || invoice.code || invoice.id || '')
+    .replace(/\{customerName\}/g, data.customer?.name || 'Khách lẻ')
+    .replace(/\{storeName\}/g, data.store?.name || 'Cửa hàng');
+}
+
 function mergeStore(payloadStore = {}, template = {}, settings = {}, logoPreviewUrl = '') {
   const store = safeObject(payloadStore);
   return {
@@ -73,7 +100,7 @@ function mergeStore(payloadStore = {}, template = {}, settings = {}, logoPreview
     name: settings.storeName || template.shop_name || store.name || 'Cửa hàng',
     address: settings.storeAddress || template.shop_address || store.address || '',
     phone: settings.storePhone || template.shop_phone || store.phone || '',
-    logo_url: logoPreviewUrl || template.logo?.url || template.logo_url || template.logo_url_resolved || template.header_logo || store.logo_url || '',
+    logo_url: resolveAssetUrl(logoPreviewUrl || template.logo?.url || template.logo_url || template.logo_url_resolved || template.header_logo || store.logo_url || ''),
   };
 }
 
@@ -82,11 +109,12 @@ function normalizePayload(payload = {}, template = {}, settings = {}, logoPrevie
   const invoice = safeObject(source.invoice);
   const metadata = safeObject(source.metadata);
   const createdAt = invoice.created_at || invoice.createdAt || source.created_at || metadata.printed_at || new Date().toISOString();
+  const items = safeArray(source.items).length ? safeArray(source.items) : safeArray(source.details);
   return {
     store: mergeStore(source.store, template, settings, logoPreviewUrl),
     customer: safeObject(source.customer),
     invoice: { ...invoice, created_at: createdAt },
-    items: Array.isArray(source.items) ? source.items : Array.isArray(source.details) ? source.details : [],
+    items,
     totals: safeObject(source.totals),
     payment: safeObject(source.payment),
     signatures: safeObject(source.signatures),
@@ -113,6 +141,30 @@ function MoneyLine({ label, value, highlight = false, negative = false, hiddenWh
       <b>{negative && amount > 0 ? '-' : ''}{formatVND(amount)}</b>
     </div>
   );
+}
+
+function getInvoiceTotalAmount(totals = {}) {
+  return Number(totals.total ?? totals.grand_total ?? totals.subtotal ?? totals.total_before_discount ?? 0) || 0;
+}
+
+function getOldDebtAmount(totals = {}, customer = {}, invoice = {}) {
+  return Number(
+    totals.old_debt
+    ?? totals.previous_debt
+    ?? totals.previous_debt_amount
+    ?? totals.customer_old_debt
+    ?? totals.opening_debt
+    ?? customer.old_debt
+    ?? customer.previous_debt
+    ?? invoice.old_debt
+    ?? 0,
+  ) || 0;
+}
+
+function getPayableAmount(totals = {}, customer = {}, invoice = {}) {
+  const total = getInvoiceTotalAmount(totals);
+  const oldDebt = getOldDebtAmount(totals, customer, invoice);
+  return Number(totals.payable_amount ?? totals.amount_due ?? totals.final_amount ?? totals.total_payable ?? invoice.payable_amount ?? (total + oldDebt)) || 0;
 }
 
 function getCssFontFamily(value) {
@@ -150,28 +202,8 @@ function StoreLogo({ store, visible, widthMm, heightMm, style = {} }) {
   );
 }
 
-function PaymentQr({ payment, visible }) {
-  if (!visible) return null;
-  const qrImage = String(payment.qr_image || payment.qr || '').trim();
-  return (
-    <div className="invoice-template-qr-block">
-      <div className="invoice-template-section-title">QR thanh toán</div>
-      {qrImage && isRenderableImage(qrImage) ? (
-        <img className="invoice-template-qr" src={qrImage} alt="QR thanh toán" crossOrigin="anonymous" />
-      ) : qrImage ? (
-        <div className="invoice-template-qr-text">{qrImage}</div>
-      ) : (
-        <div className="invoice-template-qr-placeholder">QR thanh toán</div>
-      )}
-      <div className="invoice-template-bank-info">
-        {payment.bank_name && <div>NH: <b>{payment.bank_name}</b></div>}
-        {payment.bank_account && <div>STK: <b>{payment.bank_account}</b></div>}
-        {payment.bank_account_name && <div>Chủ TK: <b>{payment.bank_account_name}</b></div>}
-        {payment.transfer_content && <div>Nội dung: <b>{payment.transfer_content}</b></div>}
-        {payment.qr_text && <div>{payment.qr_text}</div>}
-      </div>
-    </div>
-  );
+function PaymentQr() {
+  return null;
 }
 
 function getElementCssStyle(element = {}, extra = {}) {
@@ -201,7 +233,6 @@ function V2Element({ element, data, template }) {
   const invoice = data.invoice;
   const customer = data.customer;
   const totals = data.totals;
-  const payment = data.payment;
   const signatures = data.signatures;
   const metadata = data.metadata;
   const invoiceCode = invoice.invoice_code || invoice.code || invoice.id || '—';
@@ -213,11 +244,11 @@ function V2Element({ element, data, template }) {
   if (element.type === 'storeInfo') {
     return (
       <div className="invoice-template-v2-text-block" style={getElementCssStyle(element)}>
-        <h2>{store.name || template.shop_name || 'Cửa hàng'}</h2>
-        {store.address && <p>{store.address}</p>}
-        {store.phone && <p>ĐT: {store.phone}</p>}
-        {store.email && <p>Email: {store.email}</p>}
-        {store.tax_code && <p>MST: {store.tax_code}</p>}
+        {isStyleEnabled(style, 'showStoreName') && <h2>{store.name || template.shop_name || 'Cửa hàng'}</h2>}
+        {isStyleEnabled(style, 'showStoreAddress') && store.address && <p>{store.address}</p>}
+        {isStyleEnabled(style, 'showStorePhone') && store.phone && <p>{style.storePhoneLabel || 'ĐT'}: {store.phone}</p>}
+        {isStyleEnabled(style, 'showStoreEmail') && store.email && <p>Email: {store.email}</p>}
+        {isStyleEnabled(style, 'showStoreTaxCode') && store.tax_code && <p>MST: {store.tax_code}</p>}
       </div>
     );
   }
@@ -225,9 +256,9 @@ function V2Element({ element, data, template }) {
   if (element.type === 'invoiceTitle') {
     return (
       <div className="invoice-template-v2-title" style={getElementCssStyle(element)}>
-        <h1>HÓA ĐƠN</h1>
-        <h2>BÁN HÀNG</h2>
-        <div>{invoiceCode}</div>
+        {isStyleEnabled(style, 'showTitle') && <h1>{style.titleText || 'HÓA ĐƠN'}</h1>}
+        {isStyleEnabled(style, 'showSubtitle') && <h2>{style.subtitleText || 'BÁN HÀNG'}</h2>}
+        {isStyleEnabled(style, 'showInvoiceCode') && <div>{invoiceCode}</div>}
       </div>
     );
   }
@@ -235,10 +266,11 @@ function V2Element({ element, data, template }) {
   if (element.type === 'customerInfo') {
     return (
       <div className="invoice-template-v2-pairs" style={getElementCssStyle(element)}>
-        <InfoPair label="Khách" value={customer.name || 'Khách lẻ'} strong />
-        <InfoPair label="SĐT" value={customer.phone} />
-        <InfoPair label="Địa chỉ" value={customer.address} />
-        <InfoPair label="MST" value={customer.tax_code} />
+        {isStyleEnabled(style, 'showCustomerName') && <InfoPair label={style.customerNameLabel || 'Khách'} value={customer.name || 'Khách lẻ'} strong />}
+        {isStyleEnabled(style, 'showCustomerPhone') && <InfoPair label={style.customerPhoneLabel || 'SĐT'} value={customer.phone} />}
+        {isStyleEnabled(style, 'showCustomerAddress') && <InfoPair label={style.customerAddressLabel || 'Địa chỉ'} value={customer.address} />}
+        {isStyleEnabled(style, 'showCustomerTaxCode') && <InfoPair label={style.customerTaxCodeLabel || 'MST'} value={customer.tax_code} />}
+        {isStyleEnabled(style, 'showCustomerType', false) && <InfoPair label={style.customerTypeLabel || 'Loại khách'} value={customer.customer_type} />}
       </div>
     );
   }
@@ -246,33 +278,15 @@ function V2Element({ element, data, template }) {
   if (element.type === 'invoiceMeta') {
     return (
       <div className="invoice-template-v2-pairs" style={getElementCssStyle(element)}>
-        <InfoPair label="Mã đơn" value={invoiceCode} strong />
-        <InfoPair label="Ngày" value={`${formatDate(invoice.created_at)} ${formatTime(invoice.created_at)}`} />
-        <InfoPair label="Thanh toán" value={payment.method_label || invoice.payment_method} />
-        <InfoPair label="NV" value={metadata.user_name} />
+        {isStyleEnabled(style, 'showOrderCode') && <InfoPair label={style.orderCodeLabel || 'Mã đơn'} value={invoiceCode} strong />}
+        {isStyleEnabled(style, 'showOrderDate') && <InfoPair label={style.orderDateLabel || 'Ngày'} value={`${formatDate(invoice.created_at)} ${formatTime(invoice.created_at)}`} />}
+        {isStyleEnabled(style, 'showSeller') && <InfoPair label={style.sellerLabelShort || 'NV'} value={metadata.user_name} />}
+        {isStyleEnabled(style, 'showOrderSource', false) && <InfoPair label={style.orderSourceLabel || 'Nguồn'} value={invoice.source} />}
       </div>
     );
   }
 
-  if (element.type === 'paymentQr') {
-    const qrImage = String(payment.qr_image || payment.qr || '').trim();
-    return (
-      <div className="invoice-template-v2-qr" style={getElementCssStyle(element)}>
-        <div className="invoice-template-section-title">{style.showIcon === false ? '' : '▣ '}Thanh toán</div>
-        {qrImage && isRenderableImage(qrImage) ? (
-          <img src={qrImage} alt="QR thanh toán" crossOrigin="anonymous" style={{ width: `${style.qrSizeMm || 18}mm`, height: `${style.qrSizeMm || 18}mm` }} />
-        ) : (
-          <div className="invoice-template-qr-placeholder" style={{ width: `${style.qrSizeMm || 18}mm`, minHeight: `${style.qrSizeMm || 18}mm` }}>QR</div>
-        )}
-        <div className="invoice-template-bank-info">
-          {payment.bank_name && <div>NH: <b>{payment.bank_name}</b></div>}
-          {payment.bank_account && <div>STK: <b>{payment.bank_account}</b></div>}
-          {payment.bank_account_name && <div>Chủ TK: <b>{payment.bank_account_name}</b></div>}
-          {payment.transfer_content && <div>Nội dung: <b>{payment.transfer_content}</b></div>}
-        </div>
-      </div>
-    );
-  }
+  if (element.type === 'paymentQr') return null;
 
   if (element.type === 'totals') {
     const paidAmount = Number(totals.paid_amount ?? totals.paid ?? 0) || 0;
@@ -300,13 +314,13 @@ function V2Element({ element, data, template }) {
     return (
       <div className="invoice-template-v2-signatures" style={getElementCssStyle(element, { '--invoice-signature-gap': `${style.signatureGapMm || 10}mm`, '--invoice-signature-blank': `${style.blankHeightMm || 10}mm` })}>
         <div>
-          <h3>{signatures.buyer?.label || 'Người nhận hàng'}</h3>
-          <p>(Ký và ghi rõ họ tên)</p>
+          <h3>{style.buyerLabel || signatures.buyer?.label || 'Khách hàng'}</h3>
+          <p>{style.buyerHint || '(Ký và ghi rõ họ tên)'}</p>
           <b>{signatures.buyer?.name || customer.name || ''}</b>
         </div>
         <div>
-          <h3>{signatures.seller?.label || 'Người viết hóa đơn'}</h3>
-          <p>(Ký và ghi rõ họ tên)</p>
+          <h3>{style.sellerLabel || signatures.seller?.label || 'Người bán'}</h3>
+          <p>{style.sellerHint || '(Ký và ghi rõ họ tên)'}</p>
           <b>{signatures.seller?.name || metadata.user_name || ''}</b>
         </div>
       </div>
@@ -314,7 +328,7 @@ function V2Element({ element, data, template }) {
   }
 
   if (element.type === 'footerText') {
-    return <div className="invoice-template-v2-footer-text" style={getElementCssStyle(element)}>Cảm ơn quý khách! · In lúc {formatTime(metadata.printed_at || new Date().toISOString())} {formatDate(metadata.printed_at || new Date().toISOString())}</div>;
+    return <div className="invoice-template-v2-footer-text" style={getElementCssStyle(element)}>{formatFooterTemplate(style.text, data)}</div>;
   }
 
   if (element.type === 'line' || element.type === 'separator') {
@@ -327,7 +341,7 @@ function V2Element({ element, data, template }) {
 
   if (element.type === 'image') {
     return style.src && isRenderableImage(style.src)
-      ? <img className="invoice-template-v2-image" src={style.src} alt="Ảnh" crossOrigin="anonymous" style={getElementCssStyle(element)} />
+      ? <img className="invoice-template-v2-image" src={resolveAssetUrl(style.src)} alt="Ảnh" crossOrigin="anonymous" style={getElementCssStyle(element)} />
       : null;
   }
 
@@ -353,7 +367,7 @@ function V2ItemsTable({ document, data }) {
         left: `${Number(zone.frame?.x || 0) + Number(frame.x || 0)}mm`,
         top: `${Number(zone.frame?.y || 0) + Number(frame.y || 0)}mm`,
         width: `${Number(frame.w || zone.frame?.w || 100)}mm`,
-        '--invoice-v2-table-border-width': `${tableStyle.borderWidthMm ?? 0.22}mm`,
+        '--invoice-v2-table-border-width': `${tableStyle.tableBorder === false ? 0 : (tableStyle.borderWidthMm ?? 0.22)}mm`,
         '--invoice-v2-table-border-color': tableStyle.borderColor || document.theme?.borderColor || '#cbd5e1',
         '--invoice-v2-table-header-bg': tableStyle.headerBackgroundColor || '#e2e8f0',
         '--invoice-v2-table-header-color': tableStyle.headerColor || '#0f172a',
@@ -364,6 +378,9 @@ function V2ItemsTable({ document, data }) {
       }}
     >
       <table className="invoice-template-v2-table">
+        <colgroup>
+          {columns.map(column => <col key={column.key} style={{ width: `${column.widthMm}mm` }} />)}
+        </colgroup>
         <thead>
           <tr>
             {columns.map(column => (
@@ -400,11 +417,11 @@ function V2ItemsTable({ document, data }) {
   );
 }
 
-function V2Renderer({ refProp, payload, template, logoPreviewUrl, className, printScale, previewZoom, renderMode }) {
+function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPreviewUrl, className, printScale, previewZoom, renderMode }) {
   const preferDraft = renderMode === 'editor-preview' || renderMode === 'draft-preview' || renderMode === 'draft';
   const active = useMemo(() => getActiveEditorDocument(template, { preferDraft }), [preferDraft, template]);
   const document = active.document;
-  const page = getPaperDimensions(document.canvas.pageSize, document.canvas.orientation);
+  const page = getPaperDimensions(settingsOverride.paperSize || settingsOverride.paper_size || document.canvas.pageSize, settingsOverride.orientation || document.canvas.orientation);
   const editorZoom = Number(active.settings?.editor?.zoom) || 1;
   const scale = Number.isFinite(Number(printScale)) ? Number(printScale) : 1;
   const zoom = Number.isFinite(Number(previewZoom)) ? Number(previewZoom) : editorZoom;
@@ -412,7 +429,7 @@ function V2Renderer({ refProp, payload, template, logoPreviewUrl, className, pri
   const normalized = useMemo(() => normalizePayload(payload, template, {}, logoPreviewUrl), [logoPreviewUrl, payload, template]);
   const zonesById = useMemo(() => new Map((document.zones || []).map(zone => [zone.id, zone])), [document.zones]);
   const elements = useMemo(() => [...(document.elements || [])]
-    .filter(element => element.visible !== false && element.id !== '__itemsTableStyle')
+    .filter(element => element.visible !== false && element.id !== '__itemsTableStyle' && element.type !== 'paymentQr')
     .sort((a, b) => (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0)), [document.elements]);
   const contentHeightMm = useMemo(() => {
     const elementBottom = elements.reduce((max, element) => {
@@ -466,6 +483,7 @@ function V2Renderer({ refProp, payload, template, logoPreviewUrl, className, pri
                 width: `${Number(frame.w || 1)}mm`,
                 minHeight: `${Number(frame.h || 1)}mm`,
                 maxHeight: element.type === 'logo' || element.type === 'image' || element.type === 'rectangle' || element.type === 'line' ? `${Number(frame.h || 1)}mm` : undefined,
+                overflow: element.type === 'logo' || element.type === 'image' || element.type === 'rectangle' || element.type === 'line' ? 'hidden' : 'visible',
                 zIndex: Number(element.zIndex) || 0,
               }}
             >
@@ -508,13 +526,14 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
   const customer = normalized.customer;
   const items = normalized.items;
   const totals = normalized.totals;
-  const payment = normalized.payment;
   const signatures = normalized.signatures;
   const metadata = normalized.metadata;
   const lineHeight = settings.lineSpacing;
   const tableBorderWidth = settings.tableBorder ? settings.tableBorderWidthMm : 0;
-  const paidAmount = Number(totals.paid_amount ?? totals.paid ?? 0) || 0;
-  const remainingAmount = Number(totals.remaining_amount ?? totals.debt_amount ?? Math.max(0, (Number(totals.total) || 0) - paidAmount)) || 0;
+  const invoiceTotalAmount = getInvoiceTotalAmount(totals);
+  const oldDebtAmount = getOldDebtAmount(totals, customer, invoice);
+  const payableAmount = getPayableAmount(totals, customer, invoice);
+  const printedAt = metadata.printed_at || new Date().toISOString();
 
   return (
     <article
@@ -537,34 +556,25 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
     >
       <div className="invoice-print-inner">
         <header className="invoice-template-header">
-          <section className="invoice-template-header-left">
-            <div className="invoice-template-date-box">
-              <span>Giờ: <b>{formatTime(invoice.created_at)}</b></span>
-              <span>Ngày: <b>{formatDate(invoice.created_at)}</b></span>
+          <div className="invoice-template-store-row">
+            <StoreLogo store={store} visible={settings.showLogo} widthMm={settings.headerLogoWidthMm} heightMm={settings.headerLogoHeightMm} />
+            <div className="invoice-template-store-text">
+              <h2>{store.name || 'Cửa hàng'}</h2>
+              {store.address && <p>{store.address}</p>}
+              {store.phone && <p>ĐT: {store.phone}</p>}
             </div>
-            <div className="invoice-template-store-row">
-              <StoreLogo store={store} visible={settings.showLogo} widthMm={settings.headerLogoWidthMm} heightMm={settings.headerLogoHeightMm} />
-              <div className="invoice-template-store-text">
-                <h2>{store.name || 'Cửa hàng'}</h2>
-                {store.address && <p>{store.address}</p>}
-                {store.phone && <p>ĐT: {store.phone}</p>}
-              </div>
-            </div>
-          </section>
-
-          <section className="invoice-template-header-center">
-            <div className="invoice-template-section-title">Chi tiết đơn hàng</div>
+          </div>
+          <div className="invoice-template-title-block">
+            <h1>HÓA ĐƠN BÁN HÀNG</h1>
+          </div>
+          <section className="invoice-template-meta-grid">
             <InfoPair label="Mã đơn" value={invoice.invoice_code || invoice.code || invoice.id || '—'} strong />
-            <InfoPair label="Khách" value={customer.name || 'Khách lẻ'} strong />
-            <InfoPair label="SĐT" value={customer.phone} />
-            <InfoPair label="Địa chỉ" value={customer.address} />
-            <InfoPair label="Thanh toán" value={payment.method_label || invoice.payment_method} />
-          </section>
-
-          <section className="invoice-template-header-right">
-            <h1>HÓA ĐƠN</h1>
-            <h2>BÁN HÀNG</h2>
-            <div className="invoice-template-code-pill">{invoice.invoice_code || invoice.code || '—'}</div>
+            <InfoPair label="Ngày giờ" value={`${formatTime(invoice.created_at)} ${formatDate(invoice.created_at)}`} />
+            <InfoPair label="Khách hàng" value={customer.name || 'Khách lẻ'} strong />
+            <InfoPair label="SĐT" value={customer.phone || '—'} />
+            <div className="invoice-template-meta-address">
+              <InfoPair label="Địa chỉ" value={customer.address || '—'} />
+            </div>
           </section>
         </header>
 
@@ -610,45 +620,39 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
           </table>
         </section>
 
-        <section className="invoice-template-summary-row">
-          <PaymentQr payment={payment} visible={settings.showQr} />
-          <div className="invoice-template-totals">
-            <MoneyLine label="Tổng tiền hàng" value={totals.subtotal ?? totals.total_before_discount ?? totals.total} />
-            <MoneyLine label={`VAT (${Number(totals.vat_percent) || 0}%)`} value={totals.vat_amount} hiddenWhenZero />
-            <MoneyLine label="Chiết khấu" value={totals.discount_amount} negative hiddenWhenZero />
-            <MoneyLine label="Phí giao hàng" value={totals.delivery_fee} hiddenWhenZero />
-            <MoneyLine label="Tổng tiền" value={totals.total ?? totals.grand_total} highlight />
-            <MoneyLine label="Đã thanh toán" value={paidAmount} hiddenWhenZero />
-            {settings.showDebt && <MoneyLine label="Công nợ" value={remainingAmount} hiddenWhenZero />}
-            <MoneyLine label="Tiền thừa" value={totals.change_amount} hiddenWhenZero />
-          </div>
-        </section>
-
         {settings.showNote && invoice.note && (
           <section className="invoice-template-note">
             <b>Ghi chú:</b> {invoice.note}
           </section>
         )}
 
-        {settings.showSignature && (
-          <footer className="invoice-template-signatures">
-            <div>
-              <h3>{signatures.buyer?.label || 'Người nhận hàng'}</h3>
-              <p>(Ký và ghi rõ họ tên)</p>
-              <b>{signatures.buyer?.name || customer.name || ''}</b>
-            </div>
-            <div>
-              <h3>{signatures.seller?.label || 'Người viết hóa đơn'}</h3>
-              <p>(Ký và ghi rõ họ tên)</p>
-              <b>{signatures.seller?.name || metadata.user_name || ''}</b>
-            </div>
-          </footer>
-        )}
+        <footer className="invoice-template-footer-block">
+          <div className="invoice-template-footer-totals">
+            <MoneyLine label="Tổng tiền" value={invoiceTotalAmount} />
+            <MoneyLine label="Nợ cũ" value={oldDebtAmount} />
+            <MoneyLine label="Thành tiền" value={payableAmount} highlight />
+          </div>
 
-        <div className="invoice-template-footer-note">
-          <span>Cảm ơn quý khách!</span>
-          <span>In lúc: {formatTime(metadata.printed_at || new Date().toISOString())} {formatDate(metadata.printed_at || new Date().toISOString())}</span>
-        </div>
+          {settings.showSignature && (
+            <div className="invoice-template-signatures">
+              <div>
+                <h3>{signatures.buyer?.label || 'Người nhận hàng'}</h3>
+                <p>(Ký và ghi rõ họ tên)</p>
+                <b>{signatures.buyer?.name || customer.name || ''}</b>
+              </div>
+              <div>
+                <h3>{signatures.seller?.label || 'Người viết hóa đơn'}</h3>
+                <p>(Ký và ghi rõ họ tên)</p>
+                <b>{signatures.seller?.name || metadata.user_name || ''}</b>
+              </div>
+            </div>
+          )}
+
+          <div className="invoice-template-footer-note">
+            <span>Cảm ơn quý khách!</span>
+            <span>In lúc: {formatTime(printedAt)} {formatDate(printedAt)}</span>
+          </div>
+        </footer>
       </div>
     </article>
   );
@@ -671,12 +675,14 @@ const InvoiceTemplateRenderer = forwardRef(function InvoiceTemplateRenderer({
   renderMode = 'preview',
 }, ref) {
   const templateSource = template || {};
-  if (hasEditorDocument(templateSource)) {
+  const shouldUseEditorRenderer = hasEditorDocument(templateSource);
+  if (shouldUseEditorRenderer) {
     return (
       <V2Renderer
         refProp={ref}
         payload={payload}
         template={templateSource}
+        settingsOverride={settingsOverride}
         logoPreviewUrl={logoPreviewUrl}
         className={className}
         printScale={printScale}
@@ -702,38 +708,6 @@ const InvoiceTemplateRenderer = forwardRef(function InvoiceTemplateRenderer({
 });
 
 export function buildInvoicePageStyle(template = {}, settingsOverride = {}) {
-  if (hasEditorDocument(template)) {
-    const active = getActiveEditorDocument(template, { preferDraft: false });
-    const page = getPaperDimensions(active.document.canvas.pageSize, active.document.canvas.orientation);
-    return `
-      @page { size: ${page.paperSize === 'K80' ? `${page.width}mm auto` : `${page.paperSize} ${page.orientation}`}; margin: 0; }
-      html, body {
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #fff !important;
-        overflow: visible !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-      .invoice-print {
-        width: ${page.width}mm !important;
-        min-height: ${page.height}mm !important;
-        margin: 0 auto !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        box-shadow: none !important;
-        overflow: visible !important;
-        transform: none !important;
-      }
-      .invoice-print-inner {
-        width: ${page.width}mm !important;
-        min-height: ${page.height}mm !important;
-        transform: none !important;
-        padding: 0 !important;
-      }
-    `;
-  }
-
   const settings = normalizeTemplateSettings({
     ...template,
     settings_json: {
@@ -745,7 +719,7 @@ export function buildInvoicePageStyle(template = {}, settingsOverride = {}) {
   });
   const page = getPaperDimensions(settings.paperSize, settings.orientation);
   return `
-    @page { size: ${page.paperSize === 'K80' ? `${page.width}mm auto` : `${page.paperSize} ${page.orientation}`}; margin: 0; }
+    @page { size: ${page.paperSize.startsWith('K') ? `${page.width}mm ${page.height}mm` : `${page.paperSize} ${page.orientation}`}; margin: 0; }
     html, body {
       margin: 0 !important;
       padding: 0 !important;
@@ -767,7 +741,8 @@ export function buildInvoicePageStyle(template = {}, settingsOverride = {}) {
     .invoice-print-inner {
       width: ${page.width}mm !important;
       min-height: ${page.height}mm !important;
-      transform: none !important;
+      transform: scale(var(--invoice-print-scale, 1)) !important;
+      transform-origin: top center !important;
       padding: ${settings.paddingMm}mm !important;
     }
   `;

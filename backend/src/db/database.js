@@ -25,6 +25,7 @@ const SCHEMA = {
   role_permissions: [],
   sync_metadata: [],
   audit_logs: [],
+  system_settings: [],
   feature_catalog: [],
   store_info: [],
   users: [],
@@ -60,7 +61,7 @@ const ACCOUNT_SCOPED_TABLES = new Set([
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
   'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book', 'payrolls',
   'excel_import_runs', 'excel_import_details',
-  'sync_metadata', 'audit_logs',
+  'sync_metadata', 'audit_logs', 'system_settings',
 ]);
 
 const DEFAULT_PERMISSIONS = [
@@ -112,7 +113,7 @@ const SYNC_TRACKED_TABLES = [
   'store_info', 'users', 'customers', 'products', 'product_categories', 'partners',
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
   'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book', 'payrolls',
-  'excel_import_runs', 'excel_import_details',
+  'excel_import_runs', 'excel_import_details', 'system_settings',
   'feature_catalog', 'update_releases',
 ];
 
@@ -157,6 +158,7 @@ const DB_WRITE_RETRY_ATTEMPTS = Math.max(1, Number(process.env.KHA_DB_WRITE_RETR
 const DB_WRITE_RETRY_BASE_DELAY_MS = Math.max(1, Number(process.env.KHA_DB_WRITE_RETRY_BASE_DELAY_MS) || 25);
 const DB_WRITE_RETRY_MAX_DELAY_MS = Math.max(DB_WRITE_RETRY_BASE_DELAY_MS, Number(process.env.KHA_DB_WRITE_RETRY_MAX_DELAY_MS) || 250);
 let hasLoadedDb = false;
+let atomicWriteDepth = 0;
 
 function sleepSync(ms) {
   const delayMs = Math.max(0, Number(ms) || 0);
@@ -395,10 +397,27 @@ const DEFAULT_FEATURE_CATALOG = [
   {
     feature_key: 'negative_stock_exports',
     name: 'Xuất âm tồn kho',
-    description: 'Bật để cho phép xuất vượt tồn kho đến giới hạn cố định trong code.',
+    description: 'Bật để cho phép xuất vượt tồn kho theo giới hạn cấu hình trong thiết lập hệ thống.',
     category: 'Kho hàng',
     active: 0,
     metadata: {},
+  },
+];
+
+const DEFAULT_SYSTEM_SETTINGS = [
+  {
+    key: 'negative_stock_enabled',
+    value: '0',
+    value_type: 'boolean',
+    category: 'inventory',
+    description: 'Bật/tắt chức năng xuất âm tồn kho.',
+  },
+  {
+    key: 'negative_stock_limit',
+    value: '10',
+    value_type: 'integer',
+    category: 'inventory',
+    description: 'Admin có thể chỉnh số lượng tồn âm tối đa trực tiếp từ giao diện.',
   },
 ];
 
@@ -629,6 +648,64 @@ function seedDefaultFeatureCatalog() {
   }
 }
 
+function seedDefaultSystemSettings() {
+  const current = getDb();
+  const defaultAccount = ensureDefaultAccount();
+  const accounts = current.accounts.length ? current.accounts.filter(account => account && !account.deleted_at) : [defaultAccount];
+  const negativeStockFeature = current.feature_catalog.find(row => row
+    && !row.deleted_at
+    && normalizeTextKey(row.feature_key || row.key || row.code) === 'negative_stock_exports');
+  const defaultValues = DEFAULT_SYSTEM_SETTINGS.map(setting => {
+    if (setting.key !== 'negative_stock_enabled') return setting;
+    return {
+      ...setting,
+      value: negativeStockFeature && negativeStockFeature.active !== 0 ? '1' : '0',
+    };
+  });
+
+  for (const account of accounts) {
+    const accountId = account?.id || defaultAccount.id;
+    for (const setting of defaultValues) {
+      const key = normalizeTextKey(setting.key);
+      if (!key) continue;
+      const existing = current.system_settings.find(row => row
+        && !row.deleted_at
+        && normalizeTextKey(row.key || row.setting_key) === key
+        && (row.account_id == null || Number(row.account_id) === Number(accountId)));
+      if (existing) {
+        existing.key = key;
+        existing.account_id = existing.account_id == null ? accountId : existing.account_id;
+        existing.value_type = existing.value_type || setting.value_type || 'string';
+        existing.category = existing.category || setting.category || 'general';
+        existing.description = existing.description || setting.description || '';
+        if (key === 'negative_stock_limit') {
+          const limit = Number(existing.value);
+          if (!Number.isInteger(limit) || limit < 0) existing.value = String(setting.value ?? '10');
+          existing.value_type = 'integer';
+          existing.category = 'inventory';
+          existing.description = setting.description || existing.description || '';
+        }
+        existing.updated_at = existing.updated_at || now();
+        continue;
+      }
+
+      const id = current.nextId.system_settings || 1;
+      current.nextId.system_settings = id + 1;
+      current.system_settings.push({
+        id,
+        account_id: accountId,
+        key,
+        value: String(setting.value ?? ''),
+        value_type: setting.value_type || 'string',
+        category: setting.category || 'general',
+        description: setting.description || '',
+        created_at: now(),
+        updated_at: now(),
+      });
+    }
+  }
+}
+
 function findCategoryByText(_text) { return null; }
 function seedDefaultProductCategories() {
   const current = getDb();
@@ -728,6 +805,7 @@ function migrateDB() {
   seedDefaultProductCategories();
   seedDefaultFeatureCatalog();
   ensureAuthAndSyncSchema();
+  seedDefaultSystemSettings();
   rebuildAllDailyStatsFromInvoices();
   recalculateNextIds();
 }
@@ -779,14 +857,22 @@ function cloneDbState() {
   return JSON.parse(JSON.stringify(getDb()));
 }
 
+function shouldSaveImmediately(options = {}) {
+  return options.skipSave !== true && atomicWriteDepth <= 0;
+}
+
 function withAtomicDbWrite(callback) {
-  const snapshot = cloneDbState();
+  const isOuterAtomicWrite = atomicWriteDepth <= 0;
+  const snapshot = isOuterAtomicWrite ? cloneDbState() : null;
+  atomicWriteDepth += 1;
   try {
     const result = callback();
-    saveDB();
+    atomicWriteDepth -= 1;
+    if (isOuterAtomicWrite) saveDB();
     return result;
   } catch (error) {
-    replaceDB(snapshot);
+    atomicWriteDepth = Math.max(0, atomicWriteDepth - 1);
+    if (isOuterAtomicWrite && snapshot) replaceDB(snapshot);
     throw error;
   }
 }
@@ -892,7 +978,7 @@ function replaceTable(table, rows, options = {}) {
   current[table] = Array.isArray(rows) ? rows.map(row => ({ ...(row || {}) })) : [];
   recalculateNextIds();
   if (!options.skipTouch) touchSyncMetadata(table, options.accountId || getActiveAccountId());
-  if (!options.skipSave) saveDB();
+  if (shouldSaveImmediately(options)) saveDB();
   return current[table];
 }
 
@@ -905,7 +991,7 @@ function insert(table, row, options = {}) {
   rows.push(normalized);
   current.nextId[table] = Math.max(Number(current.nextId[table]) || 1, id + 1);
   if (!options.skipTouch) touchSyncMetadata(table, normalized.account_id || options.accountId || getActiveAccountId());
-  if (!options.skipSave) saveDB();
+  if (shouldSaveImmediately(options)) saveDB();
   return id;
 }
 
@@ -917,7 +1003,7 @@ function update(table, id, changes, options = {}) {
   const updated = { ...rows[index], ...normalizeUpdateChanges(table, rows[index], changes || {}) };
   rows[index] = updated;
   if (!options.skipTouch) touchSyncMetadata(table, updated.account_id || options.accountId || getActiveAccountId());
-  if (!options.skipSave) saveDB();
+  if (shouldSaveImmediately(options)) saveDB();
   return updated;
 }
 
@@ -928,7 +1014,7 @@ function remove(table, id, options = {}) {
   if (index === -1) return null;
   const [removed] = rows.splice(index, 1);
   if (!options.skipTouch) touchSyncMetadata(table, removed?.account_id || options.accountId || getActiveAccountId());
-  if (!options.skipSave) saveDB();
+  if (shouldSaveImmediately(options)) saveDB();
   return removed;
 }
 
@@ -1098,6 +1184,7 @@ module.exports = {
   DEFAULT_USER_PERMISSION_KEYS,
   SYNC_TRACKED_TABLES,
   DEFAULT_PRODUCT_CATEGORIES,
+  DEFAULT_SYSTEM_SETTINGS,
   loadDB,
   saveDB,
   getDb,

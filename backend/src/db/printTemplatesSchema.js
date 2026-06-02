@@ -3,7 +3,9 @@ const {
   createUnavailableError,
   query,
   normalizePrintTemplatesMySqlError,
+  MYSQL_CONFIGURATION_MESSAGE,
 } = require('./printTemplatesMySql');
+const { DEFAULT_LAYOUT_V2, DEFAULT_SETTINGS_V2 } = require('../services/printTemplateDocumentAdapter');
 
 const CREATE_PRINT_TEMPLATES_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS print_templates (
@@ -11,6 +13,7 @@ CREATE TABLE IF NOT EXISTS print_templates (
   account_id BIGINT UNSIGNED NOT NULL,
   code VARCHAR(100) NULL,
   template_name VARCHAR(150) NOT NULL,
+  name VARCHAR(255) NULL,
   description VARCHAR(255) NULL,
   header_logo VARCHAR(1024) NULL,
   logo_url VARCHAR(1024) NULL,
@@ -21,6 +24,7 @@ CREATE TABLE IF NOT EXISTS print_templates (
   shop_address VARCHAR(255) NULL,
   shop_phone VARCHAR(50) NULL,
   css_style MEDIUMTEXT NULL,
+  template_data LONGTEXT NULL,
   layout_json JSON NULL,
   settings_json JSON NULL,
   template_schema_version INT UNSIGNED NOT NULL DEFAULT 1,
@@ -51,6 +55,7 @@ const REQUIRED_COLUMNS = [
   ['account_id', 'BIGINT UNSIGNED NOT NULL DEFAULT 1'],
   ['code', 'VARCHAR(100) NULL'],
   ['template_name', "VARCHAR(150) NOT NULL DEFAULT 'Mẫu in hóa đơn'"],
+  ['name', 'VARCHAR(255) NULL'],
   ['description', 'VARCHAR(255) NULL'],
   ['header_logo', 'VARCHAR(1024) NULL'],
   ['logo_url', 'VARCHAR(1024) NULL'],
@@ -61,6 +66,7 @@ const REQUIRED_COLUMNS = [
   ['shop_address', 'VARCHAR(255) NULL'],
   ['shop_phone', 'VARCHAR(50) NULL'],
   ['css_style', 'MEDIUMTEXT NULL'],
+  ['template_data', 'LONGTEXT NULL'],
   ['layout_json', 'JSON NULL'],
   ['settings_json', 'JSON NULL'],
   ['template_schema_version', 'INT UNSIGNED NOT NULL DEFAULT 1'],
@@ -88,11 +94,38 @@ const REQUIRED_INDEXES = [
   ['idx_print_templates_name', 'CREATE INDEX idx_print_templates_name ON print_templates (account_id, template_name)'],
 ];
 
+const DEFAULT_TEMPLATE_SEED = Object.freeze({
+  accountId: 1,
+  code: 'mau-in-hoa-don-mac-dinh',
+  templateName: 'Mẫu in hóa đơn mặc định',
+  description: 'Mẫu mặc định được backend tự tạo để /api/print-templates luôn có dữ liệu MySQL thật ban đầu.',
+  layoutJson: JSON.stringify(DEFAULT_LAYOUT_V2),
+  settingsJson: JSON.stringify(DEFAULT_SETTINGS_V2),
+  templateSchemaVersion: 2,
+  paperSize: DEFAULT_LAYOUT_V2.canvas?.pageSize || 'A5',
+  orientation: DEFAULT_LAYOUT_V2.canvas?.orientation || 'portrait',
+  status: 'active',
+});
+
 let schemaReady = false;
 let schemaReadyPromise = null;
 
+const PRINT_TEMPLATES_TABLE_MISSING_ERROR_CODES = new Set(['ER_NO_SUCH_TABLE', 'ER_BAD_TABLE_ERROR']);
+
 function getSchemaReadyState() {
   return schemaReady;
+}
+
+function resetPrintTemplatesSchemaReady() {
+  schemaReady = false;
+  schemaReadyPromise = null;
+}
+
+function isPrintTemplatesTableMissingError(error) {
+  const code = String(error?.code || '').toUpperCase();
+  if (PRINT_TEMPLATES_TABLE_MISSING_ERROR_CODES.has(code)) return true;
+  const message = String(error?.message || '');
+  return /print_templates/i.test(message) && /(doesn'?t exist|unknown table|no such table|table .* not found)/i.test(message);
 }
 
 async function getExistingColumns() {
@@ -142,8 +175,32 @@ async function ensureSoftMigrationDefaults() {
   `);
   await query(`
     UPDATE print_templates
-       SET template_schema_version = 1
+       SET template_schema_version = CASE
+             WHEN JSON_EXTRACT(layout_json, '$.schema_version') = 2 THEN 2
+             WHEN JSON_EXTRACT(settings_json, '$.schema_version') = 2 THEN 2
+             ELSE 1
+           END
      WHERE template_schema_version IS NULL OR template_schema_version < 1
+  `);
+  await query(`
+    UPDATE print_templates
+       SET paper_size = 'A5'
+     WHERE paper_size IS NULL OR paper_size = ''
+  `);
+  await query(`
+    UPDATE print_templates
+       SET orientation = 'portrait'
+     WHERE orientation IS NULL OR orientation = ''
+  `);
+  await query(`
+    UPDATE print_templates
+       SET status = 'active'
+     WHERE status IS NULL OR status = ''
+  `);
+  await query(`
+    UPDATE print_templates
+       SET is_default = 0
+     WHERE is_default IS NULL
   `);
   await query(`
     UPDATE print_templates
@@ -152,27 +209,96 @@ async function ensureSoftMigrationDefaults() {
        AND deleted_at IS NULL
        AND layout_json IS NOT NULL
   `);
+  await query(`
+    UPDATE print_templates
+       SET name = template_name
+     WHERE (name IS NULL OR name = '')
+       AND template_name IS NOT NULL
+       AND template_name <> ''
+  `);
+  await query(`
+    UPDATE print_templates
+       SET template_data = CAST(layout_json AS CHAR)
+     WHERE (template_data IS NULL OR template_data = '')
+       AND layout_json IS NOT NULL
+  `);
+}
+
+async function ensureDefaultTemplateSeed() {
+  const activeRows = await query(
+    `SELECT id, is_default
+       FROM print_templates
+      WHERE account_id = ?
+        AND deleted_at IS NULL
+      ORDER BY is_default DESC, updated_at DESC, id DESC
+      LIMIT 1`,
+    [DEFAULT_TEMPLATE_SEED.accountId]
+  );
+
+  if (!activeRows || activeRows.length === 0) {
+    await query(
+      `INSERT INTO print_templates (
+         account_id, code, template_name, name, description,
+         template_data, layout_json, settings_json, template_schema_version,
+         paper_size, orientation, status, is_default, revision,
+         published_at, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`,
+      [
+        DEFAULT_TEMPLATE_SEED.accountId,
+        DEFAULT_TEMPLATE_SEED.code,
+        DEFAULT_TEMPLATE_SEED.templateName,
+        DEFAULT_TEMPLATE_SEED.templateName,
+        DEFAULT_TEMPLATE_SEED.description,
+        DEFAULT_TEMPLATE_SEED.layoutJson,
+        DEFAULT_TEMPLATE_SEED.layoutJson,
+        DEFAULT_TEMPLATE_SEED.settingsJson,
+        DEFAULT_TEMPLATE_SEED.templateSchemaVersion,
+        DEFAULT_TEMPLATE_SEED.paperSize,
+        DEFAULT_TEMPLATE_SEED.orientation,
+        DEFAULT_TEMPLATE_SEED.status,
+      ]
+    );
+    return { seeded: true, defaulted: true };
+  }
+
+  if (Number(activeRows[0].is_default) !== 1) {
+    await query(
+      `UPDATE print_templates
+          SET is_default = 1, updated_at = UTC_TIMESTAMP(3)
+        WHERE account_id = ?
+          AND id = ?
+          AND deleted_at IS NULL`,
+      [DEFAULT_TEMPLATE_SEED.accountId, activeRows[0].id]
+    );
+    return { seeded: false, defaulted: true };
+  }
+
+  return { seeded: false, defaulted: false };
 }
 
 async function runEnsurePrintTemplatesSchema() {
   if (!isPrintTemplatesMySqlConfigured()) {
-    throw createUnavailableError('Chưa cấu hình MySQL cho module mẫu in hóa đơn. Backend vẫn chạy, nhưng API /api/print-templates sẽ trả lỗi cấu hình cho tới khi thiết lập env MySQL.');
+    throw createUnavailableError(MYSQL_CONFIGURATION_MESSAGE);
   }
 
   await query(CREATE_PRINT_TEMPLATES_TABLE_SQL);
   await ensureMissingColumns();
   await ensureMissingIndexes();
   await ensureSoftMigrationDefaults();
+  const seed = await ensureDefaultTemplateSeed();
   schemaReady = true;
-  return { ok: true, configured: true, table: 'print_templates' };
+  return { ok: true, configured: true, table: 'print_templates', seed };
 }
 
 async function ensurePrintTemplatesSchema(options = {}) {
   const failSoft = options.failSoft === true;
+  const force = options.force === true;
+  const verify = options.verify === true;
 
-  if (schemaReady) return { ok: true, configured: true, table: 'print_templates', cached: true };
+  if (force) resetPrintTemplatesSchemaReady();
+  if (schemaReady && !verify) return { ok: true, configured: true, table: 'print_templates', cached: true };
 
-  if (!schemaReadyPromise) {
+  if (!schemaReadyPromise || verify) {
     schemaReadyPromise = runEnsurePrintTemplatesSchema()
       .catch(error => {
         schemaReady = false;
@@ -201,6 +327,9 @@ async function ensurePrintTemplatesSchema(options = {}) {
 
 module.exports = {
   CREATE_PRINT_TEMPLATES_TABLE_SQL,
+  DEFAULT_TEMPLATE_SEED,
   ensurePrintTemplatesSchema,
   getSchemaReadyState,
+  resetPrintTemplatesSchemaReady,
+  isPrintTemplatesTableMissingError,
 };

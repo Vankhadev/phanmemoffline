@@ -16,7 +16,8 @@ import {
   normalizeSearchText,
 } from '../utils/productSearch';
 import { SYNC_UPDATED_EVENT } from '../utils/apiClient';
-import { NEGATIVE_STOCK_LIMIT, getStockDisplayMeta } from '../utils/negativeStock';
+import { getNegativeStockLimitLabel, getNegativeStockNearLimitLabel, getStockDisplayMeta } from '../utils/negativeStock';
+import useNegativeStockSettings from '../utils/useNegativeStockSettings';
 
 function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
@@ -56,8 +57,8 @@ function categoryValuesMatch(a, b) {
     || compactB.includes(compactA);
 }
 
-function StockBadge({ stock }) {
-  const meta = getStockDisplayMeta(stock);
+function StockBadge({ stock, settings }) {
+  const meta = getStockDisplayMeta(stock, settings);
   return (
     <span className="inline-flex flex-col items-center gap-0.5">
       <span className={`inline-block font-bold px-2 py-0.5 rounded text-xs ${meta.badgeClass}`}>{meta.display}</span>
@@ -66,7 +67,7 @@ function StockBadge({ stock }) {
           {meta.isBreached ? 'Vượt ngưỡng' : 'Âm kho'}
         </span>
       )}
-      {meta.isNearLimit && <span className="text-[10px] font-semibold text-orange-700">Gần -100</span>}
+      {meta.isNearLimit && <span className="text-[10px] font-semibold text-orange-700">{meta.extraLabel || getNegativeStockNearLimitLabel(settings)}</span>}
     </span>
   );
 }
@@ -80,6 +81,9 @@ export default function KhoHang() {
   const [stockSortDirection, setStockSortDirection] = useState(null);
   const [alertMsg, setAlertMsg] = useState('');
   const [showHelp, setShowHelp] = useState(false);
+  const { settings: negativeStockSettings } = useNegativeStockSettings();
+  const negativeStockLimitLabel = useMemo(() => getNegativeStockLimitLabel(negativeStockSettings), [negativeStockSettings]);
+  const negativeStockNearLimitLabel = useMemo(() => getNegativeStockNearLimitLabel(negativeStockSettings), [negativeStockSettings]);
 
   useEffect(() => { fetchProducts(); fetchCategories(); }, []);
 
@@ -338,8 +342,7 @@ export default function KhoHang() {
   }, 0);
   const nearNegativeLimitRows = filteredInventoryRows.reduce((sum, row) => {
     if (row._isParent && getProductVariantCount(row) > 0) return sum;
-    const stock = Number(row.stock) || 0;
-    return sum + (stock <= -80 && stock >= NEGATIVE_STOCK_LIMIT ? 1 : 0);
+    return sum + (getStockDisplayMeta(row.stock, negativeStockSettings).isNearLimit ? 1 : 0);
   }, 0);
 
   const emptyMessage = selectedCategory?.key !== 'all'
@@ -372,11 +375,11 @@ export default function KhoHang() {
           <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
             <span className="flex items-center gap-1">
               <span className="inline-block w-3 h-3 rounded bg-red-100 border border-red-200" />
-              Âm kho ({NEGATIVE_STOCK_LIMIT} đến -1)
+              Âm kho ({negativeStockLimitLabel} đến -1)
             </span>
             <span className="flex items-center gap-1">
               <span className="inline-block w-3 h-3 rounded bg-orange-100 border border-orange-200" />
-              Gần ngưỡng -100
+              {negativeStockNearLimitLabel || 'Gần ngưỡng âm'}
             </span>
             <span className="flex items-center gap-1">
               <span className="inline-block w-3 h-3 rounded bg-yellow-100 border border-yellow-200" />
@@ -416,7 +419,7 @@ export default function KhoHang() {
             <div className="text-lg font-bold text-red-700">{negativeStockRows}</div>
           </div>
           <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-2 text-center">
-            <div className="text-xs text-orange-500 font-medium">Gần -100</div>
+            <div className="text-xs text-orange-500 font-medium">{negativeStockNearLimitLabel || 'Gần ngưỡng âm'}</div>
             <div className="text-lg font-bold text-orange-700">{nearNegativeLimitRows}</div>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2 text-center">
@@ -517,7 +520,7 @@ export default function KhoHang() {
             const rowKey = isParentRow ? `p-${row.id}` : `v-${row._parentId || row.parent_id || parent?.id || 'parent'}-${row.id || rowSku || idx}`;
 
             return (
-              <div key={rowKey} className={`border-b last:border-b-0 ${hasVariants ? (isParentRow ? 'bg-white' : 'bg-blue-50/30') : (getStockDisplayMeta(row.stock).rowClass || (isParentRow ? 'bg-white' : 'bg-blue-50/30'))}`}>
+              <div key={rowKey} className={`border-b last:border-b-0 ${hasVariants ? (isParentRow ? 'bg-white' : 'bg-blue-50/30') : (getStockDisplayMeta(row.stock, negativeStockSettings).rowClass || (isParentRow ? 'bg-white' : 'bg-blue-50/30'))}`}>
                 <div className="flex flex-wrap items-center gap-2 px-3 py-3 hover:bg-gray-50 md:flex-nowrap md:py-2">
                   {/* STT */}
                   <div className="w-8 text-center text-xs text-gray-400">{idx + 1}</div>
@@ -542,7 +545,7 @@ export default function KhoHang() {
 
                   {/* Tên sản phẩm */}
                   <div className="flex-1 min-w-[12rem] md:min-w-0">
-                    <div className={`text-sm truncate ${isParentRow ? 'font-semibold' : 'pl-2 font-medium'} ${!hasVariants ? getStockDisplayMeta(row.stock).nameClass : (isParentRow ? 'text-gray-800' : 'text-blue-700')}`} title={rowName}>{rowName}</div>
+                    <div className={`text-sm truncate ${isParentRow ? 'font-semibold' : 'pl-2 font-medium'} ${!hasVariants ? getStockDisplayMeta(row.stock, negativeStockSettings).nameClass : (isParentRow ? 'text-gray-800' : 'text-blue-700')}`} title={rowName}>{rowName}</div>
                     <div className="text-xs text-gray-400 truncate" title={isParentRow ? `${rowSku || 'Không có SKU'} · ${variantCount} biến thể` : `Biến thể của: ${parent?.name || row.parent_name || 'Sản phẩm cha'} · SKU: ${rowSku || '—'}${row.option_text ? ` · ${row.option_text}` : ''}`}>
                       {isParentRow
                         ? `${rowSku || 'Không có SKU'} · ${variantCount} biến thể`
@@ -554,7 +557,7 @@ export default function KhoHang() {
                   <div className="hidden w-36 text-xs text-gray-500 truncate sm:block" title={categoryName}>{categoryName}</div>
 
                   {/* Tồn kho */}
-                  <div className="w-20 text-center" title={hasVariants ? 'Tồn kho được quản lý ở từng biến thể' : undefined}>{hasVariants ? <span className="text-gray-300 text-xs">—</span> : <StockBadge stock={row.stock} />}</div>
+                  <div className="w-20 text-center" title={hasVariants ? 'Tồn kho được quản lý ở từng biến thể' : undefined}>{hasVariants ? <span className="text-gray-300 text-xs">—</span> : <StockBadge stock={row.stock} settings={negativeStockSettings} />}</div>
 
                   {/* Giá nhập */}
                   <div className={`hidden w-28 text-right text-xs md:block ${hasVariants ? 'text-gray-300' : 'text-gray-500'}`} title={hasVariants ? 'Giá nhập được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatOptionalVND(row.import_price)}</div>
@@ -584,7 +587,7 @@ export default function KhoHang() {
                                 <div className="truncate font-medium text-blue-700" title={variantName}>↳ {variantName}</div>
                                 <div className="truncate text-gray-400" title={variant.option_text || variantSku || 'Không có SKU'}>SKU: {variantSku || '—'}{variant.option_text ? ` · ${variant.option_text}` : ''}</div>
                               </div>
-                              <div className="md:text-center"><StockBadge stock={variant.stock} /></div>
+                              <div className="md:text-center"><StockBadge stock={variant.stock} settings={negativeStockSettings} /></div>
                               <div className="text-gray-500 md:text-right">Nhập: {formatOptionalVND(variant.import_price)}</div>
                               <div className="font-medium text-green-600 md:text-right">Lẻ: {formatOptionalVND(variant.retail_price)}</div>
                               <div className="font-medium text-red-600 md:text-right">Sỉ: {formatOptionalVND(variant.wholesale_price)}</div>
@@ -635,8 +638,8 @@ export default function KhoHang() {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">🎨 Màu sắc cảnh báo</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li><span className="text-red-600 font-medium">🔴 Âm kho:</span> Tồn kho từ {NEGATIVE_STOCK_LIMIT} đến -1, hiển thị dạng “Tồn: -5”.</li>
-                  <li><span className="text-orange-600 font-medium">🟠 Gần ngưỡng:</span> Tồn kho từ -80 đến {NEGATIVE_STOCK_LIMIT} cần xử lý sớm.</li>
+                  <li><span className="text-red-600 font-medium">🔴 Âm kho:</span> Tồn kho từ {negativeStockLimitLabel} đến -1, hiển thị dạng “Tồn: -5”.</li>
+                  <li><span className="text-orange-600 font-medium">🟠 Gần ngưỡng:</span> Tồn kho trong vùng cảnh báo gần {negativeStockLimitLabel} cần xử lý sớm.</li>
                   <li><span className="text-red-500 font-medium">🔴 Sắp hết:</span> Tồn kho từ 0 đến {'<'} 5</li>
                   <li><span className="text-yellow-600 font-medium">🟡 Còn ít:</span> Tồn kho từ 5–30</li>
                   <li><span className="text-green-600 font-medium">🟢 Còn nhiều:</span> Tồn kho ≥ 30</li>
@@ -663,7 +666,7 @@ export default function KhoHang() {
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
                   <li>Chọn danh mục như <strong>Kệ hộp</strong> để xem nhanh toàn bộ sản phẩm trong danh mục đó.</li>
                   <li>Dùng mũi tên mở chi tiết để kiểm tra tồn kho từng biến thể mà không rời màn hình Kho hàng.</li>
-                  <li>Sản phẩm âm kho sẽ hiển thị badge “Âm kho” và giá trị như “Tồn: -5”, “Tồn: -20”, “Tồn: -100”.</li>
+                  <li>Sản phẩm âm kho sẽ hiển thị badge “Âm kho” và giá trị như “Tồn: -5”; giới hạn âm lấy từ cài đặt hiện tại ({negativeStockLimitLabel}).</li>
                 </ul>
               </div>
             </div>

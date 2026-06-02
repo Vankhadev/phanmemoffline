@@ -1,4 +1,8 @@
-const { ensurePrintTemplatesSchema } = require('../db/printTemplatesSchema');
+const {
+  ensurePrintTemplatesSchema,
+  isPrintTemplatesTableMissingError,
+  resetPrintTemplatesSchemaReady,
+} = require('../db/printTemplatesSchema');
 const { getPrintTemplatesPool, normalizePrintTemplatesMySqlError, query } = require('../db/printTemplatesMySql');
 const {
   DEFAULT_LAYOUT_V2,
@@ -23,7 +27,7 @@ const {
 const DEFAULT_LAYOUT_JSON = Object.freeze({
   page: { size: 'A5', orientation: 'portrait', paddingMm: 8 },
   branding: { showLogo: true, logoWidthMm: 24, storeNameUppercase: true, headerBorder: true },
-  content: { showCustomerTaxCode: true, showDeliveryDate: true, showCreator: true, showQr: true, showSignatures: true, showFooter: true },
+  content: { showCustomerTaxCode: true, showDeliveryDate: true, showCreator: true, showQr: false, showSignatures: true, showFooter: true },
   table: {
     fontSizePt: 9,
     headerFontSizePt: 9,
@@ -37,9 +41,12 @@ const DEFAULT_LAYOUT_JSON = Object.freeze({
 });
 
 const DEFAULT_SETTINGS_JSON = Object.freeze({ schema_version: 1 });
-const PAPER_SIZES = new Set(['A5', 'A4', 'K80', 'K58']);
+const PAPER_SIZES = new Set(['A5', 'A4', 'K80', 'K57', 'K58']);
 const ORIENTATIONS = new Set(['portrait', 'landscape']);
 const STATUSES = new Set(['draft', 'active', 'archived']);
+const DEFAULT_TEMPLATE_SEED_CODE = 'mau-in-hoa-don-mac-dinh';
+const DEFAULT_TEMPLATE_SEED_NAME = 'Mẫu in hóa đơn mặc định';
+const DEFAULT_TEMPLATE_SEED_DESCRIPTION = 'Mẫu mặc định được backend tự tạo để API mẫu in hóa đơn luôn có dữ liệu MySQL thật ban đầu.';
 
 let readyPromise = null;
 
@@ -167,6 +174,7 @@ function normalizeCode(value, fallback = '') {
 
 function normalizePaperSize(value) {
   const paperSize = cleanText(value || 'A5', 20).toUpperCase();
+  if (paperSize === 'K58') return 'K57';
   return PAPER_SIZES.has(paperSize) ? paperSize : 'A5';
 }
 
@@ -186,6 +194,10 @@ function schemaVersionFromLayout(layout, settings, explicitVersion = null) {
 
 function jsonStringifyOrNull(value) {
   return value === null || value === undefined ? null : JSON.stringify(value);
+}
+
+function currentMysqlDateTime() {
+  return new Date().toISOString().slice(0, 23).replace('T', ' ');
 }
 
 function extractPaperSizeFromLayout(layout, fallback = 'A5') {
@@ -239,14 +251,28 @@ function validateEditorMetaOrThrow(meta) {
   return result.value;
 }
 
-async function ensureReady() {
-  if (!readyPromise) {
-    readyPromise = ensurePrintTemplatesSchema({ failSoft: false }).catch(error => {
+async function ensureReady(options = {}) {
+  const verify = options.verify !== false;
+  if (!readyPromise || verify) {
+    readyPromise = ensurePrintTemplatesSchema({ failSoft: false, verify }).catch(error => {
       readyPromise = null;
       throw error;
     });
   }
   return readyPromise;
+}
+
+async function runWithSchemaSelfHeal(callback) {
+  await ensureReady({ verify: true });
+  try {
+    return await callback();
+  } catch (error) {
+    if (!isPrintTemplatesTableMissingError(error)) throw error;
+    resetPrintTemplatesSchemaReady();
+    readyPromise = null;
+    await ensurePrintTemplatesSchema({ failSoft: false, force: true });
+    return callback();
+  }
 }
 
 async function execute(connection, sql, params = []) {
@@ -322,8 +348,8 @@ function serializePrintTemplate(row) {
     id: Number(row.id),
     account_id: Number(row.account_id),
     code: cleanText(row.code, 100),
-    template_name: cleanText(row.template_name, 150),
-    name: cleanText(row.template_name, 150),
+    template_name: cleanText(row.template_name || row.name, 150),
+    name: cleanText(row.name || row.template_name, 255),
     description: cleanText(row.description, 255),
     header_logo: headerLogo,
     logo_url: cleanText(row.logo_url || headerLogo, 1024),
@@ -341,6 +367,7 @@ function serializePrintTemplate(row) {
     shop_address: cleanText(row.shop_address, 255),
     shop_phone: cleanText(row.shop_phone, 50),
     css_style: row.css_style || '',
+    template_data: row.template_data || (row.layout_json ? String(row.layout_json) : ''),
     layout_json: layout,
     layout,
     settings_json: settings,
@@ -463,6 +490,7 @@ function buildPrintTemplatePayload(body = {}, options = {}) {
   if (nameInput.provided) {
     if (!templateName) return { error: 'Tên mẫu in hóa đơn không được để trống.' };
     payload.template_name = templateName;
+    payload.name = templateName;
   }
 
   const codeInput = pickBodyValue(body, ['code', 'template_code']);
@@ -497,7 +525,7 @@ function buildPrintTemplatePayload(body = {}, options = {}) {
   const isDefaultInput = pickBodyValue(body, ['is_default', 'default']);
   if (isDefaultInput.provided || !partial) payload.is_default = parseBooleanFlag(isDefaultInput.value, 0);
 
-  const layoutInput = pickBodyValue(body, ['layout_json', 'layout']);
+  const layoutInput = pickBodyValue(body, ['layout_json', 'layout', 'template_data']);
   if (layoutInput.provided) {
     const parsed = parseJsonObjectInput(layoutInput.value, 'layout_json', DEFAULT_LAYOUT_V2);
     if (parsed.error) return { error: parsed.error };
@@ -519,6 +547,10 @@ function buildPrintTemplatePayload(body = {}, options = {}) {
     validateParsedTemplateJsonForPayload(payload, parsedLayout, parsedSettings, { partial });
   } catch (error) {
     return { error: error.message, details: error.details, code: error.code };
+  }
+
+  if (payload.layout_json !== undefined) {
+    payload.template_data = payload.layout_json == null ? null : String(payload.layout_json);
   }
 
   return { value: payload };
@@ -628,6 +660,76 @@ async function withTemplateTransaction(callback) {
   }
 }
 
+function buildDefaultTemplatePayload(accountId, userId = null) {
+  const revision = 1;
+  const layout = validateV2LayoutOrThrow(cloneJson(DEFAULT_LAYOUT_V2), 'layout_json');
+  const settings = mergeSettingsPublishState(validateV2SettingsOrThrow(cloneJson(DEFAULT_SETTINGS_V2), 'settings_json'), {
+    revision,
+    hasDraft: false,
+    sourceSchemaVersion: 2,
+  });
+  return {
+    account_id: normalizeAccountId(accountId),
+    code: DEFAULT_TEMPLATE_SEED_CODE,
+    template_name: DEFAULT_TEMPLATE_SEED_NAME,
+    name: DEFAULT_TEMPLATE_SEED_NAME,
+    description: DEFAULT_TEMPLATE_SEED_DESCRIPTION,
+    template_data: JSON.stringify(layout),
+    layout_json: JSON.stringify(layout),
+    settings_json: JSON.stringify(settings),
+    template_schema_version: 2,
+    paper_size: extractPaperSizeFromLayout(layout, 'A5'),
+    orientation: extractOrientationFromLayout(layout, 'portrait'),
+    status: 'active',
+    is_default: 1,
+    revision,
+    published_at: currentMysqlDateTime(),
+    created_by: normalizeUserId(userId),
+    updated_by: normalizeUserId(userId),
+  };
+}
+
+async function getFirstActiveTemplateRow(accountId, options = {}) {
+  const connection = options.connection || null;
+  const rows = await execute(
+    connection,
+    `SELECT * FROM print_templates
+      WHERE account_id = ?
+        AND deleted_at IS NULL
+      ORDER BY is_default DESC, updated_at DESC, id DESC
+      LIMIT 1`,
+    [normalizeAccountId(accountId)]
+  );
+  return rows?.[0] || null;
+}
+
+async function ensureDefaultTemplateForAccount(accountId, options = {}) {
+  const normalizedAccountId = normalizeAccountId(accountId);
+  const connection = options.connection || null;
+  const activeRow = await getFirstActiveTemplateRow(normalizedAccountId, { connection });
+
+  if (!activeRow) {
+    const payload = buildDefaultTemplatePayload(normalizedAccountId, options.userId);
+    const insert = buildInsertSql(payload);
+    const result = await execute(connection, insert.sql, insert.params);
+    return getTemplateRowById(normalizedAccountId, result.insertId, { connection });
+  }
+
+  if (Number(activeRow.is_default) === 1) return activeRow;
+
+  await execute(
+    connection,
+    'UPDATE print_templates SET is_default = 0, updated_at = UTC_TIMESTAMP(3) WHERE account_id = ? AND deleted_at IS NULL',
+    [normalizedAccountId]
+  );
+  await execute(
+    connection,
+    'UPDATE print_templates SET is_default = 1, updated_at = UTC_TIMESTAMP(3) WHERE account_id = ? AND id = ? AND deleted_at IS NULL',
+    [normalizedAccountId, activeRow.id]
+  );
+  return getTemplateRowById(normalizedAccountId, activeRow.id, { connection });
+}
+
 async function getTemplateRowById(accountId, id, options = {}) {
   const includeDeleted = options.includeDeleted === true;
   const connection = options.connection || null;
@@ -641,29 +743,31 @@ async function getTemplateRowById(accountId, id, options = {}) {
 }
 
 async function listPrintTemplates(options = {}) {
-  await ensureReady();
-  const accountId = normalizeAccountId(options.accountId);
-  const includeDeleted = options.includeDeleted === true;
-  const status = cleanText(options.status, 20).toLowerCase();
-  const q = cleanText(options.q, 120);
-  const params = [accountId];
-  const conditions = ['account_id = ?'];
+  return runWithSchemaSelfHeal(async () => {
+    const accountId = normalizeAccountId(options.accountId);
+    await ensureDefaultTemplateForAccount(accountId, { userId: options.userId });
+    const includeDeleted = options.includeDeleted === true;
+    const status = cleanText(options.status, 20).toLowerCase();
+    const q = cleanText(options.q, 120);
+    const params = [accountId];
+    const conditions = ['account_id = ?'];
 
-  if (!includeDeleted) conditions.push('deleted_at IS NULL');
-  if (status && STATUSES.has(status)) {
-    conditions.push('status = ?');
-    params.push(status);
-  }
-  if (q) {
-    conditions.push('(template_name LIKE ? OR code LIKE ? OR shop_name LIKE ?)');
-    params.push(`%${q}%`, `%${q}%`, `%${q}%`);
-  }
+    if (!includeDeleted) conditions.push('deleted_at IS NULL');
+    if (status && STATUSES.has(status)) {
+      conditions.push('status = ?');
+      params.push(status);
+    }
+    if (q) {
+      conditions.push('(template_name LIKE ? OR code LIKE ? OR shop_name LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    }
 
-  const rows = await query(
-    `SELECT * FROM print_templates WHERE ${conditions.join(' AND ')} ORDER BY is_default DESC, updated_at DESC, id DESC`,
-    params
-  );
-  return rows.map(serializePrintTemplate);
+    const rows = await query(
+      `SELECT * FROM print_templates WHERE ${conditions.join(' AND ')} ORDER BY is_default DESC, updated_at DESC, id DESC`,
+      params
+    );
+    return rows.map(serializePrintTemplate);
+  });
 }
 
 async function getPrintTemplateById(options = {}) {
@@ -679,6 +783,8 @@ async function getPrintTemplateById(options = {}) {
 async function getDefaultPrintTemplate(options = {}) {
   await ensureReady();
   const accountId = normalizeAccountId(options.accountId);
+  const ensured = await ensureDefaultTemplateForAccount(accountId, { userId: options.userId });
+  if (ensured && Number(ensured.is_default) === 1) return serializePrintTemplate(ensured);
   const rows = await query(
     `SELECT * FROM print_templates
       WHERE account_id = ?
@@ -724,7 +830,11 @@ async function createPrintTemplate(options = {}) {
     created_by: userId,
     updated_by: userId,
   };
-  if (Number(payload.template_schema_version) >= 2 && !payload.published_at) payload.published_at = new Date().toISOString().slice(0, 23).replace('T', ' ');
+  if (Number(payload.template_schema_version) >= 2 && !payload.published_at) payload.published_at = currentMysqlDateTime();
+  if (payload.is_default !== 1) {
+    const existing = await getFirstActiveTemplateRow(accountId);
+    if (!existing) payload.is_default = 1;
+  }
   await ensureNoDuplicateTemplate(accountId, payload);
 
   const insertAndFetch = async (connection = null) => {
@@ -758,13 +868,16 @@ async function updatePrintTemplate(options = {}) {
 
   const existing = await getTemplateRowById(accountId, id);
   if (!existing) throw createHttpError(404, 'Không tìm thấy mẫu in hóa đơn.', 'PRINT_TEMPLATE_NOT_FOUND');
+  if (Number(existing.is_default) === 1 && hasOwn(payload, 'is_default') && payload.is_default !== 1) {
+    delete payload.is_default;
+  }
   await ensureNoDuplicateTemplate(accountId, payload, id);
 
   const layoutTouched = hasOwn(payload, 'layout_json') || hasOwn(payload, 'settings_json') || hasOwn(payload, 'template_schema_version');
   if (layoutTouched) {
     payload.revision = (parsePositiveInteger(existing.revision) || 1) + 1;
     if (Number(payload.template_schema_version) >= 2) {
-      payload.published_at = new Date().toISOString().slice(0, 23).replace('T', ' ');
+      payload.published_at = currentMysqlDateTime();
       payload.draft_layout_json = null;
       payload.draft_settings_json = null;
     }
@@ -1098,6 +1211,7 @@ async function softDeletePrintTemplate(options = {}) {
       WHERE account_id = ? AND id = ? AND deleted_at IS NULL`,
     [userId, accountId, id]
   );
+  await ensureDefaultTemplateForAccount(accountId, { userId });
 
   return {
     item: serializePrintTemplate({ ...existing, deleted_at: new Date().toISOString(), is_default: 0, updated_by: userId }),
@@ -1217,6 +1331,7 @@ module.exports = {
   serializePrintTemplate,
   serializePrintTemplateForInvoice,
   buildPrintTemplatePayload,
+  ensureDefaultTemplateForAccount,
   listPrintTemplates,
   getPrintTemplateById,
   getDefaultPrintTemplate,

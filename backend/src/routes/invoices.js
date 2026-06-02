@@ -19,6 +19,7 @@ const {
   getInvoiceDetailProductId,
   validateNegativeStockForDetails,
   logNegativeStockLimitViolation,
+  buildNegativeStockErrorResponse,
 } = require('../utils/negativeStock');
 const { resolveInvoicePrintTemplate } = require('../services/printTemplateService');
 
@@ -575,7 +576,7 @@ router.post('/', async (req, res) => {
   } catch (err) {
     const status = err.status || 500;
     logNegativeStockLimitViolation(err, { source: 'invoice_create' });
-    res.status(status).json({ error: 'Lỗi khi tạo đơn: ' + err.message, code: err.code });
+    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi tạo đơn'));
   }
 });
 
@@ -663,7 +664,7 @@ router.put('/:id', async (req, res) => {
   } catch (err) {
     const status = err.status || 500;
     logNegativeStockLimitViolation(err, { source: 'invoice_update', invoice_id: req.params.id });
-    res.status(status).json({ error: 'Lỗi khi sửa đơn: ' + err.message, code: err.code });
+    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi sửa đơn'));
   }
 });
 

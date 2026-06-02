@@ -9,6 +9,10 @@ const {
   auditLog,
 } = require('../db/database');
 const { requireAuth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const {
+  NEGATIVE_STOCK_FEATURE_KEY,
+  syncNegativeStockSettingFromFeature,
+} = require('../services/settingsService');
 
 const router = express.Router();
 
@@ -135,6 +139,13 @@ router.post('/', canManageFeatures, (req, res) => {
   });
   auditLog('feature_created', { userId: req.user?.id || null, featureId: id, featureKey: parsed.value.feature_key });
   const item = serializeFeature(getOne(FEATURE_TABLE, row => Number(row.id) === Number(id), { skipAccountScope: true }));
+  if (item?.feature_key === NEGATIVE_STOCK_FEATURE_KEY) {
+    syncNegativeStockSettingFromFeature(item.active, {
+      accountId: req.accountId,
+      userId: req.user?.id || null,
+      source: 'features_api_create',
+    });
+  }
   res.status(201).json({ ok: true, item, data: item });
 });
 
@@ -160,6 +171,13 @@ router.patch('/:id', canManageFeatures, (req, res) => {
   update(FEATURE_TABLE, feature.id, { ...parsed.value, updated_at: now() });
   auditLog('feature_updated', { userId: req.user?.id || null, featureId: feature.id, changes: parsed.value });
   const item = serializeFeature(getOne(FEATURE_TABLE, row => Number(row.id) === Number(feature.id), { skipAccountScope: true }));
+  if (item?.feature_key === NEGATIVE_STOCK_FEATURE_KEY && Object.prototype.hasOwnProperty.call(parsed.value, 'active')) {
+    syncNegativeStockSettingFromFeature(item.active, {
+      accountId: req.accountId,
+      userId: req.user?.id || null,
+      source: 'features_api_update',
+    });
+  }
   res.json({ ok: true, item, data: item });
 });
 
@@ -174,6 +192,13 @@ router.delete('/:id', canManageFeatures, (req, res) => {
   } else {
     update(FEATURE_TABLE, feature.id, { active: 0, deleted_at: now(), updated_at: now() });
     auditLog('feature_deleted_soft', { userId: req.user?.id || null, featureId: feature.id });
+  }
+  if (cleanText(feature.feature_key || feature.key || feature.code, 100).toLowerCase() === NEGATIVE_STOCK_FEATURE_KEY) {
+    syncNegativeStockSettingFromFeature(false, {
+      accountId: req.accountId,
+      userId: req.user?.id || null,
+      source: 'features_api_delete',
+    });
   }
   res.json({ ok: true });
 });

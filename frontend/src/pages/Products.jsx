@@ -1,12 +1,21 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown, Ban } from 'lucide-react';
+import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ExcelImportPanel from '../components/ExcelImportPanel';
+import NegativeStockInput from '../components/NegativeStockInput';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
 import { ensureFocusableElement } from '../utils/electronFocusGuard';
 import { apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
-import { NEGATIVE_STOCK_LIMIT, getStockDisplayMeta } from '../utils/negativeStock';
+import {
+  getNegativeStockInputError,
+  getNegativeStockInputHelperText,
+  getNegativeStockLimitLabel,
+  getNegativeStockNearLimitLabel,
+  getStockDisplayMeta,
+  parseStockInputNumber,
+} from '../utils/negativeStock';
+import useNegativeStockSettings from '../utils/useNegativeStockSettings';
 
 const vndFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
 const PRODUCTS_PAGE_SIZE = 80;
@@ -70,8 +79,8 @@ function normalizeDecimalQuantity(value, fallback = MIN_QUANTITY) {
   return Math.max(MIN_QUANTITY, Math.round((quantity + Number.EPSILON) * 10) / 10);
 }
 
-function ProductStockValue({ stock, align = 'right' }) {
-  const meta = getStockDisplayMeta(stock);
+function ProductStockValue({ stock, align = 'right', settings }) {
+  const meta = getStockDisplayMeta(stock, settings);
   return (
     <div className={`flex flex-col ${align === 'right' ? 'items-end' : 'items-start'} gap-0.5`}>
       <span className={`font-semibold ${meta.textClass}`}>{meta.display}</span>
@@ -80,7 +89,7 @@ function ProductStockValue({ stock, align = 'right' }) {
           {meta.isBreached ? 'Vượt ngưỡng' : 'Âm kho'}
         </span>
       )}
-      {meta.isNearLimit && <span className="text-[10px] font-semibold text-orange-700">Gần -100</span>}
+      {meta.isNearLimit && <span className="text-[10px] font-semibold text-orange-700">{meta.extraLabel || getNegativeStockNearLimitLabel(settings)}</span>}
     </div>
   );
 }
@@ -114,7 +123,6 @@ const createVariantFormInitial = (overrides = {}) => ({ ...EMPTY_VARIANT_FORM, .
 
 const stripInventoryFields = (data = {}) => {
   const {
-    stock,
     quantity,
     inventory,
     available_quantity,
@@ -128,34 +136,6 @@ const stripInventoryFields = (data = {}) => {
   } = data || {};
   return safeData;
 };
-
-const LockedStockField = memo(function LockedStockField({ value, className = '' }) {
-  const displayValue = value === undefined || value === null || value === '' ? '0' : value;
-  return (
-    <div className={className} title="Tồn kho chỉ được cập nhật qua nghiệp vụ Nhập hàng">
-      <label className="text-xs text-gray-500 flex items-center gap-1">
-        Tồn kho <Ban size={13} className="text-red-500" aria-hidden="true" />
-      </label>
-      <div className="group relative cursor-not-allowed">
-        <input
-          type="text"
-          className="input-field w-full cursor-not-allowed bg-gray-100 pr-9 text-gray-500 caret-transparent"
-          value={displayValue}
-          readOnly
-          aria-readonly="true"
-          tabIndex={-1}
-          onKeyDown={e => e.preventDefault()}
-          onPointerDown={e => e.preventDefault()}
-          placeholder="tồn kho"
-        />
-        <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-red-500 transition group-hover:scale-110" aria-hidden="true">
-          <Ban size={18} />
-        </span>
-      </div>
-      <p className="mt-0.5 text-[10px] text-red-500">Chỉ cập nhật qua Nhập hàng.</p>
-    </div>
-  );
-});
 
 // Tạo SKU mới gồm đúng 5 chữ số, mỗi chữ số từ 1-9 và không có tiền tố chữ.
 const random5Digits = () => Array.from({ length: 5 }, () => String(Math.floor(Math.random() * 9) + 1)).join('');
@@ -194,9 +174,14 @@ const ProductFormModal = memo(function ProductFormModal({
   suppliers,
   onClose,
   onSubmit,
+  onStockLimitError,
+  negativeStockSettings,
 }) {
   const [form, setForm] = useState(() => createProductFormInitial(initialForm));
   const nameInputRef = useRef(null);
+  const stockError = getNegativeStockInputError(form.stock, negativeStockSettings);
+  const stockValueNumber = parseStockInputNumber(form.stock, 0);
+  const stockIsNegative = Number.isFinite(stockValueNumber) && stockValueNumber < 0;
 
   useEffect(() => {
     setForm(createProductFormInitial(initialForm));
@@ -222,12 +207,17 @@ const ProductFormModal = memo(function ProductFormModal({
 
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
+    const nextStockError = getNegativeStockInputError(form.stock, negativeStockSettings);
+    if (nextStockError) {
+      onStockLimitError?.(nextStockError);
+      return;
+    }
     onSubmit(form);
-  }, [form, onSubmit]);
+  }, [form, negativeStockSettings, onStockLimitError, onSubmit]);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
-      <div className="relative z-10 bg-white rounded-xl p-4 sm:p-6 w-full max-w-2xl max-h-[90dvh] overflow-auto shadow-2xl">
+      <div className={`relative z-10 bg-white rounded-xl p-4 sm:p-6 w-full max-w-2xl max-h-[90dvh] overflow-auto shadow-2xl ${stockError ? 'border border-red-300 ring-2 ring-red-200' : stockIsNegative ? 'border border-red-200 bg-red-50/30' : ''}`}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Package size={20} className="text-blue-600" />
@@ -261,7 +251,17 @@ const ProductFormModal = memo(function ProductFormModal({
             <div><label className="text-xs text-gray-500">Giá VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="giá VIP" /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <LockedStockField value={form.stock} />
+            <NegativeStockInput
+              id="product-stock-input"
+              label="Số lượng tồn"
+              value={form.stock}
+              onChange={value => updateField('stock', value)}
+              error={stockError}
+              helper={getNegativeStockInputHelperText(negativeStockSettings)}
+              disabled={saving}
+              onLimitError={onStockLimitError}
+              settings={negativeStockSettings}
+            />
             <div><label className="text-xs text-gray-500">Đơn vị tính</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="đơn vị tính" /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -282,7 +282,7 @@ const ProductFormModal = memo(function ProductFormModal({
             </select>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
-            <button type="submit" disabled={saving}
+            <button type="submit" disabled={saving || Boolean(stockError)}
               className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               💾 {saving ? 'Đang lưu...' : (editing ? 'Lưu thay đổi' : 'Lưu')}
             </button>
@@ -301,9 +301,14 @@ const VariantFormModal = memo(function VariantFormModal({
   saving,
   onClose,
   onSubmit,
+  onStockLimitError,
+  negativeStockSettings,
 }) {
   const [form, setForm] = useState(() => createVariantFormInitial(initialForm));
   const nameInputRef = useRef(null);
+  const stockError = getNegativeStockInputError(form.stock, negativeStockSettings);
+  const stockValueNumber = parseStockInputNumber(form.stock, 0);
+  const stockIsNegative = Number.isFinite(stockValueNumber) && stockValueNumber < 0;
 
   useEffect(() => {
     setForm(createVariantFormInitial(initialForm));
@@ -328,12 +333,17 @@ const VariantFormModal = memo(function VariantFormModal({
 
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
+    const nextStockError = getNegativeStockInputError(form.stock, negativeStockSettings);
+    if (nextStockError) {
+      onStockLimitError?.(nextStockError);
+      return;
+    }
     onSubmit(form);
-  }, [form, onSubmit]);
+  }, [form, negativeStockSettings, onStockLimitError, onSubmit]);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
-      <div className="relative z-10 bg-white rounded-xl p-4 sm:p-6 w-full max-w-xl max-h-[90dvh] overflow-auto shadow-2xl">
+      <div className={`relative z-10 bg-white rounded-xl p-4 sm:p-6 w-full max-w-xl max-h-[90dvh] overflow-auto shadow-2xl ${stockError ? 'border border-red-300 ring-2 ring-red-200' : stockIsNegative ? 'border border-red-200 bg-red-50/30' : ''}`}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Package size={20} className="text-green-600" />
@@ -365,7 +375,18 @@ const VariantFormModal = memo(function VariantFormModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div><label className="text-xs text-gray-500">Giá sỉ</label><input type="number" className="input-field" value={form.wholesale_price} onChange={e => updateField('wholesale_price', e.target.value)} placeholder="giá sỉ" /></div>
             <div><label className="text-xs text-gray-500">Giá VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="giá VIP" /></div>
-            <LockedStockField value={form.stock} />
+            <NegativeStockInput
+              id="variant-stock-input"
+              label="Số lượng tồn"
+              value={form.stock}
+              onChange={value => updateField('stock', value)}
+              error={stockError}
+              helper={getNegativeStockInputHelperText(negativeStockSettings)}
+              disabled={saving}
+              compact
+              onLimitError={onStockLimitError}
+              settings={negativeStockSettings}
+            />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -385,7 +406,7 @@ const VariantFormModal = memo(function VariantFormModal({
             <div><label className="text-xs text-gray-500">Đơn vị tính</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="cái" /></div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
-            <button type="submit" disabled={saving} className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
+            <button type="submit" disabled={saving || Boolean(stockError)} className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
               💾 {saving ? 'Đang lưu...' : 'Lưu biến thể'}
             </button>
             <button type="button" onClick={onClose} className="btn-danger flex-1">Hủy</button>
@@ -410,6 +431,7 @@ const ProductRow = memo(function ProductRow({
   onEditVariant,
   onToggleExpand,
   onToggleSelect,
+  negativeStockSettings,
 }) {
   const p = product;
   const variants = Array.isArray(p.variants) ? p.variants : EMPTY_ARRAY;
@@ -423,7 +445,7 @@ const ProductRow = memo(function ProductRow({
     return variants.filter(v => matchedVariantIds.has(v.id));
   }, [expanded, isSearching, p._matchedVariantIdSet, p._matchedVariantIds, shouldRenderVariants, variants]);
 
-  const parentStockMeta = getStockDisplayMeta(p.stock);
+  const parentStockMeta = getStockDisplayMeta(p.stock, negativeStockSettings);
 
   return (
     <div className={`border-b last:border-0 ${!hasVariants ? parentStockMeta.rowClass : ''}`}>
@@ -450,7 +472,7 @@ const ProductRow = memo(function ProductRow({
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${parentStockMeta.badgeClass}`}>Âm kho</span>
             )}
             {!hasVariants && parentStockMeta.isNearLimit && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">Gần -100</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">{parentStockMeta.extraLabel || getNegativeStockNearLimitLabel(negativeStockSettings)}</span>
             )}
             {hasVariants && (
               <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
@@ -467,7 +489,7 @@ const ProductRow = memo(function ProductRow({
           <div className="text-right text-sm w-20 text-gray-300" title="Tồn kho được quản lý ở từng biến thể">—</div>
         ) : (
           <div className="text-right text-sm w-24">
-            <ProductStockValue stock={p.stock} />
+            <ProductStockValue stock={p.stock} settings={negativeStockSettings} />
           </div>
         )}
 
@@ -490,7 +512,7 @@ const ProductRow = memo(function ProductRow({
       </div>
 
       {variantRows.map(v => {
-        const variantStockMeta = getStockDisplayMeta(v.stock);
+        const variantStockMeta = getStockDisplayMeta(v.stock, negativeStockSettings);
         return (
         <div key={v.id} className={`flex flex-wrap items-center gap-2 px-3 py-3 pl-8 sm:pl-12 border-t md:flex-nowrap md:py-2 ${variantStockMeta.rowClass || 'bg-gray-50'}`}>
           <div className="flex-1 min-w-[12rem] md:min-w-0">
@@ -501,7 +523,7 @@ const ProductRow = memo(function ProductRow({
           </div>
 
           <div className="text-right text-sm w-24">
-            <ProductStockValue stock={v.stock} />
+            <ProductStockValue stock={v.stock} settings={negativeStockSettings} />
           </div>
 
           <div className="hidden text-right text-xs text-gray-500 w-24 md:block">{formatVND(v.import_price)}</div>
@@ -544,6 +566,9 @@ export default function Products({ store }) {
   const [categoryForm, setCategoryForm] = useState({ name: '', group_name: '', keywords: '' });
   const [stockSortDirection, setStockSortDirection] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [stockToast, setStockToast] = useState(null);
+  const { settings: negativeStockSettings } = useNegativeStockSettings();
+  const negativeStockLimitLabel = useMemo(() => getNegativeStockLimitLabel(negativeStockSettings), [negativeStockSettings]);
   const supplierNameById = useMemo(() => new Map((suppliers || []).map(supplier => [String(supplier.id), supplier.name])), [suppliers]);
   const categoryNameById = useMemo(() => new Map((categories || []).map(category => [String(category.id), category.name])), [categories]);
 
@@ -584,6 +609,16 @@ export default function Products({ store }) {
   );
   const clearSelectedProducts = useCallback(() => {
     setSelectedProducts([]);
+  }, []);
+
+  useEffect(() => {
+    if (!stockToast) return undefined;
+    const timer = window.setTimeout(() => setStockToast(null), 3400);
+    return () => window.clearTimeout(timer);
+  }, [stockToast]);
+
+  const showStockLimitToast = useCallback((message) => {
+    setStockToast({ id: Date.now(), message });
   }, []);
 
   useEffect(() => {
@@ -1104,7 +1139,7 @@ export default function Products({ store }) {
       ['Tên sản phẩm', 'Có với SKU mới', 'Tên sản phẩm cha hoặc tên biến thể. Với biến thể, tên biến thể là dữ liệu phân biệt để cập nhật đúng dòng trong cùng sản phẩm cha.'],
       ['Tên cha', 'Tham khảo', 'Chỉ giúp người dùng đọc file; backend liên kết bằng Parent SKU.'],
       ['Giá nhập / Giá sỉ / Giá lẻ / Giá VIP', 'Không', 'Nhập số không âm. Có thể dùng định dạng 100000, 100.000 hoặc 100,000.'],
-      ['Tồn kho', 'Không', `Có thể âm đến ${NEGATIVE_STOCK_LIMIT}. Nếu thấp hơn ${NEGATIVE_STOCK_LIMIT}, backend sẽ chặn ghi dữ liệu.`],
+      ['Tồn kho', 'Không', `Có thể âm đến ${negativeStockLimitLabel}. Nếu thấp hơn ${negativeStockLimitLabel}, backend sẽ chặn ghi dữ liệu.`],
       ['Đơn vị', 'Không', 'Ví dụ: cái, bộ, hộp. Biến thể bỏ trống sẽ lấy theo sản phẩm cha khi thêm mới.'],
       ['Danh mục text', 'Không', 'Tên/nhóm/từ khóa danh mục. Backend có thể tự khớp danh mục mặc định nếu đã cấu hình.'],
       ['Default category id', 'Không', 'ID danh mục mặc định nếu biết chính xác. Nếu không biết thì để trống và dùng Danh mục text.'],
@@ -1476,7 +1511,7 @@ export default function Products({ store }) {
       wholesale_price: p.wholesale_price || '',
       retail_price: p.retail_price || '',
       vip_price: p.vip_price || '',
-      stock: p.stock || '',
+      stock: p.stock ?? '',
       unit: p.unit || 'cái',
       category: p.category || '',
       supplier_id: p.supplier_id || '',
@@ -1486,6 +1521,8 @@ export default function Products({ store }) {
 
   const handleProductSubmit = useCallback(async (nextForm) => {
     if (!nextForm.name?.trim()) { alert('Vui lòng nhập tên sản phẩm!'); return; }
+    const stockError = getNegativeStockInputError(nextForm.stock);
+    if (stockError) { showStockLimitToast(stockError); return; }
     const currentEditing = editing;
     const hasVariants = getProductVariantCount(currentEditing) > 0;
     const nextSku = hasVariants
@@ -1500,6 +1537,7 @@ export default function Products({ store }) {
         ...stripInventoryFields(nextForm),
         sku: nextSku,
         category: String(nextForm.category || '').trim(),
+        stock: parseStockInputNumber(nextForm.stock, 0),
       };
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
@@ -1523,7 +1561,7 @@ export default function Products({ store }) {
     } finally {
       setSaving(false);
     }
-  }, [closeProductForm, editing, fetchProducts]);
+  }, [closeProductForm, editing, fetchProducts, showStockLimitToast]);
 
   const handleDelete = useCallback(async (id) => {
     if (!confirm('Xóa sản phẩm này? Tất cả biến thể sẽ bị xóa.')) return;
@@ -1568,7 +1606,7 @@ export default function Products({ store }) {
       wholesale_price: variant.wholesale_price || '',
       retail_price: variant.retail_price || '',
       vip_price: variant.vip_price || '',
-      stock: variant.stock || '',
+      stock: variant.stock ?? '',
       unit: variant.unit || 'cái',
     }));
     setShowVariantModal(true);
@@ -1576,6 +1614,8 @@ export default function Products({ store }) {
 
   const handleVariantSubmit = useCallback(async (nextVariantForm) => {
     if (!nextVariantForm.name?.trim()) { alert('Vui lòng nhập tên biến thể!'); return; }
+    const stockError = getNegativeStockInputError(nextVariantForm.stock);
+    if (stockError) { showStockLimitToast(stockError); return; }
     if (!variantParent || !variantParent.id) { alert('Lỗi: Không tìm thấy sản phẩm cha!'); return; }
     setSaving(true);
     try {
@@ -1584,7 +1624,10 @@ export default function Products({ store }) {
       const url = currentEditingVariant
         ? resolveApiUrl(`/products/variants/${currentEditingVariant.id}`)
         : resolveApiUrl(`/products/${variantParent.id}/variants`);
-      const variantPayload = stripInventoryFields(nextVariantForm);
+      const variantPayload = {
+        ...stripInventoryFields(nextVariantForm),
+        stock: parseStockInputNumber(nextVariantForm.stock, 0),
+      };
       delete variantPayload.sku;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10000);
@@ -1608,7 +1651,7 @@ export default function Products({ store }) {
     } finally {
       setSaving(false);
     }
-  }, [closeVariantForm, editingVariant, fetchProducts, variantParent]);
+  }, [closeVariantForm, editingVariant, fetchProducts, showStockLimitToast, variantParent]);
 
   const handleDeleteVariant = useCallback(async (variantId) => {
     if (!confirm('Xóa biến thể này?')) return;
@@ -1757,6 +1800,13 @@ export default function Products({ store }) {
 
   return (
     <div className="min-w-0">
+      {stockToast && (
+        <div className="toast-stack">
+          <div className="toast-card border-red-200 bg-red-50 text-red-700">
+            ⚠️ {stockToast.message}
+          </div>
+        </div>
+      )}
       <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-center lg:justify-between">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Package className="text-blue-600" size={24} /> Quản lý Sản phẩm
@@ -2024,6 +2074,7 @@ export default function Products({ store }) {
             onEditVariant={openEditVariant}
             onToggleExpand={toggleExpand}
             onToggleSelect={toggleSelectProduct}
+            negativeStockSettings={negativeStockSettings}
           />
         ))}
       </div>
@@ -2037,6 +2088,8 @@ export default function Products({ store }) {
           suppliers={suppliers}
           onClose={closeProductForm}
           onSubmit={handleProductSubmit}
+          onStockLimitError={showStockLimitToast}
+          negativeStockSettings={negativeStockSettings}
         />
       )}
 
@@ -2049,6 +2102,8 @@ export default function Products({ store }) {
           saving={saving}
           onClose={closeVariantForm}
           onSubmit={handleVariantSubmit}
+          onStockLimitError={showStockLimitToast}
+          negativeStockSettings={negativeStockSettings}
         />
       )}
 
@@ -2272,7 +2327,7 @@ export default function Products({ store }) {
                   <li><strong>Loại dòng</strong>: nhập <strong>PARENT</strong> cho sản phẩm cha, <strong>VARIANT</strong> cho biến thể. Nếu bỏ trống, backend tự suy luận: có Parent SKU là VARIANT, không có Parent SKU là PARENT.</li>
                   <li><strong>Parent SKU</strong> là khóa giữ quan hệ cha-con; SKU này phải trùng SKU của dòng sản phẩm cha trong file hoặc sản phẩm cha đã có trong hệ thống. Khi tạo biến thể qua giao diện/API, SKU biến thể sẽ được backend tự sinh tăng dần từ SKU cha.</li>
                   <li>Có thể nhập file có alias phổ biến như <strong>Mã SKU</strong>, <strong>Ma SKU</strong>, <strong>Mã sản phẩm</strong>, <strong>Tên</strong>, <strong>SL hàng</strong>, <strong>So luong</strong>, <strong>Giá vốn</strong>, <strong>Giá bán</strong>, <strong>ĐVT</strong>, <strong>Danh mục</strong>, <strong>ParentSKU</strong>, <strong>SKU cha</strong>, <strong>Mã cha</strong>.</li>
-                  <li><strong>Tồn kho</strong> có thể âm đến <strong>{NEGATIVE_STOCK_LIMIT}</strong>; hệ thống cảnh báo “Âm kho” và backend sẽ chặn mọi tồn kho thấp hơn ngưỡng này.</li>
+                  <li><strong>Tồn kho</strong> có thể âm đến <strong>{negativeStockLimitLabel}</strong>; hệ thống cảnh báo “Âm kho” và backend sẽ chặn mọi tồn kho thấp hơn ngưỡng này.</li>
                   <li>Import sẽ validate toàn bộ file trước khi ghi. Nếu có lỗi, thông báo sẽ chỉ rõ dòng/cột và dữ liệu chưa được cập nhật.</li>
                   <li>Các cột <strong>ID</strong>, <strong>Parent ID</strong>, <strong>Default category name</strong>, <strong>Supplier name</strong>, <strong>Ghi chú</strong> chỉ để tham khảo khi xuất file; backend bỏ qua khi import.</li>
                 </ul>

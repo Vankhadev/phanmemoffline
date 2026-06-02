@@ -8,11 +8,16 @@ const helmet  = require('helmet');
 const cron    = require('node-cron');
 const path    = require('path');
 const { version: APP_VERSION } = require('../../package.json');
+const { loadEnv, getLoadedEnvFiles } = require('./utils/loadEnv');
+
+loadEnv({ logErrors: true });
 
 // --- Load DB & helpers ---
 const { upsertDailyStats, today, now, DB_PATH, isCancelledInvoiceStatus, isCompletedInvoiceStatus } = require('./db/database');
 const { requireAuth, requireAnyPermission, requirePermission } = require('./middleware/auth');
 const { ensurePrintTemplatesSchema } = require('./db/printTemplatesSchema');
+const { testPrintTemplatesMySqlConnection, getPrintTemplatesMySqlStatus } = require('./db/printTemplatesMySql');
+const { ensureSettingsSchema, getSettingsMySqlStatus } = require('./db/settingsMySql');
 const { PRINT_TEMPLATE_UPLOAD_DIR, PUBLIC_PRINT_TEMPLATE_UPLOAD_PATH, ensureUploadDir } = require('./middleware/printTemplateUpload');
 
 // --- Routes ---
@@ -34,6 +39,7 @@ const productCategoriesRoutes = require('./routes/productCategories');
 const featuresRoutes = require('./routes/features');
 const updatesRoutes = require('./routes/updates');
 const excelImportsRoutes = require('./routes/excelImports');
+const settingsRoutes = require('./routes/settings');
 const printTemplatesRoutes = require('./routes/printTemplates');
 
 // ============================================================
@@ -71,6 +77,9 @@ function buildHealthPayload() {
     port: PORT,
     dbPath: maskDbPath(DB_PATH),
     dbFile: path.basename(DB_PATH || ''),
+    envFiles: getLoadedEnvFiles().map(maskDbPath),
+    printTemplatesMySql: getPrintTemplatesMySqlStatus(),
+    settingsMySql: getSettingsMySqlStatus(),
     node: process.version,
   };
 }
@@ -133,6 +142,7 @@ app.use(cors({
 }));
 app.use('/api/products/import-excel-rows', express.json({ limit: '25mb' }));
 app.use('/api/excel-imports', express.json({ limit: '25mb' }));
+app.use('/api/print-templates', express.json({ limit: '10mb' }));
 app.use(express.json());
 try {
   ensureUploadDir();
@@ -151,16 +161,24 @@ app.use((err, req, res, next) => {
   if (!isJsonBodyError) return next(err);
 
   const isImportRequest = req.path === '/api/products/import-excel-rows' || req.path.startsWith('/api/excel-imports');
+  const isPrintTemplateRequest = req.path.startsWith('/api/print-templates');
   const status = err.type === 'entity.too.large' ? 413 : 400;
   if (isImportRequest) console.warn('[KHA IMPORT EXCEL] JSON body error:', err.message);
+  if (isPrintTemplateRequest) console.warn('[KHA PRINT TEMPLATES] JSON body error:', err.message);
   res.status(status).json({
     ok: false,
-    error: err.type === 'entity.too.large'
-      ? 'File Excel quá lớn hoặc có quá nhiều dòng để import một lần'
-      : 'Body JSON import không hợp lệ',
-    detail: err.type === 'entity.too.large'
-      ? 'Dữ liệu gửi lên vượt giới hạn 25MB. Hãy giảm số dòng/cột không cần thiết hoặc chia file import thành nhiều lần.'
-      : 'Backend không đọc được JSON do frontend gửi lên. Vui lòng thử lại với file Excel hợp lệ.',
+    error: isPrintTemplateRequest
+      ? (err.type === 'entity.too.large' ? 'Dữ liệu mẫu in hóa đơn vượt quá giới hạn 10MB.' : 'Body JSON mẫu in hóa đơn không hợp lệ')
+      : (err.type === 'entity.too.large'
+        ? 'File Excel quá lớn hoặc có quá nhiều dòng để import một lần'
+        : 'Body JSON import không hợp lệ'),
+    detail: isPrintTemplateRequest
+      ? (err.type === 'entity.too.large'
+        ? 'layout_json/settings_json gửi lên quá lớn. Hãy giảm số component hoặc nội dung CSS.'
+        : 'Backend không đọc được JSON của module mẫu in hóa đơn. Vui lòng kiểm tra payload gửi lên.')
+      : (err.type === 'entity.too.large'
+        ? 'Dữ liệu gửi lên vượt giới hạn 25MB. Hãy giảm số dòng/cột không cần thiết hoặc chia file import thành nhiều lần.'
+        : 'Backend không đọc được JSON do frontend gửi lên. Vui lòng thử lại với file Excel hợp lệ.'),
     errors: [],
     expectedColumns: isImportRequest ? [
       'Loại dòng',
@@ -189,6 +207,7 @@ app.use((err, req, res, next) => {
     ] : undefined,
     receivedColumns: [],
     summary: isImportRequest ? { totalRows: 0, validRows: 0, createdParents: 0, updatedParents: 0, createdVariants: 0, updatedVariants: 0, errors: 1 } : undefined,
+    code: isPrintTemplateRequest ? 'PRINT_TEMPLATE_JSON_BODY_ERROR' : undefined,
   });
 });
 
@@ -215,6 +234,7 @@ app.use('/api/customer-types', requireAuth, requireAnyPermission(['customers.rea
 app.use('/api/product-categories', requireAuth, requireAnyPermission(['products.read', 'products.manage']), productCategoriesRoutes);
 app.use('/api/features', featuresRoutes);
 app.use('/api/updates', updatesRoutes);
+app.use('/api/settings', requireAuth, requireAnyPermission(['settings.read', 'settings.manage']), settingsRoutes);
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);
 app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
 
@@ -310,6 +330,21 @@ cron.schedule('0 2 * * *', () => {
 // ============================================================
 async function bootstrapPrintTemplateSchema() {
   try {
+    const connection = await testPrintTemplatesMySqlConnection();
+    const target = connection.config?.host
+      ? `${connection.config.user}@${connection.config.host}:${connection.config.port}/${connection.config.database}`
+      : connection.config?.url || connection.mode;
+    console.log(`[KHA PRINT TEMPLATES MYSQL] Kết nối MySQL thành công (${target}) - database=${connection.database || 'n/a'}, version=${connection.mysqlVersion || 'n/a'}.`);
+  } catch (error) {
+    const status = getPrintTemplatesMySqlStatus();
+    console.warn('[KHA PRINT TEMPLATES MYSQL] Không thể kết nối MySQL cho module mẫu in hóa đơn khi startup.');
+    console.warn(`[KHA PRINT TEMPLATES MYSQL] Lỗi: ${error.code || 'MYSQL_ERROR'} - ${error.message}`);
+    console.warn(`[KHA PRINT TEMPLATES MYSQL] Trạng thái cấu hình: ${JSON.stringify({ configured: status.configured, mode: status.mode, missing: status.missing, config: status.config })}`);
+    console.warn('[KHA PRINT TEMPLATES MYSQL] Backend tiếp tục chạy; các endpoint mẫu in hóa đơn trả JSON an toàn cho tới khi MySQL sẵn sàng.');
+    return;
+  }
+
+  try {
     const result = await ensurePrintTemplatesSchema({ failSoft: true });
     if (result?.ok) {
       console.log('[KHA PRINT TEMPLATES MYSQL] Schema print_templates đã sẵn sàng.');
@@ -317,11 +352,25 @@ async function bootstrapPrintTemplateSchema() {
       console.warn(`[KHA PRINT TEMPLATES MYSQL] Bỏ qua bootstrap schema print_templates: ${result?.error || 'chưa cấu hình MySQL'}`);
     }
   } catch (error) {
-    console.warn(`[KHA PRINT TEMPLATES MYSQL] Không thể bootstrap schema print_templates, backend vẫn tiếp tục chạy: ${error.message}`);
+    console.warn(`[KHA PRINT TEMPLATES MYSQL] Không thể bootstrap schema print_templates, backend vẫn tiếp tục chạy: ${error.code || 'SCHEMA_ERROR'} - ${error.message}`);
+  }
+}
+
+async function bootstrapSettingsSchema() {
+  try {
+    const result = await ensureSettingsSchema({ failSoft: true });
+    if (result?.ok) {
+      console.log('[KHA SETTINGS MYSQL] Schema system_settings đã sẵn sàng cho negative_stock_limit.');
+    } else {
+      console.warn(`[KHA SETTINGS MYSQL] Bỏ qua bootstrap schema settings: ${result?.error || 'chưa cấu hình MySQL'}`);
+    }
+  } catch (error) {
+    console.warn(`[KHA SETTINGS MYSQL] Không thể bootstrap schema settings, backend vẫn tiếp tục chạy bằng JSON fallback: ${error.code || 'SETTINGS_SCHEMA_ERROR'} - ${error.message}`);
   }
 }
 
 async function startServer() {
+  await bootstrapSettingsSchema();
   await bootstrapPrintTemplateSchema();
   app.listen(PORT, HOST, () => {
     console.log(`

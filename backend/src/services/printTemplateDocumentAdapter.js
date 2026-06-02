@@ -2,7 +2,7 @@ const PAPER_DIMENSIONS_MM = Object.freeze({
   A4: { width: 210, height: 297 },
   A5: { width: 148, height: 210 },
   K80: { width: 80, height: 220 },
-  K58: { width: 58, height: 220 },
+  K57: { width: 57, height: 220 },
 });
 
 const TABLE_COLUMN_LABELS = Object.freeze({
@@ -83,7 +83,8 @@ function roundMm(value) {
 
 function normalizePaperSize(value) {
   const paperSize = cleanText(value || 'A5', 20).toUpperCase();
-  return PAPER_DIMENSIONS_MM[paperSize] ? paperSize : 'A5';
+  const normalizedPaperSize = paperSize === 'K58' ? 'K57' : paperSize;
+  return PAPER_DIMENSIONS_MM[normalizedPaperSize] ? normalizedPaperSize : 'A5';
 }
 
 function normalizeOrientation(value, paperSize = 'A5') {
@@ -210,7 +211,6 @@ function buildDefaultV2Layout(options = {}) {
     Math.max(8, contentWidth * 0.35)
   );
   const showLogo = toBoolean(pickFirst(sourceSettings.showLogo, sourceSettings.show_logo, flags.showLogo, branding.showLogo), true);
-  const showQr = toBoolean(pickFirst(sourceSettings.showQr, sourceSettings.show_qr, flags.showQr, content.showQr), true);
   const showSignatures = toBoolean(pickFirst(sourceSettings.showSignature, sourceSettings.show_signature, flags.showSignature, content.showSignatures), true);
   const showNote = toBoolean(pickFirst(sourceSettings.showNote, sourceSettings.show_note, flags.showNote, content.showNote), true);
   const showDebt = toBoolean(pickFirst(sourceSettings.showDebt, sourceSettings.show_debt, flags.showDebt, content.showDebt), true);
@@ -239,7 +239,6 @@ function buildDefaultV2Layout(options = {}) {
       makeElement('invoiceTitle', 'invoiceTitle', 'header', makeFrame(Math.max(0, contentWidth - titleWidth), 0, titleWidth, Math.min(headerHeight, 18)), { zIndex: 30 }),
       makeElement('customerInfo', 'customerInfo', 'header', makeFrame(0, Math.min(headerHeight - 10, Math.max(18, logoSize + 2)), Math.min(contentWidth, Math.max(30, contentWidth * 0.6)), 10), { zIndex: 40 }),
       makeElement('invoiceMeta', 'invoiceMeta', 'header', makeFrame(Math.max(0, contentWidth * 0.62), Math.min(headerHeight - 10, Math.max(18, logoSize + 2)), Math.max(20, contentWidth * 0.38), 10), { zIndex: 45 }),
-      makeElement('paymentQr', 'paymentQr', 'footer', makeFrame(0, 0, footerLeftWidth, Math.min(footerHeight, footerLeftWidth)), { visible: showQr, zIndex: 10 }),
       makeElement('totals', 'totals', 'footer', makeFrame(Math.max(0, contentWidth - totalsWidth), 0, totalsWidth, Math.min(footerHeight, 24)), { visible: showDebt, zIndex: 20 }),
       makeElement('note', 'note', 'footer', makeFrame(Math.min(contentWidth - 18, footerLeftWidth + 2), 0, Math.max(18, contentWidth - footerLeftWidth - totalsWidth - 6), Math.min(footerHeight, 22)), { visible: showNote, zIndex: 15 }),
       makeElement('signatures', 'signatures', 'footer', makeFrame(0, Math.max(0, footerHeight - 18), contentWidth, Math.min(18, footerHeight)), { visible: showSignatures, zIndex: 30 }),

@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { ArrowLeft, Download, Loader, Printer, RefreshCw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
 import InvoiceTemplateRenderer, { buildInvoicePageStyle } from '../components/invoice-print/InvoiceTemplateRenderer';
 import { getPaperDimensions, normalizeTemplateSettings } from '../components/invoice-print/templateDefaults';
-import { getApiErrorMessage, invoicesApi } from '../utils/apiClient';
+import { getApiErrorMessage, invoicesApi, PRINT_TEMPLATE_UPDATED_EVENT, printTemplatesApi } from '../utils/apiClient';
 
 const PRINT_SETTINGS_KEY = 'kha.invoicePrintA5.settings';
-const SCALE_PRESETS = [0.8, 0.9, 1, 1.1, 1.2];
-const MIN_SCALE = 0.6;
-const MAX_SCALE = 1.4;
-const SCALE_STEP = 0.1;
+const PAPER_OPTIONS = ['A5', 'A4', 'K80', 'K57'];
+const SCALE_PRESETS = [0.8, 0.9, 1];
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 1;
+const SCALE_STEP = 0.05;
 
 function clamp(value, min, max) {
   const numericValue = Number(value);
@@ -24,17 +24,27 @@ function normalizeScale(value) {
   return Math.round(clamp(value, MIN_SCALE, MAX_SCALE) * 100) / 100;
 }
 
+function normalizePaperSize(value) {
+  const requested = String(value || 'A5').toUpperCase();
+  if (requested === 'K58') return 'K57';
+  return PAPER_OPTIONS.includes(requested) ? requested : 'A5';
+}
+
 function readPrintSettings() {
-  if (typeof window === 'undefined') return { scale: 1, orientation: 'portrait', orientationOverride: false };
+  const fallback = { scale: 1, paperSize: 'A5', paperSizeOverride: false, orientation: 'portrait', orientationOverride: false };
+  if (typeof window === 'undefined') return fallback;
   try {
     const parsed = JSON.parse(window.localStorage.getItem(PRINT_SETTINGS_KEY) || '{}');
+    const paperSize = normalizePaperSize(parsed.paperSize || parsed.paper_size || 'A5');
     return {
       scale: normalizeScale(parsed.scale || 1),
-      orientation: parsed.orientation === 'landscape' ? 'landscape' : 'portrait',
+      paperSize,
+      paperSizeOverride: parsed.paperSizeOverride === true,
+      orientation: paperSize.startsWith('K') ? 'portrait' : (parsed.orientation === 'landscape' ? 'landscape' : 'portrait'),
       orientationOverride: parsed.orientationOverride === true,
     };
   } catch (_error) {
-    return { scale: 1, orientation: 'portrait', orientationOverride: false };
+    return fallback;
   }
 }
 
@@ -62,25 +72,40 @@ function getBackendTemplate(data) {
   return data?.template || data?.print_template || data?.printTemplate || null;
 }
 
+function normalizeApiItem(data) {
+  if (!data) return null;
+  if (data.item && typeof data.item === 'object' && !Array.isArray(data.item)) return data.item;
+  if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+    if (data.data.item && typeof data.data.item === 'object' && !Array.isArray(data.data.item)) return data.data.item;
+    if (data.data.template && typeof data.data.template === 'object' && !Array.isArray(data.data.template)) return data.data.template;
+    if (data.data.id || data.data.template_name || data.data.editor_document || data.data.layout_json) return data.data;
+  }
+  if (data.template && typeof data.template === 'object' && !Array.isArray(data.template)) return data.template;
+  if (data.id || data.template_name || data.editor_document || data.layout_json) return data;
+  return null;
+}
+
 function buildFallbackTemplate(settings) {
+  const paperSize = normalizePaperSize(settings.paperSize || 'A5');
+  const orientation = paperSize.startsWith('K') ? 'portrait' : (settings.orientation || 'portrait');
   return {
     id: null,
-    template_name: 'Mẫu A5 mặc định',
-    paper_size: 'A5',
-    orientation: settings.orientation || 'portrait',
+    template_name: `Mẫu ${paperSize} mặc định`,
+    paper_size: paperSize,
+    orientation,
     settings_json: {
       schema_version: 1,
-      paperSize: 'A5',
-      orientation: settings.orientation || 'portrait',
+      paperSize,
+      orientation,
       scale: settings.scale || 1,
-      previewZoom: settings.scale || 1,
-      showLogo: true,
-      showQr: true,
+      previewZoom: 1,
+      showLogo: false,
+      showQr: false,
       showSignature: true,
       showNote: true,
       showDebt: true,
-      lineSpacing: 1.35,
-      paddingMm: 8,
+      lineSpacing: 1.28,
+      paddingMm: 7,
       marginMm: 0,
       tableWidthPercent: 100,
       tableBorder: true,
@@ -92,9 +117,16 @@ function buildFallbackTemplate(settings) {
 function buildRendererSettingsOverride(settings, hasBackendTemplate) {
   const override = {
     scale: settings.scale,
-    previewZoom: settings.scale,
+    previewZoom: 1,
+    showQr: false,
   };
-  if (!hasBackendTemplate || settings.orientationOverride) override.orientation = settings.orientation;
+  if (!hasBackendTemplate || settings.paperSizeOverride) {
+    override.paperSize = normalizePaperSize(settings.paperSize);
+    override.paper_size = override.paperSize;
+  }
+  if (!hasBackendTemplate || settings.orientationOverride || settings.paperSizeOverride) {
+    override.orientation = normalizePaperSize(override.paperSize || settings.paperSize).startsWith('K') ? 'portrait' : settings.orientation;
+  }
   return override;
 }
 
@@ -111,6 +143,7 @@ export default function InvoicePrint() {
   const [error, setError] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
   const [printError, setPrintError] = useState('');
+  const [toast, setToast] = useState(null);
   const [settings, setSettings] = useState(() => readPrintSettings());
 
   const invoiceCode = data?.invoice?.invoice_code || idOrCode || 'hoa-don';
@@ -140,6 +173,12 @@ export default function InvoicePrint() {
     writePrintSettings(settings);
   }, [settings]);
 
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 4200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
   const loadInvoice = useCallback(async () => {
     if (!idOrCode) {
       setError('Thiếu mã hoặc ID hóa đơn.');
@@ -152,10 +191,48 @@ export default function InvoicePrint() {
     setPrintError('');
     try {
       const payload = await invoicesApi.printData(idOrCode, templateId ? { template_id: templateId } : {});
-      setData(payload);
+      if (!payload || typeof payload !== 'object' || !payload.invoice) {
+        setData(null);
+        setError('API dữ liệu in hóa đơn trả về thiếu thông tin hóa đơn.');
+        return;
+      }
+
+      let nextPayload = payload;
+      const templateError = payload.metadata?.print_template_error;
+      if (templateError?.message) {
+        setToast({ tone: 'warning', message: getApiErrorMessage(templateError, 'Mẫu in đang ở trạng thái an toàn từ API thật.') });
+      }
+
+      if (!getBackendTemplate(payload)) {
+        try {
+          const templateData = await printTemplatesApi.current(templateId ? { template_id: templateId } : {});
+          const templateItem = normalizeApiItem(templateData);
+          if (templateItem) {
+            nextPayload = {
+              ...payload,
+              template: templateItem,
+              metadata: {
+                ...(payload.metadata || {}),
+                print_template: {
+                  id: templateItem.id || null,
+                  code: templateItem.code || '',
+                  revision: templateItem.revision || null,
+                  source: 'print-templates-api',
+                },
+              },
+            };
+          }
+        } catch (templateErr) {
+          setToast({ tone: 'warning', message: getErrorMessage(templateErr, 'Chưa tải được mẫu in từ API /api/print-templates; đang dùng mẫu mặc định frontend để preview/in.') });
+        }
+      }
+
+      setData(nextPayload);
     } catch (err) {
       setData(null);
-      setError(getErrorMessage(err, 'Không thể tải dữ liệu hóa đơn.'));
+      const message = getErrorMessage(err, 'Không thể tải dữ liệu hóa đơn.');
+      setError(message);
+      setToast({ tone: 'error', message });
     } finally {
       setLoading(false);
     }
@@ -166,19 +243,53 @@ export default function InvoicePrint() {
     loadInvoice();
   }, [loadInvoice]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleTemplateUpdated = (event) => {
+      const changedTemplateId = event?.detail?.templateId;
+      if (templateId && changedTemplateId && String(changedTemplateId) !== String(templateId)) return;
+      setToast({ tone: 'success', message: 'Mẫu in vừa được cập nhật. Preview đang tải lại dữ liệu mới.' });
+      loadInvoice();
+    };
+    window.addEventListener(PRINT_TEMPLATE_UPDATED_EVENT, handleTemplateUpdated);
+    return () => window.removeEventListener(PRINT_TEMPLATE_UPDATED_EVENT, handleTemplateUpdated);
+  }, [loadInvoice, templateId]);
+
   const pageStyle = useMemo(
     () => buildInvoicePageStyle(activeTemplate, settingsOverride),
     [activeTemplate, settingsOverride],
   );
 
-  const handlePrintInvoice = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: () => `Hoa_don_${sanitizeFileName(invoiceCode)}`,
-    pageStyle,
-    onPrintError: (_location, err) => {
-      setPrintError(err?.message || 'Không thể mở hộp thoại in.');
-    },
-  });
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const styleId = 'invoice-print-dynamic-page-style';
+    let styleElement = document.getElementById(styleId);
+    if (!styleElement) {
+      styleElement = document.createElement('style');
+      styleElement.id = styleId;
+      styleElement.setAttribute('data-owner', 'invoice-print');
+      document.head.appendChild(styleElement);
+    }
+    styleElement.textContent = pageStyle;
+    return undefined;
+  }, [pageStyle]);
+
+  const handlePrintInvoice = useCallback(() => {
+    if (!data || typeof window === 'undefined' || !printRef.current) return;
+    setPrintError('');
+    try {
+      const previousTitle = typeof document !== 'undefined' ? document.title : '';
+      if (typeof document !== 'undefined') document.title = `Hoa_don_${sanitizeFileName(invoiceCode)}`;
+      window.requestAnimationFrame(() => {
+        window.print();
+        window.setTimeout(() => {
+          if (typeof document !== 'undefined' && previousTitle) document.title = previousTitle;
+        }, 800);
+      });
+    } catch (err) {
+      setPrintError(err?.message || 'Không thể mở hộp thoại in của hệ điều hành.');
+    }
+  }, [data, invoiceCode]);
 
   useEffect(() => {
     if (!autoPrint || !data || loading || autoPrintedRef.current) return undefined;
@@ -199,13 +310,26 @@ export default function InvoicePrint() {
     setSettings(prev => ({ ...prev, scale: 1 }));
   }, []);
 
+  const setPaperSize = useCallback((nextPaperSize) => {
+    setSettings(prev => {
+      const paperSize = normalizePaperSize(nextPaperSize);
+      return {
+        ...prev,
+        paperSize,
+        paperSizeOverride: true,
+        orientation: paperSize.startsWith('K') ? 'portrait' : prev.orientation,
+      };
+    });
+  }, []);
+
   const toggleOrientation = useCallback(() => {
+    if (page.paperSize.startsWith('K')) return;
     setSettings(prev => ({
       ...prev,
       orientation: templateSettings.orientation === 'portrait' ? 'landscape' : 'portrait',
       orientationOverride: true,
     }));
-  }, [templateSettings.orientation]);
+  }, [page.paperSize, templateSettings.orientation]);
 
   const handleDownloadPdf = useCallback(async () => {
     const element = printRef.current;
@@ -214,14 +338,28 @@ export default function InvoicePrint() {
     setPdfLoading(true);
     setPrintError('');
     try {
+      const elementRect = element.getBoundingClientRect();
+      const captureScale = Math.max(3, Math.min(4, window.devicePixelRatio || 3));
       const canvas = await html2canvas(element, {
         backgroundColor: '#ffffff',
-        scale: Math.max(2, Math.min(3, window.devicePixelRatio || 2)),
+        scale: captureScale,
         useCORS: true,
         allowTaint: false,
         logging: false,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight,
+        width: Math.ceil(elementRect.width),
+        height: Math.ceil(Math.max(element.scrollHeight, elementRect.height)),
+        windowWidth: Math.ceil(elementRect.width),
+        windowHeight: Math.ceil(Math.max(element.scrollHeight, elementRect.height)),
+        onclone: (clonedDocument) => {
+          const clonedInvoice = clonedDocument.querySelector('.invoice-print');
+          if (clonedInvoice) {
+            clonedInvoice.style.border = '0';
+            clonedInvoice.style.borderRadius = '0';
+            clonedInvoice.style.boxShadow = 'none';
+            clonedInvoice.style.margin = '0';
+            clonedInvoice.style.background = '#ffffff';
+          }
+        },
       });
 
       const pdf = new jsPDF({ orientation: page.orientation, unit: 'mm', format: [page.width, page.height], compress: true });
@@ -232,13 +370,13 @@ export default function InvoicePrint() {
       let heightLeft = imgHeight;
       let position = 0;
 
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'SLOW');
       heightLeft -= pdfHeight;
 
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage([page.width, page.height], page.orientation);
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'SLOW');
         heightLeft -= pdfHeight;
       }
 
@@ -261,14 +399,20 @@ export default function InvoicePrint() {
             <h1>In hóa đơn {page.paperSize}</h1>
             <p>
               {invoiceCode ? `Mã/ID: ${invoiceCode}` : 'Preview gọi dữ liệu thật từ API backend'}
-              {hasBackendTemplate ? ` · Mẫu: ${activeTemplate.template_name || activeTemplate.name || activeTemplate.id}` : ' · Fallback A5'}
+              {hasBackendTemplate ? ` · Mẫu: ${activeTemplate.template_name || activeTemplate.name || activeTemplate.id}` : ` · Mặc định ${page.paperSize}`}
             </p>
           </div>
         </div>
 
         <div className="invoice-toolbar-actions">
           <label className="invoice-control-group">
-            <span>Scale</span>
+            <span>Khổ giấy</span>
+            <select value={page.paperSize} onChange={event => setPaperSize(event.target.value)}>
+              {PAPER_OPTIONS.map(paperSize => <option key={paperSize} value={paperSize}>{paperSize}</option>)}
+            </select>
+          </label>
+          <label className="invoice-control-group">
+            <span>Scale nội dung</span>
             <select
               value={SCALE_PRESETS.includes(settings.scale) ? String(settings.scale) : 'custom'}
               onChange={event => {
@@ -301,7 +445,7 @@ export default function InvoicePrint() {
           <button type="button" onClick={resetScale} className="invoice-toolbar-btn invoice-toolbar-btn-light">
             Reset 100%
           </button>
-          {page.paperSize !== 'K80' && (
+          {!page.paperSize.startsWith('K') && (
             <button type="button" onClick={toggleOrientation} className="invoice-toolbar-btn invoice-toolbar-btn-light">
               <RotateCw size={16} /> {page.label}
             </button>
@@ -317,6 +461,14 @@ export default function InvoicePrint() {
           </button>
         </div>
       </div>
+
+      {toast?.message && (
+        <div className="toast-stack no-print">
+          <div className={`toast-card ${toast.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : toast.tone === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-red-200 bg-red-50 text-red-700'}`}>
+            {toast.tone === 'success' ? '✅' : '⚠️'} {toast.message}
+          </div>
+        </div>
+      )}
 
       {printError && <div className="invoice-alert no-print">{printError}</div>}
 
@@ -345,7 +497,7 @@ export default function InvoicePrint() {
               template={activeTemplate}
               settingsOverride={settingsOverride}
               printScale={settings.scale}
-              previewZoom={settings.scale}
+              previewZoom={1}
             />
           </div>
         </main>

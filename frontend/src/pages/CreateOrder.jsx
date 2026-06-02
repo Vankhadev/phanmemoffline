@@ -4,17 +4,23 @@ import { ApiError, SYNC_UPDATED_EVENT, apiJsonChecked, getApiErrorMessage, resol
 import {
   Search, Plus, ShoppingCart, Trash2, ChevronDown, ChevronRight, Filter, UserPlus, Users, Printer
 } from 'lucide-react';
+import NegativeStockInput from '../components/NegativeStockInput';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, getProductDisplayName, getProductVariants, getVariantIdentity } from '../utils/productSearch';
 import { attachClientOrderMetadata, generateClientOrderId } from '../utils/clientOrderId';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
 import {
-  NEGATIVE_STOCK_LIMIT,
-  NEGATIVE_STOCK_LIMIT_MESSAGE,
   buildSaleStockValidation,
   formatStockValue,
+  getNegativeStockInputError,
+  getNegativeStockInputHelperText,
+  getNegativeStockLimitLabel,
+  getNegativeStockLimitMessage,
+  getNegativeStockNearLimitLabel,
   getSaleStockStateForLine,
   getStockDisplayMeta,
+  parseStockInputNumber,
 } from '../utils/negativeStock';
+import useNegativeStockSettings from '../utils/useNegativeStockSettings';
 
 const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
 const COMBO_REFRESH_STALE_MS = 30 * 1000;
@@ -187,10 +193,17 @@ export default function CreateOrder({ user, store }) {
     name: '', sku: '', import_price: '', wholesale_price: '', retail_price: '', vip_price: '',
     stock: '', unit: 'cái', category: '', default_category_id: '', supplier_id: ''
   });
+  const [cartProjectedStockDrafts, setCartProjectedStockDrafts] = useState({});
   const customerDropdownRef = useRef();
   const comboLastFetchedAtRef = useRef(0);
   const comboFetchInFlightRef = useRef(null);
   const lastStockLimitToastRef = useRef('');
+
+  const { settings: negativeStockSettings, error: negativeStockSettingsError } = useNegativeStockSettings();
+  const negativeStockLimitMessage = useMemo(() => getNegativeStockLimitMessage(negativeStockSettings), [negativeStockSettings]);
+  const negativeStockRuntimeLimitLabel = useMemo(() => getNegativeStockLimitLabel(negativeStockSettings), [negativeStockSettings]);
+  const negativeStockNearLimitLabel = useMemo(() => getNegativeStockNearLimitLabel(negativeStockSettings), [negativeStockSettings]);
+  const negativeStockInputHelperText = useMemo(() => getNegativeStockInputHelperText(negativeStockSettings), [negativeStockSettings]);
 
   useEffect(() => {
     if (!stockToast) return undefined;
@@ -198,12 +211,22 @@ export default function CreateOrder({ user, store }) {
     return () => window.clearTimeout(timer);
   }, [stockToast]);
 
-  const showStockLimitToast = (message = NEGATIVE_STOCK_LIMIT_MESSAGE) => {
+  const showStockLimitToast = (message = negativeStockLimitMessage) => {
     setStockToast({ id: Date.now(), message });
   };
 
   const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
   const getCartRowKey = (item, idx) => `cart-row-${String(item?.id ?? item?._cartKey ?? item?.combo_id ?? item?.product_id ?? 'item')}-${idx}`;
+  const getCartProjectedStockDraftKey = (item) => `cart-projected-stock-${String(item?.id ?? item?._cartKey ?? item?.combo_id ?? item?.product_id ?? 'item')}`;
+  const clearCartProjectedStockDraft = (itemId) => {
+    const draftKey = getCartProjectedStockDraftKey({ id: itemId });
+    setCartProjectedStockDrafts(prev => {
+      if (!Object.prototype.hasOwnProperty.call(prev, draftKey)) return prev;
+      const next = { ...prev };
+      delete next[draftKey];
+      return next;
+    });
+  };
   const recalculateCartLine = (item) => {
     const quantity = Math.max(MIN_QUANTITY, Number(item.quantity) || MIN_QUANTITY);
     const unitPrice = Math.max(0, Number(item.unit_price) || 0);
@@ -258,6 +281,14 @@ export default function CreateOrder({ user, store }) {
   useEffect(() => {
     setExpandedComboRows(prev => {
       const activeKeys = new Set(cart.map((item, idx) => getCartRowKey(item, idx)));
+      const next = Object.fromEntries(Object.entries(prev).filter(([key]) => activeKeys.has(key)));
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [cart]);
+
+  useEffect(() => {
+    setCartProjectedStockDrafts(prev => {
+      const activeKeys = new Set(cart.map(item => getCartProjectedStockDraftKey(item)));
       const next = Object.fromEntries(Object.entries(prev).filter(([key]) => activeKeys.has(key)));
       return Object.keys(next).length === Object.keys(prev).length ? prev : next;
     });
@@ -543,24 +574,8 @@ export default function CreateOrder({ user, store }) {
     baselineLines: editingInvoiceId ? editBaselineCart : [],
     getProductStockById,
     getLineKey: getCartRowKey,
-  }), [cart, editBaselineCart, editingInvoiceId, products]);
-  const hasCartStockError = cartStockValidation.hasInvalid;
-  const guardCartStockBeforeSubmit = () => {
-    if (!hasCartStockError) return true;
-    showStockLimitToast(cartStockValidation.firstError?.message || NEGATIVE_STOCK_LIMIT_MESSAGE);
-    return false;
-  };
-
-  useEffect(() => {
-    if (!hasCartStockError) {
-      lastStockLimitToastRef.current = '';
-      return;
-    }
-    const message = cartStockValidation.firstError?.message || NEGATIVE_STOCK_LIMIT_MESSAGE;
-    if (lastStockLimitToastRef.current === message) return;
-    lastStockLimitToastRef.current = message;
-    showStockLimitToast(message);
-  }, [hasCartStockError, cartStockValidation.firstError?.message]);
+    settings: negativeStockSettings,
+  }), [cart, editBaselineCart, editingInvoiceId, negativeStockSettings, products]);
 
   // Thêm biến thể với số lượng
   const addVariantItem = (v) => {
@@ -603,6 +618,192 @@ export default function CreateOrder({ user, store }) {
     setShowVariantPicker(false);
     setVariantQty({});
   };
+  const newProductStockError = getNegativeStockInputError(newProduct.stock, negativeStockSettings);
+
+  const getStockTargetProductId = (line = {}) => {
+    if (isComboOrderItem(line)) return null;
+    const id = Number(line.variant_id || line.product_id);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  };
+
+  const aggregateCartQuantitiesByProductId = (lines = []) => {
+    const map = new Map();
+    for (const line of Array.isArray(lines) ? lines : []) {
+      const productId = getStockTargetProductId(line);
+      if (!productId) continue;
+      const quantity = Math.max(0, Number(line.quantity) || 0);
+      if (quantity <= 0) continue;
+      map.set(productId, (map.get(productId) || 0) + quantity);
+    }
+    return map;
+  };
+
+  const roundProjectedStockValue = (value) => Math.round((Number(value) + Number.EPSILON) * 10) / 10;
+  const baselineCartQuantitiesByProductId = useMemo(
+    () => aggregateCartQuantitiesByProductId(editingInvoiceId ? editBaselineCart : []),
+    [editBaselineCart, editingInvoiceId]
+  );
+
+  const getProjectedStockDisplayValue = (line, stockState = null) => {
+    if (isComboOrderItem(line)) return '';
+    if (Number.isFinite(Number(stockState?.projectedStock))) {
+      return roundProjectedStockValue(stockState.projectedStock);
+    }
+    const productId = getStockTargetProductId(line);
+    if (!productId) return '';
+    const currentStock = Number(getProductStockById(productId, line)) || 0;
+    const baselineQuantity = baselineCartQuantitiesByProductId.get(productId) || 0;
+    const requestedQuantity = Math.max(0, Number(line?.quantity) || 0);
+    return roundProjectedStockValue(currentStock + baselineQuantity - requestedQuantity);
+  };
+
+  const getProjectedStockInputError = (line, rawValue) => {
+    if (isComboOrderItem(line)) return '';
+    const nextValue = rawValue === undefined || rawValue === null ? '' : String(rawValue);
+    if (!nextValue.trim()) return '';
+
+    const limitError = getNegativeStockInputError(nextValue, negativeStockSettings);
+    if (limitError) return limitError;
+
+    const productId = getStockTargetProductId(line);
+    if (!productId) return '';
+
+    const projectedStock = parseStockInputNumber(nextValue, NaN);
+    if (!Number.isFinite(projectedStock)) return 'Số lượng xuất âm không hợp lệ.';
+
+    const currentStock = Number(getProductStockById(productId, line)) || 0;
+    const baselineQuantity = baselineCartQuantitiesByProductId.get(productId) || 0;
+    const otherRequestedQuantity = cart.reduce((sum, cartLine) => {
+      if (cartLine.id === line.id) return sum;
+      return getStockTargetProductId(cartLine) === productId
+        ? sum + Math.max(0, Number(cartLine.quantity) || 0)
+        : sum;
+    }, 0);
+    const maxProjectedStock = roundProjectedStockValue(currentStock + baselineQuantity - otherRequestedQuantity - MIN_QUANTITY);
+
+    if (projectedStock > maxProjectedStock) {
+      return `Tồn dự kiến phải nhỏ hơn hoặc bằng ${maxProjectedStock.toLocaleString('vi-VN')} để giữ số lượng bán hợp lệ.`;
+    }
+
+    return '';
+  };
+
+  const updateCartProjectedStock = (line, rawValue) => {
+    const draftKey = getCartProjectedStockDraftKey(line);
+    const nextValue = rawValue === undefined || rawValue === null ? '' : String(rawValue);
+    setCartProjectedStockDrafts(prev => ({ ...prev, [draftKey]: nextValue }));
+
+    const nextError = getProjectedStockInputError(line, nextValue);
+    if (nextError) {
+      if (nextValue && nextValue !== '-') showStockLimitToast(nextError);
+      return;
+    }
+
+    const productId = getStockTargetProductId(line);
+    if (!productId) return;
+
+    const projectedStock = parseStockInputNumber(nextValue, NaN);
+    if (!Number.isFinite(projectedStock)) return;
+
+    const currentStock = Number(getProductStockById(productId, line)) || 0;
+    const baselineQuantity = baselineCartQuantitiesByProductId.get(productId) || 0;
+
+    setCart(prev => {
+      const otherRequestedQuantity = prev.reduce((sum, cartLine) => {
+        if (cartLine.id === line.id) return sum;
+        return getStockTargetProductId(cartLine) === productId
+          ? sum + Math.max(0, Number(cartLine.quantity) || 0)
+          : sum;
+      }, 0);
+      const nextQuantity = roundProjectedStockValue(currentStock + baselineQuantity - otherRequestedQuantity - projectedStock);
+      return prev.map(cartLine => cartLine.id === line.id
+        ? recalculateCartLine({ ...cartLine, quantity: normalizeDecimalQuantity(nextQuantity, MIN_QUANTITY) })
+        : cartLine);
+    });
+  };
+
+  const cartProjectedStockValidation = useMemo(() => {
+    const errors = cart.reduce((result, line) => {
+      if (isComboOrderItem(line)) return result;
+      const draftKey = getCartProjectedStockDraftKey(line);
+      if (!Object.prototype.hasOwnProperty.call(cartProjectedStockDrafts, draftKey)) return result;
+      const message = getProjectedStockInputError(line, cartProjectedStockDrafts[draftKey]);
+      if (!message) return result;
+      result.push({ itemId: line.id, message });
+      return result;
+    }, []);
+
+    return {
+      hasInvalid: errors.length > 0,
+      errors,
+      firstError: errors[0] || null,
+    };
+  }, [cart, cartProjectedStockDrafts, getProjectedStockInputError]);
+
+  const hasCartStockError = cartStockValidation.hasInvalid;
+  const hasCartProjectedStockError = cartProjectedStockValidation.hasInvalid;
+  const guardCartStockBeforeSubmit = () => {
+    if (hasCartProjectedStockError) {
+      showStockLimitToast(cartProjectedStockValidation.firstError?.message || negativeStockLimitMessage);
+      return false;
+    }
+    if (!hasCartStockError) return true;
+    showStockLimitToast(cartStockValidation.firstError?.message || negativeStockLimitMessage);
+    return false;
+  };
+
+  useEffect(() => {
+    if (!hasCartStockError && !hasCartProjectedStockError) {
+      lastStockLimitToastRef.current = '';
+      return;
+    }
+    const message = cartProjectedStockValidation.firstError?.message || cartStockValidation.firstError?.message || negativeStockLimitMessage;
+    if (lastStockLimitToastRef.current === message) return;
+    lastStockLimitToastRef.current = message;
+    showStockLimitToast(message);
+  }, [
+    hasCartProjectedStockError,
+    hasCartStockError,
+    cartProjectedStockValidation.firstError?.message,
+    cartStockValidation.firstError?.message,
+    negativeStockLimitMessage,
+  ]);
+
+  const applyProductStockDeltas = (deltaByProductId) => {
+    if (!(deltaByProductId instanceof Map) || deltaByProductId.size === 0) return;
+    setProducts(currentProducts => (currentProducts || []).map(product => {
+      const productId = Number(product.id);
+      const productDelta = deltaByProductId.get(productId) || 0;
+      const variants = Array.isArray(product.variants)
+        ? product.variants.map(variant => {
+          const variantId = Number(variant.id);
+          const variantDelta = deltaByProductId.get(variantId) || 0;
+          if (!variantDelta) return variant;
+          const currentStock = Number(variant.stock);
+          const safeStock = Number.isFinite(currentStock) ? currentStock : 0;
+          return { ...variant, stock: safeStock + variantDelta };
+        })
+        : product.variants;
+
+      if (!productDelta) return variants === product.variants ? product : { ...product, variants };
+      const currentStock = Number(product.stock);
+      const safeStock = Number.isFinite(currentStock) ? currentStock : 0;
+      return { ...product, stock: safeStock + productDelta, variants };
+    }));
+  };
+
+  const applyOrderStockRealtime = (currentCart = cart, baselineCart = []) => {
+    const requested = aggregateCartQuantitiesByProductId(currentCart);
+    const baseline = aggregateCartQuantitiesByProductId(baselineCart);
+    const productIds = new Set([...requested.keys(), ...baseline.keys()]);
+    const deltas = new Map();
+    productIds.forEach(productId => {
+      const delta = (baseline.get(productId) || 0) - (requested.get(productId) || 0);
+      if (delta !== 0) deltas.set(productId, delta);
+    });
+    applyProductStockDeltas(deltas);
+  };
+
   const vatAmount = subtotal * (vatPercent / 100);
   const discountVal = deliveryFeeMode === 'percent'
     ? subtotal * (discountAmount / 100)
@@ -681,6 +882,7 @@ export default function CreateOrder({ user, store }) {
   };
 
   const updateCartItem = (id, field, value) => {
+    if (field === 'quantity') clearCartProjectedStockDraft(id);
     setCart(prev => prev.map(item => {
       if (item.id !== id) return item;
       const updated = { ...item };
@@ -693,6 +895,7 @@ export default function CreateOrder({ user, store }) {
   };
 
   const removeCartItem = (id) => {
+    clearCartProjectedStockDraft(id);
     setCart(prev => prev.filter(i => i.id !== id));
     setExpandedComboRows(prev => {
       const next = { ...prev };
@@ -705,6 +908,10 @@ export default function CreateOrder({ user, store }) {
   const handleAddNewProduct = async () => {
     if (!newProduct.name.trim()) {
       alert('Vui lòng nhập tên sản phẩm!');
+      return;
+    }
+    if (newProductStockError) {
+      showStockLimitToast(newProductStockError);
       return;
     }
     try {
@@ -720,7 +927,7 @@ export default function CreateOrder({ user, store }) {
           wholesale_price: parseFloat(newProduct.wholesale_price) || 0,
           retail_price: parseFloat(newProduct.retail_price) || 0,
           vip_price: parseFloat(newProduct.vip_price) || 0,
-          stock: parseInt(newProduct.stock) || 0,
+          stock: parseStockInputNumber(newProduct.stock, 0),
           unit: newProduct.unit || 'cái',
           category: newProduct.category?.trim() || '',
           default_category_id: newProduct.default_category_id || null,
@@ -738,7 +945,7 @@ export default function CreateOrder({ user, store }) {
         wholesale_price: parseFloat(newProduct.wholesale_price) || 0,
         retail_price: parseFloat(newProduct.retail_price) || 0,
         vip_price: parseFloat(newProduct.vip_price) || 0,
-        stock: parseInt(newProduct.stock) || 0,
+        stock: parseStockInputNumber(newProduct.stock, 0),
         unit: newProduct.unit || 'cái',
         category: newProduct.category?.trim() || '',
         default_category_id: newProduct.default_category_id || null,
@@ -758,12 +965,12 @@ export default function CreateOrder({ user, store }) {
         line_total: unit_price,
         max_stock: productToAdd.stock,
       }]);
+      setProducts(prev => [...prev, productToAdd]);
       setShowNewProductForm(false);
       setNewProduct({
         name: '', sku: '', import_price: '', wholesale_price: '', retail_price: '', vip_price: '',
         stock: '', unit: 'cái', category: '', default_category_id: '', supplier_id: ''
       });
-      fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(Array.isArray(d) ? d : [])).catch(() => { });
       broadcastSyncUpdate({
         reason: 'product-created-from-order',
         changedTables: ['products'],
@@ -857,11 +1064,12 @@ export default function CreateOrder({ user, store }) {
         changedTables: ['invoices', 'invoice_details', 'products'],
       });
 
+      applyOrderStockRealtime(cart, editingInvoiceId ? editBaselineCart : []);
       setLastInvoice(inv);
       setEditingInvoiceId(null);
       setEditBaselineCart([]);
+      setCartProjectedStockDrafts({});
       setCreating(false);
-      fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
     };
     let timeoutId;
     try {
@@ -873,7 +1081,6 @@ export default function CreateOrder({ user, store }) {
         signal: controller.signal,
       }, 'Không thể tạo đơn hàng.');
       showSuccess(data.invoice_code, data.invoice_id || null, false);
-      fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
     } catch (error) {
       if (error instanceof ApiError) {
         setCreating(false);
@@ -895,6 +1102,7 @@ export default function CreateOrder({ user, store }) {
       id: item.id || `${Date.now()}_${idx}`,
     }));
     setEditBaselineCart(baselineCart);
+    setCartProjectedStockDrafts({});
     setCart(baselineCart.map(item => ({ ...item })));
     setVatPercent(+(lastInvoice.vatPercent || lastInvoice.vat_percent || 0));
     setDiscountAmount(+(lastInvoice.discountAmount || lastInvoice.discount_amount || 0));
@@ -979,11 +1187,12 @@ export default function CreateOrder({ user, store }) {
         remaining_amount: remainingAmount,
       };
 
+      applyOrderStockRealtime(cart, editBaselineCart);
       setLastInvoice(updatedInvoice);
       setEditingInvoiceId(null);
       setEditBaselineCart([]);
+      setCartProjectedStockDrafts({});
       setCreating(false);
-      fetch(resolveApiUrl('/products/all/with-variants')).then(r => r.json()).then(d => setProducts(d)).catch(() => { });
       window.dispatchEvent(new CustomEvent('kha-order-created', { detail: updatedInvoice }));
       broadcastSyncUpdate({
         reason: 'order-updated',
@@ -1010,6 +1219,7 @@ export default function CreateOrder({ user, store }) {
     setEditingInvoiceId(null);
     setCart([]);
     setEditBaselineCart([]);
+    setCartProjectedStockDrafts({});
     setStockToast(null);
     setProductSearch('');
     setShowProductPanel(false);
@@ -1038,6 +1248,12 @@ export default function CreateOrder({ user, store }) {
           <div className="toast-card border-red-200 bg-red-50 text-red-700">
             ⚠️ {stockToast.message}
           </div>
+        </div>
+      )}
+
+      {negativeStockSettingsError && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          {negativeStockSettingsError} Frontend đang dùng cấu hình an toàn: tồn kho không được nhỏ hơn {negativeStockRuntimeLimitLabel}.
         </div>
       )}
 
@@ -1071,14 +1287,14 @@ export default function CreateOrder({ user, store }) {
           {editingInvoiceId ? (
             <button
               onClick={handleSaveEdit}
-              disabled={cart.length === 0 || creating || hasCartStockError}
+              disabled={cart.length === 0 || creating || hasCartStockError || hasCartProjectedStockError}
               className="px-3 sm:px-5 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
               {creating ? ' Đang lưu...' : 'Lưu thay đổi'}
             </button>
           ) : (
             <button
               onClick={handleCreateOrder}
-              disabled={cart.length === 0 || creating || hasCartStockError}
+              disabled={cart.length === 0 || creating || hasCartStockError || hasCartProjectedStockError}
               className="px-3 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
               {creating ? ' Đang tạo...' : 'Tạo Đơn Hàng'}
             </button>
@@ -1320,7 +1536,7 @@ export default function CreateOrder({ user, store }) {
                     const displayName = isVariant ? getProductDisplayName(item, parent) : getProductDisplayName(item);
                     const categoryName = isVariant ? (getCategoryName(item) || getCategoryName(parent)) : getCategoryName(item);
                     const supplierName = isVariant ? getSupplierName(item.supplier_id || parent?.supplier_id) : getSupplierName(item.supplier_id);
-                    const stockMeta = getStockDisplayMeta(item.stock);
+                    const stockMeta = getStockDisplayMeta(item.stock, negativeStockSettings);
 
                     return (
                       <div
@@ -1347,7 +1563,7 @@ export default function CreateOrder({ user, store }) {
                             <div className="text-[10px] text-gray-400">SKU: {item.sku || '—'}</div>
                             <div className={`text-[10px] ${stockMeta.textClass}`}>{stockMeta.display}</div>
                             {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>Âm kho</div>}
-                            {stockMeta.isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">Gần -100</div>}
+                            {stockMeta.isNearLimit && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.extraBadgeClass || 'bg-orange-100 text-orange-800 border border-orange-200'}`}>{stockMeta.extraLabel || negativeStockNearLimitLabel}</div>}
                             <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(item))}</div>
                           </div>
                         </div>
@@ -1395,12 +1611,21 @@ export default function CreateOrder({ user, store }) {
                     const comboItems = getComboLineItems(item);
                     const isExpanded = Boolean(expandedComboRows[rowKey]);
                     const stockState = getSaleStockStateForLine(cartStockValidation, item);
-                    const rowStockInvalid = Boolean(stockState?.invalid);
-                    const rowNearLimit = Boolean(stockState?.nearLimit);
+                    const rowProjectedStockDraftKey = getCartProjectedStockDraftKey(item);
+                    const rowProjectedStockDraft = cartProjectedStockDrafts[rowProjectedStockDraftKey] ?? '';
+                    const rowProjectedStockError = getProjectedStockInputError(item, rowProjectedStockDraft);
+                    const rowProjectedStockNumber = parseStockInputNumber(rowProjectedStockDraft, NaN);
+                    const rowProjectedStockValue = Number.isFinite(rowProjectedStockNumber)
+                      ? rowProjectedStockNumber
+                      : getProjectedStockDisplayValue(item, stockState);
+                    const rowProjectedStockNegative = Number.isFinite(rowProjectedStockValue) && rowProjectedStockValue < 0;
+                    const rowProjectedStockInvalid = Boolean(rowProjectedStockError);
+                    const rowStockInvalid = Boolean(stockState?.invalid) || rowProjectedStockInvalid;
+                    const rowNearLimit = Boolean(stockState?.nearLimit) || (!rowProjectedStockInvalid && Number.isFinite(rowProjectedStockValue) && negativeStockSettings.enabled && rowProjectedStockValue <= negativeStockSettings.warningThreshold && rowProjectedStockValue >= negativeStockSettings.minimumAllowedStock);
 
                     return (
                       <Fragment key={rowKey}>
-                        <tr className={`align-middle ${rowStockInvalid ? 'bg-red-50 ring-1 ring-red-200' : rowNearLimit ? 'bg-orange-50' : ''}`}>
+                        <tr className={`align-middle ${rowStockInvalid ? 'bg-red-50 ring-1 ring-red-200' : rowNearLimit ? 'bg-orange-50' : rowProjectedStockNegative ? 'bg-red-50/60' : ''}`}>
                           <td className="text-center text-gray-500 font-medium">{idx + 1}</td>
                           <td>
                             <div className="font-medium flex items-center gap-1 min-w-0">
@@ -1425,17 +1650,33 @@ export default function CreateOrder({ user, store }) {
                             {isCombo && (
                               <div className="text-[10px] text-purple-500 mt-0.5 truncate max-w-xs">{getComboItemSummary(item)}</div>
                             )}
-                            {!isCombo && stockState && (
-                              <div className={`text-xs font-semibold mt-0.5 ${rowStockInvalid ? 'text-red-600' : rowNearLimit ? 'text-orange-700' : 'text-gray-500'}`}>
-                                Dự kiến {formatStockValue(stockState.projectedStock)}{rowStockInvalid ? ` · ${NEGATIVE_STOCK_LIMIT_MESSAGE}` : rowNearLimit ? ` · gần ngưỡng ${NEGATIVE_STOCK_LIMIT}` : ''}
+                            {!isCombo && Number.isFinite(Number(rowProjectedStockValue)) && (
+                              <div className={`text-xs font-semibold mt-0.5 ${rowStockInvalid ? 'text-red-600' : rowNearLimit ? 'text-orange-700' : rowProjectedStockNegative ? 'text-red-500' : 'text-gray-500'}`}>
+                                Dự kiến {formatStockValue(rowProjectedStockValue)}{rowStockInvalid ? ` · ${rowProjectedStockError || negativeStockLimitMessage}` : rowNearLimit ? ` · ${negativeStockNearLimitLabel || `gần ngưỡng ${negativeStockRuntimeLimitLabel}`}` : rowProjectedStockNegative ? ' · âm kho đang bật' : ''}
                               </div>
                             )}
                           </td>
                           <td>
-                            <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal"
-                              value={item.quantity}
-                              onChange={e => updateCartItem(item.id, 'quantity', e.target.value)}
-                              className={`pos-table-input text-center ${rowStockInvalid ? 'bg-red-100 text-red-700 border-red-300' : rowNearLimit ? 'bg-orange-50 text-orange-700 border-orange-300' : ''}`} />
+                            <div className="space-y-2">
+                              <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal"
+                                value={item.quantity}
+                                onChange={e => updateCartItem(item.id, 'quantity', e.target.value)}
+                                className={`pos-table-input text-center ${rowStockInvalid ? 'bg-red-100 text-red-700 border-red-300' : rowNearLimit ? 'bg-orange-50 text-orange-700 border-orange-300' : rowProjectedStockNegative ? 'bg-red-50 text-red-700 border-red-200' : ''}`} />
+                              {!isCombo && (
+                                <NegativeStockInput
+                                  id={`cart-negative-stock-${item.id}`}
+                                  label="Xuất âm"
+                                  value={rowProjectedStockDraft}
+                                  onChange={value => updateCartProjectedStock(item, value)}
+                                  error={rowProjectedStockError}
+                                  helper={rowProjectedStockError ? '' : `Tồn dự kiến realtime: ${formatStockValue(rowProjectedStockValue)} · giới hạn ${negativeStockRuntimeLimitLabel}`}
+                                  compact
+                                  showBadge={rowProjectedStockNegative || rowProjectedStockInvalid || rowNearLimit || rowStockInvalid}
+                                  settings={negativeStockSettings}
+                                  onLimitError={showStockLimitToast}
+                                />
+                              )}
+                            </div>
                           </td>
                           <td>
                             <input type="number" min="0"
@@ -1571,7 +1812,7 @@ export default function CreateOrder({ user, store }) {
                     const displayName = isVariant ? getProductDisplayName(item, parent) : getProductDisplayName(item);
                     const categoryName = isVariant ? (getCategoryName(item) || getCategoryName(parent)) : getCategoryName(item);
                     const supplierName = isVariant ? getSupplierName(item.supplier_id || parent?.supplier_id) : getSupplierName(item.supplier_id);
-                    const stockMeta = getStockDisplayMeta(item.stock);
+                    const stockMeta = getStockDisplayMeta(item.stock, negativeStockSettings);
 
                     return (
                       <div
@@ -1599,7 +1840,7 @@ export default function CreateOrder({ user, store }) {
                             <div className="text-[10px] text-gray-400">SKU: {item.sku || '—'}</div>
                             <div className={`text-[10px] ${stockMeta.textClass}`}>{stockMeta.display}</div>
                             {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>Âm kho</div>}
-                            {stockMeta.isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">Gần -100</div>}
+                            {stockMeta.isNearLimit && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.extraBadgeClass || 'bg-orange-100 text-orange-800 border border-orange-200'}`}>{stockMeta.extraLabel || negativeStockNearLimitLabel}</div>}
                             <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(item))}</div>
                           </div>
                         </div>
@@ -1691,14 +1932,14 @@ export default function CreateOrder({ user, store }) {
                   {formatVND(Math.max(0, remainingAmount))}
                 </span>
               </div>
-              {hasCartStockError && (
+              {(hasCartProjectedStockError || hasCartStockError) && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-                  {cartStockValidation.summaryMessage || NEGATIVE_STOCK_LIMIT_MESSAGE}
+                  {cartProjectedStockValidation.firstError?.message || cartStockValidation.summaryMessage || negativeStockLimitMessage}
                 </div>
               )}
               <button
                 onClick={editingInvoiceId ? handleSaveEdit : handleCreateOrder}
-                disabled={cart.length === 0 || creating || hasCartStockError}
+                disabled={cart.length === 0 || creating || hasCartStockError || hasCartProjectedStockError}
                 className={`w-full mt-2 py-2.5 disabled:bg-gray-300 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${editingInvoiceId ? 'bg-green-600 hover:bg-green-700' : 'bg-green-600 hover:bg-green-700'}`}>
                 {creating ? (editingInvoiceId ? ' Đang lưu...' : ' Đang tạo...') : (editingInvoiceId ? ' Lưu thay đổi' : 'Tạo đơn hàng')}
               </button>
@@ -1850,7 +2091,7 @@ export default function CreateOrder({ user, store }) {
               </div>
               <div className="flex-1 overflow-auto p-4 space-y-2">
                 {(showVariantPicker.variants || []).map(v => {
-                  const stockMeta = getStockDisplayMeta(v.stock);
+                  const stockMeta = getStockDisplayMeta(v.stock, negativeStockSettings);
                   return (
                   <div key={v.id} className={`flex flex-col gap-3 border rounded-lg p-3 hover:border-blue-400 sm:flex-row sm:items-center ${stockMeta.cardClass}`}>
                     <div className="flex-1 min-w-0">
@@ -1918,8 +2159,16 @@ export default function CreateOrder({ user, store }) {
                     <input className="input-field w-full" type="number" min="0" value={newProduct.import_price} onChange={e => setNewProduct(p => ({ ...p, import_price: e.target.value }))} placeholder="0" />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Số lượng tồn</label>
-                    <input className="input-field w-full" type="number" min={NEGATIVE_STOCK_LIMIT} value={newProduct.stock} onChange={e => setNewProduct(p => ({ ...p, stock: e.target.value }))} placeholder="0" />
+                    <NegativeStockInput
+                      id="order-new-product-stock"
+                      label="Số lượng tồn"
+                      value={newProduct.stock}
+                      onChange={value => setNewProduct(p => ({ ...p, stock: value }))}
+                      error={newProductStockError}
+                      helper={negativeStockInputHelperText}
+                      settings={negativeStockSettings}
+                      onLimitError={showStockLimitToast}
+                    />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1968,7 +2217,8 @@ export default function CreateOrder({ user, store }) {
                   Hủy
                 </button>
                 <button onClick={handleAddNewProduct}
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold">
+                  disabled={Boolean(newProductStockError)}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold">
                    Thêm vào đơn hàng
                 </button>
               </div>

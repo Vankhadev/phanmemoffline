@@ -3,7 +3,8 @@ import * as XLSX from 'xlsx';
 import { AlertTriangle, CheckCircle, Download, Eye, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, UploadCloud } from 'lucide-react';
 import { excelImportApi, getApiErrorMessage } from '../utils/apiClient';
 
-import { NEGATIVE_STOCK_LIMIT } from '../utils/negativeStock';
+import { getNegativeStockLimitLabel } from '../utils/negativeStock';
+import useNegativeStockSettings from '../utils/useNegativeStockSettings';
 
 const IMPORT_FIELDS = {
   products: [
@@ -194,27 +195,30 @@ const TEMPLATE_ROWS = {
   ],
 };
 
-const GUIDE_ROWS = {
-  products: [
-    ['Cột', 'Bắt buộc', 'Ghi chú'],
-    ['Loại dòng', 'Khuyến nghị', 'PARENT cho sản phẩm cha, VARIANT cho biến thể; có Parent SKU thì backend suy luận là VARIANT.'],
-    ['SKU', 'Có', 'SKU/mã sản phẩm hoặc SKU biến thể, không được trùng sai loại.'],
-    ['Parent SKU', 'Có với VARIANT', 'Phải khớp SKU sản phẩm cha trong file hoặc đã có trong hệ thống.'],
-    ['Tên sản phẩm', 'Có với bản ghi mới', 'Tên sản phẩm cha hoặc tên biến thể.'],
-    ['Giá/Tồn kho', 'Không', `Giá nhập số không âm; tồn kho có thể âm đến ${NEGATIVE_STOCK_LIMIT} (ví dụ -5, -20, -100) và phải là số nguyên; thấp hơn ngưỡng sẽ bị backend chặn.`],
-    ['Danh mục text / Default category id', 'Không', 'Khớp danh mục hiện có theo tên/từ khóa hoặc id.'],
-    ['Supplier id', 'Không', 'Nếu nhập thì id nhà cung cấp phải tồn tại.'],
-  ],
-  invoices: [
-    ['Cột', 'Bắt buộc', 'Ghi chú'],
-    ['Mã đơn hàng', 'Có', 'Các dòng cùng mã đơn sẽ được gom thành một đơn nhiều sản phẩm.'],
-    ['Mã khách hàng / Tên / SĐT / Email / Nhóm khách', 'Nên có mã khách hàng', 'Khách phải tồn tại; nếu có nhóm khách thì phải khớp loại khách để tránh import nhầm khách lẻ/khách sỉ.'],
-    ['SKU hoặc Tên sản phẩm', 'Có', 'Sản phẩm/biến thể phải tồn tại trong hệ thống.'],
-    ['Số lượng', 'Có', `Số lượng bán phải lớn hơn 0; có thể bán khi tồn hiện tại 0/âm nếu tồn dự kiến không nhỏ hơn ${NEGATIVE_STOCK_LIMIT}. Backend sẽ chặn nếu vượt ngưỡng.`],
-    ['Đơn giá / Giảm giá / Thành tiền', 'Không', 'Nếu tổng tiền file khác tổng chi tiết, hệ thống ưu tiên tính lại từ chi tiết.'],
-    ['Trạng thái thanh toán / Phương thức / Trạng thái đơn', 'Không', 'Hỗ trợ paid/unpaid/partial, cash/bank/debt, pending/completed/cancelled.'],
-  ],
-};
+function buildGuideRows(dataType, negativeStockLimitLabel = '0') {
+  const guideRows = {
+    products: [
+      ['Cột', 'Bắt buộc', 'Ghi chú'],
+      ['Loại dòng', 'Khuyến nghị', 'PARENT cho sản phẩm cha, VARIANT cho biến thể; có Parent SKU thì backend suy luận là VARIANT.'],
+      ['SKU', 'Có', 'SKU/mã sản phẩm hoặc SKU biến thể, không được trùng sai loại.'],
+      ['Parent SKU', 'Có với VARIANT', 'Phải khớp SKU sản phẩm cha trong file hoặc đã có trong hệ thống.'],
+      ['Tên sản phẩm', 'Có với bản ghi mới', 'Tên sản phẩm cha hoặc tên biến thể.'],
+      ['Giá/Tồn kho', 'Không', `Giá nhập số không âm; tồn kho có thể âm đến ${negativeStockLimitLabel} (ví dụ -5, -20) và phải là số nguyên; thấp hơn ngưỡng sẽ bị backend chặn.`],
+      ['Danh mục text / Default category id', 'Không', 'Khớp danh mục hiện có theo tên/từ khóa hoặc id.'],
+      ['Supplier id', 'Không', 'Nếu nhập thì id nhà cung cấp phải tồn tại.'],
+    ],
+    invoices: [
+      ['Cột', 'Bắt buộc', 'Ghi chú'],
+      ['Mã đơn hàng', 'Có', 'Các dòng cùng mã đơn sẽ được gom thành một đơn nhiều sản phẩm.'],
+      ['Mã khách hàng / Tên / SĐT / Email / Nhóm khách', 'Nên có mã khách hàng', 'Khách phải tồn tại; nếu có nhóm khách thì phải khớp loại khách để tránh import nhầm khách lẻ/khách sỉ.'],
+      ['SKU hoặc Tên sản phẩm', 'Có', 'Sản phẩm/biến thể phải tồn tại trong hệ thống.'],
+      ['Số lượng', 'Có', `Số lượng bán phải lớn hơn 0; có thể bán khi tồn hiện tại 0/âm nếu tồn dự kiến không nhỏ hơn ${negativeStockLimitLabel}. Backend sẽ chặn nếu vượt ngưỡng.`],
+      ['Đơn giá / Giảm giá / Thành tiền', 'Không', 'Nếu tổng tiền file khác tổng chi tiết, hệ thống ưu tiên tính lại từ chi tiết.'],
+      ['Trạng thái thanh toán / Phương thức / Trạng thái đơn', 'Không', 'Hỗ trợ paid/unpaid/partial, cash/bank/debt, pending/completed/cancelled.'],
+    ],
+  };
+  return guideRows[dataType] || [];
+}
 
 const ACTION_META = {
   create: 'bg-green-100 text-green-700 border-green-200',
@@ -303,14 +307,14 @@ function parseWorksheetRows(workbook, sheetName) {
   return { rows: normalizedRows, columns };
 }
 
-function buildWorkbook(dataType, rows = TEMPLATE_ROWS[dataType] || [], columns = []) {
+function buildWorkbook(dataType, rows = TEMPLATE_ROWS[dataType] || [], columns = [], options = {}) {
   const header = columns.length > 0 ? columns : Object.keys(rows[0] || {});
   const ws = XLSX.utils.json_to_sheet(rows, { header });
   ws['!cols'] = header.map(column => ({ wch: Math.max(14, Math.min(34, String(column).length + 6)) }));
   ws['!autofilter'] = {
     ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(rows.length, 1), c: Math.max(header.length - 1, 0) } }),
   };
-  const guide = XLSX.utils.aoa_to_sheet(GUIDE_ROWS[dataType] || []);
+  const guide = XLSX.utils.aoa_to_sheet(buildGuideRows(dataType, options.negativeStockLimitLabel || '0'));
   guide['!cols'] = [{ wch: 28 }, { wch: 16 }, { wch: 100 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, dataType === 'invoices' ? 'Hóa đơn' : 'Sản phẩm');
@@ -338,6 +342,7 @@ export default function ExcelImportPanel({
   onCommitted,
   onClose,
   defaultMode = 'upsert',
+  negativeStockSettings: negativeStockSettingsProp,
 }) {
   const [excel, setExcel] = useState({
     fileName: '',
@@ -360,6 +365,9 @@ export default function ExcelImportPanel({
   const [busyKey, setBusyKey] = useState('');
   const inputRef = useRef(null);
 
+  const { settings: loadedNegativeStockSettings } = useNegativeStockSettings({ load: !negativeStockSettingsProp });
+  const negativeStockSettings = negativeStockSettingsProp || loadedNegativeStockSettings;
+  const negativeStockLimitLabel = getNegativeStockLimitLabel(negativeStockSettings);
   const fields = IMPORT_FIELDS[dataType] || IMPORT_FIELDS.products;
   const filteredItems = useMemo(() => {
     const query = normalizeText(filter.query);
@@ -470,7 +478,7 @@ export default function ExcelImportPanel({
       URL.revokeObjectURL(url);
       return;
     }
-    XLSX.writeFile(buildWorkbook(dataType, rows, columns), `${baseName}_${getTimestamp()}.xlsx`);
+    XLSX.writeFile(buildWorkbook(dataType, rows, columns, { negativeStockLimitLabel }), `${baseName}_${getTimestamp()}.xlsx`);
   };
 
   const previewImport = () => runAction('preview', async () => {
@@ -550,7 +558,7 @@ export default function ExcelImportPanel({
           <h3 className="font-bold flex items-center gap-2"><UploadCloud size={18} className="text-blue-600" /> {title || `Import ${dataType === 'invoices' ? 'hóa đơn/đơn hàng' : 'sản phẩm'} từ Excel/CSV`}</h3>
           <p className="text-xs text-gray-600 mt-1">{description || 'Frontend parse file bằng xlsx rồi gửi JSON rows cho backend preview/commit, không upload binary.'}</p>
           <p className="mt-1 text-[11px] font-medium text-orange-700">
-            Nghiệp vụ âm kho: hệ thống cho phép tồn âm đến {NEGATIVE_STOCK_LIMIT}; hóa đơn/import bị chặn nếu tồn dự kiến thấp hơn ngưỡng này.
+            Nghiệp vụ âm kho: hệ thống cho phép tồn âm đến {negativeStockLimitLabel}; hóa đơn/import bị chặn nếu tồn dự kiến thấp hơn ngưỡng này.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

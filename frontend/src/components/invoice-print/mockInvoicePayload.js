@@ -21,7 +21,7 @@ export const mockInvoicePayload = Object.freeze({
     created_at: now,
     delivery_date: '01/06/2026',
     status: 'Đã thanh toán',
-    payment_method: 'Chuyển khoản',
+    payment_method: 'Tiền mặt',
     note: 'Hàng giao trong giờ hành chính. Vui lòng kiểm tra hàng trước khi nhận.',
   },
   items: [
@@ -78,13 +78,7 @@ export const mockInvoicePayload = Object.freeze({
     change_amount: 0,
   },
   payment: {
-    method_label: 'Chuyển khoản',
-    bank_name: 'Vietcombank',
-    bank_account: '0123456789',
-    bank_account_name: 'CUA HANG VAN KHA',
-    transfer_content: 'HD-20260601-0001',
-    qr_text: 'Quét QR để thanh toán nhanh',
-    qr_image: '',
+    method_label: 'Tiền mặt',
   },
   signatures: {
     buyer: { label: 'Người nhận hàng', name: 'Nguyễn Văn An' },

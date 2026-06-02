@@ -24,6 +24,13 @@ const {
   countTemplatesUsingLogoPath,
   parseBooleanFlag,
 } = require('../services/printTemplateService');
+const {
+  CONFIGURATION_ERROR_CODE,
+  CONNECTION_ERROR_CODE,
+  MODULE_ERROR_CODE,
+  getPrintTemplatesMySqlStatus,
+} = require('../db/printTemplatesMySql');
+const { getSchemaReadyState } = require('../db/printTemplatesSchema');
 
 const router = express.Router();
 const canManagePrintTemplates = requirePermission('print_templates.manage');
@@ -36,18 +43,70 @@ function getUserId(req) {
   return req.user?.id || null;
 }
 
+function getSafeStatus(error) {
+  const status = Number(error?.status || error?.statusCode || 500);
+  return status >= 400 && status <= 599 ? status : 500;
+}
+
+function toSafeDetails(details) {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return undefined;
+  const allowedKeys = ['mysqlCode', 'errno', 'sqlState', 'missing', 'table', 'field', 'errors', 'expected_revision', 'current_revision'];
+  const safe = {};
+  for (const key of allowedKeys) {
+    if (details[key] !== undefined) safe[key] = details[key];
+  }
+  return Object.keys(safe).length > 0 ? safe : undefined;
+}
+
 function sendError(res, error, fallbackMessage = 'Lỗi xử lý mẫu in hóa đơn') {
-  const status = error?.status || 500;
+  const status = getSafeStatus(error);
   const isOperational = status < 500 || error?.expose === true;
-  const message = isOperational ? error.message : fallbackMessage;
-  if (status >= 500) console.warn('[KHA PRINT TEMPLATES]', error?.message || error);
-  return res.status(status).json({
+  const message = isOperational ? (error?.message || fallbackMessage) : fallbackMessage;
+  if (status >= 500) console.warn('[KHA PRINT TEMPLATES]', error?.code || 'PRINT_TEMPLATES_ERROR', error?.message || error);
+  const details = toSafeDetails(error?.details);
+  return res.status(status).type('application/json').json({
     ok: false,
+    item: null,
+    data: null,
+    items: [],
+    total: 0,
     error: message,
     message,
     code: error?.code || (status === 503 ? 'PRINT_TEMPLATES_MYSQL_UNAVAILABLE' : 'PRINT_TEMPLATES_ERROR'),
-    ...(error?.details ? { details: error.details } : {}),
+    ...(details ? { details } : {}),
   });
+}
+
+const READ_SAFE_MYSQL_ERROR_CODES = new Set([
+  CONFIGURATION_ERROR_CODE,
+  CONNECTION_ERROR_CODE,
+  MODULE_ERROR_CODE,
+]);
+
+function isReadSafeMySqlUnavailable(error) {
+  return getSafeStatus(error) === 503 && READ_SAFE_MYSQL_ERROR_CODES.has(error?.code);
+}
+
+function sendReadUnavailable(res, error, options = {}) {
+  if (!isReadSafeMySqlUnavailable(error)) return false;
+  const isCollection = options.collection === true;
+  const message = error?.message || 'MySQL cho module mẫu in hóa đơn chưa sẵn sàng.';
+  const payload = {
+    ok: true,
+    mysqlAvailable: false,
+    degraded: true,
+    source: 'mysql',
+    code: error?.code || CONNECTION_ERROR_CODE,
+    message,
+    schemaReady: getSchemaReadyState(),
+    mysql: getPrintTemplatesMySqlStatus(),
+    ...(isCollection
+      ? { items: [], data: [], total: 0 }
+      : { item: null, data: null }),
+  };
+  console.warn('[KHA PRINT TEMPLATES]', payload.code, message);
+  res.status(200).type('application/json').json(payload);
+  return true;
 }
 
 function runLogoUpload(req, res) {
@@ -87,6 +146,16 @@ async function cleanupLogoIfUnused(accountId, logoPath, excludeId = null) {
   return false;
 }
 
+router.get('/status', async (_req, res) => {
+  const mysql = getPrintTemplatesMySqlStatus();
+  res.json({
+    ok: true,
+    module: 'print_templates',
+    mysql,
+    schemaReady: getSchemaReadyState(),
+  });
+});
+
 router.get('/', async (req, res) => {
   try {
     const items = await listPrintTemplates({
@@ -94,9 +163,11 @@ router.get('/', async (req, res) => {
       includeDeleted: parseBooleanFlag(req.query.include_deleted, 0) === 1,
       status: req.query.status,
       q: req.query.q,
+      userId: getUserId(req),
     });
     res.json({ ok: true, items, data: items, total: items.length });
   } catch (error) {
+    if (sendReadUnavailable(res, error, { collection: true })) return;
     sendError(res, error, 'Lỗi lấy danh sách mẫu in hóa đơn');
   }
 });
@@ -106,6 +177,7 @@ router.get('/default', async (req, res) => {
     const item = await getDefaultPrintTemplate({ accountId: getAccountId(req) });
     res.json({ ok: true, item, data: item });
   } catch (error) {
+    if (sendReadUnavailable(res, error)) return;
     sendError(res, error, 'Lỗi lấy mẫu in hóa đơn mặc định');
   }
 });
@@ -118,6 +190,7 @@ router.get('/current', async (req, res) => {
     });
     res.json({ ok: true, item, data: item });
   } catch (error) {
+    if (sendReadUnavailable(res, error)) return;
     sendError(res, error, 'Lỗi lấy mẫu in hóa đơn hiện hành');
   }
 });
@@ -130,6 +203,7 @@ router.get('/active', async (req, res) => {
     });
     res.json({ ok: true, item, data: item });
   } catch (error) {
+    if (sendReadUnavailable(res, error)) return;
     sendError(res, error, 'Lỗi lấy mẫu in hóa đơn đang dùng');
   }
 });
@@ -139,6 +213,7 @@ router.get('/:id', async (req, res) => {
     const item = await getPrintTemplateById({ accountId: getAccountId(req), id: req.params.id });
     res.json({ ok: true, item, data: item });
   } catch (error) {
+    if (sendReadUnavailable(res, error)) return;
     sendError(res, error, 'Lỗi lấy mẫu in hóa đơn');
   }
 });
@@ -220,7 +295,7 @@ router.post('/:id/logo', canManagePrintTemplates, async (req, res) => {
   let uploadedLogoPath = '';
   try {
     await runLogoUpload(req, res);
-    if (!req.file) return res.status(400).json({ ok: false, error: 'Vui lòng chọn file logo để upload.', code: 'PRINT_TEMPLATE_LOGO_REQUIRED' });
+    if (!req.file) return res.status(400).type('application/json').json({ ok: false, item: null, data: null, error: 'Vui lòng chọn file logo để upload.', message: 'Vui lòng chọn file logo để upload.', code: 'PRINT_TEMPLATE_LOGO_REQUIRED' });
 
     uploadedLogoPath = req.file.filename;
     const publicUrl = toPublicLogoUrl(uploadedLogoPath);
