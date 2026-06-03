@@ -1,12 +1,12 @@
 {
-  "version": "1.4.7",
-  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.4.7/banhangoffline-setup-v1.4.7-x64.exe",
-  "sha256": "c8497be9c17d59a283b6f5342b4331ee931098d3a6dc5e2deec0c5d65dddfe5e",
-  "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.4.7.\n- Có bộ cài riêng cho Windows x64 và Windows 32-bit (ia32).",
-  "releaseDate": "2026-06-03T02:31:12.286Z",
+  "version": "1.4.8",
+  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.4.8/banhangoffline-setup-v1.4.8-x64.exe",
+  "sha256": "015f4fb9b619fd4842d0b4edb3ca9b7016a1baa79ec894c5b26081d8392cb214",
+  "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.4.8.\n- Có bộ cài riêng cho Windows x64 và Windows 32-bit (ia32).",
+  "releaseDate": "2026-06-03T04:44:06.512Z",
   "platform": "win32",
   "arch": "x64",
-  "size": 81985742,
+  "size": 81985730,
   "mandatory": false,
   "installerType": "nsis",
   "supportedArch": [
@@ -17,19 +17,19 @@
     "x64": {
       "platform": "win32",
       "arch": "x64",
-      "fileName": "banhangoffline-setup-v1.4.7-x64.exe",
-      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.4.7/banhangoffline-setup-v1.4.7-x64.exe",
-      "sha256": "c8497be9c17d59a283b6f5342b4331ee931098d3a6dc5e2deec0c5d65dddfe5e",
-      "size": 81985742,
+      "fileName": "banhangoffline-setup-v1.4.8-x64.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.4.8/banhangoffline-setup-v1.4.8-x64.exe",
+      "sha256": "015f4fb9b619fd4842d0b4edb3ca9b7016a1baa79ec894c5b26081d8392cb214",
+      "size": 81985730,
       "installerType": "nsis"
     },
     "ia32": {
       "platform": "win32",
       "arch": "ia32",
-      "fileName": "banhangoffline-setup-v1.4.7-ia32.exe",
-      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.4.7/banhangoffline-setup-v1.4.7-ia32.exe",
-      "sha256": "f6defc98e1c93666c2d1bd6937632500c04316040d76f4419d01743f18a1202e",
-      "size": 72402864,
+      "fileName": "banhangoffline-setup-v1.4.8-ia32.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.4.8/banhangoffline-setup-v1.4.8-ia32.exe",
+      "sha256": "08bb7a29574f43ea781f50c1588514f89ba547e1322d919bbb474845e86b22cd",
+      "size": 72402852,
       "installerType": "nsis"
     }
   }
