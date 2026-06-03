@@ -21,6 +21,8 @@ const NEGATIVE_STOCK_FEATURE_KEY = 'negative_stock_exports';
 const NEGATIVE_STOCK_ENABLED_KEY = 'negative_stock_enabled';
 const NEGATIVE_STOCK_LIMIT_KEY = 'negative_stock_limit';
 const DEFAULT_NEGATIVE_STOCK_LIMIT = 10;
+const NEGATIVE_STOCK_SETTINGS_CACHE_TTL_MS = 30 * 1000;
+const negativeStockSettingsCache = new Map();
 
 function normalizeKey(value) {
   return String(value ?? '')
@@ -70,6 +72,42 @@ function parseNonNegativeIntegerInput(value, fieldName = NEGATIVE_STOCK_LIMIT_KE
   }
 
   return { ok: false, error: `${fieldName} phải là số nguyên >= 0, không nhận text hoặc số âm.` };
+}
+
+function cloneNegativeStockSettings(settings = {}) {
+  return JSON.parse(JSON.stringify(settings || {}));
+}
+
+function getNegativeStockSettingsCacheKey(accountId = getActiveAccountId()) {
+  return String(toAccountId(accountId) || toAccountId(getActiveAccountId()) || 1);
+}
+
+function readNegativeStockSettingsCache(accountId = getActiveAccountId()) {
+  const key = getNegativeStockSettingsCacheKey(accountId);
+  const entry = negativeStockSettingsCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > NEGATIVE_STOCK_SETTINGS_CACHE_TTL_MS) {
+    negativeStockSettingsCache.delete(key);
+    return null;
+  }
+  return cloneNegativeStockSettings(entry.value);
+}
+
+function writeNegativeStockSettingsCache(accountId = getActiveAccountId(), settings = {}) {
+  const key = getNegativeStockSettingsCacheKey(accountId);
+  negativeStockSettingsCache.set(key, {
+    cachedAt: Date.now(),
+    value: cloneNegativeStockSettings(settings),
+  });
+  return settings;
+}
+
+function invalidateNegativeStockSettingsCache(accountId = null) {
+  if (accountId === null || accountId === undefined) {
+    negativeStockSettingsCache.clear();
+    return;
+  }
+  negativeStockSettingsCache.delete(getNegativeStockSettingsCacheKey(accountId));
 }
 
 function rowsToSettingsMap(rows = []) {
@@ -213,6 +251,7 @@ function mirrorNegativeStockSettingsToJson(settings = {}, context = {}) {
   const enabled = parseBooleanFlag(settings.negative_stock_enabled ?? settings.enabled, false);
   const limit = parseStoredNonNegativeInteger(settings.negative_stock_limit ?? settings.limit, DEFAULT_NEGATIVE_STOCK_LIMIT);
 
+  invalidateNegativeStockSettingsCache(accountId);
   return withAtomicDbWrite(() => {
     upsertSettingRow({
       key: NEGATIVE_STOCK_ENABLED_KEY,
@@ -233,26 +272,42 @@ function mirrorNegativeStockSettingsToJson(settings = {}, context = {}) {
     }, { skipSave: true });
 
     syncNegativeStockFeature(enabled, { ...context, account_id: accountId }, { skipSave: true });
-    return getNegativeStockSettings({ accountId, skipSave: true });
+    const mirrored = getNegativeStockSettings({ accountId, skipSave: true, skipCache: true });
+    writeNegativeStockSettingsCache(accountId, mirrored);
+    return mirrored;
   });
 }
 
 function getNegativeStockSettings(options = {}) {
   const accountId = toAccountId(options.accountId) || toAccountId(getActiveAccountId()) || 1;
+  if (options.skipCache !== true && options.forceRefresh !== true) {
+    const cached = readNegativeStockSettingsCache(accountId);
+    if (cached) return cached;
+  }
+
   ensureNegativeStockSettings(accountId, { skipSave: options.skipSave === true });
   const enabledRow = serializeSettingRow(findSettingRow(NEGATIVE_STOCK_ENABLED_KEY, accountId));
   const limitRow = serializeSettingRow(findSettingRow(NEGATIVE_STOCK_LIMIT_KEY, accountId));
   const feature = findFeatureByKey(NEGATIVE_STOCK_FEATURE_KEY);
-  return buildNegativeStockSettingsFromRows({ rows: [enabledRow, limitRow].filter(Boolean), feature, accountId, source: 'json' });
+  const settings = buildNegativeStockSettingsFromRows({ rows: [enabledRow, limitRow].filter(Boolean), feature, accountId, source: 'json' });
+  if (options.skipCache !== true) writeNegativeStockSettingsCache(accountId, settings);
+  return settings;
 }
 
 async function getNegativeStockSettingsAsync(options = {}) {
   const accountId = toAccountId(options.accountId) || toAccountId(getActiveAccountId()) || 1;
+  if (options.skipCache !== true && options.forceRefresh !== true) {
+    const cached = readNegativeStockSettingsCache(accountId);
+    if (cached) return cached;
+  }
+
   const feature = findFeatureByKey(NEGATIVE_STOCK_FEATURE_KEY);
-  const fallback = getNegativeStockSettings({ accountId, skipSave: options.skipSave === true });
+  const fallback = getNegativeStockSettings({ accountId, skipSave: options.skipSave === true, skipCache: true });
 
   if (!isSettingsMySqlConfigured()) {
-    return { ...fallback, mysql: getSettingsMySqlStatus(), source: 'json_fallback' };
+    const result = { ...fallback, mysql: getSettingsMySqlStatus(), source: 'json_fallback' };
+    if (options.skipCache !== true) writeNegativeStockSettingsCache(accountId, result);
+    return result;
   }
 
   try {
@@ -264,10 +319,11 @@ async function getNegativeStockSettingsAsync(options = {}) {
     const rows = await getNegativeStockSettingsRowsFromMySql({ accountId });
     const mysqlSettings = buildNegativeStockSettingsFromRows({ rows, feature, accountId, source: 'mysql' });
     mirrorNegativeStockSettingsToJson(mysqlSettings, { accountId, source: 'settings_mysql_read' });
+    if (options.skipCache !== true) writeNegativeStockSettingsCache(accountId, mysqlSettings);
     return mysqlSettings;
   } catch (error) {
     console.warn('[KHA SETTINGS MYSQL] Không thể đọc negative_stock_limit từ MySQL, dùng JSON fallback:', error.message);
-    return {
+    const result = {
       ...fallback,
       source: 'json_fallback',
       mysql: {
@@ -278,6 +334,8 @@ async function getNegativeStockSettingsAsync(options = {}) {
         },
       },
     };
+    if (options.skipCache !== true) writeNegativeStockSettingsCache(accountId, result);
+    return result;
   }
 }
 
@@ -352,7 +410,8 @@ function updateNegativeStockSettings(input = {}, context = {}) {
       throw error;
     }
 
-    const before = getNegativeStockSettings({ accountId, skipSave: true });
+    invalidateNegativeStockSettingsCache(accountId);
+    const before = getNegativeStockSettings({ accountId, skipSave: true, skipCache: true });
     const changes = {};
 
     if (Object.prototype.hasOwnProperty.call(parsed.payload, 'negative_stock_enabled')) {
@@ -386,7 +445,9 @@ function updateNegativeStockSettings(input = {}, context = {}) {
       }, { skipSave: true });
     }
 
-    const after = getNegativeStockSettings({ accountId, skipSave: true });
+    invalidateNegativeStockSettingsCache(accountId);
+    const after = getNegativeStockSettings({ accountId, skipSave: true, skipCache: true });
+    writeNegativeStockSettingsCache(accountId, after);
     if (changes.negative_stock_limit) {
       console.info('[KHA SETTINGS] negative_stock_limit updated', {
         account_id: accountId,
@@ -442,6 +503,7 @@ async function updateNegativeStockSettingsAsync(input = {}, context = {}) {
       accountId: context.accountId || context.account_id || result.after.account_id || 1,
       source: 'mysql',
     });
+    writeNegativeStockSettingsCache(context.accountId || context.account_id || result.after.account_id || 1, mysqlAfter);
     return { ...result, after: mysqlAfter };
   } catch (error) {
     console.warn('[KHA SETTINGS MYSQL] Không thể ghi negative_stock_limit vào MySQL; JSON đã được cập nhật:', error.message);
@@ -451,7 +513,8 @@ async function updateNegativeStockSettingsAsync(input = {}, context = {}) {
 
 function syncNegativeStockSettingFromFeature(active, context = {}, options = {}) {
   const accountId = toAccountId(context.accountId || context.account_id) || toAccountId(getActiveAccountId()) || 1;
-  const before = getNegativeStockSettings({ accountId, skipSave: true });
+  invalidateNegativeStockSettingsCache(accountId);
+  const before = getNegativeStockSettings({ accountId, skipSave: true, skipCache: true });
   const nextEnabled = parseBooleanFlag(active, false);
   upsertSettingRow({
     key: NEGATIVE_STOCK_ENABLED_KEY,
@@ -461,7 +524,9 @@ function syncNegativeStockSettingFromFeature(active, context = {}, options = {})
     description: 'Bật/tắt chức năng xuất âm tồn kho.',
     accountId,
   }, { skipSave: options.skipSave === true });
-  const after = getNegativeStockSettings({ accountId, skipSave: true });
+  invalidateNegativeStockSettingsCache(accountId);
+  const after = getNegativeStockSettings({ accountId, skipSave: true, skipCache: true });
+  writeNegativeStockSettingsCache(accountId, after);
 
   if (before.negative_stock_enabled !== after.negative_stock_enabled) {
     auditLog('settings.negative_stock_updated', {
@@ -494,9 +559,11 @@ module.exports = {
   NEGATIVE_STOCK_ENABLED_KEY,
   NEGATIVE_STOCK_LIMIT_KEY,
   DEFAULT_NEGATIVE_STOCK_LIMIT,
+  NEGATIVE_STOCK_SETTINGS_CACHE_TTL_MS,
   normalizeKey,
   parseBooleanFlag,
   parseNonNegativeIntegerInput,
+  invalidateNegativeStockSettingsCache,
   findFeatureByKey,
   findSettingRow,
   upsertSettingRow,

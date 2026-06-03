@@ -371,12 +371,20 @@ function collectApiErrorMessages(errors = []) {
     .filter(Boolean);
 }
 
+function readStructuredDetailMessage(details) {
+  if (!details) return '';
+  if (typeof details === 'string') return details.trim();
+  if (details && typeof details === 'object' && !Array.isArray(details)) {
+    return String(details.message || details.error || details.detail || details.reason || '').trim();
+  }
+  return '';
+}
+
 function sanitizeApiErrorMessage(message, data = null, fallback = 'Yêu cầu API thất bại.') {
   const text = String(message || '').trim() || fallback;
   const code = String(data?.code || data?.error_code || '').trim();
-  const signature = `${code} ${text}`;
-  if (/PRINT_TEMPLATES_MYSQL|print_templates_mysql|\bmysql\b/i.test(signature)) {
-    return 'Dịch vụ mẫu in hóa đơn chưa sẵn sàng. Vui lòng kiểm tra API /api/print-templates và thử lại.';
+  if (/^PRINT_TEMPLATE/i.test(code) && code && !text.includes(code)) {
+    return `${text} (${code})`;
   }
   return text;
 }
@@ -386,7 +394,8 @@ export function getApiErrorMessage(data, fallback = 'Yêu cầu API thất bại
   if (typeof data === 'string') return sanitizeApiErrorMessage(data, null, fallback);
   const messages = collectApiErrorMessages(data.errors);
   if (messages.length) return sanitizeApiErrorMessage(messages.join(', '), data, fallback);
-  const message = data.message || data.error || data.detail || (typeof data.details === 'string' ? data.details : '') || fallback;
+  const detailMessage = readStructuredDetailMessage(data.details);
+  const message = data.message || data.error || data.detail || detailMessage || fallback;
   return sanitizeApiErrorMessage(message, data, fallback);
 }
 
@@ -770,8 +779,8 @@ export const usersApi = {
 };
 
 export const settingsApi = {
-  get() { return apiJsonChecked('/settings', {}, 'Không thể tải cài đặt hệ thống.'); },
-  update(payload = {}) { return apiJsonChecked('/settings', { method: 'PUT', body: payload }, 'Không thể lưu cài đặt hệ thống.'); },
+  get() { return apiJsonChecked('/settings/negative-stock', {}, 'Không thể tải cài đặt xuất âm tồn kho.'); },
+  update(payload = {}) { return apiJsonChecked('/settings/negative-stock', { method: 'PUT', body: payload }, 'Không thể lưu cài đặt xuất âm tồn kho.'); },
 };
 
 export const featuresApi = {

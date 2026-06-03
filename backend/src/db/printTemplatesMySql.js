@@ -270,6 +270,25 @@ function normalizePrintTemplatesMySqlError(error) {
   return error;
 }
 
+function resetPrintTemplatesPoolAfterConnectionError(normalizedError) {
+  if (!pool) return;
+  if (normalizedError?.status !== 503 || normalizedError?.code !== CONNECTION_ERROR_CODE) return;
+
+  const stalePool = pool;
+  pool = null;
+  currentPoolFingerprint = '';
+  Promise.resolve(stalePool.end()).catch(error => {
+    console.warn(`[KHA PRINT TEMPLATES MYSQL] Không thể đóng pool lỗi trước khi reconnect: ${error.message}`);
+  });
+}
+
+function rememberPrintTemplatesMySqlError(normalizedError) {
+  if (normalizedError?.status === 503) {
+    lastConnectionError = normalizedError;
+    resetPrintTemplatesPoolAfterConnectionError(normalizedError);
+  }
+}
+
 function getPrintTemplatesPool() {
   const config = resolvePrintTemplatesMySqlConfig();
   if (!config.configured) {
@@ -315,7 +334,7 @@ async function testPrintTemplatesMySqlConnection() {
     };
   } catch (error) {
     const normalized = normalizePrintTemplatesMySqlError(error);
-    if (normalized.status === 503) lastConnectionError = normalized;
+    rememberPrintTemplatesMySqlError(normalized);
     throw normalized;
   } finally {
     if (connection) connection.release();
@@ -329,7 +348,7 @@ async function query(sql, params = []) {
     return rows;
   } catch (error) {
     const normalized = normalizePrintTemplatesMySqlError(error);
-    if (normalized.status === 503) lastConnectionError = normalized;
+    rememberPrintTemplatesMySqlError(normalized);
     throw normalized;
   }
 }
@@ -352,7 +371,7 @@ async function withTransaction(callback) {
       }
     }
     const normalized = normalizePrintTemplatesMySqlError(error);
-    if (normalized.status === 503) lastConnectionError = normalized;
+    rememberPrintTemplatesMySqlError(normalized);
     throw normalized;
   } finally {
     if (connection) connection.release();

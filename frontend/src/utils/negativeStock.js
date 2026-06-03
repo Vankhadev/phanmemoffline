@@ -28,15 +28,36 @@ function firstDefined(...values) {
   return values.find(value => value !== undefined && value !== null && value !== '');
 }
 
+function hasNegativeStockSettingFields(value = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return [
+    'negative_stock_enabled',
+    'negativeStockEnabled',
+    'allow_negative_stock',
+    'allowNegativeStock',
+    'negative_stock_limit',
+    'negativeStockLimit',
+    'minimum_allowed_stock',
+    'runtime_minimum_stock',
+    'minimumAllowedStock',
+    'runtimeMinimumStock',
+    'limit',
+    'enabled',
+  ].some(key => Object.prototype.hasOwnProperty.call(value, key));
+}
+
 function unwrapSettingsPayload(payload = {}) {
   if (!payload || typeof payload !== 'object') return {};
-  if (payload.settings && typeof payload.settings === 'object') return payload.settings;
-  if (payload.item && typeof payload.item === 'object') return payload.item;
+  if (hasNegativeStockSettingFields(payload)) return payload;
   if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
-    if (payload.data.settings && typeof payload.data.settings === 'object') return payload.data.settings;
-    if (payload.data.item && typeof payload.data.item === 'object') return payload.data.item;
-    return payload.data;
+    if (hasNegativeStockSettingFields(payload.data)) return payload.data;
+    if (hasNegativeStockSettingFields(payload.data.settings)) return payload.data.settings;
+    if (hasNegativeStockSettingFields(payload.data.item)) return payload.data.item;
   }
+  if (hasNegativeStockSettingFields(payload.inventory)) return payload.inventory;
+  if (hasNegativeStockSettingFields(payload.negativeStock)) return payload.negativeStock;
+  if (hasNegativeStockSettingFields(payload.settings)) return payload.settings;
+  if (hasNegativeStockSettingFields(payload.item)) return payload.item;
   return payload;
 }
 

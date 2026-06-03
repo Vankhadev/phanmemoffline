@@ -19,12 +19,12 @@ export const TABLE_COLUMN_LABELS = Object.freeze({
 
 export const DEFAULT_TABLE_COLUMNS = Object.freeze([
   { key: 'no', label: 'STT', widthMm: 8, align: 'center' },
-  { key: 'name', label: 'Tên sản phẩm', widthMm: 54, align: 'left' },
-  { key: 'unit', label: 'Đơn vị', widthMm: 13, align: 'center' },
-  { key: 'qty', label: 'Số lượng', widthMm: 13, align: 'center' },
-  { key: 'unitPrice', label: 'Đơn giá', widthMm: 21, align: 'right' },
-  { key: 'discount', label: 'Chiết khấu', widthMm: 21, align: 'right' },
-  { key: 'lineTotal', label: 'Thành tiền', widthMm: 22, align: 'right' },
+  { key: 'name', label: 'Tên sản phẩm', widthMm: 48, align: 'left' },
+  { key: 'unit', label: 'Đơn vị', widthMm: 11, align: 'center' },
+  { key: 'qty', label: 'SL', widthMm: 12, align: 'center' },
+  { key: 'unitPrice', label: 'Đơn giá', widthMm: 19, align: 'right' },
+  { key: 'discount', label: 'CK', widthMm: 18, align: 'right' },
+  { key: 'lineTotal', label: 'Thành tiền', widthMm: 20, align: 'right' },
 ]);
 
 const TABLE_COLUMN_MIN_WIDTHS = Object.freeze({
@@ -187,8 +187,8 @@ function defaultStyleForType(type) {
         opacity: 1,
         paddingMm: 0,
         borderWidthMm: 0.2,
-        borderColor: '#bfdbfe',
-        backgroundColor: '#eff6ff',
+        borderColor: '#111827',
+        backgroundColor: '#ffffff',
       };
     case 'storeInfo':
       return {
@@ -204,7 +204,7 @@ function defaultStyleForType(type) {
         storePhoneLabel: 'ĐT',
       };
     case 'invoiceTitle':
-      return { ...commonText, fontSizePt: 13, bold: true, align: 'right', color: '#0f172a', titleText: 'HÓA ĐƠN', subtitleText: 'BÁN HÀNG', showTitle: true, showSubtitle: true, showInvoiceCode: true };
+      return { ...commonText, fontSizePt: 12.5, bold: true, align: 'right', color: '#111827', titleText: 'HÓA ĐƠN', subtitleText: 'BÁN HÀNG', showTitle: true, showSubtitle: true, showInvoiceCode: true };
     case 'customerInfo':
       return {
         ...commonText,
@@ -245,14 +245,14 @@ function defaultStyleForType(type) {
       return {
         ...commonText,
         fontSizePt: 8,
-        highlightColor: '#eff6ff',
-        paddingMm: 1.4,
+        highlightColor: '#ffffff',
+        paddingMm: 1,
         borderWidthMm: 0.2,
-        borderColor: '#e2e8f0',
-        borderRadiusMm: 2,
+        borderColor: '#111827',
+        borderRadiusMm: 0,
       };
     case 'note':
-      return { ...commonText, fontSizePt: 7.8, color: '#78350f', backgroundColor: '#fffbeb', paddingMm: 1.4, borderRadiusMm: 2 };
+      return { ...commonText, fontSizePt: 7.8, color: '#111827', backgroundColor: '#ffffff', paddingMm: 1, borderWidthMm: 0.2, borderColor: '#111827', borderRadiusMm: 0 };
     case 'signatures':
       return { ...commonText, fontSizePt: 8, align: 'center', signatureGapMm: 10, blankHeightMm: 12, buyerLabel: 'Khách hàng', sellerLabel: 'Người bán', buyerHint: '(Ký và ghi rõ họ tên)', sellerHint: '(Ký và ghi rõ họ tên)' };
     case 'footerText':
@@ -294,14 +294,14 @@ function defaultTableStyleElement(bodyZone, tableFrame) {
     style: {
       tableBorder: true,
       borderWidthMm: 0.22,
-      borderColor: '#cbd5e1',
-      headerBackgroundColor: '#e2e8f0',
-      headerColor: '#0f172a',
-      paddingMm: 1.35,
+      borderColor: '#111827',
+      headerBackgroundColor: '#f5f5f5',
+      headerColor: '#111827',
+      paddingMm: 0.95,
       rowGapMm: 0,
-      fontSizePt: 8.2,
-      headerFontSizePt: 7.6,
-      lineHeight: 1.18,
+      fontSizePt: 7.8,
+      headerFontSizePt: 7.2,
+      lineHeight: 1.15,
       widthPercent: 100,
     },
   };
@@ -395,7 +395,7 @@ function normalizeCanvas(input = {}, template = {}) {
     pageSize,
     orientation,
     unit: 'mm',
-    safePaddingMm: roundMm(clampNumber(raw.safePaddingMm, 0, 30, pageSize.startsWith('K') ? 4 : 8)),
+    safePaddingMm: roundMm(clampNumber(raw.safePaddingMm, 0, 30, pageSize.startsWith('K') ? 3 : 5)),
     snapGridMm: roundMm(clampNumber(raw.snapGridMm, 0.1, 10, 1)),
   };
 }
@@ -404,10 +404,10 @@ function defaultZonesForCanvas(canvas) {
   const page = getPaperDimensions(canvas.pageSize, canvas.orientation);
   const safe = canvas.safePaddingMm;
   const contentWidth = Math.max(20, page.width - safe * 2);
-  const gap = canvas.pageSize.startsWith('K') ? 3 : 4;
-  const headerHeight = Math.min(page.height * 0.25, canvas.pageSize.startsWith('K') ? 42 : 34);
-  const footerHeight = Math.min(page.height * 0.25, canvas.pageSize.startsWith('K') ? 44 : 34);
-  const signatureHeight = Math.min(page.height * 0.16, canvas.pageSize.startsWith('K') ? 24 : 18);
+  const gap = canvas.pageSize.startsWith('K') ? 2.5 : 3;
+  const headerHeight = Math.min(page.height * 0.22, canvas.pageSize.startsWith('K') ? 38 : 28);
+  const footerHeight = Math.min(page.height * 0.22, canvas.pageSize.startsWith('K') ? 38 : 28);
+  const signatureHeight = Math.min(page.height * 0.14, canvas.pageSize.startsWith('K') ? 20 : 15);
   const headerY = safe;
   const bodyY = headerY + headerHeight + gap;
   const signatureY = Math.max(bodyY + 28, page.height - safe - signatureHeight);
@@ -473,19 +473,19 @@ export function createDefaultEditorDocument(options = {}) {
   const headerW = header.frame.w;
   const footerW = footer.frame.w;
   const signatureW = signatures.frame.w;
-  const logoSize = Math.min(22, header.frame.h - 2, headerW * 0.24);
+  const logoSize = Math.min(18, header.frame.h - 2, headerW * 0.2);
   const tableFrame = { x: 0, y: 0, w: body.frame.w, h: 'auto' };
 
   const elements = [
     makeElement('logo', 'logo', 'header', { x: 0, y: 0, w: logoSize, h: logoSize }, { bindings: { source: 'template.logo' }, zIndex: 10, visible: false }),
-    makeElement('storeInfo', 'storeInfo', 'header', { x: 0, y: 0, w: Math.max(54, headerW * 0.48), h: Math.min(22, header.frame.h) }, { zIndex: 20 }),
-    makeElement('invoiceTitle', 'invoiceTitle', 'header', { x: Math.max(0, headerW - Math.max(42, headerW * 0.34)), y: 0, w: Math.max(42, headerW * 0.34), h: Math.min(14, header.frame.h) }, { zIndex: 30, style: { titleText: 'HÓA ĐƠN BÁN HÀNG', showSubtitle: false, showInvoiceCode: false, align: 'right', fontSizePt: 13 } }),
-    makeElement('customerInfo', 'customerInfo', 'header', { x: 0, y: Math.max(0, header.frame.h - 11), w: Math.max(50, headerW * 0.62), h: 10 }, { zIndex: 40 }),
-    makeElement('invoiceMeta', 'invoiceMeta', 'header', { x: Math.max(0, headerW * 0.64), y: Math.max(0, header.frame.h - 11), w: Math.max(32, headerW * 0.36), h: 10 }, { zIndex: 45, style: { showPaymentMethod: false, showSeller: false } }),
-    makeElement('totals', 'totals', 'footer', { x: Math.max(0, footerW - Math.max(46, footerW * 0.42)), y: 0, w: Math.max(46, footerW * 0.42), h: Math.min(23, footer.frame.h) }, { zIndex: 20 }),
-    makeElement('note', 'note', 'footer', { x: 0, y: 0, w: Math.max(28, footerW * 0.42), h: Math.min(18, footer.frame.h) }, { zIndex: 15 }),
+    makeElement('storeInfo', 'storeInfo', 'header', { x: 0, y: 0, w: Math.max(58, headerW * 0.5), h: Math.min(18, header.frame.h) }, { zIndex: 20 }),
+    makeElement('invoiceTitle', 'invoiceTitle', 'header', { x: Math.max(0, headerW - Math.max(42, headerW * 0.32)), y: 0, w: Math.max(42, headerW * 0.32), h: Math.min(12, header.frame.h) }, { zIndex: 30, style: { titleText: 'HÓA ĐƠN BÁN HÀNG', showSubtitle: false, showInvoiceCode: false, align: 'right', fontSizePt: 12.5 } }),
+    makeElement('customerInfo', 'customerInfo', 'header', { x: 0, y: Math.max(0, header.frame.h - 9), w: Math.max(52, headerW * 0.62), h: 8.5 }, { zIndex: 40 }),
+    makeElement('invoiceMeta', 'invoiceMeta', 'header', { x: Math.max(0, headerW * 0.64), y: Math.max(0, header.frame.h - 9), w: Math.max(32, headerW * 0.36), h: 8.5 }, { zIndex: 45, style: { showPaymentMethod: false, showSeller: false } }),
+    makeElement('totals', 'totals', 'footer', { x: Math.max(0, footerW - Math.max(44, footerW * 0.4)), y: 0, w: Math.max(44, footerW * 0.4), h: Math.min(20, footer.frame.h) }, { zIndex: 20 }),
+    makeElement('note', 'note', 'footer', { x: 0, y: 0, w: Math.max(28, footerW * 0.38), h: Math.min(14, footer.frame.h) }, { zIndex: 15 }),
     makeElement('footerText', 'footerText', 'footer', { x: 0, y: Math.max(0, footer.frame.h - 5), w: footerW, h: Math.min(5, footer.frame.h) }, { zIndex: 35 }),
-    makeElement('signatures', 'signatures', 'signatures', { x: 0, y: 0, w: signatureW, h: Math.min(16, signatures.frame.h) }, { zIndex: 30 }),
+    makeElement('signatures', 'signatures', 'signatures', { x: 0, y: 0, w: signatureW, h: Math.min(14, signatures.frame.h) }, { zIndex: 30 }),
     defaultTableStyleElement(body, tableFrame),
   ];
 

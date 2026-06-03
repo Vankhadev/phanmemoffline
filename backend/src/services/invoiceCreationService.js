@@ -414,14 +414,15 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
     return buildExistingInvoiceResult(existing, client_order_id, payload_hash, idempotency_key);
   }
 
-  validateStockForDetails(safeDetails, { source: options.orderSource || 'invoice_service' });
-
   const money = buildInvoiceMoneyFields(payload, safeDetails);
   const creatorMetadata = buildCreatorMetadata(payload, req, options);
   const status = payload.status || options.defaultStatus || 'pending';
   const invoiceCreatedAt = payload.created_at || now();
 
   const runCreation = () => {
+    // Validate tồn kho ngay trong transaction cập nhật tồn để tránh dùng snapshot tồn kho cũ.
+    // Mỗi lần trừ tồn bên dưới tiếp tục kiểm tra lại bằng row-lock in-process trong applyProductStockDeltaLocked.
+    validateStockForDetails(safeDetails, { source: options.orderSource || 'invoice_service' });
     const invoice_code = resolveInvoiceCode(payload, { ...options, skipSave: true });
     const sync_status = payload.sync_status || (payload_hash ? 'applied' : '');
     const synced_at = payload.synced_at || (payload_hash ? now() : null);

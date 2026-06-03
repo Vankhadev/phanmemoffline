@@ -426,6 +426,12 @@ function getNegativeStockLimitInputError(value) {
   return '';
 }
 
+function buildNegativeStockSaveSignature(enabled, limit) {
+  const number = Number(limit);
+  const normalizedLimit = Number.isInteger(number) && number >= 0 ? number : '';
+  return `${enabled ? '1' : '0'}:${normalizedLimit}`;
+}
+
 function SectionNotice({ notice }) {
   if (!notice?.message) return null;
 
@@ -472,6 +478,11 @@ function hasAnyPermission(permissionSet, required = []) {
 export default function Settings({ store, onStoreChange, permissions = [] }) {
   const mountedRef = useRef(true);
   const noticeTimersRef = useRef({});
+  const negativeStockAutosaveTimerRef = useRef(null);
+  const negativeStockLastSavedRef = useRef(buildNegativeStockSaveSignature(
+    normalizeNegativeStockSettings().enabled,
+    normalizeNegativeStockSettings().limit,
+  ));
   const hasExplicitPermissions = Array.isArray(permissions) && permissions.length > 0;
   const permissionSet = useMemo(
     () => new Set(
@@ -571,6 +582,10 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   useEffect(() => {
     return () => {
       mountedRef.current = false;
+      if (negativeStockAutosaveTimerRef.current) {
+        window.clearTimeout(negativeStockAutosaveTimerRef.current);
+        negativeStockAutosaveTimerRef.current = null;
+      }
       Object.values(noticeTimersRef.current).forEach(timerId => window.clearTimeout(timerId));
       noticeTimersRef.current = {};
     };
@@ -610,6 +625,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
 
   const applyNegativeStockSettings = useCallback((payload = {}) => {
     const normalized = cacheNegativeStockSettings(payload);
+    negativeStockLastSavedRef.current = buildNegativeStockSaveSignature(normalized.enabled, normalized.limit);
     if (mountedRef.current) {
       setNegativeStockSettings(normalized);
       setNegativeStockLimitInput(String(normalized.limit));
@@ -623,7 +639,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
       if (mountedRef.current) setNegativeStockNotice(null);
       return applyNegativeStockSettings(data);
     } catch (error) {
-      const message = getErrorMessage(error, 'Không thể tải cấu hình xuất âm tồn kho từ API /api/settings.');
+      const message = getErrorMessage(error, 'Không thể tải cấu hình xuất âm tồn kho từ API /api/settings/negative-stock.');
       const fallbackSettings = normalizeNegativeStockSettings();
       if (mountedRef.current) {
         setNegativeStockSettings(fallbackSettings);
@@ -1133,7 +1149,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     [printTemplateEdit, printTemplateForm, printTemplateLogoPreviewUrl],
   );
 
-  const saveNegativeStockSettings = async ({ enabled = negativeStockSettings.enabled, limitInput = negativeStockLimitInput, successMessage = 'Đã lưu cấu hình xuất âm tồn kho.' } = {}) => {
+  const saveNegativeStockSettings = async ({ enabled = negativeStockSettings.enabled, limitInput = negativeStockLimitInput, successMessage = 'Lưu cài đặt thành công' } = {}) => {
     const inputError = getNegativeStockLimitInputError(limitInput);
     if (inputError) {
       setTimedNotice('negative-stock', setNegativeStockNotice, {
@@ -1144,6 +1160,21 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     }
 
     const limit = Number(String(limitInput).trim());
+    const nextSignature = buildNegativeStockSaveSignature(Boolean(enabled), limit);
+    if (nextSignature === negativeStockLastSavedRef.current) {
+      setNegativeStockLimitInput(String(limit));
+      const normalized = normalizeNegativeStockSettings({
+        ...negativeStockSettings,
+        negative_stock_enabled: Boolean(enabled),
+        negative_stock_limit: limit,
+      });
+      setTimedNotice('negative-stock', setNegativeStockNotice, {
+        tone: 'success',
+        message: successMessage,
+      }, 2500);
+      return normalized;
+    }
+
     setNegativeStockSaving(true);
     setNegativeStockNotice(null);
     try {
@@ -1152,8 +1183,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
         negative_stock_limit: limit,
       };
       const data = await settingsApi.update(payload);
-      const rawSettings = data?.settings || data?.data?.settings || data?.data || data || {};
-      const normalized = applyNegativeStockSettings({ ...payload, ...rawSettings });
+      const normalized = applyNegativeStockSettings({ ...payload, ...(data || {}) });
       setTimedNotice('negative-stock', setNegativeStockNotice, {
         tone: 'success',
         message: successMessage,
@@ -1162,7 +1192,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     } catch (error) {
       setTimedNotice('negative-stock', setNegativeStockNotice, {
         tone: 'error',
-        message: getErrorMessage(error, 'Không thể lưu cấu hình xuất âm tồn kho qua API /api/settings.'),
+        message: getErrorMessage(error, 'Không thể lưu cấu hình xuất âm tồn kho qua API /api/settings/negative-stock.'),
       });
       return null;
     } finally {
@@ -1174,7 +1204,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     const nextEnabled = !negativeStockSettings.enabled;
     return saveNegativeStockSettings({
       enabled: nextEnabled,
-      successMessage: nextEnabled ? 'Đã bật cho phép xuất âm tồn kho.' : 'Đã tắt cho phép xuất âm tồn kho.',
+      successMessage: nextEnabled ? 'Đã bật chế độ xuất âm' : 'Đã tắt chế độ xuất âm',
     });
   };
 
@@ -1188,6 +1218,38 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   };
 
   const handleSaveNegativeStockSettings = () => saveNegativeStockSettings();
+
+  useEffect(() => {
+    if (!canManageNegativeStock || initialLoading || negativeStockSaving) return undefined;
+
+    const inputError = getNegativeStockLimitInputError(negativeStockLimitInput);
+    if (inputError) return undefined;
+
+    const limit = Number(String(negativeStockLimitInput).trim());
+    const nextSignature = buildNegativeStockSaveSignature(negativeStockSettings.enabled, limit);
+    if (nextSignature === negativeStockLastSavedRef.current) return undefined;
+
+    if (negativeStockAutosaveTimerRef.current) {
+      window.clearTimeout(negativeStockAutosaveTimerRef.current);
+      negativeStockAutosaveTimerRef.current = null;
+    }
+
+    negativeStockAutosaveTimerRef.current = window.setTimeout(() => {
+      negativeStockAutosaveTimerRef.current = null;
+      saveNegativeStockSettings({
+        enabled: negativeStockSettings.enabled,
+        limitInput: String(limit),
+        successMessage: 'Lưu cài đặt thành công',
+      });
+    }, 700);
+
+    return () => {
+      if (negativeStockAutosaveTimerRef.current) {
+        window.clearTimeout(negativeStockAutosaveTimerRef.current);
+        negativeStockAutosaveTimerRef.current = null;
+      }
+    };
+  }, [canManageNegativeStock, initialLoading, negativeStockLimitInput, negativeStockSaving, negativeStockSettings.enabled]);
 
   const runUpdateAction = async (busyKey, action) => {
     if (!window.khaDesktop?.updates) {
@@ -1573,7 +1635,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
       )}
 
       {!initialLoading && tab === 'negative-stock' && (
-        <div className="card space-y-5 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100">
+        <div className="card space-y-5 overflow-hidden border-white/60 bg-white/75 shadow-2xl shadow-emerald-900/10 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/80 dark:text-slate-100">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <h2 className="font-bold flex items-center gap-2">
@@ -1591,7 +1653,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
 
           <SectionNotice notice={negativeStockNotice} />
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-3xl border border-white/70 bg-white/70 p-4 shadow-xl shadow-emerald-900/10 backdrop-blur-md dark:border-slate-700/70 dark:bg-slate-900/70">
             <div className="space-y-5">
               <div className="space-y-2">
                 <div className="font-semibold text-gray-800 dark:text-slate-100">Cho phép xuất âm tồn kho sản phẩm</div>
@@ -1696,7 +1758,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
               <li>Khi tắt: backend không cho xuất nếu tồn dự kiến nhỏ hơn 0.</li>
               <li>Khi bật: admin nhập {negativeStockAdminLimitLabel}, backend cho phép tồn sau xuất giảm tối đa đến {negativeStockRuntimeLimitLabel}.</li>
               <li>Nếu vượt giới hạn, backend trả lỗi rõ tên sản phẩm, tồn hiện tại, số lượng xuất và giới hạn tối thiểu.</li>
-              <li>Frontend đọc/ghi trực tiếp qua API /api/settings và không còn dùng giới hạn hard-code.</li>
+              <li>Frontend đọc/ghi trực tiếp qua API /api/settings/negative-stock và không còn dùng giới hạn hard-code.</li>
             </ul>
           </div>
 
@@ -2201,7 +2263,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                 <li>Dùng để bật/tắt cho phép xuất âm tồn kho sản phẩm.</li>
                 <li>Khi bật, admin nhập số lượng âm tối đa; ví dụ nhập {negativeStockAdminLimitLabel} thì tồn tối thiểu runtime là {negativeStockRuntimeLimitLabel}.</li>
                 <li>Khi tắt, mọi thao tác làm tồn kho nhỏ hơn 0 sẽ bị backend từ chối.</li>
-                <li>Ô giới hạn lưu qua API /api/settings và được các màn hình bán hàng/kho dùng làm runtime settings.</li>
+                <li>Ô giới hạn lưu qua API /api/settings/negative-stock và được các màn hình bán hàng/kho dùng làm runtime settings.</li>
               </ul>
             </div>
 

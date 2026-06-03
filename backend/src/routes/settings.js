@@ -45,7 +45,7 @@ function serializeSettingsPayload(settings) {
   };
 }
 
-router.get('/', async (req, res) => {
+async function handleGetNegativeStockSettings(req, res) {
   try {
     const settings = await getNegativeStockSettingsAsync({ accountId: getAccountId(req) });
     res.json(serializeSettingsPayload(settings));
@@ -58,14 +58,14 @@ router.get('/', async (req, res) => {
       details: error.details || undefined,
     });
   }
-});
+}
 
-router.put('/', canManageSettings, async (req, res) => {
+async function handleUpdateNegativeStockSettings(req, res) {
   try {
     const result = await updateNegativeStockSettingsAsync(req.body || {}, {
       accountId: getAccountId(req),
       userId: req.user?.id || null,
-      source: 'settings_api',
+      source: req.path === '/negative-stock' ? 'settings_negative_stock_api' : 'settings_api',
     });
     res.json({
       ...serializeSettingsPayload(result.after),
@@ -86,6 +86,11 @@ router.put('/', canManageSettings, async (req, res) => {
       details: error.details || undefined,
     });
   }
-});
+}
+
+router.get('/', handleGetNegativeStockSettings);
+router.put('/', canManageSettings, handleUpdateNegativeStockSettings);
+router.get('/negative-stock', handleGetNegativeStockSettings);
+router.put('/negative-stock', canManageSettings, handleUpdateNegativeStockSettings);
 
 module.exports = router;

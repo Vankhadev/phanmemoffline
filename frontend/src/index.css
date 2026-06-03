@@ -3136,6 +3136,318 @@
     }
   }
 
+  /* Final invoice overrides: dynamic K80/A5/A4 paper, centered preview, black/white print output. */
+  .invoice-paper {
+    width: var(--invoice-page-width, 148mm);
+    min-width: var(--invoice-page-width, 148mm);
+    max-width: var(--invoice-page-width, 148mm);
+    min-height: var(--invoice-physical-page-height, var(--invoice-page-height, 210mm));
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    background: #fff;
+    box-sizing: border-box;
+  }
+
+  .invoice-print-page {
+    background: #e5e7eb;
+    color: #111827;
+  }
+
+  .invoice-preview-shell {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 1rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .invoice-print-preview-frame {
+    align-items: flex-start;
+    justify-content: center;
+    width: 100%;
+    border-radius: 0;
+    background: #d1d5db;
+    background-image: none;
+    padding: clamp(12px, 4vw, 8mm);
+    box-sizing: border-box;
+  }
+
+  .invoice-print {
+    width: var(--invoice-page-width, 148mm);
+    min-width: var(--invoice-page-width, 148mm);
+    max-width: var(--invoice-page-width, 148mm);
+    height: auto;
+    min-height: var(--invoice-physical-page-height, var(--invoice-page-height, 210mm));
+    max-height: none;
+    flex: 0 0 auto;
+    overflow: visible;
+    border: 1px solid #9ca3af;
+    border-radius: 2px;
+    background: #fff;
+    box-shadow: 0 12px 34px rgb(15 23 42 / 0.22);
+    color: #111827;
+  }
+
+  .invoice-print-inner {
+    width: var(--invoice-page-width, 148mm);
+    min-width: var(--invoice-page-width, 148mm);
+    max-width: var(--invoice-page-width, 148mm);
+    min-height: var(--invoice-physical-page-height, var(--invoice-page-height, 210mm));
+    transform: scale(var(--invoice-print-scale, 1));
+    transform-origin: top center;
+    background: #fff;
+    padding: min(var(--invoice-paper-padding, 5mm), 5mm);
+    color: #111827;
+    font-family: Arial, 'Segoe UI', Tahoma, sans-serif;
+    font-size: var(--invoice-font-size, 8.6pt);
+    line-height: var(--invoice-line-height, 1.22);
+    overflow: visible;
+    box-sizing: border-box;
+  }
+
+  .invoice-pdf-capture {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .invoice-template-header {
+    margin-bottom: 2.4mm;
+    padding-bottom: 2.4mm;
+    border-bottom: 0.28mm solid #111827;
+  }
+
+  .invoice-template-title-block {
+    margin: 1.7mm 0 1.4mm;
+  }
+
+  .invoice-template-title-block h1 {
+    font-size: 1.24em;
+    letter-spacing: 0.01em;
+  }
+
+  .invoice-template-meta-grid {
+    gap: 0.6mm 4mm;
+  }
+
+  .invoice-template-info-pair {
+    grid-template-columns: 18mm minmax(0, 1fr);
+    gap: 1mm;
+    margin-top: 0.45mm;
+  }
+
+  .invoice-template-table-wrap {
+    margin-top: 2.4mm;
+  }
+
+  .invoice-template-table {
+    font-size: 0.84em;
+  }
+
+  .invoice-template-table th,
+  .invoice-template-table td {
+    border-color: #111827;
+    padding: 0.95mm 1mm;
+  }
+
+  .invoice-template-table th {
+    background: #f5f5f5;
+    font-size: 0.76em;
+  }
+
+  .invoice-template-note {
+    margin-top: 2mm;
+    padding: 1.4mm 1.6mm;
+    border-color: #111827;
+    background: #fff;
+    color: #111827;
+  }
+
+  .invoice-template-footer-block {
+    margin-top: 2.6mm;
+  }
+
+  .invoice-template-footer-totals {
+    width: min(58mm, 100%);
+  }
+
+  .invoice-template-money-line {
+    padding: 0.8mm 0;
+    border-bottom-color: #9ca3af;
+    color: #111827;
+  }
+
+  .invoice-template-money-total {
+    border-bottom-color: #111827;
+    background: #fff;
+    color: #111827;
+  }
+
+  .invoice-template-signatures {
+    margin-top: 5mm;
+    gap: 9mm;
+  }
+
+  .invoice-template-signatures p {
+    margin-bottom: 9mm;
+  }
+
+  .invoice-template-footer-note {
+    margin-top: 2.2mm;
+    padding-top: 1mm;
+  }
+
+  .invoice-print-v2 .invoice-print-inner,
+  .invoice-template-v2-document {
+    width: var(--invoice-page-width, 148mm);
+    min-width: var(--invoice-page-width, 148mm);
+    max-width: var(--invoice-page-width, 148mm);
+    min-height: var(--invoice-content-height, var(--invoice-physical-page-height, var(--invoice-page-height, 210mm)));
+    background: #fff;
+    color: #111827;
+  }
+
+  .invoice-template-v2-title div,
+  .invoice-template-v2-totals .invoice-template-money-total,
+  .invoice-editor-preview-totals .is-total {
+    border-radius: 0;
+    background: #fff;
+    color: #111827;
+  }
+
+  .invoice-template-v2-table th,
+  .invoice-template-v2-table td {
+    border-color: #111827;
+  }
+
+  .invoice-template-v2-table th {
+    background: #f5f5f5;
+    color: #111827;
+  }
+
+  @media print {
+    @page {
+      size: A5 portrait;
+      margin: 0;
+    }
+
+    html,
+    body,
+    #root {
+      width: auto !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      background: #fff !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    #root > div,
+    #root > div > div,
+    .app-main-scroll,
+    .invoice-print-page,
+    .invoice-preview-shell,
+    .invoice-print-preview-frame {
+      display: block !important;
+      width: auto !important;
+      height: auto !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      background: #fff !important;
+      background-image: none !important;
+      box-shadow: none !important;
+    }
+
+    #root aside,
+    #root nav,
+    .no-print,
+    .invoice-print-toolbar,
+    .invoice-toolbar-actions,
+    .invoice-control-group,
+    .invoice-alert,
+    .invoice-state-card,
+    .toast-stack,
+    .invoice-editor-modal,
+    .invoice-editor-toolbar,
+    .invoice-editor-topbar,
+    .invoice-editor-left,
+    .invoice-editor-right,
+    .invoice-editor-ruler-wrap,
+    .invoice-editor-canvas-footer,
+    button {
+      display: none !important;
+    }
+
+    .invoice-paper,
+    .invoice-print {
+      width: var(--invoice-page-width, 148mm) !important;
+      min-width: var(--invoice-page-width, 148mm) !important;
+      max-width: var(--invoice-page-width, 148mm) !important;
+      height: auto !important;
+      min-height: var(--invoice-physical-page-height, var(--invoice-page-height, 210mm)) !important;
+      max-height: none !important;
+      margin: 0 auto !important;
+      overflow: visible !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: #fff !important;
+      box-shadow: none !important;
+      transform: none !important;
+      page-break-after: auto !important;
+      break-inside: avoid !important;
+    }
+
+    .invoice-print-inner {
+      width: var(--invoice-page-width, 148mm) !important;
+      min-width: var(--invoice-page-width, 148mm) !important;
+      max-width: var(--invoice-page-width, 148mm) !important;
+      min-height: var(--invoice-physical-page-height, var(--invoice-page-height, 210mm)) !important;
+      padding: min(var(--invoice-paper-padding, 5mm), 5mm) !important;
+      overflow: visible !important;
+      background: #fff !important;
+      box-sizing: border-box !important;
+      transform: scale(var(--invoice-print-scale, 1)) !important;
+      transform-origin: top center !important;
+    }
+
+    .invoice-print *,
+    .invoice-print *::before,
+    .invoice-print *::after {
+      box-shadow: none !important;
+      text-shadow: none !important;
+    }
+  }
+
+  .invoice-print-k80,
+  .invoice-print-k57 {
+    min-height: auto;
+  }
+
+  .invoice-print-k80 .invoice-print-inner,
+  .invoice-print-k57 .invoice-print-inner {
+    min-height: auto;
+    padding: min(var(--invoice-paper-padding, 3mm), 3mm);
+    font-size: clamp(6pt, var(--invoice-font-size, 8pt), 8.5pt);
+    line-height: 1.2;
+  }
+
+  @media (max-width: 767px) {
+    .invoice-preview-shell {
+      padding: 0.5rem;
+    }
+
+    .invoice-print-preview-frame {
+      justify-content: flex-start;
+      padding: 0.5rem;
+    }
+  }
+
   .dark .system-table th {
     background: #111827;
     color: #cbd5e1;

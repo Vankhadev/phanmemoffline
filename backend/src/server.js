@@ -18,6 +18,7 @@ const { requireAuth, requireAnyPermission, requirePermission } = require('./midd
 const { ensurePrintTemplatesSchema } = require('./db/printTemplatesSchema');
 const { testPrintTemplatesMySqlConnection, getPrintTemplatesMySqlStatus } = require('./db/printTemplatesMySql');
 const { ensureSettingsSchema, getSettingsMySqlStatus } = require('./db/settingsMySql');
+const { getNegativeStockSettingsAsync } = require('./services/settingsService');
 const { PRINT_TEMPLATE_UPLOAD_DIR, PUBLIC_PRINT_TEMPLATE_UPLOAD_PATH, ensureUploadDir } = require('./middleware/printTemplateUpload');
 
 // --- Routes ---
@@ -165,20 +166,25 @@ app.use((err, req, res, next) => {
   const status = err.type === 'entity.too.large' ? 413 : 400;
   if (isImportRequest) console.warn('[KHA IMPORT EXCEL] JSON body error:', err.message);
   if (isPrintTemplateRequest) console.warn('[KHA PRINT TEMPLATES] JSON body error:', err.message);
+  const message = isPrintTemplateRequest
+    ? (err.type === 'entity.too.large' ? 'Dữ liệu mẫu in hóa đơn vượt quá giới hạn 10MB.' : 'Body JSON mẫu in hóa đơn không hợp lệ')
+    : (err.type === 'entity.too.large'
+      ? 'File Excel quá lớn hoặc có quá nhiều dòng để import một lần'
+      : 'Body JSON import không hợp lệ');
+  const detail = isPrintTemplateRequest
+    ? (err.type === 'entity.too.large'
+      ? 'layout_json/settings_json gửi lên quá lớn. Hãy giảm số component hoặc nội dung CSS.'
+      : 'Backend không đọc được JSON của module mẫu in hóa đơn. Vui lòng kiểm tra payload gửi lên.')
+    : (err.type === 'entity.too.large'
+      ? 'Dữ liệu gửi lên vượt giới hạn 25MB. Hãy giảm số dòng/cột không cần thiết hoặc chia file import thành nhiều lần.'
+      : 'Backend không đọc được JSON do frontend gửi lên. Vui lòng thử lại với file Excel hợp lệ.');
   res.status(status).json({
     ok: false,
-    error: isPrintTemplateRequest
-      ? (err.type === 'entity.too.large' ? 'Dữ liệu mẫu in hóa đơn vượt quá giới hạn 10MB.' : 'Body JSON mẫu in hóa đơn không hợp lệ')
-      : (err.type === 'entity.too.large'
-        ? 'File Excel quá lớn hoặc có quá nhiều dòng để import một lần'
-        : 'Body JSON import không hợp lệ'),
-    detail: isPrintTemplateRequest
-      ? (err.type === 'entity.too.large'
-        ? 'layout_json/settings_json gửi lên quá lớn. Hãy giảm số component hoặc nội dung CSS.'
-        : 'Backend không đọc được JSON của module mẫu in hóa đơn. Vui lòng kiểm tra payload gửi lên.')
-      : (err.type === 'entity.too.large'
-        ? 'Dữ liệu gửi lên vượt giới hạn 25MB. Hãy giảm số dòng/cột không cần thiết hoặc chia file import thành nhiều lần.'
-        : 'Backend không đọc được JSON do frontend gửi lên. Vui lòng thử lại với file Excel hợp lệ.'),
+    success: false,
+    status,
+    error: message,
+    message,
+    detail,
     errors: [],
     expectedColumns: isImportRequest ? [
       'Loại dòng',
@@ -360,7 +366,8 @@ async function bootstrapSettingsSchema() {
   try {
     const result = await ensureSettingsSchema({ failSoft: true });
     if (result?.ok) {
-      console.log('[KHA SETTINGS MYSQL] Schema system_settings đã sẵn sàng cho negative_stock_limit.');
+      await getNegativeStockSettingsAsync({ accountId: 1 });
+      console.log('[KHA SETTINGS MYSQL] Schema settings/system_settings đã sẵn sàng và đã mirror negative_stock_limit vào runtime JSON.');
     } else {
       console.warn(`[KHA SETTINGS MYSQL] Bỏ qua bootstrap schema settings: ${result?.error || 'chưa cấu hình MySQL'}`);
     }

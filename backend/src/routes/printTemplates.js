@@ -66,6 +66,8 @@ function sendError(res, error, fallbackMessage = 'Lỗi xử lý mẫu in hóa �
   const details = toSafeDetails(error?.details);
   return res.status(status).type('application/json').json({
     ok: false,
+    success: false,
+    status,
     item: null,
     data: null,
     items: [],
@@ -93,6 +95,8 @@ function sendReadUnavailable(res, error, options = {}) {
   const message = error?.message || 'MySQL cho module mẫu in hóa đơn chưa sẵn sàng.';
   const payload = {
     ok: true,
+    success: true,
+    status: 200,
     mysqlAvailable: false,
     degraded: true,
     source: 'mysql',
@@ -146,10 +150,18 @@ async function cleanupLogoIfUnused(accountId, logoPath, excludeId = null) {
   return false;
 }
 
+function sendSuccess(res, payload = {}, status = 200) {
+  return res.status(status).type('application/json').json({
+    ok: true,
+    success: true,
+    status,
+    ...payload,
+  });
+}
+
 router.get('/status', async (_req, res) => {
   const mysql = getPrintTemplatesMySqlStatus();
-  res.json({
-    ok: true,
+  sendSuccess(res, {
     module: 'print_templates',
     mysql,
     schemaReady: getSchemaReadyState(),
@@ -165,7 +177,7 @@ router.get('/', async (req, res) => {
       q: req.query.q,
       userId: getUserId(req),
     });
-    res.json({ ok: true, items, data: items, total: items.length });
+    sendSuccess(res, { items, data: items, total: items.length });
   } catch (error) {
     if (sendReadUnavailable(res, error, { collection: true })) return;
     sendError(res, error, 'Lỗi lấy danh sách mẫu in hóa đơn');
@@ -175,7 +187,7 @@ router.get('/', async (req, res) => {
 router.get('/default', async (req, res) => {
   try {
     const item = await getDefaultPrintTemplate({ accountId: getAccountId(req) });
-    res.json({ ok: true, item, data: item });
+    sendSuccess(res, { item, data: item });
   } catch (error) {
     if (sendReadUnavailable(res, error)) return;
     sendError(res, error, 'Lỗi lấy mẫu in hóa đơn mặc định');
@@ -188,7 +200,7 @@ router.get('/current', async (req, res) => {
       accountId: getAccountId(req),
       templateId: req.query.template_id || req.query.templateId || req.query.id,
     });
-    res.json({ ok: true, item, data: item });
+    sendSuccess(res, { item, data: item });
   } catch (error) {
     if (sendReadUnavailable(res, error)) return;
     sendError(res, error, 'Lỗi lấy mẫu in hóa đơn hiện hành');
@@ -201,7 +213,7 @@ router.get('/active', async (req, res) => {
       accountId: getAccountId(req),
       templateId: req.query.template_id || req.query.templateId || req.query.id,
     });
-    res.json({ ok: true, item, data: item });
+    sendSuccess(res, { item, data: item });
   } catch (error) {
     if (sendReadUnavailable(res, error)) return;
     sendError(res, error, 'Lỗi lấy mẫu in hóa đơn đang dùng');
@@ -211,7 +223,7 @@ router.get('/active', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const item = await getPrintTemplateById({ accountId: getAccountId(req), id: req.params.id });
-    res.json({ ok: true, item, data: item });
+    sendSuccess(res, { item, data: item });
   } catch (error) {
     if (sendReadUnavailable(res, error)) return;
     sendError(res, error, 'Lỗi lấy mẫu in hóa đơn');
@@ -221,7 +233,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', canManagePrintTemplates, async (req, res) => {
   try {
     const item = await createPrintTemplate({ accountId: getAccountId(req), userId: getUserId(req), body: req.body || {} });
-    res.status(201).json({ ok: true, item, data: item });
+    sendSuccess(res, { item, data: item }, 201);
   } catch (error) {
     sendError(res, error, 'Lỗi tạo mẫu in hóa đơn');
   }
@@ -230,7 +242,7 @@ router.post('/', canManagePrintTemplates, async (req, res) => {
 router.put('/:id', canManagePrintTemplates, async (req, res) => {
   try {
     const item = await updatePrintTemplate({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id, body: req.body || {} });
-    res.json({ ok: true, item, data: item });
+    sendSuccess(res, { item, data: item });
   } catch (error) {
     sendError(res, error, 'Lỗi cập nhật mẫu in hóa đơn');
   }
@@ -239,7 +251,7 @@ router.put('/:id', canManagePrintTemplates, async (req, res) => {
 router.patch('/:id/autosave', canManagePrintTemplates, async (req, res) => {
   try {
     const item = await autosavePrintTemplateDraft({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id, body: req.body || {} });
-    res.json({ ok: true, item, data: item, revision: item.revision, has_draft: item.has_draft, last_autosaved_at: item.last_autosaved_at });
+    sendSuccess(res, { item, data: item, revision: item.revision, has_draft: item.has_draft, last_autosaved_at: item.last_autosaved_at });
   } catch (error) {
     sendError(res, error, 'Lỗi autosave draft mẫu in hóa đơn');
   }
@@ -248,7 +260,7 @@ router.patch('/:id/autosave', canManagePrintTemplates, async (req, res) => {
 router.post('/:id/autosave', canManagePrintTemplates, async (req, res) => {
   try {
     const item = await autosavePrintTemplateDraft({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id, body: req.body || {} });
-    res.json({ ok: true, item, data: item, revision: item.revision, has_draft: item.has_draft, last_autosaved_at: item.last_autosaved_at });
+    sendSuccess(res, { item, data: item, revision: item.revision, has_draft: item.has_draft, last_autosaved_at: item.last_autosaved_at });
   } catch (error) {
     sendError(res, error, 'Lỗi autosave draft mẫu in hóa đơn');
   }
@@ -257,7 +269,7 @@ router.post('/:id/autosave', canManagePrintTemplates, async (req, res) => {
 router.post('/:id/publish', canManagePrintTemplates, async (req, res) => {
   try {
     const item = await publishPrintTemplateDraft({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id, body: req.body || {} });
-    res.json({ ok: true, item, data: item, revision: item.revision, has_draft: item.has_draft, published_at: item.published_at });
+    sendSuccess(res, { item, data: item, revision: item.revision, has_draft: item.has_draft, published_at: item.published_at });
   } catch (error) {
     sendError(res, error, 'Lỗi publish mẫu in hóa đơn');
   }
@@ -266,7 +278,7 @@ router.post('/:id/publish', canManagePrintTemplates, async (req, res) => {
 router.post('/:id/discard-draft', canManagePrintTemplates, async (req, res) => {
   try {
     const item = await discardPrintTemplateDraft({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id, body: req.body || {} });
-    res.json({ ok: true, item, data: item, revision: item.revision, has_draft: item.has_draft });
+    sendSuccess(res, { item, data: item, revision: item.revision, has_draft: item.has_draft });
   } catch (error) {
     sendError(res, error, 'Lỗi hủy draft mẫu in hóa đơn');
   }
@@ -276,7 +288,7 @@ router.delete('/:id', canManagePrintTemplates, async (req, res) => {
   try {
     const result = await softDeletePrintTemplate({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id });
     await cleanupLogoIfUnused(getAccountId(req), result.previousLogoPath, req.params.id);
-    res.json({ ok: true, item: result.item, data: result.item });
+    sendSuccess(res, { item: result.item, data: result.item });
   } catch (error) {
     sendError(res, error, 'Lỗi xóa mẫu in hóa đơn');
   }
@@ -285,7 +297,7 @@ router.delete('/:id', canManagePrintTemplates, async (req, res) => {
 router.post('/:id/set-default', canManagePrintTemplates, async (req, res) => {
   try {
     const item = await setDefaultPrintTemplate({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id });
-    res.json({ ok: true, item, data: item });
+    sendSuccess(res, { item, data: item });
   } catch (error) {
     sendError(res, error, 'Lỗi đặt mẫu in hóa đơn mặc định');
   }
@@ -295,7 +307,7 @@ router.post('/:id/logo', canManagePrintTemplates, async (req, res) => {
   let uploadedLogoPath = '';
   try {
     await runLogoUpload(req, res);
-    if (!req.file) return res.status(400).type('application/json').json({ ok: false, item: null, data: null, error: 'Vui lòng chọn file logo để upload.', message: 'Vui lòng chọn file logo để upload.', code: 'PRINT_TEMPLATE_LOGO_REQUIRED' });
+    if (!req.file) return res.status(400).type('application/json').json({ ok: false, success: false, status: 400, item: null, data: null, error: 'Vui lòng chọn file logo để upload.', message: 'Vui lòng chọn file logo để upload.', code: 'PRINT_TEMPLATE_LOGO_REQUIRED' });
 
     uploadedLogoPath = req.file.filename;
     const publicUrl = toPublicLogoUrl(uploadedLogoPath);
@@ -311,8 +323,7 @@ router.post('/:id/logo', canManagePrintTemplates, async (req, res) => {
     });
 
     await cleanupLogoIfUnused(getAccountId(req), result.previousLogoPath, req.params.id);
-    res.json({
-      ok: true,
+    sendSuccess(res, {
       item: result.item,
       data: result.item,
       logo_url: publicUrl,
@@ -330,7 +341,7 @@ router.delete('/:id/logo', canManagePrintTemplates, async (req, res) => {
   try {
     const result = await removeLogoFromPrintTemplate({ accountId: getAccountId(req), userId: getUserId(req), id: req.params.id });
     await cleanupLogoIfUnused(getAccountId(req), result.previousLogoPath, req.params.id);
-    res.json({ ok: true, item: result.item, data: result.item });
+    sendSuccess(res, { item: result.item, data: result.item });
   } catch (error) {
     sendError(res, error, 'Lỗi xóa logo mẫu in hóa đơn');
   }

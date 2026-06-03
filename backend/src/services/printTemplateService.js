@@ -188,6 +188,20 @@ function normalizeStatus(value) {
   return STATUSES.has(status) ? status : 'active';
 }
 
+function normalizeTemplateType(value) {
+  const templateType = cleanText(value || 'invoice', 50)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return templateType || 'invoice';
+}
+
+function normalizePrintScale(value) {
+  const scale = Number(value);
+  if (!Number.isFinite(scale) || scale <= 0) return 1;
+  return Math.round(Math.min(5, Math.max(0.1, scale)) * 1000) / 1000;
+}
+
 function schemaVersionFromLayout(layout, settings, explicitVersion = null) {
   return detectTemplateSchemaVersion(layout || {}, settings || {}, explicitVersion) >= 2 ? 2 : 1;
 }
@@ -350,6 +364,7 @@ function serializePrintTemplate(row) {
     code: cleanText(row.code, 100),
     template_name: cleanText(row.template_name || row.name, 150),
     name: cleanText(row.name || row.template_name, 255),
+    template_type: normalizeTemplateType(row.template_type),
     description: cleanText(row.description, 255),
     header_logo: headerLogo,
     logo_url: cleanText(row.logo_url || headerLogo, 1024),
@@ -368,6 +383,7 @@ function serializePrintTemplate(row) {
     shop_phone: cleanText(row.shop_phone, 50),
     css_style: row.css_style || '',
     template_data: row.template_data || (row.layout_json ? String(row.layout_json) : ''),
+    print_scale: normalizePrintScale(row.print_scale ?? settings.print?.scale ?? settings.scale),
     layout_json: layout,
     layout,
     settings_json: settings,
@@ -418,7 +434,10 @@ function serializePrintTemplateForInvoice(row) {
     code: item.code,
     name: item.template_name,
     template_name: item.template_name,
+    template_type: item.template_type,
     description: item.description,
+    template_data: item.template_data,
+    print_scale: item.print_scale,
     paper_size: item.paper_size,
     orientation: item.orientation,
     css_style: item.css_style,
@@ -497,6 +516,12 @@ function buildPrintTemplatePayload(body = {}, options = {}) {
   if (codeInput.provided) payload.code = normalizeCode(codeInput.value);
   if (!partial && !payload.code) payload.code = normalizeCode(templateName || 'mau-in-hoa-don');
 
+  const templateTypeInput = pickBodyValue(body, ['template_type', 'templateType', 'type']);
+  if (templateTypeInput.provided || !partial) payload.template_type = normalizeTemplateType(templateTypeInput.value);
+
+  const printScaleInput = pickBodyValue(body, ['print_scale', 'printScale', 'scale']);
+  if (printScaleInput.provided) payload.print_scale = normalizePrintScale(printScaleInput.value);
+
   const textFields = [
     ['description', ['description'], 255],
     ['header_logo', ['header_logo', 'logo_url'], 1024],
@@ -525,11 +550,33 @@ function buildPrintTemplatePayload(body = {}, options = {}) {
   const isDefaultInput = pickBodyValue(body, ['is_default', 'default']);
   if (isDefaultInput.provided || !partial) payload.is_default = parseBooleanFlag(isDefaultInput.value, 0);
 
-  const layoutInput = pickBodyValue(body, ['layout_json', 'layout', 'template_data']);
+  const layoutInput = pickBodyValue(body, ['layout_json', 'layout']);
+  const templateDataInput = pickBodyValue(body, ['template_data', 'templateData']);
   if (layoutInput.provided) {
     const parsed = parseJsonObjectInput(layoutInput.value, 'layout_json', DEFAULT_LAYOUT_V2);
     if (parsed.error) return { error: parsed.error };
     parsedLayout = parsed.value;
+  } else if (templateDataInput.provided) {
+    const rawTemplateData = templateDataInput.value;
+    if (rawTemplateData === null || rawTemplateData === '') {
+      payload.template_data = null;
+    } else if (isPlainObject(rawTemplateData)) {
+      parsedLayout = rawTemplateData;
+      payload.template_data = JSON.stringify(rawTemplateData);
+    } else if (typeof rawTemplateData === 'string') {
+      const text = rawTemplateData.trim();
+      payload.template_data = text || null;
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          if (isPlainObject(parsed)) parsedLayout = parsed;
+        } catch (_error) {
+          // Legacy template_data may be HTML/plain text; keep it without using mock data.
+        }
+      }
+    } else {
+      return { error: 'template_data phải là chuỗi hoặc JSON object hợp lệ.' };
+    }
   } else if (!partial) {
     parsedLayout = cloneJson(DEFAULT_LAYOUT_V2);
   }
@@ -543,13 +590,21 @@ function buildPrintTemplatePayload(body = {}, options = {}) {
     parsedSettings = cloneJson(DEFAULT_SETTINGS_V2);
   }
 
+  if (!hasOwn(payload, 'print_scale') && isPlainObject(parsedSettings)) {
+    const settingsScale = parsedSettings.print?.scale ?? parsedSettings.scale;
+    if (settingsScale !== undefined && settingsScale !== null && settingsScale !== '') {
+      payload.print_scale = normalizePrintScale(settingsScale);
+    }
+  }
+  if (!partial && !hasOwn(payload, 'print_scale')) payload.print_scale = 1;
+
   try {
     validateParsedTemplateJsonForPayload(payload, parsedLayout, parsedSettings, { partial });
   } catch (error) {
     return { error: error.message, details: error.details, code: error.code };
   }
 
-  if (payload.layout_json !== undefined) {
+  if (payload.layout_json !== undefined && !hasOwn(payload, 'template_data')) {
     payload.template_data = payload.layout_json == null ? null : String(payload.layout_json);
   }
 
@@ -678,6 +733,8 @@ function buildDefaultTemplatePayload(accountId, userId = null) {
     layout_json: JSON.stringify(layout),
     settings_json: JSON.stringify(settings),
     template_schema_version: 2,
+    template_type: 'invoice',
+    print_scale: 1,
     paper_size: extractPaperSizeFromLayout(layout, 'A5'),
     orientation: extractOrientationFromLayout(layout, 'portrait'),
     status: 'active',
@@ -873,7 +930,11 @@ async function updatePrintTemplate(options = {}) {
   }
   await ensureNoDuplicateTemplate(accountId, payload, id);
 
-  const layoutTouched = hasOwn(payload, 'layout_json') || hasOwn(payload, 'settings_json') || hasOwn(payload, 'template_schema_version');
+  const layoutTouched = hasOwn(payload, 'layout_json')
+    || hasOwn(payload, 'settings_json')
+    || hasOwn(payload, 'template_schema_version')
+    || hasOwn(payload, 'template_data')
+    || hasOwn(payload, 'print_scale');
   if (layoutTouched) {
     payload.revision = (parsePositiveInteger(existing.revision) || 1) + 1;
     if (Number(payload.template_schema_version) >= 2) {
@@ -1126,8 +1187,10 @@ async function publishPrintTemplateDraft(options = {}) {
 
     const payload = {
       layout_json: JSON.stringify(normalizedLayout),
+      template_data: JSON.stringify(normalizedLayout),
       settings_json: JSON.stringify(normalizedSettings),
       template_schema_version: 2,
+      print_scale: normalizePrintScale(normalizedSettings.print?.scale ?? normalizedSettings.scale),
       draft_layout_json: null,
       draft_settings_json: null,
       revision: nextRevision,

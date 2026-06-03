@@ -16,14 +16,28 @@ function formatDate(value) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value || '—');
-  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' });
 }
 
 function formatTime(value) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' });
+}
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || '—');
+  return date.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  });
 }
 
 function isRenderableImage(value) {
@@ -93,14 +107,51 @@ function formatFooterTemplate(text, data) {
     .replace(/\{storeName\}/g, data.store?.name || 'Cửa hàng');
 }
 
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function toMoneyNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
 function mergeStore(payloadStore = {}, template = {}, settings = {}, logoPreviewUrl = '') {
   const store = safeObject(payloadStore);
   return {
     ...store,
-    name: settings.storeName || template.shop_name || store.name || 'Cửa hàng',
-    address: settings.storeAddress || template.shop_address || store.address || '',
-    phone: settings.storePhone || template.shop_phone || store.phone || '',
-    logo_url: resolveAssetUrl(logoPreviewUrl || template.logo?.url || template.logo_url || template.logo_url_resolved || template.header_logo || store.logo_url || ''),
+    name: firstNonEmpty(store.name, store.store_name, store.company_name, settings.storeName, template.shop_name, 'Cửa hàng'),
+    address: firstNonEmpty(store.address, store.store_address, settings.storeAddress, template.shop_address),
+    phone: firstNonEmpty(store.phone, store.hotline, store.tel, settings.storePhone, template.shop_phone),
+    email: firstNonEmpty(store.email),
+    tax_code: firstNonEmpty(store.tax_code, store.mst),
+    logo_url: resolveAssetUrl(logoPreviewUrl || store.logo_url || store.logo || store.logo_base64 || template.logo?.url || template.logo_url || template.logo_url_resolved || template.header_logo || ''),
+  };
+}
+
+function normalizePrintItem(item = {}, index = 0) {
+  const quantity = toMoneyNumber(item.quantity ?? item.qty, 0);
+  const unitPrice = toMoneyNumber(item.unit_price ?? item.price, 0);
+  const discountAmount = toMoneyNumber(item.discount_amount ?? item.discount, 0);
+  const explicitLineTotal = Number(item.line_total ?? item.total ?? item.lineTotal);
+  return {
+    ...item,
+    id: item.id || item.product_id || item.variant_id || item.combo_id || `item-${index}`,
+    no: item.no || index + 1,
+    sku: firstNonEmpty(item.sku, item.product_sku, item.variant_sku),
+    name: firstNonEmpty(item.name, item.product_name, item.productName, item.variant_name, item.combo_name, item.sku, 'Sản phẩm'),
+    unit: firstNonEmpty(item.unit, item.unit_name, item.uom, item.product_unit),
+    quantity,
+    unit_price: unitPrice,
+    discount_amount: discountAmount,
+    discount_percent: toMoneyNumber(item.discount_percent, 0),
+    line_total: Number.isFinite(explicitLineTotal) ? explicitLineTotal : Math.max(0, quantity * unitPrice - discountAmount),
+    note: firstNonEmpty(item.note),
   };
 }
 
@@ -108,17 +159,53 @@ function normalizePayload(payload = {}, template = {}, settings = {}, logoPrevie
   const source = safeObject(payload);
   const invoice = safeObject(source.invoice);
   const metadata = safeObject(source.metadata);
-  const createdAt = invoice.created_at || invoice.createdAt || source.created_at || metadata.printed_at || new Date().toISOString();
-  const items = safeArray(source.items).length ? safeArray(source.items) : safeArray(source.details);
+  const customer = safeObject(source.customer);
+  const totalsSource = safeObject(source.totals);
+  const paymentSource = safeObject(source.payment);
+  const createdAt = invoice.created_at || invoice.createdAt || source.created_at || metadata.created_at || metadata.printed_at || new Date().toISOString();
+  const items = (safeArray(source.items).length ? safeArray(source.items) : safeArray(source.details)).map(normalizePrintItem);
+  const subtotal = Number.isFinite(Number(totalsSource.subtotal))
+    ? toMoneyNumber(totalsSource.subtotal)
+    : items.reduce((sum, item) => sum + toMoneyNumber(item.line_total), 0);
+  const total = toMoneyNumber(totalsSource.total ?? totalsSource.grand_total ?? invoice.total, subtotal);
+  const paidAmount = toMoneyNumber(paymentSource.paid_amount ?? totalsSource.paid_amount ?? invoice.paid_amount, 0);
+  const remainingAmount = toMoneyNumber(paymentSource.remaining_amount ?? totalsSource.remaining_amount ?? invoice.remaining_amount, Math.max(0, total - paidAmount));
+  const changeAmount = toMoneyNumber(paymentSource.change_amount ?? totalsSource.change_amount ?? invoice.change_amount, Math.max(0, paidAmount - total));
+  const userName = firstNonEmpty(metadata.user_name, metadata.created_by_user_name, invoice.user_name, invoice.invoice_writer, invoice.created_by_name);
+
   return {
     store: mergeStore(source.store, template, settings, logoPreviewUrl),
-    customer: safeObject(source.customer),
-    invoice: { ...invoice, created_at: createdAt },
+    customer: {
+      ...customer,
+      name: firstNonEmpty(customer.name, invoice.customer_name, 'Khách lẻ'),
+      phone: firstNonEmpty(customer.phone, invoice.customer_phone),
+      address: firstNonEmpty(customer.address, invoice.customer_address),
+      tax_code: firstNonEmpty(customer.tax_code, invoice.customer_tax_code),
+    },
+    invoice: { ...invoice, created_at: createdAt, note: firstNonEmpty(invoice.note, source.note) },
     items,
-    totals: safeObject(source.totals),
-    payment: safeObject(source.payment),
+    totals: {
+      ...totalsSource,
+      subtotal,
+      total,
+      vat_percent: toMoneyNumber(totalsSource.vat_percent ?? invoice.vat_percent, 0),
+      vat_amount: toMoneyNumber(totalsSource.vat_amount ?? invoice.vat_amount, 0),
+      discount_percent: toMoneyNumber(totalsSource.discount_percent ?? invoice.discount_percent, 0),
+      discount_amount: toMoneyNumber(totalsSource.discount_amount ?? invoice.discount_amount, 0),
+      delivery_fee: toMoneyNumber(totalsSource.delivery_fee ?? invoice.delivery_fee, 0),
+      paid_amount: paidAmount,
+      remaining_amount: remainingAmount,
+      change_amount: changeAmount,
+    },
+    payment: {
+      ...paymentSource,
+      paid_amount: paidAmount,
+      remaining_amount: remainingAmount,
+      change_amount: changeAmount,
+      method_label: firstNonEmpty(paymentSource.method_label, paymentSource.payment_method_label, invoice.payment_method),
+    },
     signatures: safeObject(source.signatures),
-    metadata,
+    metadata: { ...metadata, user_name: userName },
   };
 }
 
@@ -279,7 +366,7 @@ function V2Element({ element, data, template }) {
     return (
       <div className="invoice-template-v2-pairs" style={getElementCssStyle(element)}>
         {isStyleEnabled(style, 'showOrderCode') && <InfoPair label={style.orderCodeLabel || 'Mã đơn'} value={invoiceCode} strong />}
-        {isStyleEnabled(style, 'showOrderDate') && <InfoPair label={style.orderDateLabel || 'Ngày'} value={`${formatDate(invoice.created_at)} ${formatTime(invoice.created_at)}`} />}
+        {isStyleEnabled(style, 'showOrderDate') && <InfoPair label={style.orderDateLabel || 'Ngày'} value={formatDateTime(invoice.created_at)} />}
         {isStyleEnabled(style, 'showSeller') && <InfoPair label={style.sellerLabelShort || 'NV'} value={metadata.user_name} />}
         {isStyleEnabled(style, 'showOrderSource', false) && <InfoPair label={style.orderSourceLabel || 'Nguồn'} value={invoice.source} />}
       </div>
@@ -450,10 +537,11 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
   return (
     <article
       ref={refProp}
-      className={`invoice-print invoice-print-${page.paperSize.toLowerCase()} invoice-print-${page.orientation} invoice-print-v2 ${className}`.trim()}
+      className={`invoice-paper invoice-print invoice-print-${page.paperSize.toLowerCase()} invoice-print-${page.orientation} invoice-print-v2 ${className}`.trim()}
       style={{
         '--invoice-page-width': `${page.width}mm`,
-        '--invoice-page-height': `${contentHeightMm}mm`,
+        '--invoice-page-height': `${page.height}mm`,
+        '--invoice-content-height': `${contentHeightMm}mm`,
         '--invoice-physical-page-height': `${page.height}mm`,
         '--invoice-paper-padding': '0mm',
         '--invoice-paper-margin': '0mm',
@@ -538,7 +626,7 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
   return (
     <article
       ref={refProp}
-      className={`invoice-print invoice-print-${page.paperSize.toLowerCase()} invoice-print-${page.orientation} ${className}`.trim()}
+      className={`invoice-paper invoice-print invoice-print-${page.paperSize.toLowerCase()} invoice-print-${page.orientation} ${className}`.trim()}
       style={{
         '--invoice-page-width': `${page.width}mm`,
         '--invoice-page-height': `${page.height}mm`,
@@ -569,7 +657,7 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
           </div>
           <section className="invoice-template-meta-grid">
             <InfoPair label="Mã đơn" value={invoice.invoice_code || invoice.code || invoice.id || '—'} strong />
-            <InfoPair label="Ngày giờ" value={`${formatTime(invoice.created_at)} ${formatDate(invoice.created_at)}`} />
+            <InfoPair label="Ngày giờ" value={formatDateTime(invoice.created_at)} />
             <InfoPair label="Khách hàng" value={customer.name || 'Khách lẻ'} strong />
             <InfoPair label="SĐT" value={customer.phone || '—'} />
             <div className="invoice-template-meta-address">
@@ -628,8 +716,12 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
 
         <footer className="invoice-template-footer-block">
           <div className="invoice-template-footer-totals">
-            <MoneyLine label="Tổng tiền" value={invoiceTotalAmount} />
-            <MoneyLine label="Nợ cũ" value={oldDebtAmount} />
+            <MoneyLine label="Tổng tiền hàng" value={totals.subtotal ?? invoiceTotalAmount} />
+            <MoneyLine label="Giảm giá" value={totals.discount_amount} negative hiddenWhenZero />
+            <MoneyLine label="Khách thanh toán" value={totals.paid_amount} hiddenWhenZero />
+            <MoneyLine label="Tiền thừa" value={totals.change_amount} hiddenWhenZero />
+            <MoneyLine label="Còn nợ" value={totals.remaining_amount} hiddenWhenZero />
+            {oldDebtAmount > 0 && <MoneyLine label="Nợ cũ" value={oldDebtAmount} />}
             <MoneyLine label="Thành tiền" value={payableAmount} highlight />
           </div>
 
@@ -718,32 +810,75 @@ export function buildInvoicePageStyle(template = {}, settingsOverride = {}) {
     orientation: settingsOverride.orientation || template?.orientation,
   });
   const page = getPaperDimensions(settings.paperSize, settings.orientation);
+  const pageSize = page.paperSize.startsWith('K') ? `${page.width}mm ${page.height}mm` : `${page.paperSize} ${page.orientation}`;
+  const safePadding = page.paperSize.startsWith('K') ? Math.min(settings.paddingMm, 3) : Math.min(settings.paddingMm, page.paperSize === 'A5' ? 5 : 10);
+  const minHeightRule = page.paperSize.startsWith('K') ? 'auto' : `${page.height}mm`;
   return `
-    @page { size: ${page.paperSize.startsWith('K') ? `${page.width}mm ${page.height}mm` : `${page.paperSize} ${page.orientation}`}; margin: 0; }
-    html, body {
-      margin: 0 !important;
-      padding: 0 !important;
-      background: #fff !important;
-      overflow: visible !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    .invoice-print {
-      width: ${page.width}mm !important;
-      min-height: ${page.height}mm !important;
-      margin: 0 auto !important;
-      border: 0 !important;
-      border-radius: 0 !important;
-      box-shadow: none !important;
-      overflow: visible !important;
-      transform: none !important;
-    }
-    .invoice-print-inner {
-      width: ${page.width}mm !important;
-      min-height: ${page.height}mm !important;
-      transform: scale(var(--invoice-print-scale, 1)) !important;
-      transform-origin: top center !important;
-      padding: ${settings.paddingMm}mm !important;
+    @page { size: ${pageSize}; margin: 0; }
+    @media print {
+      html,
+      body,
+      #root {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        overflow: visible !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      #root > div,
+      #root > div > div,
+      .app-main-scroll,
+      .invoice-print-page,
+      .invoice-preview-shell,
+      .invoice-print-preview-frame {
+        display: block !important;
+        width: auto !important;
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        background: #fff !important;
+        box-shadow: none !important;
+      }
+      #root aside,
+      #root nav,
+      .no-print,
+      .invoice-print-toolbar,
+      .invoice-alert,
+      .invoice-state-card,
+      .invoice-toolbar-actions,
+      .invoice-control-group,
+      button {
+        display: none !important;
+      }
+      .invoice-paper,
+      .invoice-print {
+        width: ${page.width}mm !important;
+        min-width: ${page.width}mm !important;
+        max-width: ${page.width}mm !important;
+        height: ${page.paperSize.startsWith('K') ? 'auto' : `${page.height}mm`} !important;
+        min-height: ${minHeightRule} !important;
+        max-height: none !important;
+        margin: 0 auto !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        overflow: visible !important;
+        transform: none !important;
+        background: #fff !important;
+      }
+      .invoice-print-inner {
+        width: ${page.width}mm !important;
+        min-height: ${minHeightRule} !important;
+        transform: scale(var(--invoice-print-scale, 1)) !important;
+        transform-origin: top center !important;
+        padding: ${safePadding}mm !important;
+        overflow: visible !important;
+        background: #fff !important;
+        box-sizing: border-box !important;
+      }
     }
   `;
 }

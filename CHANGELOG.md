@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.4.7 - 2026-06-03
+
+### Phát hành
+
+- Đồng bộ version phát hành 1.4.7 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
+- Cập nhật tài liệu release, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.4.7.
+- GitHub Actions tiếp tục build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json từ artifact thực tế sau khi push tag.
+
+### Lưu ý quan trọng
+
+- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.7-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.7-ia32.exe`.
+- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
+- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+
 ## v1.4.6 - 2026-06-02
 
 ### Phát hành

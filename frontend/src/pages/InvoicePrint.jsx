@@ -7,9 +7,9 @@ import InvoiceTemplateRenderer, { buildInvoicePageStyle } from '../components/in
 import { getPaperDimensions, normalizeTemplateSettings } from '../components/invoice-print/templateDefaults';
 import { getApiErrorMessage, invoicesApi, PRINT_TEMPLATE_UPDATED_EVENT, printTemplatesApi } from '../utils/apiClient';
 
-const PRINT_SETTINGS_KEY = 'kha.invoicePrintA5.settings';
-const PAPER_OPTIONS = ['A5', 'A4', 'K80', 'K57'];
-const SCALE_PRESETS = [0.8, 0.9, 1];
+const PRINT_SETTINGS_KEY = 'kha.invoicePrint.settings';
+const PAPER_OPTIONS = ['K80', 'A5', 'A4'];
+const SCALE_PRESETS = [0.8, 0.9, 0.95, 1];
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 1;
 const SCALE_STEP = 0.05;
@@ -31,13 +31,13 @@ function normalizePaperSize(value) {
 }
 
 function readPrintSettings() {
-  const fallback = { scale: 1, paperSize: 'A5', paperSizeOverride: false, orientation: 'portrait', orientationOverride: false };
+  const fallback = { scale: 0.95, paperSize: 'A5', paperSizeOverride: false, orientation: 'portrait', orientationOverride: false };
   if (typeof window === 'undefined') return fallback;
   try {
     const parsed = JSON.parse(window.localStorage.getItem(PRINT_SETTINGS_KEY) || '{}');
     const paperSize = normalizePaperSize(parsed.paperSize || parsed.paper_size || 'A5');
     return {
-      scale: normalizeScale(parsed.scale || 1),
+      scale: normalizeScale(parsed.scale ?? 0.95),
       paperSize,
       paperSizeOverride: parsed.paperSizeOverride === true,
       orientation: paperSize.startsWith('K') ? 'portrait' : (parsed.orientation === 'landscape' ? 'landscape' : 'portrait'),
@@ -65,7 +65,21 @@ function sanitizeFileName(value) {
 }
 
 function getErrorMessage(error, fallback) {
-  return getApiErrorMessage(error?.data, error?.message || fallback);
+  return getApiErrorMessage(error?.data || error, error?.message || fallback);
+}
+
+function isPrintTemplateApiError(error) {
+  const data = error?.data || error || {};
+  const signature = [
+    data.code,
+    data.error_code,
+    data.message,
+    data.error,
+    data.detail,
+    typeof data.details === 'string' ? data.details : data.details?.message,
+    error?.message,
+  ].filter(Boolean).join(' ');
+  return /PRINT_TEMPLATE|print[_\s-]*template|mẫu in|template_id/i.test(signature);
 }
 
 function getBackendTemplate(data) {
@@ -97,15 +111,16 @@ function buildFallbackTemplate(settings) {
       schema_version: 1,
       paperSize,
       orientation,
-      scale: settings.scale || 1,
+      scale: settings.scale || 0.95,
       previewZoom: 1,
       showLogo: false,
       showQr: false,
       showSignature: true,
       showNote: true,
       showDebt: true,
-      lineSpacing: 1.28,
-      paddingMm: 7,
+      fontSize: 8.6,
+      lineSpacing: 1.22,
+      paddingMm: 5,
       marginMm: 0,
       tableWidthPercent: 100,
       tableBorder: true,
@@ -115,19 +130,17 @@ function buildFallbackTemplate(settings) {
 }
 
 function buildRendererSettingsOverride(settings, hasBackendTemplate) {
-  const override = {
+  const paperSize = normalizePaperSize(settings.paperSize || 'A5');
+  const orientation = paperSize.startsWith('K') ? 'portrait' : (settings.orientation === 'landscape' ? 'landscape' : 'portrait');
+  return {
     scale: settings.scale,
     previewZoom: 1,
     showQr: false,
+    paperSize,
+    paper_size: paperSize,
+    orientation,
+    source: hasBackendTemplate ? 'print-page-user-override' : 'print-page-fallback',
   };
-  if (!hasBackendTemplate || settings.paperSizeOverride) {
-    override.paperSize = normalizePaperSize(settings.paperSize);
-    override.paper_size = override.paperSize;
-  }
-  if (!hasBackendTemplate || settings.orientationOverride || settings.paperSizeOverride) {
-    override.orientation = normalizePaperSize(override.paperSize || settings.paperSize).startsWith('K') ? 'portrait' : settings.orientation;
-  }
-  return override;
 }
 
 export default function InvoicePrint() {
@@ -190,7 +203,18 @@ export default function InvoicePrint() {
     setError('');
     setPrintError('');
     try {
-      const payload = await invoicesApi.printData(idOrCode, templateId ? { template_id: templateId } : {});
+      let payload;
+      try {
+        payload = await invoicesApi.printData(idOrCode, templateId ? { template_id: templateId } : {});
+      } catch (printDataErr) {
+        if (!templateId || !isPrintTemplateApiError(printDataErr)) throw printDataErr;
+        payload = await invoicesApi.printData(idOrCode, {});
+        setToast({
+          tone: 'warning',
+          message: `${getErrorMessage(printDataErr, 'Template được chọn không khả dụng.')} Đã tải hóa đơn bằng mẫu mặc định để tiếp tục preview/in.`,
+        });
+      }
+
       if (!payload || typeof payload !== 'object' || !payload.invoice) {
         setData(null);
         setError('API dữ liệu in hóa đơn trả về thiếu thông tin hóa đơn.');
@@ -200,7 +224,7 @@ export default function InvoicePrint() {
       let nextPayload = payload;
       const templateError = payload.metadata?.print_template_error;
       if (templateError?.message) {
-        setToast({ tone: 'warning', message: getApiErrorMessage(templateError, 'Mẫu in đang ở trạng thái an toàn từ API thật.') });
+        setToast({ tone: 'warning', message: getApiErrorMessage(templateError, 'API mẫu in trả lỗi; frontend đang dùng mẫu an toàn để preview/in.') });
       }
 
       if (!getBackendTemplate(payload)) {
@@ -223,6 +247,29 @@ export default function InvoicePrint() {
             };
           }
         } catch (templateErr) {
+          if (templateId) {
+            try {
+              const defaultTemplateData = await printTemplatesApi.current({});
+              const templateItem = normalizeApiItem(defaultTemplateData);
+              if (templateItem) {
+                nextPayload = {
+                  ...payload,
+                  template: templateItem,
+                  metadata: {
+                    ...(payload.metadata || {}),
+                    print_template: {
+                      id: templateItem.id || null,
+                      code: templateItem.code || '',
+                      revision: templateItem.revision || null,
+                      source: 'print-templates-api-default-after-template-error',
+                    },
+                  },
+                };
+              }
+            } catch (_defaultTemplateErr) {
+              // Giữ fallback frontend bên dưới nếu API mẫu mặc định cũng lỗi.
+            }
+          }
           setToast({ tone: 'warning', message: getErrorMessage(templateErr, 'Chưa tải được mẫu in từ API /api/print-templates; đang dùng mẫu mặc định frontend để preview/in.') });
         }
       }
@@ -307,7 +354,7 @@ export default function InvoicePrint() {
   }, []);
 
   const resetScale = useCallback(() => {
-    setSettings(prev => ({ ...prev, scale: 1 }));
+    setSettings(prev => ({ ...prev, scale: 0.95 }));
   }, []);
 
   const setPaperSize = useCallback((nextPaperSize) => {
@@ -323,13 +370,12 @@ export default function InvoicePrint() {
   }, []);
 
   const toggleOrientation = useCallback(() => {
-    if (page.paperSize.startsWith('K')) return;
-    setSettings(prev => ({
-      ...prev,
-      orientation: templateSettings.orientation === 'portrait' ? 'landscape' : 'portrait',
-      orientationOverride: true,
-    }));
-  }, [page.paperSize, templateSettings.orientation]);
+    setSettings(prev => {
+      const paperSize = normalizePaperSize(prev.paperSize);
+      if (paperSize.startsWith('K')) return { ...prev, orientation: 'portrait', orientationOverride: false };
+      return { ...prev, orientation: prev.orientation === 'landscape' ? 'portrait' : 'landscape', orientationOverride: true };
+    });
+  }, []);
 
   const handleDownloadPdf = useCallback(async () => {
     const element = printRef.current;
@@ -340,46 +386,50 @@ export default function InvoicePrint() {
     try {
       const elementRect = element.getBoundingClientRect();
       const captureScale = Math.max(3, Math.min(4, window.devicePixelRatio || 3));
+      const captureWidth = Math.ceil(elementRect.width);
+      const captureHeight = Math.ceil(elementRect.height);
       const canvas = await html2canvas(element, {
         backgroundColor: '#ffffff',
         scale: captureScale,
         useCORS: true,
         allowTaint: false,
         logging: false,
-        width: Math.ceil(elementRect.width),
-        height: Math.ceil(Math.max(element.scrollHeight, elementRect.height)),
-        windowWidth: Math.ceil(elementRect.width),
-        windowHeight: Math.ceil(Math.max(element.scrollHeight, elementRect.height)),
+        width: captureWidth,
+        height: captureHeight,
+        windowWidth: captureWidth,
+        windowHeight: captureHeight,
+        scrollX: 0,
+        scrollY: 0,
         onclone: (clonedDocument) => {
           const clonedInvoice = clonedDocument.querySelector('.invoice-print');
+          const clonedInner = clonedDocument.querySelector('.invoice-print-inner');
           if (clonedInvoice) {
+            clonedInvoice.classList.add('invoice-pdf-capture');
+            clonedInvoice.style.width = `${page.width}mm`;
+            clonedInvoice.style.minHeight = `${page.height}mm`;
+            clonedInvoice.style.height = `${page.height}mm`;
             clonedInvoice.style.border = '0';
             clonedInvoice.style.borderRadius = '0';
             clonedInvoice.style.boxShadow = 'none';
             clonedInvoice.style.margin = '0';
+            clonedInvoice.style.overflow = 'hidden';
             clonedInvoice.style.background = '#ffffff';
+          }
+          if (clonedInner) {
+            clonedInner.style.transformOrigin = 'top center';
+            clonedInner.style.background = '#ffffff';
           }
         },
       });
 
-      const pdf = new jsPDF({ orientation: page.orientation, unit: 'mm', format: [page.width, page.height], compress: true });
-      const imgData = canvas.toDataURL('image/png', 1);
-      const pdfWidth = page.width;
-      const pdfHeight = page.height;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'SLOW');
-      heightLeft -= pdfHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage([page.width, page.height], page.orientation);
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'SLOW');
-        heightLeft -= pdfHeight;
+      const pdf = new jsPDF({ orientation: page.orientation, unit: 'mm', format: [page.width, page.height], compress: true, putOnlyUsedFonts: true });
+      try {
+        pdf.setLanguage?.('vi-VN');
+      } catch (_languageError) {
+        // jsPDF cũ có thể không hỗ trợ setLanguage; nội dung tiếng Việt vẫn được raster ổn định từ DOM.
       }
-
+      const imgData = canvas.toDataURL('image/png', 1);
+      pdf.addImage(imgData, 'PNG', 0, 0, page.width, page.height, undefined, 'FAST');
       pdf.save(`Hoa_don_${sanitizeFileName(invoiceCode)}.pdf`);
     } catch (err) {
       setPrintError(err?.message || 'Không thể tải PDF hóa đơn.');
@@ -443,13 +493,11 @@ export default function InvoicePrint() {
             <ZoomIn size={16} /> Phóng to
           </button>
           <button type="button" onClick={resetScale} className="invoice-toolbar-btn invoice-toolbar-btn-light">
-            Reset 100%
+            Reset 95%
           </button>
-          {!page.paperSize.startsWith('K') && (
-            <button type="button" onClick={toggleOrientation} className="invoice-toolbar-btn invoice-toolbar-btn-light">
-              <RotateCw size={16} /> {page.label}
-            </button>
-          )}
+          <button type="button" onClick={toggleOrientation} className="invoice-toolbar-btn invoice-toolbar-btn-light" disabled={page.paperSize.startsWith('K')}>
+            <RotateCw size={16} /> {page.paperSize.startsWith('K') ? 'Cuộn dọc' : (page.orientation === 'landscape' ? 'Khổ ngang' : 'Khổ dọc')}
+          </button>
           <button type="button" onClick={loadInvoice} disabled={loading} className="invoice-toolbar-btn invoice-toolbar-btn-light">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Tải lại
           </button>

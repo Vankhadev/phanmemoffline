@@ -5,6 +5,7 @@ const MODULE_ERROR_CODE = 'SETTINGS_MYSQL_DRIVER_MISSING';
 const CONNECTION_ERROR_CODE = 'SETTINGS_MYSQL_UNAVAILABLE';
 
 const SETTINGS_TABLE = 'system_settings';
+const SETTINGS_COLUMN_TABLE = 'settings';
 const NEGATIVE_STOCK_ENABLED_KEY = 'negative_stock_enabled';
 const NEGATIVE_STOCK_LIMIT_KEY = 'negative_stock_limit';
 const DEFAULT_NEGATIVE_STOCK_LIMIT = 10;
@@ -355,7 +356,40 @@ async function ensureSettingsSchema(options = {}) {
         await connection.query(`ALTER TABLE \`${SETTINGS_TABLE}\` ${migrations.join(', ')}`);
       }
 
-      return { ok: true, migrated: migrations.length > 0, migrations };
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS \`${SETTINGS_COLUMN_TABLE}\` (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+          account_id BIGINT UNSIGNED NOT NULL DEFAULT 1,
+          negative_stock_enabled TINYINT(1) NOT NULL DEFAULT 0,
+          negative_stock_limit INT NOT NULL DEFAULT ${DEFAULT_NEGATIVE_STOCK_LIMIT},
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          KEY idx_settings_account_id (account_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+
+      const [settingsColumns] = await connection.query(`SHOW COLUMNS FROM \`${SETTINGS_COLUMN_TABLE}\``);
+      const settingsColumnNames = new Set((settingsColumns || []).map(column => String(column.Field || '').toLowerCase()));
+      const settingsMigrations = [];
+      if (!settingsColumnNames.has('account_id')) settingsMigrations.push(`ADD COLUMN account_id BIGINT UNSIGNED NOT NULL DEFAULT 1`);
+      if (!settingsColumnNames.has('negative_stock_enabled')) settingsMigrations.push(`ADD COLUMN negative_stock_enabled TINYINT(1) NOT NULL DEFAULT 0`);
+      if (!settingsColumnNames.has('negative_stock_limit')) settingsMigrations.push(`ADD COLUMN negative_stock_limit INT DEFAULT ${DEFAULT_NEGATIVE_STOCK_LIMIT}`);
+      if (!settingsColumnNames.has('created_at')) settingsMigrations.push(`ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      if (!settingsColumnNames.has('updated_at')) settingsMigrations.push(`ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`);
+
+      if (settingsMigrations.length > 0) {
+        await connection.query(`ALTER TABLE \`${SETTINGS_COLUMN_TABLE}\` ${settingsMigrations.join(', ')}`);
+      }
+
+      return {
+        ok: true,
+        migrated: migrations.length > 0 || settingsMigrations.length > 0,
+        migrations: [
+          ...migrations.map(item => `${SETTINGS_TABLE}: ${item}`),
+          ...settingsMigrations.map(item => `${SETTINGS_COLUMN_TABLE}: ${item}`),
+        ],
+      };
     });
 
     schemaReady = true;
@@ -390,6 +424,115 @@ function serializeMySqlSetting(row) {
     updated_at: row.updated_at || null,
     deleted_at: row.deleted_at || null,
     source: 'mysql',
+  };
+}
+
+function normalizeBooleanDatabaseValue(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback ? '1' : '0';
+  if (value === true || value === 1 || value === '1') return '1';
+  if (value === false || value === 0 || value === '0') return '0';
+  const normalized = String(value).trim().toLowerCase();
+  if (['true', 'yes', 'y', 'on', 'active', 'enabled', 'bat', 'bật', 'co', 'có'].includes(normalized)) return '1';
+  if (['false', 'no', 'n', 'off', 'inactive', 'disabled', 'tat', 'tắt', 'khong', 'không'].includes(normalized)) return '0';
+  return fallback ? '1' : '0';
+}
+
+function normalizeLimitDatabaseValue(value, fallback = DEFAULT_NEGATIVE_STOCK_LIMIT) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 ? Math.trunc(number) : fallback;
+}
+
+function serializeSettingsColumnRowAsSettingsRows(row) {
+  if (!row) return [];
+  const accountId = normalizeAccountId(row.account_id);
+  const enabledValue = normalizeBooleanDatabaseValue(row.negative_stock_enabled ?? row.allow_negative_stock, false);
+  const limitValue = normalizeLimitDatabaseValue(row.negative_stock_limit, DEFAULT_NEGATIVE_STOCK_LIMIT);
+  const createdAt = row.created_at || null;
+  const updatedAt = row.updated_at || null;
+  return [
+    {
+      id: row.id ? `${row.id}:${NEGATIVE_STOCK_ENABLED_KEY}` : null,
+      account_id: accountId,
+      key: NEGATIVE_STOCK_ENABLED_KEY,
+      setting_key: NEGATIVE_STOCK_ENABLED_KEY,
+      value: enabledValue,
+      value_type: 'boolean',
+      category: 'inventory',
+      description: 'Bật/tắt chức năng xuất âm tồn kho.',
+      created_at: createdAt,
+      updated_at: updatedAt,
+      deleted_at: null,
+      source: 'mysql_settings_table',
+    },
+    {
+      id: row.id ? `${row.id}:${NEGATIVE_STOCK_LIMIT_KEY}` : null,
+      account_id: accountId,
+      key: NEGATIVE_STOCK_LIMIT_KEY,
+      setting_key: NEGATIVE_STOCK_LIMIT_KEY,
+      value: String(limitValue),
+      value_type: 'integer',
+      category: 'inventory',
+      description: 'Admin có thể chỉnh số lượng tồn âm tối đa trực tiếp từ giao diện.',
+      created_at: createdAt,
+      updated_at: updatedAt,
+      deleted_at: null,
+      source: 'mysql_settings_table',
+    },
+  ];
+}
+
+async function findSettingsColumnRowForUpdate(connection, accountId = 1) {
+  const [rows] = await connection.execute(
+    `SELECT * FROM \`${SETTINGS_COLUMN_TABLE}\` WHERE account_id = ? LIMIT 1 FOR UPDATE`,
+    [normalizeAccountId(accountId)]
+  );
+  return rows?.[0] || null;
+}
+
+async function findSettingsColumnRow(connection, accountId = 1) {
+  const [rows] = await connection.execute(
+    `SELECT * FROM \`${SETTINGS_COLUMN_TABLE}\` WHERE account_id = ? LIMIT 1`,
+    [normalizeAccountId(accountId)]
+  );
+  return rows?.[0] || null;
+}
+
+async function upsertSettingsColumnRow(connection, {
+  accountId = 1,
+  enabled = false,
+  limit = DEFAULT_NEGATIVE_STOCK_LIMIT,
+  updateExisting = true,
+} = {}) {
+  const normalizedAccountId = normalizeAccountId(accountId);
+  const normalizedEnabled = normalizeBooleanDatabaseValue(enabled, false);
+  const normalizedLimit = normalizeLimitDatabaseValue(limit, DEFAULT_NEGATIVE_STOCK_LIMIT);
+  const existing = await findSettingsColumnRowForUpdate(connection, normalizedAccountId);
+
+  if (existing) {
+    if (updateExisting) {
+      await connection.execute(
+        `UPDATE \`${SETTINGS_COLUMN_TABLE}\` SET negative_stock_enabled = ?, negative_stock_limit = ?, updated_at = CURRENT_TIMESTAMP WHERE account_id = ? LIMIT 1`,
+        [Number(normalizedEnabled), normalizedLimit, normalizedAccountId]
+      );
+      return {
+        ...existing,
+        negative_stock_enabled: Number(normalizedEnabled),
+        negative_stock_limit: normalizedLimit,
+      };
+    }
+    return existing;
+  }
+
+  const [result] = await connection.execute(
+    `INSERT INTO \`${SETTINGS_COLUMN_TABLE}\` (account_id, negative_stock_enabled, negative_stock_limit, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [normalizedAccountId, Number(normalizedEnabled), normalizedLimit]
+  );
+
+  return {
+    id: result.insertId,
+    account_id: normalizedAccountId,
+    negative_stock_enabled: Number(normalizedEnabled),
+    negative_stock_limit: normalizedLimit,
   };
 }
 
@@ -446,12 +589,31 @@ async function ensureNegativeStockSettingsInMySql({ accountId = 1, enabled = fal
   const normalizedEnabled = enabled ? '1' : '0';
 
   return withSettingsTransaction(async (connection) => {
+    const [legacyRows] = await connection.execute(
+      `SELECT * FROM \`${SETTINGS_TABLE}\` WHERE account_id = ? AND setting_key IN (?, ?) AND deleted_at IS NULL ORDER BY setting_key ASC FOR UPDATE`,
+      [normalizedAccountId, NEGATIVE_STOCK_ENABLED_KEY, NEGATIVE_STOCK_LIMIT_KEY]
+    );
+    const legacyRowMap = new Map((legacyRows || []).map(row => [normalizeKey(row.setting_key || row.key), row]));
+    const legacyEnabled = legacyRowMap.has(NEGATIVE_STOCK_ENABLED_KEY)
+      ? normalizeBooleanDatabaseValue(legacyRowMap.get(NEGATIVE_STOCK_ENABLED_KEY)?.value, normalizedEnabled === '1')
+      : normalizedEnabled;
+    const legacyLimit = legacyRowMap.has(NEGATIVE_STOCK_LIMIT_KEY)
+      ? normalizeLimitDatabaseValue(legacyRowMap.get(NEGATIVE_STOCK_LIMIT_KEY)?.value, normalizedLimit)
+      : normalizedLimit;
+
+    const settingsColumnRow = await upsertSettingsColumnRow(connection, {
+      accountId: normalizedAccountId,
+      enabled: legacyEnabled,
+      limit: legacyLimit,
+      updateExisting: false,
+    });
+
     const enabledRow = await findSettingRowForUpdate(connection, NEGATIVE_STOCK_ENABLED_KEY, normalizedAccountId);
     if (!enabledRow) {
       await upsertSettingRow(connection, {
         accountId: normalizedAccountId,
         key: NEGATIVE_STOCK_ENABLED_KEY,
-        value: normalizedEnabled,
+        value: normalizeBooleanDatabaseValue(settingsColumnRow.negative_stock_enabled, false),
         valueType: 'boolean',
         category: 'inventory',
         description: 'Bật/tắt chức năng xuất âm tồn kho.',
@@ -463,18 +625,14 @@ async function ensureNegativeStockSettingsInMySql({ accountId = 1, enabled = fal
       await upsertSettingRow(connection, {
         accountId: normalizedAccountId,
         key: NEGATIVE_STOCK_LIMIT_KEY,
-        value: String(normalizedLimit),
+        value: String(normalizeLimitDatabaseValue(settingsColumnRow.negative_stock_limit, normalizedLimit)),
         valueType: 'integer',
         category: 'inventory',
         description: 'Admin có thể chỉnh số lượng tồn âm tối đa trực tiếp từ giao diện.',
       });
     }
 
-    const [rows] = await connection.execute(
-      `SELECT * FROM \`${SETTINGS_TABLE}\` WHERE account_id = ? AND setting_key IN (?, ?) AND deleted_at IS NULL ORDER BY setting_key ASC`,
-      [normalizedAccountId, NEGATIVE_STOCK_ENABLED_KEY, NEGATIVE_STOCK_LIMIT_KEY]
-    );
-    return (rows || []).map(serializeMySqlSetting);
+    return serializeSettingsColumnRowAsSettingsRows(settingsColumnRow);
   });
 }
 
@@ -482,6 +640,9 @@ async function getNegativeStockSettingsRowsFromMySql({ accountId = 1 } = {}) {
   await ensureSettingsSchema();
   const normalizedAccountId = normalizeAccountId(accountId);
   return withSettingsConnection(async (connection) => {
+    const settingsColumnRow = await findSettingsColumnRow(connection, normalizedAccountId);
+    if (settingsColumnRow) return serializeSettingsColumnRowAsSettingsRows(settingsColumnRow);
+
     const [rows] = await connection.execute(
       `SELECT * FROM \`${SETTINGS_TABLE}\` WHERE account_id = ? AND setting_key IN (?, ?) AND deleted_at IS NULL ORDER BY setting_key ASC`,
       [normalizedAccountId, NEGATIVE_STOCK_ENABLED_KEY, NEGATIVE_STOCK_LIMIT_KEY]
@@ -497,10 +658,17 @@ async function saveNegativeStockSettingsToMySql({ accountId = 1, enabled, limit 
   const normalizedEnabled = enabled ? '1' : '0';
 
   return withSettingsTransaction(async (connection) => {
+    const settingsColumnRow = await upsertSettingsColumnRow(connection, {
+      accountId: normalizedAccountId,
+      enabled: normalizedEnabled,
+      limit: normalizedLimit,
+      updateExisting: true,
+    });
+
     await upsertSettingRow(connection, {
       accountId: normalizedAccountId,
       key: NEGATIVE_STOCK_ENABLED_KEY,
-      value: normalizedEnabled,
+      value: normalizeBooleanDatabaseValue(settingsColumnRow.negative_stock_enabled, false),
       valueType: 'boolean',
       category: 'inventory',
       description: 'Bật/tắt chức năng xuất âm tồn kho.',
@@ -508,17 +676,13 @@ async function saveNegativeStockSettingsToMySql({ accountId = 1, enabled, limit 
     await upsertSettingRow(connection, {
       accountId: normalizedAccountId,
       key: NEGATIVE_STOCK_LIMIT_KEY,
-      value: String(normalizedLimit),
+      value: String(normalizeLimitDatabaseValue(settingsColumnRow.negative_stock_limit, normalizedLimit)),
       valueType: 'integer',
       category: 'inventory',
       description: 'Admin có thể chỉnh số lượng tồn âm tối đa trực tiếp từ giao diện.',
     });
 
-    const [rows] = await connection.execute(
-      `SELECT * FROM \`${SETTINGS_TABLE}\` WHERE account_id = ? AND setting_key IN (?, ?) AND deleted_at IS NULL ORDER BY setting_key ASC`,
-      [normalizedAccountId, NEGATIVE_STOCK_ENABLED_KEY, NEGATIVE_STOCK_LIMIT_KEY]
-    );
-    return (rows || []).map(serializeMySqlSetting);
+    return serializeSettingsColumnRowAsSettingsRows(settingsColumnRow);
   });
 }
 
@@ -537,6 +701,7 @@ module.exports = {
   MODULE_ERROR_CODE,
   CONNECTION_ERROR_CODE,
   SETTINGS_TABLE,
+  SETTINGS_COLUMN_TABLE,
   NEGATIVE_STOCK_ENABLED_KEY,
   NEGATIVE_STOCK_LIMIT_KEY,
   DEFAULT_NEGATIVE_STOCK_LIMIT,

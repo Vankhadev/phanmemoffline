@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS print_templates (
   code VARCHAR(100) NULL,
   template_name VARCHAR(150) NOT NULL,
   name VARCHAR(255) NULL,
+  template_type VARCHAR(50) NOT NULL DEFAULT 'invoice',
   description VARCHAR(255) NULL,
   header_logo VARCHAR(1024) NULL,
   logo_url VARCHAR(1024) NULL,
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS print_templates (
   shop_phone VARCHAR(50) NULL,
   css_style MEDIUMTEXT NULL,
   template_data LONGTEXT NULL,
+  print_scale DECIMAL(6,3) NOT NULL DEFAULT 1.000,
   layout_json JSON NULL,
   settings_json JSON NULL,
   template_schema_version INT UNSIGNED NOT NULL DEFAULT 1,
@@ -56,6 +58,7 @@ const REQUIRED_COLUMNS = [
   ['code', 'VARCHAR(100) NULL'],
   ['template_name', "VARCHAR(150) NOT NULL DEFAULT 'Mẫu in hóa đơn'"],
   ['name', 'VARCHAR(255) NULL'],
+  ['template_type', "VARCHAR(50) NOT NULL DEFAULT 'invoice'"],
   ['description', 'VARCHAR(255) NULL'],
   ['header_logo', 'VARCHAR(1024) NULL'],
   ['logo_url', 'VARCHAR(1024) NULL'],
@@ -67,6 +70,7 @@ const REQUIRED_COLUMNS = [
   ['shop_phone', 'VARCHAR(50) NULL'],
   ['css_style', 'MEDIUMTEXT NULL'],
   ['template_data', 'LONGTEXT NULL'],
+  ['print_scale', 'DECIMAL(6,3) NOT NULL DEFAULT 1.000'],
   ['layout_json', 'JSON NULL'],
   ['settings_json', 'JSON NULL'],
   ['template_schema_version', 'INT UNSIGNED NOT NULL DEFAULT 1'],
@@ -99,6 +103,8 @@ const DEFAULT_TEMPLATE_SEED = Object.freeze({
   code: 'mau-in-hoa-don-mac-dinh',
   templateName: 'Mẫu in hóa đơn mặc định',
   description: 'Mẫu mặc định được backend tự tạo để /api/print-templates luôn có dữ liệu MySQL thật ban đầu.',
+  templateType: 'invoice',
+  printScale: 1,
   layoutJson: JSON.stringify(DEFAULT_LAYOUT_V2),
   settingsJson: JSON.stringify(DEFAULT_SETTINGS_V2),
   templateSchemaVersion: 2,
@@ -218,6 +224,36 @@ async function ensureSoftMigrationDefaults() {
   `);
   await query(`
     UPDATE print_templates
+       SET template_name = name
+     WHERE (template_name IS NULL OR template_name = '' OR template_name = 'Mẫu in hóa đơn')
+       AND name IS NOT NULL
+       AND name <> ''
+  `);
+  await query(`
+    UPDATE print_templates
+       SET template_type = 'invoice'
+     WHERE template_type IS NULL OR template_type = ''
+  `);
+  await query(`
+    UPDATE print_templates
+       SET print_scale = 1.000
+     WHERE print_scale IS NULL OR print_scale <= 0
+  `);
+  await query(`
+    UPDATE print_templates
+       SET layout_json = template_data
+     WHERE layout_json IS NULL
+       AND template_data IS NOT NULL
+       AND template_data <> ''
+       AND JSON_VALID(template_data)
+  `);
+  await query(`
+    UPDATE print_templates
+       SET settings_json = ?
+     WHERE settings_json IS NULL
+  `, [JSON.stringify(DEFAULT_SETTINGS_V2)]);
+  await query(`
+    UPDATE print_templates
        SET template_data = CAST(layout_json AS CHAR)
      WHERE (template_data IS NULL OR template_data = '')
        AND layout_json IS NOT NULL
@@ -238,18 +274,20 @@ async function ensureDefaultTemplateSeed() {
   if (!activeRows || activeRows.length === 0) {
     await query(
       `INSERT INTO print_templates (
-         account_id, code, template_name, name, description,
-         template_data, layout_json, settings_json, template_schema_version,
+         account_id, code, template_name, name, template_type, description,
+         template_data, print_scale, layout_json, settings_json, template_schema_version,
          paper_size, orientation, status, is_default, revision,
          published_at, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`,
       [
         DEFAULT_TEMPLATE_SEED.accountId,
         DEFAULT_TEMPLATE_SEED.code,
         DEFAULT_TEMPLATE_SEED.templateName,
         DEFAULT_TEMPLATE_SEED.templateName,
+        DEFAULT_TEMPLATE_SEED.templateType,
         DEFAULT_TEMPLATE_SEED.description,
         DEFAULT_TEMPLATE_SEED.layoutJson,
+        DEFAULT_TEMPLATE_SEED.printScale,
         DEFAULT_TEMPLATE_SEED.layoutJson,
         DEFAULT_TEMPLATE_SEED.settingsJson,
         DEFAULT_TEMPLATE_SEED.templateSchemaVersion,
