@@ -45,7 +45,7 @@ const SIMPLE_PUSH_FIELDS = {
     'payment_status', 'paid_amount', 'remaining_amount', 'deleted', 'cancel_reason',
     'cancelled_at', 'deleted_at', 'created_at', 'updated_at',
   ],
-  import_details: ['import_id', 'product_id', 'variant_id', 'product_name', 'sku', 'quantity', 'import_price', 'retail_price', 'wholesale_price', 'line_total', 'created_at', 'updated_at'],
+  import_details: ['import_id', 'product_id', 'variant_id', 'product_name', 'sku', 'quantity', 'import_price', 'retail_price', 'wholesale_price', 'discount_percent', 'discount_amount', 'tax_percent', 'tax_amount', 'vat_percent', 'vat_amount', 'line_subtotal', 'taxable_amount', 'line_total', 'created_at', 'updated_at'],
 };
 
 function publicUser(user) {
@@ -222,6 +222,58 @@ function pickAllowedFields(payload = {}, fields = []) {
   }, {});
 }
 
+function hasSyncNumberValue(value) {
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
+function firstFiniteSyncNumber(...values) {
+  for (const value of values) {
+    if (!hasSyncNumberValue(value)) continue;
+    const numberValue = Number(value);
+    if (Number.isFinite(numberValue)) return numberValue;
+  }
+  return 0;
+}
+
+function toSyncMoney(...values) {
+  return Math.max(0, firstFiniteSyncNumber(...values));
+}
+
+function toSyncPercent(...values) {
+  return Math.min(100, Math.max(0, firstFiniteSyncNumber(...values)));
+}
+
+function normalizeImportDetailForSync(detailPayload = {}) {
+  const row = { ...(detailPayload || {}) };
+  const quantity = toSyncMoney(row.quantity, 0);
+  const importPrice = toSyncMoney(row.import_price, 0);
+  const lineSubtotal = quantity * importPrice;
+  const discountPercent = toSyncPercent(row.discount_percent, 0);
+  const discountAmount = hasSyncNumberValue(row.discount_amount)
+    ? Math.min(lineSubtotal, toSyncMoney(row.discount_amount, 0))
+    : lineSubtotal * discountPercent / 100;
+  const taxableAmount = Math.max(0, lineSubtotal - discountAmount);
+  const taxPercent = toSyncPercent(row.tax_percent, row.vat_percent, 0);
+  const taxAmount = hasSyncNumberValue(row.tax_amount) || hasSyncNumberValue(row.vat_amount)
+    ? toSyncMoney(row.tax_amount, row.vat_amount, 0)
+    : taxableAmount * taxPercent / 100;
+
+  return {
+    ...row,
+    quantity,
+    import_price: importPrice,
+    discount_percent: discountPercent,
+    discount_amount: discountAmount,
+    tax_percent: taxPercent,
+    tax_amount: taxAmount,
+    vat_percent: taxPercent,
+    vat_amount: taxAmount,
+    line_subtotal: lineSubtotal,
+    taxable_amount: taxableAmount,
+    line_total: taxableAmount + taxAmount,
+  };
+}
+
 function upsertProductFromSync(payload, req) {
   if (!payload || typeof payload !== 'object') return null;
   const row = pickAllowedFields(payload, SIMPLE_PUSH_FIELDS.products);
@@ -304,6 +356,7 @@ function upsertSimpleRowFromSync(table, payload, req) {
   const fields = SIMPLE_PUSH_FIELDS[table];
   if (!fields) return null;
   const row = pickAllowedFields(payload, fields);
+  if (table === 'import_details') Object.assign(row, normalizeImportDetailForSync(row));
   const existing = findByNaturalKey(table, payload);
   row.updated_at = row.updated_at || now();
 
@@ -353,14 +406,13 @@ function upsertImportFromSync(payload, req) {
 
   const savedDetails = [];
   for (const detail of details) {
-    const detailPayload = pickAllowedFields({ ...detail, import_id: importId }, SIMPLE_PUSH_FIELDS.import_details);
+    const detailPayload = normalizeImportDetailForSync(
+      pickAllowedFields({ ...detail, import_id: importId }, SIMPLE_PUSH_FIELDS.import_details)
+    );
     const id = insert('import_details', {
       ...detailPayload,
       account_id: req.accountId,
       import_id: importId,
-      quantity: Number(detailPayload.quantity) || 0,
-      import_price: Number(detailPayload.import_price) || 0,
-      line_total: Number(detailPayload.line_total) || ((Number(detailPayload.quantity) || 0) * (Number(detailPayload.import_price) || 0)),
       created_at: detailPayload.created_at || now(),
     });
     savedDetails.push({ id, action: 'created' });

@@ -5,13 +5,6 @@ const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, remove, now, withAtomicDbWrite } = require('../db/database');
 const { v4: uuidv4 } = require('uuid');
-const {
-  assertCanApplyProductStockDelta,
-  applyProductStockDeltaLocked,
-  logNegativeStockTransition,
-  logNegativeStockLimitViolation,
-  buildNegativeStockErrorResponse,
-} = require('../utils/negativeStock');
 
 function genImportCode() {
   const d = new Date();
@@ -35,6 +28,27 @@ function toOptionalNumber(value) {
   if (value === undefined || value === null || value === '') return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function toMoney(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, n) : fallback;
+}
+
+function toPercent(value, fallback = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(0, n));
+}
+
+function sendImportError(res, err, fallback = 'Lỗi xử lý phiếu nhập') {
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({
+    error: fallback,
+    detail: err.message || fallback,
+    code: err.code || 'IMPORT_ROUTE_ERROR',
+    ...(err.details ? { details: err.details } : {}),
+  });
 }
 
 function normalizeImportStatus(status) {
@@ -67,12 +81,27 @@ function unpaidPaymentAmounts(total) {
   return paymentAmounts(total, 'unpaid', 0);
 }
 
-function detailPayload(importId, detail) {
-  const quantity = Math.max(0, toNumber(detail.quantity, 1));
-  const importPrice = Math.max(0, toNumber(detail.import_price, 0));
+function detailPayload(importId, detail = {}) {
+  const rawQuantity = Number(detail.quantity);
+  if (!Number.isFinite(rawQuantity) || rawQuantity <= 0) {
+    throw createRouteError('Số lượng nhập phải lớn hơn 0', 400, 'IMPORT_DETAIL_INVALID_QUANTITY');
+  }
+
+  const quantity = rawQuantity;
+  const importPrice = toMoney(detail.import_price, 0);
+  const grossAmount = quantity * importPrice;
+  const discountPercent = toPercent(detail.discount_percent ?? detail.discount ?? detail.chietKhau, 0);
+  const explicitDiscountAmount = detail.discount_amount !== undefined ? toMoney(detail.discount_amount, 0) : null;
+  const discountAmount = Math.min(grossAmount, explicitDiscountAmount !== null ? explicitDiscountAmount : (grossAmount * discountPercent / 100));
+  const taxableAmount = Math.max(0, grossAmount - discountAmount);
+  const taxPercent = toPercent(detail.tax_percent ?? detail.vat_percent ?? detail.thueGTGT, 0);
+  const explicitTaxAmount = detail.tax_amount !== undefined || detail.vat_amount !== undefined
+    ? toMoney(detail.tax_amount ?? detail.vat_amount, 0)
+    : null;
+  const taxAmount = explicitTaxAmount !== null ? explicitTaxAmount : taxableAmount * taxPercent / 100;
   const lineTotal = detail.line_total !== undefined
-    ? Math.max(0, toNumber(detail.line_total, 0))
-    : quantity * importPrice;
+    ? toMoney(detail.line_total, 0)
+    : taxableAmount + taxAmount;
 
   return {
     import_id: importId,
@@ -82,8 +111,16 @@ function detailPayload(importId, detail) {
     sku: detail.sku || '',
     quantity,
     import_price: importPrice,
-    retail_price: Math.max(0, toNumber(detail.retail_price, 0)),
-    wholesale_price: Math.max(0, toNumber(detail.wholesale_price, 0)),
+    retail_price: toMoney(detail.retail_price, 0),
+    wholesale_price: toMoney(detail.wholesale_price, 0),
+    discount_percent: discountPercent,
+    discount_amount: discountAmount,
+    tax_percent: taxPercent,
+    tax_amount: taxAmount,
+    vat_percent: taxPercent,
+    vat_amount: taxAmount,
+    line_subtotal: grossAmount,
+    taxable_amount: taxableAmount,
     line_total: lineTotal,
   };
 }
@@ -99,10 +136,16 @@ function detailComparable(detail) {
     product_name: detail.product_name || '',
     sku: detail.sku || '',
     quantity: Math.max(0, toNumber(detail.quantity, 0)),
-    import_price: Math.max(0, toNumber(detail.import_price, 0)),
-    retail_price: Math.max(0, toNumber(detail.retail_price, 0)),
-    wholesale_price: Math.max(0, toNumber(detail.wholesale_price, 0)),
-    line_total: Math.max(0, toNumber(detail.line_total, 0)),
+    import_price: toMoney(detail.import_price, 0),
+    retail_price: toMoney(detail.retail_price, 0),
+    wholesale_price: toMoney(detail.wholesale_price, 0),
+    discount_percent: toPercent(detail.discount_percent, 0),
+    discount_amount: toMoney(detail.discount_amount, 0),
+    tax_percent: toPercent(detail.tax_percent ?? detail.vat_percent, 0),
+    tax_amount: toMoney(detail.tax_amount ?? detail.vat_amount, 0),
+    line_subtotal: toMoney(detail.line_subtotal, 0),
+    taxable_amount: toMoney(detail.taxable_amount, 0),
+    line_total: toMoney(detail.line_total, 0),
   };
 }
 
@@ -110,6 +153,34 @@ function detailsEqual(oldDetails, newDetails) {
   const oldComparable = (oldDetails || []).map(detailComparable);
   const newComparable = (newDetails || []).map(detailComparable);
   return JSON.stringify(oldComparable) === JSON.stringify(newComparable);
+}
+
+function getImportStockDetailLabel(detail = {}, product = {}) {
+  return detail.product_name || product.name || detail.sku || `ID ${product.id || detail.product_id || detail.variant_id || ''}`;
+}
+
+function validateImportStockDelta({ productId, detail = {}, delta = 0, operation = 'cập nhật tồn kho phiếu nhập' }) {
+  const numericProductId = toOptionalNumber(productId);
+  const product = numericProductId ? getOne('products', p => Number(p.id) === Number(numericProductId)) : null;
+  if (!product) throw createRouteError(`Sản phẩm ID ${productId || ''} không tồn tại`, 400, 'IMPORT_PRODUCT_NOT_FOUND');
+
+  const normalizedDelta = toNumber(delta, 0);
+  const currentStock = toNumber(product.stock, 0);
+  const projectedStock = currentStock + normalizedDelta;
+  if (!Number.isFinite(projectedStock) || projectedStock < 0) {
+    const label = getImportStockDetailLabel(detail, product);
+    const error = createRouteError(`Tồn kho không đủ để ${operation} cho "${label}". Tồn hiện tại: ${currentStock}, thay đổi: ${normalizedDelta}, tồn dự kiến: ${projectedStock}.`, 400, 'IMPORT_STOCK_UNDERFLOW');
+    error.details = { product_id: product.id, product_name: label, current_stock: currentStock, change_quantity: normalizedDelta, projected_stock: projectedStock, operation };
+    throw error;
+  }
+
+  return { product, currentStock, projectedStock, delta: normalizedDelta };
+}
+
+function applyImportStockDelta({ productId, detail = {}, delta = 0, operation = 'cập nhật tồn kho phiếu nhập', changes = {} }) {
+  const validation = validateImportStockDelta({ productId, detail, delta, operation });
+  const updated = update('products', validation.product.id, { ...(changes || {}), stock: validation.projectedStock });
+  return { updated, validation };
 }
 
 function aggregateStockQuantities(details) {
@@ -162,11 +233,10 @@ function buildApplyStockOperations(details, operation = 'áp dụng phiếu nh�
 
   return Array.from(grouped.values()).map(item => ({
     ...item,
-    validation: assertCanApplyProductStockDelta({
+    validation: validateImportStockDelta({
       productId: item.product.id,
       detail: { product_name: item.detail.product_name || item.product.name, product_sku: item.detail.sku || item.product.sku },
       delta: item.quantity,
-      quantity: item.quantity,
       operation,
     }),
   }));
@@ -185,16 +255,12 @@ function applyStockForImport(importLog, details) {
     if (d.import_price) changes.import_price = Math.max(0, toNumber(d.import_price, 0));
     if (d.wholesale_price) changes.wholesale_price = Math.max(0, toNumber(d.wholesale_price, 0));
     if (d.retail_price) changes.retail_price = Math.max(0, toNumber(d.retail_price, 0));
-    const { validation } = applyProductStockDeltaLocked({
+    const { validation } = applyImportStockDelta({
       productId: operation.product.id,
       detail: { product_name: d.product_name || operation.product.name, product_sku: d.sku || operation.product.sku },
       delta: operation.quantity,
-      quantity: operation.quantity,
       operation: 'áp dụng phiếu nhập',
       changes,
-      options: { skipSave: true },
-      source: 'import_apply',
-      meta: { import_id: importLog.id },
     });
     appliedItems.push({ product_id: operation.product.id, quantity: operation.quantity, final_stock: validation.projectedStock });
   }
@@ -222,11 +288,10 @@ function rollbackStockForImport(importLog, details) {
     const product = getOne('products', p => Number(p.id) === Number(productId));
     if (!product) continue;
 
-    const validation = assertCanApplyProductStockDelta({
+    const validation = validateImportStockDelta({
       productId: product.id,
       detail: { product_name: product.name, product_sku: product.sku },
       delta: -quantity,
-      quantity,
       operation: 'rollback phiếu nhập',
     });
     operations.push({ product, quantity, validation });
@@ -234,16 +299,12 @@ function rollbackStockForImport(importLog, details) {
 
   const rolledBackItems = [];
   for (const operation of operations) {
-    const { validation } = applyProductStockDeltaLocked({
+    const { validation } = applyImportStockDelta({
       productId: operation.product.id,
       detail: { product_name: operation.product.name, product_sku: operation.product.sku },
       delta: -operation.quantity,
-      quantity: operation.quantity,
       operation: 'rollback phiếu nhập',
       changes: { updated_at: now() },
-      options: { skipSave: true },
-      source: 'import_rollback',
-      meta: { import_id: importLog.id },
     });
     rolledBackItems.push({ product_id: operation.product.id, quantity: operation.quantity, final_stock: validation.projectedStock });
   }
@@ -271,7 +332,7 @@ function applyStockDeltaForUpdatedDetails(importLog, oldDetails, newDetails) {
     const product = getOne('products', p => Number(p.id) === Number(productId));
     if (!product) continue;
 
-    const validation = assertCanApplyProductStockDelta({
+    const validation = validateImportStockDelta({
       productId: product.id,
       detail: { product_name: product.name, product_sku: product.sku },
       delta,
@@ -281,15 +342,12 @@ function applyStockDeltaForUpdatedDetails(importLog, oldDetails, newDetails) {
   }
 
   for (const operation of operations) {
-    const { validation } = applyProductStockDeltaLocked({
+    const { validation } = applyImportStockDelta({
       productId: operation.product.id,
       detail: { product_name: operation.product.name, product_sku: operation.product.sku },
       delta: operation.delta,
       operation: 'cập nhật delta phiếu nhập',
       changes: { updated_at: now() },
-      options: { skipSave: true },
-      source: 'import_delta_update',
-      meta: { import_id: importLog.id },
     });
     changedItems.push({
       product_id: operation.product.id,
@@ -396,7 +454,6 @@ function softDeleteImport(importLog, reason = 'deleted') {
   try {
     rollbackResult = rollbackStockForImport(importLog, details);
   } catch (error) {
-    logNegativeStockLimitViolation(error, { source: 'import_soft_delete', import_id: importLog.id });
     throw error;
   }
   const rolledBackAt = rollbackResult.rolledBack ? now() : (importLog.stock_rolled_back_at || null);
@@ -544,9 +601,7 @@ router.post('/', (req, res) => {
 
     res.json(result);
   } catch (err) {
-    const status = err.status || err.statusCode || 500;
-    logNegativeStockLimitViolation(err, { source: 'import_create' });
-    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi tạo phiếu nhập'));
+    sendImportError(res, err, 'Lỗi khi tạo phiếu nhập');
   }
 });
 
@@ -581,7 +636,6 @@ router.put('/:idOrCode', (req, res) => {
         const deltaResult = applyStockDeltaForUpdatedDetails(importLog, oldDetails, incomingDetails);
         stockResult = { ...deltaResult, mode: 'delta' };
       } catch (error) {
-        logNegativeStockLimitViolation(error, { source: 'import_update_delta', import_id: importLog.id });
         throw error;
       }
     }
@@ -607,7 +661,6 @@ router.put('/:idOrCode', (req, res) => {
       try {
         buildApplyStockOperations(savedDetails, 'áp dụng phiếu nhập');
       } catch (error) {
-        logNegativeStockLimitViolation(error, { source: 'import_update_apply', import_id: importLog.id });
         throw error;
       }
       update('import_logs', importLog.id, changes);
@@ -619,7 +672,6 @@ router.put('/:idOrCode', (req, res) => {
       try {
         rollbackResult = rollbackStockForImport(importLog, oldDetails);
       } catch (error) {
-        logNegativeStockLimitViolation(error, { source: 'import_update_rollback_to_draft', import_id: importLog.id });
         throw error;
       }
       Object.assign(changes, {
@@ -661,9 +713,7 @@ router.put('/:idOrCode', (req, res) => {
 
     res.json(result);
   } catch (err) {
-    const status = err.status || err.statusCode || 500;
-    logNegativeStockLimitViolation(err, { source: 'import_update' });
-    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi cập nhật phiếu nhập'));
+    sendImportError(res, err, 'Lỗi khi cập nhật phiếu nhập');
   }
 });
 
@@ -689,7 +739,6 @@ router.post('/:idOrCode/cancel', (req, res) => {
     try {
       rollbackResult = rollbackStockForImport(importLog, details);
     } catch (error) {
-      logNegativeStockLimitViolation(error, { source: 'import_cancel', import_id: importLog.id });
       throw error;
     }
     const rolledBackAt = rollbackResult.rolledBack ? now() : (importLog.stock_rolled_back_at || null);
@@ -723,9 +772,7 @@ router.post('/:idOrCode/cancel', (req, res) => {
 
     res.json(result);
   } catch (err) {
-    const status = err.status || err.statusCode || 500;
-    logNegativeStockLimitViolation(err, { source: 'import_cancel' });
-    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi hủy phiếu nhập'));
+    sendImportError(res, err, 'Lỗi khi hủy phiếu nhập');
   }
 });
 
@@ -807,9 +854,7 @@ router.delete('/bulk', (req, res) => {
 
     res.json(result);
   } catch (err) {
-    const status = err.status || err.statusCode || 500;
-    logNegativeStockLimitViolation(err, { source: 'import_bulk_delete' });
-    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi xóa hàng loạt phiếu nhập'));
+    sendImportError(res, err, 'Lỗi khi xóa hàng loạt phiếu nhập');
   }
 });
 
@@ -823,9 +868,7 @@ router.delete('/:idOrCode', (req, res) => {
     if (!result.ok) return res.status(result.status || 500).json({ error: result.error || 'Không thể xóa phiếu nhập' });
     res.json(result);
   } catch (err) {
-    const status = err.status || err.statusCode || 500;
-    logNegativeStockLimitViolation(err, { source: 'import_delete' });
-    res.status(status).json(buildNegativeStockErrorResponse(err, 'Lỗi khi xóa phiếu nhập'));
+    sendImportError(res, err, 'Lỗi khi xóa phiếu nhập');
   }
 });
 

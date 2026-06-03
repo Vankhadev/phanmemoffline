@@ -2,8 +2,6 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Search, Plus, X, Save, Package, Tag, FileText, LogOut, AlertCircle, CheckCircle, Building, Trash2, CreditCard, RotateCcw } from 'lucide-react';
 import { SYNC_UPDATED_EVENT, apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
-import NegativeStockInput from '../components/NegativeStockInput';
-import { getNegativeStockInputError, parseStockInputNumber } from '../utils/negativeStock';
 import { buildCategoriesById, categoryFields, getProductDisplayName, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
 
 const API = resolveApiUrl('');
@@ -613,6 +611,60 @@ const toNonNegativeMoney = (value, fallback = 0) => {
   return Number.isFinite(numberValue) ? Math.max(0, numberValue) : fallback;
 };
 
+const formatVND = (value) => {
+  const numberValue = Number(value);
+  const safeValue = Number.isFinite(numberValue) ? Math.max(0, numberValue) : 0;
+  return `${Math.round(safeValue).toLocaleString('vi-VN')}đ`;
+};
+
+const clampImportPercent = (value) => {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return 0;
+  return Math.min(100, Math.max(0, numberValue));
+};
+
+const parseImportQuantity = (value, fallback = 0) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  const numberValue = Number(String(value).trim().replace(',', '.'));
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+};
+
+const normalizeImportQuantity = (value, fallback = 1) => {
+  const quantity = parseImportQuantity(value, fallback);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : fallback;
+};
+
+const getImportQuantityInputError = (value) => {
+  const quantity = parseImportQuantity(value, NaN);
+  if (!Number.isFinite(quantity)) return 'Số lượng phải là số hợp lệ';
+  if (quantity <= 0) return 'Số lượng nhập phải lớn hơn 0';
+  return '';
+};
+
+const calculateImportLineAmounts = (giaNhap, soLuong, chietKhau = 0, thueGTGT = 0) => {
+  const price = Math.max(0, getFirstFiniteNumber(giaNhap, 0));
+  const quantity = Math.max(0, parseImportQuantity(soLuong, 0));
+  const discountPercent = clampImportPercent(chietKhau);
+  const taxPercent = clampImportPercent(thueGTGT);
+  const grossAmount = price * quantity;
+  const discountAmount = grossAmount * (discountPercent / 100);
+  const afterDiscount = Math.max(0, grossAmount - discountAmount);
+  const taxAmount = afterDiscount * (taxPercent / 100);
+  const lineTotal = afterDiscount + taxAmount;
+
+  return {
+    price,
+    quantity,
+    discountPercent,
+    taxPercent,
+    grossAmount,
+    discountAmount,
+    afterDiscount,
+    taxAmount,
+    lineTotal,
+  };
+};
+
 const resolvePaymentAmounts = ({ total, status, paidAmount, remainingAmount, forceUnpaidFull = false }) => {
   const normalizedTotal = toNonNegativeMoney(total, 0);
   if (forceUnpaidFull) {
@@ -650,7 +702,8 @@ const buildPaymentDetailSignature = (items = []) => JSON.stringify((Array.isArra
   sku: String(firstImportValue(item.maSP, item.sku) || '').trim(),
   quantity: getFirstFiniteNumber(item.soLuongNhap, item.soLuong, item.quantity),
   import_price: getFirstFiniteNumber(item.giaNhap, item.import_price),
-  discount: getFirstFiniteNumber(item.chietKhau, item.discount),
+  discount: getFirstFiniteNumber(item.chietKhau, item.discount, item.discount_percent),
+  tax: getFirstFiniteNumber(item.thueGTGT, item.tax_percent, item.vat_percent),
   line_total: getFirstFiniteNumber(item.thanhTien, item.line_total),
 })));
 
@@ -904,27 +957,25 @@ const Nhaphang = ({ store }) => {
   // Validation
   const validateProduct = (product) => {
     const errors = [];
-    const quantity = Number(product.soLuongNhap);
     const importPrice = hasImportValue(product.giaNhap)
       ? Number(product.giaNhap)
       : getFirstFiniteNumber(product.import_price, product.retail_price, 0);
     const discount = Number(product.chietKhau || 0);
+    const taxPercent = Number(product.thueGTGT ?? product.tax_percent ?? product.vat_percent ?? 0);
 
     if (!product.tenSP) errors.push('Tên sản phẩm là bắt buộc');
     if (!product.donVi) errors.push('Đơn vị là bắt buộc');
     if (!getImportRowKey(product)) errors.push('Dòng sản phẩm thiếu product_id, variant_id hoặc SKU hợp lệ');
-    const quantityError = getNegativeStockInputError(product.soLuongNhap);
-    if (!Number.isFinite(quantity) || quantity === 0) {
-      errors.push('Số lượng nhập/xuất phải khác 0');
-    }
-    if (quantityError) {
-      errors.push(quantityError);
-    }
+    const quantityError = getImportQuantityInputError(product.soLuongNhap);
+    if (quantityError) errors.push(quantityError);
     if (!Number.isFinite(importPrice) || importPrice < 0) {
       errors.push('Giá nhập phải lớn hơn hoặc bằng 0');
     }
     if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
       errors.push('Chiết khấu phải từ 0-100%');
+    }
+    if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100) {
+      errors.push('Thuế GTGT phải từ 0-100%');
     }
     return errors;
   };
@@ -950,18 +1001,11 @@ const Nhaphang = ({ store }) => {
   };
 
   // Calculate thanhTien for a product
-  const calculateThanhTien = (giaNhap, soLuong, chietKhau) => {
-    const price = Math.max(0, Number(giaNhap) || 0);
-    const quantity = Number.isFinite(Number(soLuong)) ? Number(soLuong) : 0;
-    const discount = Math.min(100, Math.max(0, Number(chietKhau) || 0));
-    const thanhTien = price * quantity;
-    return thanhTien - (thanhTien * (discount / 100));
-  };
+  const calculateThanhTien = (giaNhap, soLuong, chietKhau, thueGTGT = 0) => (
+    calculateImportLineAmounts(giaNhap, soLuong, chietKhau, thueGTGT).lineTotal
+  );
 
-  const normalizeEditableImportQuantity = (value, fallback = 1) => {
-    const quantity = parseStockInputNumber(value, fallback);
-    return Number.isFinite(quantity) && quantity !== 0 ? quantity : fallback;
-  };
+  const normalizeEditableImportQuantity = (value, fallback = 1) => normalizeImportQuantity(value, fallback);
 
   const resetProductSearchState = (options = {}) => {
     const {
@@ -1049,16 +1093,21 @@ const Nhaphang = ({ store }) => {
     const isEditingExistingRow = editingProductIndex !== null && products[editingProductIndex];
     const sourceRow = isEditingExistingRow ? products[editingProductIndex] : null;
     const quantity = isEditingExistingRow ? normalizeEditableImportQuantity(sourceRow.soLuongNhap, 1) : 1;
-    const discount = isEditingExistingRow ? Math.min(100, Math.max(0, Number(sourceRow.chietKhau) || 0)) : 0;
+    const discount = isEditingExistingRow ? clampImportPercent(sourceRow.chietKhau) : 0;
+    const taxPercent = isEditingExistingRow ? clampImportPercent(sourceRow.thueGTGT ?? sourceRow.tax_percent ?? sourceRow.vat_percent) : 0;
     const importPrice = Math.max(0, getFirstFiniteNumber(mappedProduct.giaNhap, mappedProduct.import_price, mappedProduct.retail_price));
+    const lineAmounts = calculateImportLineAmounts(importPrice, quantity, discount, taxPercent);
 
     return {
       ...mappedProduct,
       soLuongNhap: quantity,
       chietKhau: discount,
+      thueGTGT: taxPercent,
       giaNhap: importPrice,
       import_price: importPrice,
-      thanhTien: calculateThanhTien(importPrice, quantity, discount)
+      tienSauChietKhau: lineAmounts.afterDiscount,
+      thueGTGTAmount: lineAmounts.taxAmount,
+      thanhTien: lineAmounts.lineTotal
     };
   };
 
@@ -1135,8 +1184,10 @@ const Nhaphang = ({ store }) => {
     }
 
     const importPrice = Math.max(0, getFirstFiniteNumber(selectedProduct.giaNhap, selectedProduct.import_price, selectedProduct.retail_price));
-    const quantityToAdd = parseStockInputNumber(selectedProduct.soLuongNhap, 0);
-    const nextDiscount = Math.min(100, Math.max(0, Number(selectedProduct.chietKhau) || 0));
+    const quantityToAdd = normalizeImportQuantity(selectedProduct.soLuongNhap, 0);
+    const nextDiscount = clampImportPercent(selectedProduct.chietKhau);
+    const nextTaxPercent = clampImportPercent(selectedProduct.thueGTGT ?? selectedProduct.tax_percent ?? selectedProduct.vat_percent);
+    const lineAmounts = calculateImportLineAmounts(importPrice, quantityToAdd, nextDiscount, nextTaxPercent);
     const normalizedProduct = {
       ...selectedProduct,
       row_key: getImportRowKey(selectedProduct),
@@ -1144,7 +1195,10 @@ const Nhaphang = ({ store }) => {
       import_price: importPrice,
       soLuongNhap: quantityToAdd,
       chietKhau: nextDiscount,
-      thanhTien: calculateThanhTien(importPrice, quantityToAdd, nextDiscount)
+      thueGTGT: nextTaxPercent,
+      tienSauChietKhau: lineAmounts.afterDiscount,
+      thueGTGTAmount: lineAmounts.taxAmount,
+      thanhTien: lineAmounts.lineTotal
     };
 
     const rowKey = normalizedProduct.row_key;
@@ -1170,16 +1224,21 @@ const Nhaphang = ({ store }) => {
       const duplicateName = products[duplicateIndex]?.tenSP || normalizedProduct.tenSP || normalizedProduct.maSP;
       setProducts(prev => prev.map((product, index) => {
         if (index !== duplicateIndex) return product;
-        const nextQuantity = (Number(product.soLuongNhap) || 0) + quantityToAdd;
+        const nextQuantity = normalizeImportQuantity(product.soLuongNhap, 0) + quantityToAdd;
         const nextPrice = Math.max(0, getFirstFiniteNumber(product.giaNhap, product.import_price, normalizedProduct.giaNhap));
-        const mergedDiscount = Math.min(100, Math.max(0, Number(product.chietKhau) || 0));
+        const mergedDiscount = clampImportPercent(product.chietKhau);
+        const mergedTaxPercent = clampImportPercent(product.thueGTGT ?? product.tax_percent ?? product.vat_percent);
+        const mergedLine = calculateImportLineAmounts(nextPrice, nextQuantity, mergedDiscount, mergedTaxPercent);
         return {
           ...product,
           soLuongNhap: nextQuantity,
           giaNhap: nextPrice,
           import_price: nextPrice,
           chietKhau: mergedDiscount,
-          thanhTien: calculateThanhTien(nextPrice, nextQuantity, mergedDiscount)
+          thueGTGT: mergedTaxPercent,
+          tienSauChietKhau: mergedLine.afterDiscount,
+          thueGTGTAmount: mergedLine.taxAmount,
+          thanhTien: mergedLine.lineTotal
         };
       }));
       setSuccess(`Đã gộp thêm ${quantityToAdd} vào dòng ${duplicateName}.`);
@@ -1215,21 +1274,28 @@ const Nhaphang = ({ store }) => {
       const numericValue = Number(value);
       const safeValue = Number.isFinite(numericValue) ? numericValue : 0;
       if (field === 'soLuongNhap') {
-        const quantityError = getNegativeStockInputError(value);
+        const quantityError = getImportQuantityInputError(value);
         if (quantityError) showStockLimitToast(quantityError);
         product.soLuongNhap = value;
-      } else if (field === 'chietKhau' || field === 'giaNhap') {
-        product[field] = safeValue;
-        if (field === 'giaNhap') product.import_price = safeValue;
+      } else if (field === 'chietKhau' || field === 'thueGTGT') {
+        product[field] = clampImportPercent(safeValue);
+      } else if (field === 'giaNhap') {
+        product[field] = Math.max(0, safeValue);
+        product.import_price = Math.max(0, safeValue);
       } else {
         product[field] = value;
       }
 
       const nextPrice = Math.max(0, getFirstFiniteNumber(product.giaNhap, product.import_price, product.retail_price));
-      const nextQuantity = parseStockInputNumber(product.soLuongNhap, 0);
-      const nextDiscount = Math.min(100, Math.max(0, Number(product.chietKhau) || 0));
+      const nextQuantity = parseImportQuantity(product.soLuongNhap, 0);
+      const nextDiscount = clampImportPercent(product.chietKhau);
+      const nextTaxPercent = clampImportPercent(product.thueGTGT ?? product.tax_percent ?? product.vat_percent);
+      const lineAmounts = calculateImportLineAmounts(nextPrice, nextQuantity, nextDiscount, nextTaxPercent);
       product.chietKhau = nextDiscount;
-      product.thanhTien = calculateThanhTien(nextPrice, nextQuantity, nextDiscount);
+      product.thueGTGT = nextTaxPercent;
+      product.tienSauChietKhau = lineAmounts.afterDiscount;
+      product.thueGTGTAmount = lineAmounts.taxAmount;
+      product.thanhTien = lineAmounts.lineTotal;
       return product;
     }));
   };
@@ -1243,28 +1309,42 @@ const Nhaphang = ({ store }) => {
 
   // Calculate total
   const totalAmount = useMemo(() => {
-    return products.reduce((sum, p) => sum + p.thanhTien, 0);
+    return products.reduce((sum, p) => {
+      const lineAmounts = calculateImportLineAmounts(p.giaNhap ?? p.import_price, p.soLuongNhap, p.chietKhau, p.thueGTGT ?? p.tax_percent ?? p.vat_percent);
+      return sum + lineAmounts.lineTotal;
+    }, 0);
   }, [products]);
 
-  // Calculate total quantity and discount
+  // Calculate total quantity, discount and tax
   const totalStats = useMemo(() => {
     return products.reduce((acc, p) => {
-      const quantity = parseStockInputNumber(p.soLuongNhap, 0);
-      const importPrice = Math.max(0, getFirstFiniteNumber(p.giaNhap, p.import_price, p.retail_price));
-      const discount = Math.min(100, Math.max(0, Number(p.chietKhau) || 0));
+      const lineAmounts = calculateImportLineAmounts(p.giaNhap ?? p.import_price, p.soLuongNhap, p.chietKhau, p.thueGTGT ?? p.tax_percent ?? p.vat_percent);
       return {
-        quantity: acc.quantity + quantity,
-        discountValue: acc.discountValue + (importPrice * quantity * (discount / 100))
+        quantity: acc.quantity + lineAmounts.quantity,
+        subtotal: acc.subtotal + lineAmounts.grossAmount,
+        discountValue: acc.discountValue + lineAmounts.discountAmount,
+        taxableValue: acc.taxableValue + lineAmounts.afterDiscount,
+        taxValue: acc.taxValue + lineAmounts.taxAmount,
       };
-    }, { quantity: 0, discountValue: 0 });
+    }, { quantity: 0, subtotal: 0, discountValue: 0, taxableValue: 0, taxValue: 0 });
   }, [products]);
 
-  const selectedProductQuantityError = selectedProduct ? getNegativeStockInputError(selectedProduct.soLuongNhap) : '';
+  const selectedProductQuantityError = selectedProduct ? getImportQuantityInputError(selectedProduct.soLuongNhap) : '';
+  const selectedProductLinePreview = useMemo(() => (
+    selectedProduct
+      ? calculateImportLineAmounts(
+        selectedProduct.giaNhap ?? selectedProduct.import_price,
+        selectedProduct.soLuongNhap,
+        selectedProduct.chietKhau,
+        selectedProduct.thueGTGT ?? selectedProduct.tax_percent ?? selectedProduct.vat_percent
+      )
+      : null
+  ), [selectedProduct]);
   const productsQuantityError = useMemo(() => {
-    const invalid = products.find(product => getNegativeStockInputError(product.soLuongNhap));
-    return invalid ? getNegativeStockInputError(invalid.soLuongNhap) : '';
+    const invalid = products.find(product => getImportQuantityInputError(product.soLuongNhap));
+    return invalid ? getImportQuantityInputError(invalid.soLuongNhap) : '';
   }, [products]);
-  const hasNegativeStockQuantityError = Boolean(productsQuantityError);
+  const hasQuantityError = Boolean(productsQuantityError);
 
   const currentOrderDetailSignature = useMemo(
     () => buildPaymentDetailSignature(currentOrder?.chiTiet || []),
@@ -1333,19 +1413,29 @@ const Nhaphang = ({ store }) => {
         sdt: '',
         email: '',
       },
-      chiTiet: details.map((d, index) => ({
-        maSP: d.sku || '',
-        tenSP: d.product_name || '',
-        soLuong: +d.quantity || 0,
-        donVi: d.unit || 'cái',
-        giaNhap: +d.import_price || 0,
-        retail_price: +d.retail_price || 0,
-        wholesale_price: +d.wholesale_price || 0,
-        chietKhau: 0,
-        thanhTien: +d.line_total || 0,
-        product_id: d.product_id || null,
-        variant_id: d.variant_id || null,
-      })),
+      chiTiet: details.map((d) => {
+        const quantity = Math.max(0, Number(d.quantity) || 0);
+        const importPrice = Math.max(0, Number(d.import_price) || 0);
+        const discountPercent = clampImportPercent(d.discount_percent ?? d.discount);
+        const taxPercent = clampImportPercent(d.tax_percent ?? d.vat_percent ?? d.thueGTGT);
+        const lineAmounts = calculateImportLineAmounts(importPrice, quantity, discountPercent, taxPercent);
+        return {
+          maSP: d.sku || '',
+          tenSP: d.product_name || '',
+          soLuong: quantity,
+          donVi: d.unit || 'cái',
+          giaNhap: importPrice,
+          retail_price: +d.retail_price || 0,
+          wholesale_price: +d.wholesale_price || 0,
+          chietKhau: discountPercent,
+          thueGTGT: taxPercent,
+          tienSauChietKhau: getFirstFiniteNumber(d.taxable_amount, lineAmounts.afterDiscount),
+          thueGTGTAmount: getFirstFiniteNumber(d.tax_amount, d.vat_amount, lineAmounts.taxAmount),
+          thanhTien: getFirstFiniteNumber(d.line_total, lineAmounts.lineTotal),
+          product_id: d.product_id || null,
+          variant_id: d.variant_id || null,
+        };
+      }),
       soSanPham: imp.detail_count || details.length,
       tongTien: total,
       tongSoLuong: details.reduce((sum, d) => sum + (+d.quantity || 0), 0),
@@ -1399,17 +1489,28 @@ const Nhaphang = ({ store }) => {
     payment_status: paymentSummary.payment_status,
     paid_amount: paymentSummary.paid_amount,
     remaining_amount: paymentSummary.remaining_amount,
-    details: products.map(p => ({
-      product_id: toPayloadNumberId(p.product_id || p.id),
-      variant_id: toPayloadNumberId(p.variant_id),
-      product_name: p.tenSP || '',
-      sku: p.maSP || '',
-      quantity: parseStockInputNumber(p.soLuongNhap, 1),
-      import_price: Math.max(0, getFirstFiniteNumber(p.giaNhap, p.import_price)),
-      retail_price: Math.max(0, getFirstFiniteNumber(p.retail_price)),
-      wholesale_price: Math.max(0, getFirstFiniteNumber(p.wholesale_price)),
-      line_total: Math.max(0, Number(p.thanhTien) || 0),
-    })),
+    details: products.map(p => {
+      const lineAmounts = calculateImportLineAmounts(p.giaNhap ?? p.import_price, p.soLuongNhap, p.chietKhau, p.thueGTGT ?? p.tax_percent ?? p.vat_percent);
+      return {
+        product_id: toPayloadNumberId(p.product_id || p.id),
+        variant_id: toPayloadNumberId(p.variant_id),
+        product_name: p.tenSP || '',
+        sku: p.maSP || '',
+        quantity: lineAmounts.quantity,
+        import_price: lineAmounts.price,
+        retail_price: Math.max(0, getFirstFiniteNumber(p.retail_price)),
+        wholesale_price: Math.max(0, getFirstFiniteNumber(p.wholesale_price)),
+        discount_percent: lineAmounts.discountPercent,
+        discount_amount: lineAmounts.discountAmount,
+        tax_percent: lineAmounts.taxPercent,
+        tax_amount: lineAmounts.taxAmount,
+        vat_percent: lineAmounts.taxPercent,
+        vat_amount: lineAmounts.taxAmount,
+        line_subtotal: lineAmounts.grossAmount,
+        taxable_amount: lineAmounts.afterDiscount,
+        line_total: lineAmounts.lineTotal,
+      };
+    }),
   });
 
   const buildLocalOrderData = (status, importCode, result = {}) => ({
@@ -1425,20 +1526,26 @@ const Nhaphang = ({ store }) => {
       sdt: selectedSupplier.sdt,
       email: selectedSupplier.email
     },
-    chiTiet: products.map(p => ({
-      maSP: p.maSP,
-      tenSP: p.tenSP,
-      soLuong: p.soLuongNhap,
-      donVi: p.donVi,
-      giaNhap: p.giaNhap,
-      chietKhau: p.chietKhau,
-      thanhTien: p.thanhTien,
-      product_id: p.product_id || p.id || null,
-      variant_id: p.variant_id || null,
-      retail_price: p.retail_price || 0,
-      wholesale_price: p.wholesale_price || 0,
-      row_key: getImportRowKey(p),
-    })),
+    chiTiet: products.map(p => {
+      const lineAmounts = calculateImportLineAmounts(p.giaNhap ?? p.import_price, p.soLuongNhap, p.chietKhau, p.thueGTGT ?? p.tax_percent ?? p.vat_percent);
+      return {
+        maSP: p.maSP,
+        tenSP: p.tenSP,
+        soLuong: lineAmounts.quantity,
+        donVi: p.donVi,
+        giaNhap: lineAmounts.price,
+        chietKhau: lineAmounts.discountPercent,
+        thueGTGT: lineAmounts.taxPercent,
+        tienSauChietKhau: lineAmounts.afterDiscount,
+        thueGTGTAmount: lineAmounts.taxAmount,
+        thanhTien: lineAmounts.lineTotal,
+        product_id: p.product_id || p.id || null,
+        variant_id: p.variant_id || null,
+        retail_price: p.retail_price || 0,
+        wholesale_price: p.wholesale_price || 0,
+        row_key: getImportRowKey(p),
+      };
+    }),
     tongTien: totalAmount,
     tongSoLuong: totalStats.quantity,
     tongChietKhau: totalStats.discountValue,
@@ -1573,7 +1680,10 @@ const Nhaphang = ({ store }) => {
         const row = {
           ...item,
           soLuongNhap: item.soLuong,
-          chietKhau: item.chietKhau || 0,
+          chietKhau: clampImportPercent(item.chietKhau),
+          thueGTGT: clampImportPercent(item.thueGTGT ?? item.tax_percent ?? item.vat_percent),
+          tienSauChietKhau: item.tienSauChietKhau || 0,
+          thueGTGTAmount: item.thueGTGTAmount || item.tax_amount || item.vat_amount || 0,
           thanhTien: item.thanhTien,
           giaNhap: item.giaNhap,
           import_price: item.giaNhap,
@@ -1586,7 +1696,14 @@ const Nhaphang = ({ store }) => {
           product_id: item.product_id || null,
           variant_id: item.variant_id || null,
         };
-        return { ...row, row_key: getImportRowKey(row) };
+        const lineAmounts = calculateImportLineAmounts(row.giaNhap, row.soLuongNhap, row.chietKhau, row.thueGTGT);
+        return {
+          ...row,
+          tienSauChietKhau: row.tienSauChietKhau || lineAmounts.afterDiscount,
+          thueGTGTAmount: row.thueGTGTAmount || lineAmounts.taxAmount,
+          thanhTien: row.thanhTien || lineAmounts.lineTotal,
+          row_key: getImportRowKey(row),
+        };
       }));
       setNote(fullOrder.ghiChu || '');
       setPaymentStatus(fullOrder.payment_status || 'unpaid');
@@ -2123,7 +2240,7 @@ const Nhaphang = ({ store }) => {
                                     Đơn vị: {unit}{categoryName ? ` · ${categoryName}` : ''} · Số lượng: {availableQuantity.toLocaleString('vi-VN')}
                                   </span>
                                   <span className="text-sm font-medium text-blue-600 whitespace-nowrap">
-                                    {price.toLocaleString('vi-VN')}đ
+                                    {formatVND(price)}
                                   </span>
                                 </div>
                               </div>
@@ -2149,14 +2266,14 @@ const Nhaphang = ({ store }) => {
 
             {/* Selected Product Card */}
             {selectedProduct && (
-              <div className={`bg-white rounded-lg border shadow-sm ${selectedProductQuantityError ? 'border-red-300 ring-1 ring-red-200' : parseStockInputNumber(selectedProduct.soLuongNhap, 0) < 0 ? 'border-red-200 bg-red-50/40' : 'border-gray-200'}`}>
+              <div className={`bg-white rounded-lg border shadow-sm ${selectedProductQuantityError ? 'border-red-300 ring-1 ring-red-200' : 'border-gray-200'}`}>
                 <div className="p-4 border-b border-gray-200 bg-blue-50 flex items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">
-                      <Package className="w-4 h-4" />
+                      <Package className="w-4 h-4 shrink-0" />
                       {editingProductIndex !== null ? `Cập nhật dòng #${editingProductIndex + 1}` : 'Thêm sản phẩm vào phiếu'}
                     </h2>
-                    <p className="text-sm text-blue-700 mt-0.5">{selectedProduct.tenSP} · Mã: {selectedProduct.maSP || 'N/A'}</p>
+                    <p className="text-sm text-blue-700 mt-0.5 truncate" title={selectedProduct.tenSP}>{selectedProduct.tenSP} · Mã: {selectedProduct.maSP || 'N/A'}</p>
                   </div>
                   <button
                     type="button"
@@ -2168,105 +2285,122 @@ const Nhaphang = ({ store }) => {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="p-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                    <NegativeStockInput
-                      id="import-selected-negative-stock"
-                      label="Số lượng"
-                      value={selectedProduct.soLuongNhap}
-                      error={selectedProductQuantityError}
-                      helper={selectedProductQuantityError ? '' : 'Cho phép nhập số dương hoặc số âm để nhập/xuất kho realtime.'}
-                      disabled={saving}
-                      onLimitError={showStockLimitToast}
-                      onChange={(nextValue) => {
-                        const nextQuantity = parseStockInputNumber(nextValue, 0);
-                        const nextPrice = Math.max(0, getFirstFiniteNumber(selectedProduct.giaNhap, selectedProduct.import_price, selectedProduct.retail_price));
-                        setSelectedProduct({
-                          ...selectedProduct,
-                          soLuongNhap: nextValue,
-                          thanhTien: calculateThanhTien(nextPrice, nextQuantity, selectedProduct.chietKhau)
-                        });
-                      }}
-                    />
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Đơn vị</label>
+                <div className="p-4 space-y-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <label className="block min-w-0">
+                      <span className="block text-xs font-medium text-gray-600 mb-1">Số lượng</span>
                       <input
-                        type="text"
-                        value={selectedProduct.donVi}
-                        disabled
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 text-sm"
+                        type="number"
+                        min="0.0001"
+                        step="1"
+                        value={selectedProduct.soLuongNhap ?? ''}
+                        onChange={(e) => {
+                          const nextValue = e.target.value;
+                          const nextLine = calculateImportLineAmounts(
+                            selectedProduct.giaNhap ?? selectedProduct.import_price,
+                            nextValue,
+                            selectedProduct.chietKhau,
+                            selectedProduct.thueGTGT ?? selectedProduct.tax_percent ?? selectedProduct.vat_percent
+                          );
+                          setSelectedProduct({
+                            ...selectedProduct,
+                            soLuongNhap: nextValue,
+                            tienSauChietKhau: nextLine.afterDiscount,
+                            thueGTGTAmount: nextLine.taxAmount,
+                            thanhTien: nextLine.lineTotal
+                          });
+                        }}
+                        className={`min-h-10 w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${selectedProductQuantityError ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300'}`}
+                        disabled={saving}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Giá nhập</label>
+                      {selectedProductQuantityError && <span className="mt-1 block text-xs font-medium text-red-600">{selectedProductQuantityError}</span>}
+                    </label>
+                    <label className="block min-w-0">
+                      <span className="block text-xs font-medium text-gray-600 mb-1">Giá nhập</span>
                       <input
                         type="number"
                         min="0"
-                        value={selectedProduct.giaNhap ?? selectedProduct.retail_price ?? selectedProduct.import_price ?? 0}
+                        step="1000"
+                        value={selectedProduct.giaNhap ?? selectedProduct.import_price ?? 0}
                         onChange={(e) => {
                           const nextPrice = Math.max(0, Number(e.target.value) || 0);
+                          const nextLine = calculateImportLineAmounts(nextPrice, selectedProduct.soLuongNhap, selectedProduct.chietKhau, selectedProduct.thueGTGT);
                           setSelectedProduct({
                             ...selectedProduct,
                             giaNhap: nextPrice,
                             import_price: nextPrice,
-                            thanhTien: calculateThanhTien(
-                              nextPrice,
-                              selectedProduct.soLuongNhap,
-                              selectedProduct.chietKhau
-                            )
+                            tienSauChietKhau: nextLine.afterDiscount,
+                            thueGTGTAmount: nextLine.taxAmount,
+                            thanhTien: nextLine.lineTotal
                           });
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        className="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         disabled={saving}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Chiết khấu (%)</label>
+                    </label>
+                    <label className="block min-w-0">
+                      <span className="block text-xs font-medium text-gray-600 mb-1">Chiết khấu (%)</span>
                       <input
                         type="number"
                         min="0"
                         max="100"
                         step="0.1"
-                        value={selectedProduct.chietKhau}
+                        value={selectedProduct.chietKhau ?? 0}
                         onChange={(e) => {
-                          const nextDiscount = Math.min(100, Math.max(0, Number(e.target.value) || 0));
-                          const nextPrice = Math.max(0, getFirstFiniteNumber(selectedProduct.giaNhap, selectedProduct.import_price, selectedProduct.retail_price));
+                          const nextDiscount = clampImportPercent(e.target.value);
+                          const nextLine = calculateImportLineAmounts(selectedProduct.giaNhap ?? selectedProduct.import_price, selectedProduct.soLuongNhap, nextDiscount, selectedProduct.thueGTGT);
                           setSelectedProduct({
                             ...selectedProduct,
                             chietKhau: nextDiscount,
-                            thanhTien: calculateThanhTien(
-                              nextPrice,
-                              selectedProduct.soLuongNhap,
-                              nextDiscount
-                            )
+                            tienSauChietKhau: nextLine.afterDiscount,
+                            thueGTGTAmount: nextLine.taxAmount,
+                            thanhTien: nextLine.lineTotal
                           });
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        className="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         disabled={saving}
                       />
-                    </div>
+                    </label>
+                    <label className="block min-w-0">
+                      <span className="block text-xs font-medium text-gray-600 mb-1">Thuế GTGT (%)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={selectedProduct.thueGTGT ?? 0}
+                        onChange={(e) => {
+                          const nextTaxPercent = clampImportPercent(e.target.value);
+                          const nextLine = calculateImportLineAmounts(selectedProduct.giaNhap ?? selectedProduct.import_price, selectedProduct.soLuongNhap, selectedProduct.chietKhau, nextTaxPercent);
+                          setSelectedProduct({
+                            ...selectedProduct,
+                            thueGTGT: nextTaxPercent,
+                            tienSauChietKhau: nextLine.afterDiscount,
+                            thueGTGTAmount: nextLine.taxAmount,
+                            thanhTien: nextLine.lineTotal
+                          });
+                        }}
+                        className="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        disabled={saving}
+                      />
+                    </label>
                   </div>
-                  <div className="mb-4">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Thành tiền</label>
-                    <div className="w-full px-3 py-2 bg-green-50 border border-green-200 rounded-md font-semibold text-green-700 text-sm">
-                      {selectedProduct.thanhTien.toLocaleString('vi-VN')}đ
+
+                  {selectedProductLinePreview && (
+                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                      <div><div className="text-xs text-gray-500">Tiền hàng</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.grossAmount)}</div></div>
+                      <div><div className="text-xs text-gray-500">Sau chiết khấu</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.afterDiscount)}</div></div>
+                      <div><div className="text-xs text-gray-500">Thuế GTGT</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.taxAmount)}</div></div>
+                      <div><div className="text-xs text-gray-500">Thành tiền</div><div className="text-lg font-bold text-green-600">{formatVND(selectedProductLinePreview.lineTotal)}</div></div>
                     </div>
-                  </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      onClick={() => handleAddProduct({ keepSearching: false })}
-                      disabled={saving || Boolean(selectedProductQuantityError)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm"
-                    >
+                    <button onClick={() => handleAddProduct({ keepSearching: false })} disabled={saving || Boolean(selectedProductQuantityError)} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm">
                       <Plus className="w-4 h-4" />
                       {editingProductIndex !== null ? 'Cập nhật dòng sản phẩm' : 'Thêm vào danh sách'}
                     </button>
-                    <button
-                      onClick={() => handleAddProduct({ keepSearching: true })}
-                      disabled={saving || Boolean(selectedProductQuantityError)}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm"
-                      title="Thêm sản phẩm và giữ nguyên ô tìm kiếm để nhập tiếp"
-                    >
+                    <button onClick={() => handleAddProduct({ keepSearching: true })} disabled={saving || Boolean(selectedProductQuantityError)} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm" title="Thêm sản phẩm và giữ nguyên ô tìm kiếm để nhập tiếp">
                       <Search className="w-4 h-4" />
                       Thêm và tìm tiếp
                     </button>
@@ -2279,136 +2413,42 @@ const Nhaphang = ({ store }) => {
             {products.length > 0 && (
               <div className="min-w-0 overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm">
                 <div className="p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Danh sách sản phẩm
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={handleStartAddProduct}
-                    disabled={saving || !selectedSupplier}
-                    className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Thêm sản phẩm
-                  </button>
+                  <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><FileText className="w-4 h-4" />Danh sách sản phẩm</h2>
+                  <button type="button" onClick={handleStartAddProduct} disabled={saving || !selectedSupplier} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"><Plus className="w-4 h-4" />Thêm sản phẩm</button>
                 </div>
                 <div className="w-full max-w-full overflow-x-auto">
-                  <table className="w-full min-w-[900px]">
+                  <table className="w-full min-w-[1040px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-12">STT</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">Ảnh</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tên sản phẩm</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">Số lượng</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Đơn giá</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">Chiết khấu</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Thành tiền</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider min-w-[240px]">Tên sản phẩm</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Số lượng</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-36">Giá nhập</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Chiết khấu</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Thuế GTGT</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-36">Thành tiền</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">Xóa</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {products.map((product, index) => {
-                        const displayPrice = Math.max(0, getFirstFiniteNumber(product.giaNhap, product.import_price, product.retail_price));
-                        const rowQuantityError = getNegativeStockInputError(product.soLuongNhap);
-                        const rowQuantityValue = parseStockInputNumber(product.soLuongNhap, 0);
-                        const rowQuantityNegative = Number.isFinite(rowQuantityValue) && rowQuantityValue < 0;
+                        const lineAmounts = calculateImportLineAmounts(product.giaNhap ?? product.import_price, product.soLuongNhap, product.chietKhau, product.thueGTGT ?? product.tax_percent ?? product.vat_percent);
+                        const rowQuantityError = getImportQuantityInputError(product.soLuongNhap);
                         return (
-                          <tr key={`${getImportRowKey(product) || 'row'}-${index}`} className={`hover:bg-gray-50 ${editingProductIndex === index ? 'bg-blue-50' : rowQuantityNegative ? 'bg-red-50/70' : ''}`}>
-                            <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
-                            <td className="px-4 py-3">
-                              <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center overflow-hidden border border-gray-200">
-                                {product.hinhAnh ? (
-                                  <img src={product.hinhAnh} alt={product.tenSP} className="w-full h-full object-cover" />
-                                ) : (
-                                  <Package className="w-6 h-6 text-gray-400" />
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                              <div>{product.tenSP}</div>
-                              <button
-                                type="button"
-                                onClick={() => handleEditProductRow(index)}
-                                disabled={saving}
-                                className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-blue-300"
-                              >
-                                Đổi sản phẩm
-                              </button>
-                            </td>
-                            <td className="px-4 py-3">
-                              <NegativeStockInput
-                                id={`import-row-negative-stock-${index}`}
-                                label=""
-                                value={product.soLuongNhap}
-                                error={rowQuantityError}
-                                helper={rowQuantityError ? '' : rowQuantityNegative ? 'Âm kho' : ''}
-                                compact
-                                showBadge={rowQuantityNegative || Boolean(rowQuantityError)}
-                                disabled={saving}
-                                onLimitError={showStockLimitToast}
-                                onChange={(value) => handleUpdateProduct(index, 'soLuongNhap', value)}
-                              />
-                            </td>
-                            <td className="px-4 py-3">
-                              <input
-                                type="number"
-                                min="0"
-                                value={displayPrice}
-                                onChange={(e) => handleUpdateProduct(index, 'giaNhap', e.target.value)}
-                                className="w-full px-2 py-1 text-right text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                disabled={saving}
-                              />
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center justify-end gap-1">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  step="0.1"
-                                  value={product.chietKhau}
-                                  onChange={(e) => handleUpdateProduct(index, 'chietKhau', e.target.value)}
-                                  className="w-18 px-2 py-1 text-right text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                  disabled={saving}
-                                />
-                                <span className="text-xs text-gray-500">%</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-sm font-semibold text-green-600 text-right">
-                              {product.thanhTien.toLocaleString('vi-VN')}đ
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveProduct(index)}
-                                disabled={saving}
-                                className="text-gray-400 hover:text-red-600 disabled:text-gray-300 transition-colors p-1"
-                                title="Xóa dòng"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </td>
+                          <tr key={`${getImportRowKey(product) || 'row'}-${index}`} className={`hover:bg-gray-50 ${editingProductIndex === index ? 'bg-blue-50' : rowQuantityError ? 'bg-red-50/50' : ''}`}>
+                            <td className="px-4 py-3 text-sm text-gray-600 align-top">{index + 1}</td>
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900 align-top"><div className="min-w-0"><div className="truncate" title={product.tenSP}>{product.tenSP}</div><div className="mt-1 text-xs text-gray-500 truncate" title={product.maSP || ''}>Mã: {product.maSP || 'N/A'}</div><button type="button" onClick={() => handleEditProductRow(index)} disabled={saving} className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-blue-300">Đổi sản phẩm</button></div></td>
+                            <td className="px-4 py-3 align-top"><input type="number" min="0.0001" step="1" value={product.soLuongNhap ?? ''} onChange={(e) => handleUpdateProduct(index, 'soLuongNhap', e.target.value)} className={`min-h-10 w-full rounded-md border px-2 py-2 text-right text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${rowQuantityError ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300'}`} disabled={saving} />{rowQuantityError && <div className="mt-1 text-[11px] font-medium text-red-600">{rowQuantityError}</div>}</td>
+                            <td className="px-4 py-3 align-top"><input type="number" min="0" step="1000" value={lineAmounts.price} onChange={(e) => handleUpdateProduct(index, 'giaNhap', e.target.value)} className="min-h-10 w-full rounded-md border border-gray-300 px-2 py-2 text-right text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" disabled={saving} /></td>
+                            <td className="px-4 py-3 align-top"><div className="flex items-center gap-1"><input type="number" min="0" max="100" step="0.1" value={lineAmounts.discountPercent} onChange={(e) => handleUpdateProduct(index, 'chietKhau', e.target.value)} className="min-h-10 w-full rounded-md border border-gray-300 px-2 py-2 text-right text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" disabled={saving} /><span className="text-xs text-gray-500">%</span></div></td>
+                            <td className="px-4 py-3 align-top"><div className="flex items-center gap-1"><input type="number" min="0" max="100" step="0.1" value={lineAmounts.taxPercent} onChange={(e) => handleUpdateProduct(index, 'thueGTGT', e.target.value)} className="min-h-10 w-full rounded-md border border-gray-300 px-2 py-2 text-right text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" disabled={saving} /><span className="text-xs text-gray-500">%</span></div></td>
+                            <td className="px-4 py-3 text-sm font-semibold text-green-600 text-right align-top"><div>{formatVND(lineAmounts.lineTotal)}</div><div className="mt-1 text-[11px] font-normal text-gray-500">Thuế: {formatVND(lineAmounts.taxAmount)}</div></td>
+                            <td className="px-4 py-3 text-center align-top"><button type="button" onClick={() => handleRemoveProduct(index)} disabled={saving} className="text-gray-400 hover:text-red-600 disabled:text-gray-300 transition-colors p-1" title="Xóa dòng"><X className="w-4 h-4" /></button></td>
                           </tr>
                         );
                       })}
                     </tbody>
-                    <tfoot className="bg-gray-50 border-t border-gray-200">
-                      <tr>
-                        <td colSpan="4" className="px-4 py-3 text-right text-sm text-gray-600">
-                          Tổng ({totalStats.quantity} sản phẩm)
-                        </td>
-                        <td colSpan="2" className="px-4 py-3 text-right text-sm text-gray-600">
-                          Chiết khấu: <span className="font-medium">{totalStats.discountValue.toLocaleString('vi-VN')}đ</span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="text-lg font-bold text-green-600">
-                            {totalAmount.toLocaleString('vi-VN')}đ
-                          </div>
-                        </td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
+                    <tfoot className="bg-gray-50 border-t border-gray-200"><tr><td colSpan="3" className="px-4 py-3 text-right text-sm text-gray-600">Tổng ({totalStats.quantity.toLocaleString('vi-VN')} sản phẩm)</td><td colSpan="3" className="px-4 py-3 text-right text-sm text-gray-600"><div>Chiết khấu: <span className="font-medium">{formatVND(totalStats.discountValue)}</span></div><div>Thuế GTGT: <span className="font-medium">{formatVND(totalStats.taxValue)}</span></div></td><td className="px-4 py-3 text-right"><div className="text-lg font-bold text-green-600">{formatVND(totalAmount)}</div></td><td></td></tr></tfoot>
                   </table>
                 </div>
               </div>
@@ -2488,28 +2528,13 @@ const Nhaphang = ({ store }) => {
                 </h2>
               </div>
               <div className="p-4 space-y-4">
-                <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                  <span className="text-sm text-gray-600">Sản phẩm</span>
-                  <span className="text-sm font-semibold text-gray-900">{products.length}</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                  <span className="text-sm text-gray-600">Tổng số lượng</span>
-                  <span className="text-sm font-semibold text-gray-900">{totalStats.quantity}</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                  <span className="text-sm text-gray-600">Tổng chiết khấu</span>
-                  <span className="text-sm font-semibold text-red-600">
-                    -{totalStats.discountValue.toLocaleString('vi-VN')}đ
-                  </span>
-                </div>
-                <div className="pt-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-base font-semibold text-gray-900">Tổng thanh toán</span>
-                  </div>
-                  <div className="text-2xl font-bold text-green-600 mt-1">
-                    {totalAmount.toLocaleString('vi-VN')}đ
-                  </div>
-                </div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Sản phẩm</span><span className="text-sm font-semibold text-gray-900">{products.length}</span></div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Tổng số lượng</span><span className="text-sm font-semibold text-gray-900">{totalStats.quantity.toLocaleString('vi-VN')}</span></div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Tiền hàng</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.subtotal)}</span></div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Tổng chiết khấu</span><span className="text-sm font-semibold text-red-600">-{formatVND(totalStats.discountValue)}</span></div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Tiền sau chiết khấu</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.taxableValue)}</span></div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Thuế GTGT</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.taxValue)}</span></div>
+                <div className="pt-2"><div className="flex items-center justify-between"><span className="text-base font-semibold text-gray-900">Tổng thanh toán</span></div><div className="text-2xl font-bold text-green-600 mt-1 break-words">{formatVND(totalAmount)}</div></div>
 
                 {/* Payment Status */}
                 <div className="mt-4 pt-4 border-t border-gray-200">
@@ -2537,11 +2562,11 @@ const Nhaphang = ({ store }) => {
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div className="bg-gray-50 rounded-md p-2">
                       <div className="text-gray-500">Đã trả</div>
-                      <div className="font-semibold text-gray-900">{paymentSummary.paid_amount.toLocaleString('vi-VN')}đ</div>
+                      <div className="font-semibold text-gray-900">{formatVND(paymentSummary.paid_amount)}</div>
                     </div>
                     <div className="bg-gray-50 rounded-md p-2">
                       <div className="text-gray-500">Còn phải trả</div>
-                      <div className="font-semibold text-gray-900">{paymentSummary.remaining_amount.toLocaleString('vi-VN')}đ</div>
+                      <div className="font-semibold text-gray-900">{formatVND(paymentSummary.remaining_amount)}</div>
                     </div>
                   </div>
                 </div>
@@ -2563,7 +2588,7 @@ const Nhaphang = ({ store }) => {
                   {(!isEditingOrder || currentOrder?.trangThai === 'cho_nhap') && (
                     <button
                       onClick={handleCreateAndReceive}
-                      disabled={saving || products.length === 0 || !selectedSupplier || hasNegativeStockQuantityError}
+                      disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError}
                       className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2.5 px-4 rounded-md flex items-center justify-center gap-2 text-sm shadow-sm"
                     >
                       <Package className="w-4 h-4" />
@@ -2572,7 +2597,7 @@ const Nhaphang = ({ store }) => {
                   )}
                   <button
                     onClick={handleCreateOnly}
-                    disabled={saving || products.length === 0 || !selectedSupplier || hasNegativeStockQuantityError}
+                    disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError}
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 px-4 rounded-md flex items-center justify-center gap-2 text-sm shadow-sm"
                   >
                     <Save className="w-4 h-4" />
@@ -2656,7 +2681,7 @@ const Nhaphang = ({ store }) => {
                         {(order.tongSoLuong || 0).toLocaleString('vi-VN')}
                       </td>
                       <td className="px-4 py-3 text-sm font-semibold text-green-600 text-right whitespace-nowrap">
-                        {order.tongTien.toLocaleString('vi-VN')}đ
+                        {formatVND(order.tongTien)}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 text-center">
                         <div className="max-w-[180px] truncate" title={order.nhaCungCap?.tenNCC || order.nhaCungCap?.name || '—'}>
@@ -2669,7 +2694,7 @@ const Nhaphang = ({ store }) => {
                         </span>
                         {Number(order.remaining_amount || 0) > 0 && (
                           <div className="mt-1 text-[11px] text-gray-500">
-                            Còn {Number(order.remaining_amount || 0).toLocaleString('vi-VN')}đ
+                            Còn {formatVND(order.remaining_amount)}
                           </div>
                         )}
                       </td>

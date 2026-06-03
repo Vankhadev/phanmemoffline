@@ -40,6 +40,7 @@ const productCategoriesRoutes = require('./routes/productCategories');
 const featuresRoutes = require('./routes/features');
 const updatesRoutes = require('./routes/updates');
 const excelImportsRoutes = require('./routes/excelImports');
+const inventoryRoutes = require('./routes/inventory');
 const settingsRoutes = require('./routes/settings');
 const printTemplatesRoutes = require('./routes/printTemplates');
 
@@ -240,6 +241,7 @@ app.use('/api/customer-types', requireAuth, requireAnyPermission(['customers.rea
 app.use('/api/product-categories', requireAuth, requireAnyPermission(['products.read', 'products.manage']), productCategoriesRoutes);
 app.use('/api/features', featuresRoutes);
 app.use('/api/updates', updatesRoutes);
+app.use('/api/inventory', requireAuth, requireAnyPermission(['products.read', 'products.manage']), inventoryRoutes);
 app.use('/api/settings', requireAuth, requireAnyPermission(['settings.read', 'settings.manage']), settingsRoutes);
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);
 app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
