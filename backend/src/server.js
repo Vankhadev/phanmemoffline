@@ -13,7 +13,16 @@ const { loadEnv, getLoadedEnvFiles } = require('./utils/loadEnv');
 loadEnv({ logErrors: true });
 
 // --- Load DB & helpers ---
-const { upsertDailyStats, today, now, DB_PATH, isCancelledInvoiceStatus, isCompletedInvoiceStatus } = require('./db/database');
+const {
+  upsertDailyStats,
+  today,
+  now,
+  DB_PATH,
+  isCancelledInvoiceStatus,
+  isCompletedInvoiceStatus,
+  deleteExpiredCancelledInvoices,
+  runScheduledDbBackup,
+} = require('./db/database');
 const { requireAuth, requireAnyPermission, requirePermission } = require('./middleware/auth');
 const { ensurePrintTemplatesSchema } = require('./db/printTemplatesSchema');
 const { testPrintTemplatesMySqlConnection, getPrintTemplatesMySqlStatus } = require('./db/printTemplatesMySql');
@@ -41,6 +50,7 @@ const featuresRoutes = require('./routes/features');
 const updatesRoutes = require('./routes/updates');
 const excelImportsRoutes = require('./routes/excelImports');
 const inventoryRoutes = require('./routes/inventory');
+const accountingRoutes = require('./routes/accounting');
 const settingsRoutes = require('./routes/settings');
 const printTemplatesRoutes = require('./routes/printTemplates');
 
@@ -241,7 +251,8 @@ app.use('/api/customer-types', requireAuth, requireAnyPermission(['customers.rea
 app.use('/api/product-categories', requireAuth, requireAnyPermission(['products.read', 'products.manage']), productCategoriesRoutes);
 app.use('/api/features', featuresRoutes);
 app.use('/api/updates', updatesRoutes);
-app.use('/api/inventory', requireAuth, requireAnyPermission(['products.read', 'products.manage']), inventoryRoutes);
+app.use('/api/inventory', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'inventory_reports.read']), inventoryRoutes);
+app.use('/api/accounting', requireAuth, requireAnyPermission(['accounting.read', 'accounting.manage', 'tax_reports.read', 'tax_reports.manage', 'revenue_reports.read', 'profit_reports.read', 'debts.read', 'einvoices.read', 'bank_accounts.read', 'activity_logs.read']), accountingRoutes);
 app.use('/api/settings', requireAuth, requireAnyPermission(['settings.read', 'settings.manage']), settingsRoutes);
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);
 app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
@@ -307,30 +318,44 @@ cron.schedule('*/5 * * * *', () => {
 });
 
 
-// ============================================================
-//  CRON: mỗi ngày lúc 02:00 - xóa đơn hàng đã hủy cũ hơn 5 ngày
-// ============================================================
-cron.schedule('0 2 * * *', () => {
-  console.log('[KHA CRON CLEANUP] Xóa đơn hàng cũ -', new Date().toISOString());
-  const { getAll, remove } = require('./db/database');
-  const invoices = getAll('invoices');
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - 5); // 5 ngày trước
-
-  let deletedCount = 0;
-  invoices.forEach(inv => {
-    if (isCancelledInvoiceStatus(inv.status) && inv.created_at) {
-      const invDate = new Date(inv.created_at);
-      if (invDate < cutoffDate) {
-        remove('invoices', inv.id);
-        deletedCount++;
-      }
+function runDbBackup(source = 'scheduler') {
+  try {
+    const result = runScheduledDbBackup(source);
+    if (result.ok && !result.skipped) {
+      console.log(`[KHA DB BACKUP] ${source}: đã tạo backup ${result.backup?.file || ''}`.trim());
     }
-  });
-
-  if (deletedCount > 0) {
-    console.log(`[KHA CRON CLEANUP] Đã xóa ${deletedCount} đơn hủy cũ`);
+    return result;
+  } catch (error) {
+    console.error(`[KHA DB BACKUP] ${source}: lỗi backup DB - ${error.message}`);
+    return { ok: false, error: error.message };
   }
+}
+
+function runExpiredCancelledInvoiceCleanup(source = 'scheduler') {
+  try {
+    const result = deleteExpiredCancelledInvoices();
+    if (result.deletedCount > 0) {
+      console.log(`[KHA CRON CLEANUP] ${source}: đã xóa ${result.deletedCount} đơn hủy quá 24 giờ, ${result.deletedDetailCount} dòng chi tiết`);
+    }
+    return result;
+  } catch (error) {
+    console.error(`[KHA CRON CLEANUP] ${source}: lỗi dọn đơn hủy quá 24 giờ - ${error.message}`);
+    return { ok: false, error: error.message, deletedCount: 0, deletedDetailCount: 0 };
+  }
+}
+
+// ============================================================
+//  CRON: mỗi 30 phút - xóa an toàn đơn hàng đã hủy sau 24 giờ
+// ============================================================
+cron.schedule('*/30 * * * *', () => {
+  runExpiredCancelledInvoiceCleanup('scheduler-30m');
+});
+
+// ============================================================
+//  CRON: mỗi ngày 02:30 - backup DB JSON với retention gọn
+// ============================================================
+cron.schedule('30 2 * * *', () => {
+  runDbBackup('scheduler-daily');
 });
 
 // ============================================================
@@ -381,6 +406,8 @@ async function bootstrapSettingsSchema() {
 async function startServer() {
   await bootstrapSettingsSchema();
   await bootstrapPrintTemplateSchema();
+  runDbBackup('startup');
+  runExpiredCancelledInvoiceCleanup('startup');
   app.listen(PORT, HOST, () => {
     console.log(`
 ----------------------------------------------

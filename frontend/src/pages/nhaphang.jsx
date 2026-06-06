@@ -3,11 +3,13 @@ import { Search, Plus, X, Save, Package, Tag, FileText, LogOut, AlertCircle, Che
 import { SYNC_UPDATED_EVENT, apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
 import { buildCategoriesById, categoryFields, getProductDisplayName, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
+import QuantityStepper from '../components/QuantityStepper';
 
 const API = resolveApiUrl('');
 
 const SUPPLIER_CHANGE_CONFIRM_MESSAGE = 'Đổi nhà cung cấp sẽ xóa danh sách sản phẩm hiện tại. Bạn có muốn tiếp tục?';
 const PRODUCT_SEARCH_LIMIT = 80;
+const IMPORT_PICKER_QUANTITY_STEP = 1;
 
 const hasImportValue = (value) => value !== undefined && value !== null && String(value).trim() !== '';
 
@@ -641,6 +643,8 @@ const getImportQuantityInputError = (value) => {
   return '';
 };
 
+const isValidImportQuantityInput = (value) => !getImportQuantityInputError(value);
+
 const calculateImportLineAmounts = (giaNhap, soLuong, chietKhau = 0, thueGTGT = 0) => {
   const price = Math.max(0, getFirstFiniteNumber(giaNhap, 0));
   const quantity = Math.max(0, parseImportQuantity(soLuong, 0));
@@ -719,6 +723,7 @@ const Nhaphang = ({ store }) => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [editingProductIndex, setEditingProductIndex] = useState(null);
+  const [importPickerSelections, setImportPickerSelections] = useState([]);
   const [note, setNote] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('unpaid');
   const [tags, setTags] = useState([]);
@@ -1061,11 +1066,12 @@ const Nhaphang = ({ store }) => {
     const nextSupplierId = getSupplierRecordId(nextSupplier);
     if (selectedSupplier && nextSupplierId && isSameId(selectedSupplierId, nextSupplierId)) return true;
 
-    if (products.length > 0 && !window.confirm(SUPPLIER_CHANGE_CONFIRM_MESSAGE)) {
+    if ((products.length > 0 || importPickerSelections.length > 0) && !window.confirm(SUPPLIER_CHANGE_CONFIRM_MESSAGE)) {
       return false;
     }
 
     setProducts([]);
+    setImportPickerSelections([]);
     resetProductSearchState();
     setPaymentStatus('unpaid');
     return true;
@@ -1111,18 +1117,238 @@ const Nhaphang = ({ store }) => {
     };
   };
 
-  // Handle product selection from search
-  const handleSelectProduct = async (product) => {
+  const buildImportProductDraftFromSearch = async (product) => {
+    let fullProduct = product;
     try {
-      setLoading(true);
-      let fullProduct = product;
       if (product?.id) {
         const productRes = await fetch(`${API}/products/${product.id}`);
         fullProduct = productRes.ok ? await productRes.json() : product;
       }
+    } catch (_) {
+      fullProduct = product;
+    }
+    return buildSelectedProductDraft(mapProductForImport(product, fullProduct, allProducts));
+  };
 
-      const mappedProduct = mapProductForImport(product, fullProduct, allProducts);
-      setSelectedProduct(buildSelectedProductDraft(mappedProduct));
+  const buildNormalizedImportProductLine = (product, quantityOverride = null) => {
+    const quantitySource = quantityOverride ?? product.soLuongNhap;
+    const importPrice = Math.max(0, getFirstFiniteNumber(product.giaNhap, product.import_price, product.retail_price));
+    const quantityToAdd = normalizeImportQuantity(quantitySource, 0);
+    const nextDiscount = clampImportPercent(product.chietKhau);
+    const nextTaxPercent = clampImportPercent(product.thueGTGT ?? product.tax_percent ?? product.vat_percent);
+    const lineAmounts = calculateImportLineAmounts(importPrice, quantityToAdd, nextDiscount, nextTaxPercent);
+    return {
+      ...product,
+      row_key: getImportRowKey(product),
+      giaNhap: importPrice,
+      import_price: importPrice,
+      soLuongNhap: quantityToAdd,
+      chietKhau: nextDiscount,
+      thueGTGT: nextTaxPercent,
+      tienSauChietKhau: lineAmounts.afterDiscount,
+      thueGTGTAmount: lineAmounts.taxAmount,
+      thanhTien: lineAmounts.lineTotal
+    };
+  };
+
+  const mergeImportProductLines = (currentProducts, normalizedProduct, options = {}) => {
+    const rowKey = normalizedProduct.row_key || getImportRowKey(normalizedProduct);
+    const quantityToAdd = normalizeImportQuantity(normalizedProduct.soLuongNhap, 0);
+    const skipIndex = Number.isInteger(options.skipIndex) ? options.skipIndex : null;
+    const duplicateIndex = currentProducts.findIndex((product, index) => getImportRowKey(product) === rowKey && (skipIndex === null || index !== skipIndex));
+
+    if (duplicateIndex >= 0) {
+      return currentProducts.map((product, index) => {
+        if (index !== duplicateIndex) return product;
+        const nextQuantity = normalizeImportQuantity(product.soLuongNhap, 0) + quantityToAdd;
+        const nextPrice = Math.max(0, getFirstFiniteNumber(product.giaNhap, product.import_price, normalizedProduct.giaNhap));
+        const mergedDiscount = clampImportPercent(product.chietKhau);
+        const mergedTaxPercent = clampImportPercent(product.thueGTGT ?? product.tax_percent ?? product.vat_percent);
+        const mergedLine = calculateImportLineAmounts(nextPrice, nextQuantity, mergedDiscount, mergedTaxPercent);
+        return {
+          ...product,
+          soLuongNhap: nextQuantity,
+          giaNhap: nextPrice,
+          import_price: nextPrice,
+          chietKhau: mergedDiscount,
+          thueGTGT: mergedTaxPercent,
+          tienSauChietKhau: mergedLine.afterDiscount,
+          thueGTGTAmount: mergedLine.taxAmount,
+          thanhTien: mergedLine.lineTotal
+        };
+      });
+    }
+
+    if (skipIndex !== null && currentProducts[skipIndex]) {
+      return currentProducts.map((product, index) => index === skipIndex ? normalizedProduct : product);
+    }
+
+    return [...currentProducts, normalizedProduct];
+  };
+
+  const applyImportProductQuantityDelta = (currentProducts, selection, quantityDelta) => {
+    if (!Number.isFinite(quantityDelta) || quantityDelta === 0) return currentProducts;
+    if (quantityDelta > 0) {
+      return mergeImportProductLines(currentProducts, buildNormalizedImportProductLine(selection.product, quantityDelta));
+    }
+
+    const rowKey = getImportRowKey(selection.product);
+    const rowIndex = currentProducts.findIndex(product => getImportRowKey(product) === rowKey);
+    if (rowIndex < 0) return currentProducts;
+    const subtractQuantity = Math.abs(quantityDelta);
+    return currentProducts.map((product, index) => {
+      if (index !== rowIndex) return product;
+      const nextQuantity = Math.max(0.0001, normalizeImportQuantity(product.soLuongNhap, 0) - subtractQuantity);
+      const nextPrice = Math.max(0, getFirstFiniteNumber(product.giaNhap, product.import_price, selection.product.giaNhap));
+      const nextDiscount = clampImportPercent(product.chietKhau);
+      const nextTaxPercent = clampImportPercent(product.thueGTGT ?? product.tax_percent ?? product.vat_percent);
+      const nextLine = calculateImportLineAmounts(nextPrice, nextQuantity, nextDiscount, nextTaxPercent);
+      return {
+        ...product,
+        soLuongNhap: nextQuantity,
+        giaNhap: nextPrice,
+        import_price: nextPrice,
+        chietKhau: nextDiscount,
+        thueGTGT: nextTaxPercent,
+        tienSauChietKhau: nextLine.afterDiscount,
+        thueGTGTAmount: nextLine.taxAmount,
+        thanhTien: nextLine.lineTotal,
+      };
+    });
+  };
+
+  const getImportPickerKey = (product = {}) => getImportRowKey(product) || `product:${product.id || product.sku || product.maSP || Math.random()}`;
+
+  const handleAddImportPickerSelection = async (product) => {
+    if (!selectedSupplier) {
+      showSupplierRequiredHint();
+      return;
+    }
+    try {
+      setLoading(true);
+      const draft = await buildImportProductDraftFromSearch(product);
+      const key = getImportPickerKey(draft);
+      setImportPickerSelections(prev => {
+        if (prev.some(selection => selection.key === key)) return prev;
+        return [...prev, { key, product: draft, quantity: 1, appliedQuantity: 0, name: draft.tenSP, sku: draft.maSP }];
+      });
+      setError(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateImportPickerQuantity = (key, value) => {
+    const text = String(value ?? '').replace(',', '.');
+    if (text !== '' && !/^\d*(?:\.\d*)?$/.test(text)) return;
+    setImportPickerSelections(prev => prev.map(selection => (
+      selection.key === key ? { ...selection, quantity: text } : selection
+    )));
+  };
+
+  const stepImportPickerQuantity = (key, direction) => {
+    setImportPickerSelections(prev => prev.map(selection => {
+      if (selection.key !== key) return selection;
+      const current = parseImportQuantity(selection.quantity, 1);
+      return { ...selection, quantity: normalizeImportQuantity(current + direction * IMPORT_PICKER_QUANTITY_STEP, 1) };
+    }));
+  };
+
+  const removeImportPickerSelection = (key) => {
+    setImportPickerSelections(prev => prev.filter(selection => selection.key !== key));
+  };
+
+  const importPickerHasQuantityError = importPickerSelections.some(selection => !isValidImportQuantityInput(selection.quantity));
+  const importPickerTotalQuantity = importPickerSelections.reduce((sum, selection) => (
+    sum + (isValidImportQuantityInput(selection.quantity) ? parseImportQuantity(selection.quantity, 0) : 0)
+  ), 0);
+
+  const finishImportPickerSelection = () => {
+    if (importPickerSelections.length === 0 || importPickerHasQuantityError) return;
+    const normalizedSelections = importPickerSelections.map(selection => ({
+      ...selection,
+      quantity: normalizeImportQuantity(selection.quantity, 1),
+      appliedQuantity: Number(selection.appliedQuantity) || 0,
+    }));
+    const changes = normalizedSelections
+      .map(selection => ({
+        selection,
+        quantityDelta: normalizeImportQuantity(selection.quantity, 1) - (Number(selection.appliedQuantity) || 0),
+      }))
+      .filter(item => item.quantityDelta !== 0);
+
+    if (changes.length > 0) {
+      setPaymentStatus('unpaid');
+      setProducts(prev => changes.reduce((nextProducts, change) => applyImportProductQuantityDelta(nextProducts, change.selection, change.quantityDelta), prev));
+    }
+    setImportPickerSelections(normalizedSelections.map(selection => ({ ...selection, appliedQuantity: selection.quantity })));
+    setShowSearchResults(false);
+    setSelectedProduct(null);
+    setEditingProductIndex(null);
+    setError(null);
+    setSuccess(changes.length > 0 ? `Đã cập nhật ${changes.length} dòng sản phẩm vào phiếu nhập.` : 'Danh sách chọn tạm đã được giữ nguyên, không cộng trùng sản phẩm.');
+    setTimeout(() => setSuccess(null), 3000);
+  };
+
+  const renderImportPickerSelections = () => (
+    <div className="rounded-xl border border-blue-200 bg-white shadow-sm">
+      <div className="border-b border-blue-100 bg-blue-50 px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-sm font-bold text-blue-800">Sản phẩm đã chọn</div>
+            <div className="text-[11px] text-blue-600">Tổng {importPickerSelections.length.toLocaleString('vi-VN')} dòng · {importPickerTotalQuantity.toLocaleString('vi-VN')} sản phẩm</div>
+          </div>
+          <button
+            type="button"
+            onClick={finishImportPickerSelection}
+            disabled={importPickerSelections.length === 0 || importPickerHasQuantityError || saving}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            Chọn xong
+          </button>
+        </div>
+        {importPickerHasQuantityError && <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700">Số lượng phải là số dương, không nhập chữ hoặc số âm.</div>}
+      </div>
+      <div className="max-h-72 overflow-y-auto p-2 space-y-2 scroll-smooth">
+        {importPickerSelections.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-xs text-gray-400">Bấm nút + màu xanh ngay cạnh tên sản phẩm để đưa vào danh sách tạm.</div>
+        ) : importPickerSelections.map(selection => {
+          const price = Math.max(0, getFirstFiniteNumber(selection.product.giaNhap, selection.product.import_price, selection.product.retail_price));
+          const quantity = isValidImportQuantityInput(selection.quantity) ? parseImportQuantity(selection.quantity, 0) : 0;
+          return (
+            <div key={selection.key} className="rounded-lg border border-gray-200 bg-white p-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-semibold text-gray-800" title={selection.name}>{selection.name}</div>
+                  <div className="mt-0.5 text-[10px] text-gray-400">Mã: {selection.sku || 'N/A'} · {formatVND(price)}</div>
+                </div>
+                <button type="button" onClick={() => removeImportPickerSelection(selection.key)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Bỏ khỏi danh sách chọn tạm"><Trash2 className="w-3.5 h-3.5" /></button>
+              </div>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <QuantityStepper
+                  value={selection.quantity}
+                  min={1}
+                  step={IMPORT_PICKER_QUANTITY_STEP}
+                  onChange={(value) => updateImportPickerQuantity(selection.key, value)}
+                  onDecrease={() => stepImportPickerQuantity(selection.key, -1)}
+                  onIncrease={() => stepImportPickerQuantity(selection.key, 1)}
+                  inputClassName={!isValidImportQuantityInput(selection.quantity) ? 'bg-red-50 text-red-700' : ''}
+                />
+                <div className="text-right text-xs font-bold text-green-700">{formatVND(quantity * price)}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // Handle product selection from search
+  const handleSelectProduct = async (product) => {
+    try {
+      setLoading(true);
+      const draft = await buildImportProductDraftFromSearch(product);
+      setSelectedProduct(draft);
       setShowSearchResults(false);
       setError(null);
     } catch (err) {
@@ -1599,6 +1825,7 @@ const Nhaphang = ({ store }) => {
       setCurrentOrder(savedOrder);
       setIsEditingOrder(true);
       setPaymentStatus(savedOrder.payment_status || 'unpaid');
+      setImportPickerSelections([]);
       setTimeout(() => {
         if (status === 'received' || result.stock_delta?.length > 0 || result.stock_mode) {
           window.dispatchEvent(new Event('kha-order-created'));
@@ -1650,6 +1877,7 @@ const Nhaphang = ({ store }) => {
     setProducts([]);
     setSelectedProduct(null);
     setEditingProductIndex(null);
+    setImportPickerSelections([]);
     setSelectedSupplier(null);
     setSearchQuery('');
     setFilteredProducts([]);
@@ -1676,6 +1904,7 @@ const Nhaphang = ({ store }) => {
       );
       setCurrentOrder(fullOrder);
       setIsEditingOrder(edit);
+      setImportPickerSelections([]);
       setProducts((fullOrder.chiTiet || []).map((item) => {
         const row = {
           ...item,
@@ -2210,47 +2439,65 @@ const Nhaphang = ({ store }) => {
                     {showSearchResults && (
                       <div
                         ref={searchResultsRef}
-                        className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"
+                        className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-2"
                       >
-                        {loading ? (
-                          <div className="p-3 text-center text-sm text-gray-500">Đang tìm kiếm...</div>
-                        ) : filteredProducts.length > 0 ? (
-                          filteredProducts.map(product => {
-                            // Map price from API field
-                            const price = product.retail_price || product.import_price || product.giaNhap || 0;
-                            const isVariant = isImportVariantProduct(product, product.parent || null);
-                            const name = isVariant ? getProductDisplayName(product, product.parent || null) : (product.name || product.tenSP || '');
-                            const sku = product.sku || product.maSP || '';
-                            const unit = product.unit || product.donVi || 'cái';
-                            const categoryName = product.default_category?.name || product.category || '';
-                            const parentName = !isVariant ? (product.parent_name || product.parent?.name || '') : '';
-                            const availableQuantity = getProductAvailableQuantity(product);
-                            return (
-                              <div
-                                key={`${product.is_variant ? 'v' : 'p'}-${product.id}`}
-                                onClick={() => handleSelectProduct(product)}
-                                className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium text-gray-900 text-sm">{name}{parentName ? <span className="text-xs text-gray-400"> · {parentName}</span> : null}</span>
-                                  <span className="text-xs text-gray-500">({sku})</span>
-                                </div>
-                                <div className="flex items-center justify-between mt-1 gap-3">
-                                  <span className="text-xs text-gray-500">
-                                    Đơn vị: {unit}{categoryName ? ` · ${categoryName}` : ''} · Số lượng: {availableQuantity.toLocaleString('vi-VN')}
-                                  </span>
-                                  <span className="text-sm font-medium text-blue-600 whitespace-nowrap">
-                                    {formatVND(price)}
-                                  </span>
-                                </div>
+                        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+                          <div className="max-h-72 overflow-y-auto scroll-smooth rounded-lg border border-gray-100 bg-white">
+                            {loading ? (
+                              <div className="p-3 text-center text-sm text-gray-500">Đang tìm kiếm...</div>
+                            ) : filteredProducts.length > 0 ? (
+                              filteredProducts.map(product => {
+                                // Map price from API field
+                                const price = product.retail_price || product.import_price || product.giaNhap || 0;
+                                const isVariant = isImportVariantProduct(product, product.parent || null);
+                                const name = isVariant ? getProductDisplayName(product, product.parent || null) : (product.name || product.tenSP || '');
+                                const sku = product.sku || product.maSP || '';
+                                const unit = product.unit || product.donVi || 'cái';
+                                const categoryName = product.default_category?.name || product.category || '';
+                                const parentName = !isVariant ? (product.parent_name || product.parent?.name || '') : '';
+                                const availableQuantity = getProductAvailableQuantity(product);
+                                return (
+                                  <div
+                                    key={`${product.is_variant ? 'v' : 'p'}-${product.id}`}
+                                    onClick={() => editingProductIndex !== null ? handleSelectProduct(product) : handleAddImportPickerSelection(product)}
+                                    className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span className="font-medium text-gray-900 text-sm min-w-0 flex items-center gap-2">
+                                        <span className="truncate">{name}{parentName ? <span className="text-xs text-gray-400"> · {parentName}</span> : null}</span>
+                                        <button
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            editingProductIndex !== null ? handleSelectProduct(product) : handleAddImportPickerSelection(product);
+                                          }}
+                                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700"
+                                          title="Thêm sản phẩm vào danh sách tạm"
+                                        >
+                                          <Plus className="w-3.5 h-3.5" />
+                                        </button>
+                                      </span>
+                                      <span className="text-xs text-gray-500 shrink-0">({sku})</span>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-1 gap-3">
+                                      <span className="text-xs text-gray-500">
+                                        Đơn vị: {unit}{categoryName ? ` · ${categoryName}` : ''} · Số lượng: {availableQuantity.toLocaleString('vi-VN')}
+                                      </span>
+                                      <span className="text-sm font-medium text-blue-600 whitespace-nowrap">
+                                        {formatVND(price)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="p-3 text-sm text-gray-500 text-center">
+                                {searchQuery.trim() ? 'Không có sản phẩm phù hợp' : 'Chưa có sản phẩm trong hệ thống'}
                               </div>
-                            );
-                          })
-                        ) : (
-                          <div className="p-3 text-sm text-gray-500 text-center">
-                            {searchQuery.trim() ? 'Không có sản phẩm phù hợp' : 'Chưa có sản phẩm trong hệ thống'}
+                            )}
                           </div>
-                        )}
+                          {renderImportPickerSelections()}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2258,7 +2505,7 @@ const Nhaphang = ({ store }) => {
                     <p className="mt-2 text-xs text-amber-600">Chọn nhà cung cấp trước để thêm nhiều sản phẩm vào phiếu nhập.</p>
                   )}
                   {selectedSupplier && (
-                    <p className="mt-2 text-xs text-gray-500">Đã chọn nhà cung cấp: {selectedSupplier.tenNCC}. Có thể bấm Enter để thêm nhanh, hoặc Shift+Enter / Ctrl+Enter để thêm xong và tiếp tục tìm sản phẩm tiếp theo.</p>
+                    <p className="mt-2 text-xs text-gray-500">Đã chọn nhà cung cấp: {selectedSupplier.tenNCC}. Bấm nút + cạnh tên để chọn nhiều sản phẩm, sau đó bấm Chọn xong để thêm vào phiếu nhập.</p>
                   )}
                 </div>
               </div>

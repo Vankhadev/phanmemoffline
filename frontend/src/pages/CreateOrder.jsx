@@ -17,6 +17,7 @@ import {
   getStockDisplayMeta,
 } from '../utils/negativeStock';
 import useNegativeStockSettings from '../utils/useNegativeStockSettings';
+import QuantityStepper from '../components/QuantityStepper';
 
 const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
 const COMBO_REFRESH_STALE_MS = 30 * 1000;
@@ -43,6 +44,17 @@ function formatVND(n) {
 
 const QUANTITY_STEP = 0.1;
 const MIN_QUANTITY = 0.1;
+
+function getOrderPickerKey(item, kind = 'product') {
+  if (kind === 'combo') return `combo:${item?.id}`;
+  return `product:${item?.id}`;
+}
+
+function isValidQuantityInput(value) {
+  const text = String(value ?? '').trim();
+  if (!text || !/^\d+(?:[.,]\d*)?$/.test(text)) return false;
+  return parseDecimalQuantity(text, 0) > 0;
+}
 
 function parseDecimalQuantity(value, fallback = MIN_QUANTITY) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -167,6 +179,7 @@ export default function CreateOrder({ user, store }) {
   const [tag, setTag] = useState('');
   const [showVariantPicker, setShowVariantPicker] = useState(null);
   const [variantQty, setVariantQty] = useState({});
+  const [productPickerSelections, setProductPickerSelections] = useState([]);
   const [serverOnline, setServerOnline] = useState(true);
   const [pendingOrders, setPendingOrders] = useState(() => {
     try { return JSON.parse(localStorage.getItem('kha_pending_orders') || '[]'); }
@@ -686,74 +699,254 @@ export default function CreateOrder({ user, store }) {
   const remainingAmount = Math.max(0, grandTotal - paidAmount);
   const changeAmount = Math.max(0, paidAmount - grandTotal);
 
-  const addCombo = (combo) => {
-    if (!combo?.id) return;
+  const buildComboCartLine = (combo, quantity = 1) => {
     const unit_price = getComboPrice(combo);
+    const normalizedQuantity = normalizeDecimalQuantity(quantity, 1);
     const comboLineItems = getComboLineItems(combo).map(child => ({ ...child }));
-    setCart(prev => {
-      const existing = prev.find(c => c.type === 'combo' && Number(c.combo_id) === Number(combo.id) && c.unit_price === unit_price && !splitLine);
-      if (existing) {
-        const newQty = normalizeDecimalQuantity(existing.quantity + 1, 1);
-        return prev.map(c => c.id === existing.id
-          ? recalculateCartLine({ ...c, quantity: newQty })
-          : c);
-      }
+    return {
+      id: `combo_${combo.id}_${Date.now()}_${Math.random()}`,
+      type: 'combo',
+      item_type: 'combo',
+      combo_id: combo.id,
+      product_id: null,
+      variant_id: null,
+      product_name: combo.name || 'Combo',
+      product_sku: combo.sku || '',
+      name: combo.name || 'Combo',
+      sku: combo.sku || '',
+      quantity: normalizedQuantity,
+      unit_price,
+      discount_amount: 0,
+      discount_percent: 0,
+      line_total: normalizedQuantity * unit_price,
+      max_stock: null,
+      items: comboLineItems,
+      combo_items: comboLineItems,
+    };
+  };
+
+  const buildProductCartLine = (product, quantity = 1) => {
+    const unit_price = getPrice(product);
+    const normalizedQuantity = normalizeDecimalQuantity(quantity, 1);
+    const isVariant = Boolean(product.is_variant || product.parent_id || product._parentId || product.parent_name || product.parent?.name);
+    const parentId = product.parent_id || product._parentId || product.parent?.id || null;
+    const displayName = getProductDisplayName(product, product.parent || null);
+    return {
+      id: Date.now() + Math.random(),
+      product_id: product.id,
+      variant_id: isVariant ? product.id : null,
+      parent_id: isVariant ? parentId : null,
+      parent_name: isVariant ? (product.parent_name || product.parent?.name || '') : '',
+      variant_name: isVariant ? product.name : '',
+      product_name: displayName,
+      product_sku: product.sku,
+      name: displayName,
+      sku: product.sku,
+      quantity: normalizedQuantity,
+      unit_price,
+      discount_amount: 0,
+      discount_percent: 0,
+      line_total: normalizedQuantity * unit_price,
+      max_stock: product.stock,
+    };
+  };
+
+  const mergeCartLineQuantity = (currentCart, lineToMerge, quantityDelta) => {
+    if (!Number.isFinite(quantityDelta) || quantityDelta === 0) return currentCart;
+    const isCombo = isComboOrderItem(lineToMerge);
+    const existing = currentCart.find(line => (
+      isCombo
+        ? isComboOrderItem(line) && Number(line.combo_id) === Number(lineToMerge.combo_id) && line.unit_price === lineToMerge.unit_price
+        : !isComboOrderItem(line) && Number(line.product_id) === Number(lineToMerge.product_id) && line.unit_price === lineToMerge.unit_price
+    ));
+    if (!existing) {
+      if (quantityDelta <= 0) return currentCart;
+      return [...currentCart, recalculateCartLine({ ...lineToMerge, quantity: quantityDelta })];
+    }
+    return currentCart.map(line => {
+      if (line.id !== existing.id) return line;
+      const nextQuantity = Math.max(MIN_QUANTITY, normalizeDecimalQuantity(Number(line.quantity) + quantityDelta, MIN_QUANTITY));
+      return recalculateCartLine({ ...line, quantity: nextQuantity });
+    });
+  };
+
+  const addCombo = (combo, quantity = 1) => {
+    if (!combo?.id) return;
+    const line = buildComboCartLine(combo, quantity);
+    setCart(prev => mergeCartLineQuantity(prev, line, line.quantity));
+  };
+
+  const addProduct = (product, quantity = 1) => {
+    if (!product?.id) return;
+    const line = buildProductCartLine(product, quantity);
+    setCart(prev => mergeCartLineQuantity(prev, line, line.quantity));
+  };
+
+  const addOrderPickerSelection = (item, kind = 'product') => {
+    if (!item?.id) return;
+    const key = getOrderPickerKey(item, kind);
+    setProductPickerSelections(prev => {
+      if (prev.some(selection => selection.key === key)) return prev;
+      const line = kind === 'combo' ? buildComboCartLine(item, 1) : buildProductCartLine(item, 1);
       return [...prev, {
-        id: `combo_${combo.id}_${Date.now()}_${Math.random()}`,
-        type: 'combo',
-        item_type: 'combo',
-        combo_id: combo.id,
-        product_id: null,
-        variant_id: null,
-        product_name: combo.name || 'Combo',
-        product_sku: combo.sku || '',
-        name: combo.name || 'Combo',
-        sku: combo.sku || '',
+        key,
+        kind,
+        item,
+        line,
+        name: line.product_name,
+        sku: line.product_sku,
         quantity: 1,
-        unit_price,
-        discount_amount: 0,
-        discount_percent: 0,
-        line_total: unit_price,
-        max_stock: null,
-        items: comboLineItems,
-        combo_items: comboLineItems,
+        appliedQuantity: 0,
       }];
     });
   };
 
-  const addProduct = (product) => {
-    const unit_price = getPrice(product);
-    const isVariant = Boolean(product.is_variant || product.parent_id || product._parentId || product.parent_name || product.parent?.name);
-    const parentId = product.parent_id || product._parentId || product.parent?.id || null;
-    const displayName = getProductDisplayName(product);
-    setCart(prev => {
-      const existing = prev.find(c => c.product_id === product.id && c.unit_price === unit_price && !splitLine);
-      if (existing) {
-        const newQty = normalizeDecimalQuantity(existing.quantity + 1, 1);
-        return prev.map(c => c.product_id === product.id && c.unit_price === unit_price && !splitLine
-          ? recalculateCartLine({ ...c, quantity: newQty })
-          : c);
-      }
-      return [...prev, {
-        id: Date.now() + Math.random(),
-        product_id: product.id,
-        variant_id: isVariant ? product.id : null,
-        parent_id: isVariant ? parentId : null,
-        parent_name: isVariant ? (product.parent_name || product.parent?.name || '') : '',
-        variant_name: isVariant ? product.name : '',
-        product_name: displayName,
-        product_sku: product.sku,
-        name: displayName,
-        sku: product.sku,
-        quantity: 1,
-        unit_price,
-        discount_amount: 0,
-        discount_percent: 0,
-        line_total: unit_price,
-        max_stock: product.stock,
-      }];
-    });
+  const updateOrderPickerQuantity = (key, nextValue) => {
+    const text = String(nextValue ?? '').replace(',', '.');
+    if (text !== '' && !/^\d*(?:\.\d*)?$/.test(text)) return;
+    setProductPickerSelections(prev => prev.map(selection => (
+      selection.key === key ? { ...selection, quantity: text } : selection
+    )));
   };
+
+  const stepOrderPickerQuantity = (key, direction) => {
+    setProductPickerSelections(prev => prev.map(selection => {
+      if (selection.key !== key) return selection;
+      const current = parseDecimalQuantity(selection.quantity, 1);
+      return { ...selection, quantity: normalizeDecimalQuantity(current + direction * QUANTITY_STEP, 1) };
+    }));
+  };
+
+  const removeOrderPickerSelection = (key) => {
+    setProductPickerSelections(prev => prev.filter(selection => selection.key !== key));
+  };
+
+  const orderPickerHasQuantityError = productPickerSelections.some(selection => !isValidQuantityInput(selection.quantity));
+  const orderPickerTotalQuantity = productPickerSelections.reduce((sum, selection) => (
+    sum + (isValidQuantityInput(selection.quantity) ? parseDecimalQuantity(selection.quantity, 0) : 0)
+  ), 0);
+
+  const orderPickerPreviewCart = useMemo(() => {
+    let preview = cart;
+    productPickerSelections.forEach(selection => {
+      if (!isValidQuantityInput(selection.quantity)) return;
+      const desiredQuantity = normalizeDecimalQuantity(selection.quantity, 1);
+      const appliedQuantity = Number(selection.appliedQuantity) || 0;
+      preview = mergeCartLineQuantity(preview, selection.line, desiredQuantity - appliedQuantity);
+    });
+    return preview;
+  }, [cart, productPickerSelections]);
+
+  const orderPickerStockValidation = useMemo(() => buildSaleStockValidation(orderPickerPreviewCart, {
+    baselineLines: editingInvoiceId ? editBaselineCart : [],
+    getProductStockById,
+    getLineKey: getCartRowKey,
+    settings: negativeStockSettings,
+  }), [orderPickerPreviewCart, editBaselineCart, editingInvoiceId, negativeStockSettings, products]);
+
+  const finishOrderProductSelection = () => {
+    if (productPickerSelections.length === 0 || orderPickerHasQuantityError) return;
+    if (orderPickerStockValidation.hasInvalid) {
+      showStockLimitToast(orderPickerStockValidation.firstError?.message || negativeStockLimitMessage);
+      return;
+    }
+    setCart(orderPickerPreviewCart);
+    setProductPickerSelections(prev => prev.map(selection => ({
+      ...selection,
+      quantity: normalizeDecimalQuantity(selection.quantity, 1),
+      appliedQuantity: normalizeDecimalQuantity(selection.quantity, 1),
+    })));
+    setProductSearch('');
+    setShowProductPanel(false);
+  };
+
+  const renderOrderPickerSelections = (className = '') => (
+    <div className={`rounded-xl border border-blue-200 bg-white shadow-sm ${className}`.trim()}>
+      <div className="border-b border-blue-100 bg-blue-50 px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-sm font-bold text-blue-800">Sản phẩm đã chọn</div>
+            <div className="text-[11px] text-blue-600">
+              Tổng {productPickerSelections.length.toLocaleString('vi-VN')} dòng · {orderPickerTotalQuantity.toLocaleString('vi-VN')} sản phẩm
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={finishOrderProductSelection}
+            disabled={productPickerSelections.length === 0 || orderPickerHasQuantityError || orderPickerStockValidation.hasInvalid}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            Chọn xong
+          </button>
+        </div>
+        {orderPickerStockValidation.hasInvalid && (
+          <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700">
+            {orderPickerStockValidation.summaryMessage || negativeStockLimitMessage}
+          </div>
+        )}
+        {orderPickerHasQuantityError && (
+          <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700">
+            Số lượng phải là số dương, không nhập chữ hoặc số âm.
+          </div>
+        )}
+      </div>
+      <div className="max-h-72 overflow-y-auto p-2 space-y-2 scroll-smooth">
+        {productPickerSelections.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-xs text-gray-400">
+            Bấm nút + màu xanh ngay cạnh tên sản phẩm để đưa vào danh sách tạm.
+          </div>
+        ) : productPickerSelections.map(selection => {
+          const stockState = getSaleStockStateForLine(orderPickerStockValidation, selection.line);
+          const projectedStock = Number(stockState?.projectedStock);
+          const isProjectedNegative = Number.isFinite(projectedStock) && projectedStock < 0;
+          const isInvalid = Boolean(stockState?.invalid);
+          const isNearLimit = Boolean(stockState?.nearLimit);
+          return (
+            <div key={selection.key} className={`rounded-lg border p-2 ${isInvalid ? 'border-red-200 bg-red-50' : isNearLimit ? 'border-orange-200 bg-orange-50' : isProjectedNegative ? 'border-red-100 bg-red-50/60' : 'border-gray-200 bg-white'}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${selection.kind === 'combo' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                      {selection.kind === 'combo' ? 'Combo' : 'SP'}
+                    </span>
+                    <span className="truncate text-xs font-semibold text-gray-800" title={selection.name}>{selection.name}</span>
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-gray-400">SKU: {selection.sku || '—'} · {formatVND(selection.line.unit_price)}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeOrderPickerSelection(selection.key)}
+                  className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  title="Bỏ khỏi danh sách chọn tạm"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <QuantityStepper
+                  value={selection.quantity}
+                  min={MIN_QUANTITY}
+                  step={QUANTITY_STEP}
+                  onChange={(value) => updateOrderPickerQuantity(selection.key, value)}
+                  onDecrease={() => stepOrderPickerQuantity(selection.key, -1)}
+                  onIncrease={() => stepOrderPickerQuantity(selection.key, 1)}
+                  inputClassName={!isValidQuantityInput(selection.quantity) ? 'bg-red-50 text-red-700' : ''}
+                />
+                <div className="text-right text-xs font-bold text-blue-700">
+                  {formatVND((isValidQuantityInput(selection.quantity) ? parseDecimalQuantity(selection.quantity, 0) : 0) * selection.line.unit_price)}
+                </div>
+              </div>
+              {stockState && (
+                <div className={`mt-1 text-[11px] font-semibold ${isInvalid ? 'text-red-700' : isNearLimit ? 'text-orange-700' : isProjectedNegative ? 'text-red-600' : 'text-gray-500'}`}>
+                  Dự kiến {formatStockValue(stockState.projectedStock)}{isInvalid ? ` · ${stockState.message || negativeStockLimitMessage}` : isNearLimit ? ` · ${negativeStockNearLimitLabel || `gần ngưỡng ${negativeStockRuntimeLimitLabel}`}` : isProjectedNegative ? ' · xuất âm được phép theo cấu hình' : ''}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   const updateCartItem = (id, field, value) => {
     setCart(prev => prev.map(item => {
@@ -940,6 +1133,7 @@ export default function CreateOrder({ user, store }) {
 
       applyOrderStockRealtime(cart, editingInvoiceId ? editBaselineCart : []);
       setLastInvoice(inv);
+      setProductPickerSelections([]);
       setEditingInvoiceId(null);
       setEditBaselineCart([]);
       setCreating(false);
@@ -1061,6 +1255,7 @@ export default function CreateOrder({ user, store }) {
 
       applyOrderStockRealtime(cart, editBaselineCart);
       setLastInvoice(updatedInvoice);
+      setProductPickerSelections([]);
       setEditingInvoiceId(null);
       setEditBaselineCart([]);
       setCreating(false);
@@ -1092,6 +1287,7 @@ export default function CreateOrder({ user, store }) {
     setEditBaselineCart([]);
     setStockToast(null);
     setProductSearch('');
+    setProductPickerSelections([]);
     setShowProductPanel(false);
     setExpandedParents({});
     setExpandedComboRows({});
@@ -1375,21 +1571,30 @@ export default function CreateOrder({ user, store }) {
                   {resultLoading && <span className="text-blue-500">Đang tải dữ liệu...</span>}
                   {resultLoadError && <span className="text-red-500">Có dữ liệu chưa tải được</span>}
                 </div>
-                <div className="space-y-1 min-h-72 max-h-[62vh] overflow-auto rounded-lg border border-blue-100 bg-white/70 p-2 pr-1">
-                  {visibleFilteredCombos.map(combo => (
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="space-y-1 min-h-72 max-h-[62vh] overflow-auto scroll-smooth rounded-lg border border-blue-100 bg-white/70 p-2 pr-1">
+                    {visibleFilteredCombos.map(combo => (
                     <div
                       key={`combo-search-${combo.id}`}
-                      className="border rounded-lg p-3 cursor-pointer hover:border-purple-500 hover:shadow-sm bg-purple-50"
-                      onClick={() => {
-                        addCombo(combo);
-                        setProductSearch('');
-                      }}
+                      className="border rounded-lg p-3 hover:border-purple-500 hover:shadow-sm bg-purple-50"
+                      onClick={() => addOrderPickerSelection(combo, 'combo')}
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-600 text-white font-bold">Combo</span>
                             <div className="text-xs font-semibold text-purple-900 truncate">{combo.name}</div>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                addOrderPickerSelection(combo, 'combo');
+                              }}
+                              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700"
+                              title="Thêm combo vào danh sách tạm"
+                            >
+                              <Plus size={15} />
+                            </button>
                           </div>
                           <div className="text-[10px] text-purple-500 truncate mt-0.5">{getComboItemSummary(combo)}</div>
                         </div>
@@ -1411,11 +1616,8 @@ export default function CreateOrder({ user, store }) {
                     return (
                       <div
                         key={`search-${item._rowKey}`}
-                        className={`border rounded-lg p-3 cursor-pointer ${isVariant ? 'hover:border-blue-500' : 'hover:border-green-500'} hover:shadow-sm ${stockMeta.cardClass}`}
-                        onClick={() => {
-                          addProduct(item);
-                          setProductSearch('');
-                        }}
+                        className={`border rounded-lg p-3 ${isVariant ? 'hover:border-blue-500' : 'hover:border-green-500'} hover:shadow-sm ${stockMeta.cardClass}`}
+                        onClick={() => addOrderPickerSelection(item, 'product')}
                       >
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -1424,6 +1626,17 @@ export default function CreateOrder({ user, store }) {
                               <div className="text-xs font-medium truncate flex items-center gap-2">
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${isVariant ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{isVariant ? 'Variant' : 'Sản phẩm'}</span>
                                 <span className="truncate">{displayName}</span>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    addOrderPickerSelection(item, 'product');
+                                  }}
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700"
+                                  title="Thêm sản phẩm vào danh sách tạm"
+                                >
+                                  <Plus size={15} />
+                                </button>
                               </div>
                               {isVariant && parent?.name && <div className="text-[10px] text-blue-500 truncate">Thuộc: {parent.name}</div>}
                               <div className="text-[10px] text-gray-400 truncate">{categoryName} · {supplierName}</div>
@@ -1440,13 +1653,15 @@ export default function CreateOrder({ user, store }) {
                       </div>
                     );
                   })}
-                  {(() => {
-                    return selectableProductRows.length === 0 && visibleFilteredCombos.length === 0 && !resultLoading && (
-                      <div className="text-center text-gray-400 py-6 text-sm">
-                        {emptyProductResultMessage}
-                      </div>
-                    );
-                  })()}
+                    {(() => {
+                      return selectableProductRows.length === 0 && visibleFilteredCombos.length === 0 && !resultLoading && (
+                        <div className="text-center text-gray-400 py-6 text-sm">
+                          {emptyProductResultMessage}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  {renderOrderPickerSelections('lg:sticky lg:top-3 self-start')}
                 </div>
               </div>
             )}
@@ -1627,22 +1842,30 @@ export default function CreateOrder({ user, store }) {
                   {resultLoading && <span className="text-blue-500">Đang tải dữ liệu...</span>}
                   {resultLoadError && <span className="text-red-500">Có dữ liệu chưa tải được</span>}
                 </div>
-                <div className="space-y-1 min-h-80 max-h-[68vh] overflow-auto rounded-lg border border-blue-100 bg-white/70 p-2 pr-1">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="space-y-1 min-h-80 max-h-[68vh] overflow-auto scroll-smooth rounded-lg border border-blue-100 bg-white/70 p-2 pr-1">
                   {visibleFilteredCombos.map(combo => (
                     <div
                       key={`combo-panel-${combo.id}`}
-                      className="border rounded-lg p-3 cursor-pointer hover:border-purple-500 hover:shadow-sm bg-purple-50"
-                      onClick={() => {
-                        addCombo(combo);
-                        setShowProductPanel(false);
-                        setProductSearch('');
-                      }}
+                      className="border rounded-lg p-3 hover:border-purple-500 hover:shadow-sm bg-purple-50"
+                      onClick={() => addOrderPickerSelection(combo, 'combo')}
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-600 text-white font-bold">Combo</span>
                             <div className="text-xs font-semibold text-purple-900 truncate">{combo.name}</div>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                addOrderPickerSelection(combo, 'combo');
+                              }}
+                              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700"
+                              title="Thêm combo vào danh sách tạm"
+                            >
+                              <Plus size={15} />
+                            </button>
                           </div>
                           <div className="text-[10px] text-purple-500 truncate mt-0.5">{getComboItemSummary(combo)}</div>
                         </div>
@@ -1664,12 +1887,8 @@ export default function CreateOrder({ user, store }) {
                     return (
                       <div
                         key={`panel-${item._rowKey}`}
-                        className={`border rounded-lg p-3 cursor-pointer ${isVariant ? 'hover:border-blue-500' : 'hover:border-green-500'} hover:shadow-sm ${stockMeta.cardClass}`}
-                        onClick={() => {
-                          addProduct(item);
-                          setShowProductPanel(false);
-                          setProductSearch('');
-                        }}
+                        className={`border rounded-lg p-3 ${isVariant ? 'hover:border-blue-500' : 'hover:border-green-500'} hover:shadow-sm ${stockMeta.cardClass}`}
+                        onClick={() => addOrderPickerSelection(item, 'product')}
                       >
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -1678,6 +1897,17 @@ export default function CreateOrder({ user, store }) {
                               <div className="text-xs font-medium truncate flex items-center gap-2">
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${isVariant ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{isVariant ? 'Variant' : 'Sản phẩm'}</span>
                                 <span className="truncate">{displayName}</span>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    addOrderPickerSelection(item, 'product');
+                                  }}
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700"
+                                  title="Thêm sản phẩm vào danh sách tạm"
+                                >
+                                  <Plus size={15} />
+                                </button>
                               </div>
                               {isVariant && parent?.name && <div className="text-[10px] text-blue-500 truncate">Thuộc: {parent.name}</div>}
                               <div className="text-[10px] text-gray-400 truncate">{categoryName} · {supplierName}</div>
@@ -1694,13 +1924,15 @@ export default function CreateOrder({ user, store }) {
                       </div>
                     );
                   })}
-                  {(() => {
-                    return selectableProductRows.length === 0 && visibleFilteredCombos.length === 0 && !resultLoading && (
-                      <div className="text-center text-gray-400 py-6 text-sm">
-                        {emptyProductResultMessage}
-                      </div>
-                    );
-                  })()}
+                    {(() => {
+                      return selectableProductRows.length === 0 && visibleFilteredCombos.length === 0 && !resultLoading && (
+                        <div className="text-center text-gray-400 py-6 text-sm">
+                          {emptyProductResultMessage}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  {renderOrderPickerSelections('lg:sticky lg:top-3 self-start')}
                 </div>
               </div>
             )}

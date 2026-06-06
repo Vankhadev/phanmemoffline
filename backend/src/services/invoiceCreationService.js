@@ -1,5 +1,6 @@
 const {
   getOne,
+  getAll,
   insert,
   update,
   rebuildDailyStatsForDates,
@@ -9,6 +10,7 @@ const {
   getActiveAccountId,
   normalizeDateKey,
   isCompletedInvoiceStatus,
+  isCancelledInvoiceStatus,
   withAtomicDbWrite,
 } = require('../db/database');
 const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
@@ -18,6 +20,8 @@ const {
   applyProductStockDeltaLocked,
   logNegativeStockLimitViolation,
 } = require('../utils/negativeStock');
+const accountingService = require('./accountingService');
+const { logActivity } = require('./accountingLogService');
 
 function createHttpError(message, status = 400) {
   const err = new Error(message);
@@ -370,9 +374,15 @@ function syncInvoiceAccounting(invoice, options = {}) {
     options.previousCreatedAt,
     invoice.created_at,
   ].map(value => normalizeDateKey(value)).filter(Boolean)));
+  const details = getAll('invoice_details', detail => Number(detail.invoice_id) === Number(invoice.id));
 
   if (isCompletedInvoiceStatus(invoice.status)) {
     addCashBookIncome(invoice, { ...options, rethrowOnError: true });
+    accountingService.postInvoiceCompleted(invoice, details, {
+      ...options,
+      timestamp: options.timestamp || invoice.updated_at || invoice.created_at,
+      userId: options.userId || invoice.user_id || null,
+    });
   } else {
     voidCashBookIncome(invoice.id, {
       skipSave,
@@ -380,6 +390,13 @@ function syncInvoiceAccounting(invoice, options = {}) {
       reason: options.voidReason || 'invoice_not_completed',
       rethrowOnError: true,
     });
+    if (isCancelledInvoiceStatus(invoice.status)) {
+      accountingService.reverseInvoice(invoice, options.voidReason || 'invoice_cancelled', {
+        ...options,
+        timestamp: options.timestamp || invoice.cancelled_at || invoice.updated_at,
+        userId: options.userId || invoice.user_id || null,
+      });
+    }
   }
 
   if (affectedDates.length > 0) {
@@ -447,6 +464,11 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
       receiver_name: payload.receiver_name || '',
       delivery_date: payload.delivery_date || null,
       status,
+      stock_effect_status: 'deducted_on_create',
+      stock_effect_source: 'legacy_create_invoice_flow',
+      accounting_status: isCompletedInvoiceStatus(status) ? 'pending' : 'not_posted',
+      posted_at: null,
+      reversed_at: null,
       ...creatorMetadata,
       source: normalizeText(payload.source || creatorMetadata.order_source || '', 80),
       created_at: invoiceCreatedAt,
@@ -460,7 +482,12 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
     }
 
     const invoice = getOne('invoices', invoiceRow => Number(invoiceRow.id) === Number(invoice_id));
-    syncInvoiceAccounting(invoice, { skipSave: true, timestamp: invoiceCreatedAt });
+    syncInvoiceAccounting(invoice, { skipSave: true, timestamp: invoiceCreatedAt, userId: req?.user?.id || invoice?.user_id || null });
+    logActivity(req, 'invoice.create', {
+      type: 'invoice',
+      id: invoice_id,
+      code: invoice_code,
+    }, null, invoice, `Tạo đơn hàng ${invoice_code}`, { skipSave: true, accountId });
 
     return {
       ok: true,

@@ -5,6 +5,8 @@ const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, remove, now, withAtomicDbWrite } = require('../db/database');
 const { v4: uuidv4 } = require('uuid');
+const accountingService = require('../services/accountingService');
+const { logActivity, logDataDeletion } = require('../services/accountingLogService');
 
 function genImportCode() {
   const d = new Date();
@@ -476,6 +478,8 @@ function softDeleteImport(importLog, reason = 'deleted') {
   });
 
   const voidedPaymentEntry = voidImportPaymentCashBook(importLog);
+  const deletedImport = getOne('import_logs', row => Number(row.id) === Number(importLog.id));
+  const accountingReversal = accountingService.reverseImport(deletedImport || importLog, reason, { skipSave: true, timestamp: now(), details });
 
   return {
     ok: true,
@@ -483,6 +487,7 @@ function softDeleteImport(importLog, reason = 'deleted') {
     rollback_stock: rollbackResult.rolledBack,
     rollback_items: rollbackResult.items,
     payment_cash_book_voided: voidedPaymentEntry,
+    accounting_reversal: accountingReversal,
     stock_applied: importLog.stock_applied === true,
     stock_rolled_back: importLog.stock_applied === true,
   };
@@ -585,6 +590,14 @@ router.post('/', (req, res) => {
     }
 
     const savedImport = getOne('import_logs', i => i.id === import_id);
+    const accountingResult = normalizedStatus === 'received'
+      ? accountingService.postImportReceived(savedImport, savedDetails, { skipSave: true, timestamp: createdAt, userId: req.user?.id || savedImport.user_id || null })
+      : null;
+    logActivity(req, 'import.create', {
+      type: 'import',
+      id: import_id,
+      code: import_code,
+    }, null, { ...savedImport, details: savedDetails }, `Tạo phiếu nhập ${import_code}`, { skipSave: true, accountId: savedImport.account_id || req.accountId });
     return {
       ok: true,
       import_id,
@@ -596,6 +609,7 @@ router.post('/', (req, res) => {
       stock_applied: savedImport.stock_applied === true,
       stock_status: savedImport.stock_status,
       stock_items: stockResult.items,
+      accounting: accountingResult,
     };
     });
 
@@ -692,6 +706,14 @@ router.put('/:idOrCode', (req, res) => {
 
     const savedImport = getOne('import_logs', i => i.id === importLog.id);
     const finalDetails = getAll('import_details', d => d.import_id === importLog.id);
+    const accountingResult = normalizeImportStatus(savedImport.status) === 'received'
+      ? accountingService.postImportReceived(savedImport, finalDetails, { skipSave: true, timestamp: now(), userId: req.user?.id || savedImport.user_id || null })
+      : accountingService.reverseImport(savedImport, 'import_not_received', { skipSave: true, timestamp: now(), details: finalDetails, userId: req.user?.id || savedImport.user_id || null });
+    logActivity(req, 'import.update', {
+      type: 'import',
+      id: savedImport.id,
+      code: savedImport.import_code,
+    }, importLog, { ...savedImport, details: finalDetails }, `Cập nhật phiếu nhập ${savedImport.import_code || savedImport.id}`, { skipSave: true, accountId: savedImport.account_id || req.accountId });
     return {
       ok: true,
       action: 'updated',
@@ -708,6 +730,7 @@ router.put('/:idOrCode', (req, res) => {
       stock_mode: stockResult.mode,
       payment_cash_book_voided: voidedPaymentEntry,
       details: finalDetails,
+      accounting: accountingResult,
     };
     });
 
@@ -760,11 +783,20 @@ router.post('/:idOrCode/cancel', (req, res) => {
       updated_at: now(),
     });
 
+    const cancelledImport = getOne('import_logs', row => Number(row.id) === Number(importLog.id));
+    const accountingReversal = accountingService.reverseImport(cancelledImport || importLog, 'import_cancelled', { skipSave: true, timestamp: cancelledImport?.cancelled_at || now(), details, userId: req.user?.id || importLog.user_id || null });
+    logActivity(req, 'import.cancel', {
+      type: 'import',
+      id: importLog.id,
+      code: importLog.import_code,
+    }, importLog, cancelledImport, `Hủy phiếu nhập ${importLog.import_code || importLog.id}`, { skipSave: true, accountId: importLog.account_id || req.accountId });
+
     return {
       ok: true,
       rollback_stock: rollbackResult.rolledBack,
       rollback_items: rollbackResult.items,
       payment_cash_book_voided: voidedPaymentEntry,
+      accounting_reversal: accountingReversal,
       stock_applied: importLog.stock_applied === true,
       stock_rolled_back: importLog.stock_applied === true,
     };
@@ -804,6 +836,17 @@ router.patch('/:idOrCode/payment', (req, res) => {
     }
 
     const savedImport = getOne('import_logs', i => i.id === importLog.id);
+    const accountingPayment = accountingService.postImportPayment(savedImport, {
+      amount: payment.paid_amount,
+      payment_method: req.body?.payment_method || savedImport.payment_method || 'cash',
+      note: req.body?.note || `Thanh toán phiếu nhập ${importLog.import_code}`,
+      cash_book_id: cashBookEntry?.id || null,
+    }, { skipSave: true, timestamp: savedImport.paid_at || now(), userId: req.user?.id || savedImport.user_id || null });
+    logActivity(req, alreadyPaid ? 'import.payment.already_paid' : 'import.payment', {
+      type: 'import',
+      id: savedImport.id,
+      code: savedImport.import_code,
+    }, importLog, savedImport, `Thanh toán phiếu nhập ${savedImport.import_code || savedImport.id}`, { skipSave: true, accountId: savedImport.account_id || req.accountId });
     return {
       ok: true,
       action: alreadyPaid ? 'already_paid' : 'paid',
@@ -813,6 +856,7 @@ router.patch('/:idOrCode/payment', (req, res) => {
       paid_amount: savedImport.paid_amount,
       remaining_amount: savedImport.remaining_amount,
       cash_book_entry: cashBookEntry,
+      accounting_payment: accountingPayment,
       stock_applied: savedImport.stock_applied === true,
       stock_rolled_back: savedImport.stock_rolled_back === true,
       stock_status: savedImport.stock_status,
@@ -842,6 +886,9 @@ router.delete('/bulk', (req, res) => {
       if (seen.has(uniqueKey)) continue;
       seen.add(uniqueKey);
       const result = softDeleteImport(importLog, req.body?.reason || 'bulk deleted');
+      if (result.ok && importLog) {
+        logDataDeletion(req, { type: 'import', id: importLog.id, code: importLog.import_code }, importLog, { skipSave: true, accountId: importLog.account_id || req.accountId, content: `Xóa phiếu nhập ${importLog.import_code || importLog.id}` });
+      }
       results.push({ target, import_id: importLog?.id || null, import_code: importLog?.import_code || null, ...result });
     }
 
@@ -863,7 +910,11 @@ router.delete('/:idOrCode', (req, res) => {
     const result = withAtomicDbWrite(() => {
       const idOrCode = req.params.idOrCode;
       const importLog = findImport(idOrCode);
-      return softDeleteImport(importLog, req.body?.lyDo || req.body?.reason || 'deleted');
+      const result = softDeleteImport(importLog, req.body?.lyDo || req.body?.reason || 'deleted');
+      if (result.ok && importLog) {
+        logDataDeletion(req, { type: 'import', id: importLog.id, code: importLog.import_code }, importLog, { skipSave: true, accountId: importLog.account_id || req.accountId, content: `Xóa phiếu nhập ${importLog.import_code || importLog.id}` });
+      }
+      return result;
     });
     if (!result.ok) return res.status(result.status || 500).json({ error: result.error || 'Không thể xóa phiếu nhập' });
     res.json(result);

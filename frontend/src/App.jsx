@@ -17,6 +17,10 @@ import ProductReport from './pages/ProductReport';
 import CashBook from './pages/CashBook';
 import Payroll from './pages/Payroll';
 import InvoicePrint from './pages/InvoicePrint';
+import AccountingDashboard from './pages/AccountingDashboard';
+import TaxReport from './pages/TaxReport';
+import InventoryReport from './pages/InventoryReport';
+import AccountingLogs from './pages/AccountingLogs';
 import {
   BadgeDollarSign,
   BarChart3,
@@ -25,11 +29,14 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  FileClock,
   FileText,
   Home as HomeIcon,
   Menu,
   Package,
   PlusCircle,
+  ReceiptText,
+  Scale,
   Settings as SettingsIcon,
   ShieldCheck,
   ShoppingCart,
@@ -126,6 +133,10 @@ const ROUTE_PERMISSIONS = {
   '/khach-hang': ['customers.read'],
   '/thong-ke': ['stats.read'],
   '/so-quy': ['cashbook.read'],
+  '/ke-toan': ['accounting.read', 'revenue_reports.read'],
+  '/ke-toan/bao-cao-thue': ['tax_reports.read'],
+  '/ke-toan/bao-cao-ton-kho': ['inventory_reports.read'],
+  '/ke-toan/nhat-ky': ['activity_logs.read'],
   '/bang-luong-nhan-vien': ['payrolls.read'],
   '/bao-cao-theo-don-hang': ['invoices.read'],
   '/bao-cao-theo-san-pham': ['stats.read'],
@@ -256,6 +267,7 @@ function AppLayout({
   const [openMenus, setOpenMenus] = useState(() => ({
     don_hang: location.pathname.startsWith('/tao-don-hang') || location.pathname.startsWith('/danh-sach-don-hang'),
     danh_muc: location.pathname.startsWith('/san-pham') || location.pathname.startsWith('/kho-hang') || location.pathname.startsWith('/khach-hang') || location.pathname.startsWith('/nhap-hang') || location.pathname.startsWith('/nha-cung-cap'),
+    ke_toan: location.pathname.startsWith('/ke-toan'),
     quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat'),
   }));
   const [updateToast, setUpdateToast] = useState(null);
@@ -299,6 +311,7 @@ function AppLayout({
       const autoOpenMatchers = {
         don_hang: ['/tao-don-hang', '/danh-sach-don-hang'],
         danh_muc: ['/san-pham', '/kho-hang', '/khach-hang', '/nhap-hang', '/nha-cung-cap'],
+        ke_toan: ['/ke-toan'],
         quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/bang-luong-nhan-vien', '/cai-dat'],
       };
 
@@ -342,6 +355,17 @@ function AppLayout({
           { to: '/khach-hang', label: 'Khách hàng', icon: Users },
           { to: '/nhap-hang', label: 'Nhập hàng', icon: ShoppingCart },
           { to: '/nha-cung-cap', label: 'Đối Tác', icon: Truck },
+        ],
+      },
+      {
+        key: 'ke_toan',
+        label: 'Kế toán',
+        icon: Scale,
+        items: [
+          { to: '/ke-toan', label: 'Doanh thu/lợi nhuận', icon: BarChart3 },
+          { to: '/ke-toan/bao-cao-thue', label: 'Báo cáo thuế GTGT', icon: ReceiptText },
+          { to: '/ke-toan/bao-cao-ton-kho', label: 'Báo cáo tồn kho', icon: Warehouse },
+          { to: '/ke-toan/nhat-ky', label: 'Nhật ký hoạt động', icon: FileClock },
         ],
       },
       {
@@ -447,6 +471,10 @@ function AppLayout({
             <Route path="/khach-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/khach-hang"><Customers /></ProtectedRoute>} />
             <Route path="/thong-ke" element={<ProtectedRoute user={user} permissions={permissions} path="/thong-ke"><Stats /></ProtectedRoute>} />
             <Route path="/so-quy" element={<ProtectedRoute user={user} permissions={permissions} path="/so-quy"><CashBook /></ProtectedRoute>} />
+            <Route path="/ke-toan" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan"><AccountingDashboard user={user} /></ProtectedRoute>} />
+            <Route path="/ke-toan/bao-cao-thue" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-thue"><TaxReport /></ProtectedRoute>} />
+            <Route path="/ke-toan/bao-cao-ton-kho" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-ton-kho"><InventoryReport /></ProtectedRoute>} />
+            <Route path="/ke-toan/nhat-ky" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/nhat-ky"><AccountingLogs /></ProtectedRoute>} />
             <Route path="/bang-luong-nhan-vien" element={<ProtectedRoute user={user} permissions={permissions} path="/bang-luong-nhan-vien"><Payroll /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><CustomerOrderReport /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ProductReport /></ProtectedRoute>} />

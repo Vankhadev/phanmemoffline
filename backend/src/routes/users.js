@@ -15,6 +15,7 @@ const {
   getAccountById,
   getUserPermissions,
   getSyncVersions,
+  normalizeRoleValue,
 } = require('../db/database');
 const { hashPassword, verifyPassword, isPasswordHash } = require('../utils/password');
 const {
@@ -30,6 +31,9 @@ const {
 } = require('../middleware/auth');
 
 const ROLE_ADMIN = 'admin';
+const ROLE_ACCOUNTANT = 'accountant';
+const ROLE_CASHIER = 'cashier';
+const ROLE_EMPLOYEE = 'employee';
 const ROLE_USER = 'user';
 const ADMIN_DEFAULT_ROUTE = '/cai-dat';
 const AUTH_RATE_LIMIT_WINDOW_MS = Number(process.env.KHA_AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
@@ -63,8 +67,9 @@ function isActiveUser(user) {
 }
 
 function normalizeRole(role) {
-  const value = String(role || '').trim().toLowerCase();
-  return value === ROLE_ADMIN ? ROLE_ADMIN : ROLE_USER;
+  const value = normalizeRoleValue(role);
+  if ([ROLE_ADMIN, ROLE_ACCOUNTANT, ROLE_CASHIER, ROLE_EMPLOYEE, ROLE_USER].includes(value)) return value;
+  return ROLE_USER;
 }
 
 function isAdminRole(role) {
@@ -97,9 +102,11 @@ function getBootstrapInfo() {
 }
 
 function getRegisterMessage(role) {
-  return role === ROLE_ADMIN
-    ? 'Tài khoản đầu tiên đã được cấp quyền ADMIN'
-    : 'Đăng ký thành công với quyền USER';
+  if (role === ROLE_ADMIN) return 'Tài khoản đầu tiên đã được cấp quyền ADMIN';
+  if (role === ROLE_ACCOUNTANT) return 'Đăng ký thành công với quyền KẾ TOÁN';
+  if (role === ROLE_CASHIER) return 'Đăng ký thành công với quyền THU NGÂN';
+  if (role === ROLE_EMPLOYEE) return 'Đăng ký thành công với quyền NHÂN VIÊN';
+  return 'Đăng ký thành công với quyền USER';
 }
 
 function publicUser(user) {

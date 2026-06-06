@@ -52,6 +52,54 @@ function formatDate(d) {
   return new Date(d).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+const CANCELLED_ORDER_STATUS_VALUES = new Set(['cancelled', 'canceled', 'da_huy', 'da huy', 'đã hủy', 'dã hủy', 'huy', 'hủy']);
+const CANCELLED_ORDER_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+function normalizeStatusValue(value) {
+  return String(value || '').trim().toLowerCase().normalize('NFC').replace(/\s+/g, ' ');
+}
+
+function isCancelledOrderStatus(status) {
+  return CANCELLED_ORDER_STATUS_VALUES.has(normalizeStatusValue(status));
+}
+
+function getOrderStatusMeta(status) {
+  if (isCancelledOrderStatus(status)) return STATUS_LABELS.cancelled;
+  return STATUS_LABELS[status] || STATUS_LABELS.pending;
+}
+
+function parseOrderTimeMs(value) {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function getOrderCancelledAtMs(order = {}) {
+  return parseOrderTimeMs(order.cancelled_at || order.cancelledAt);
+}
+
+function isOrderVisibleInActiveList(order = {}, nowMs = Date.now()) {
+  if (!isCancelledOrderStatus(order.status)) return true;
+  const cancelledAtMs = getOrderCancelledAtMs(order);
+  if (cancelledAtMs == null) return true;
+  return cancelledAtMs + CANCELLED_ORDER_RETENTION_MS > nowMs;
+}
+
+function formatCancelAutoDeleteRemaining(order = {}, nowMs = Date.now()) {
+  if (!isCancelledOrderStatus(order.status)) return '';
+  const cancelledAtMs = getOrderCancelledAtMs(order);
+  if (cancelledAtMs == null) return 'Tự động xóa sau: đang chờ thời điểm hủy';
+  const remainingMs = cancelledAtMs + CANCELLED_ORDER_RETENTION_MS - nowMs;
+  if (remainingMs <= 0) return 'Đang chờ hệ thống tự động xóa';
+  const totalMinutes = Math.max(1, Math.ceil(remainingMs / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [];
+  if (hours > 0) parts.push(`${hours} giờ`);
+  if (minutes > 0) parts.push(`${minutes} phút`);
+  return `Tự động xóa sau: ${parts.join(' ') || 'dưới 1 phút'}`;
+}
+
 function normalizeSourceValue(value) {
   return String(value || '').trim().toLowerCase();
 }
@@ -99,7 +147,11 @@ function getOrderIdentityKey(order = {}) {
 
 function normalizeInvoiceListResponse(data) {
   const items = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
-  return items.filter(Boolean).map(item => ({ ...item, _isOffline: false }));
+  const nowMs = Date.now();
+  return items
+    .filter(Boolean)
+    .map(item => ({ ...item, _isOffline: false }))
+    .filter(item => isOrderVisibleInActiveList(item, nowMs));
 }
 
 function getOrderDedupeKey(order = {}) {
@@ -162,6 +214,7 @@ export default function OrderList() {
   const [expandedParents, setExpandedParents] = useState({});
   const [showHelp, setShowHelp] = useState(false);
   const [showExcelImport, setShowExcelImport] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const { settings: negativeStockSettings } = useNegativeStockSettings();
   const negativeStockLimitLabel = useMemo(() => getNegativeStockLimitLabel(negativeStockSettings), [negativeStockSettings]);
@@ -221,6 +274,11 @@ export default function OrderList() {
     return () => window.clearTimeout(timer);
   }, [stockToast]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   // Kiểm tra server + load dữ liệu
   useEffect(() => {
     const checkAndLoad = async () => {
@@ -279,7 +337,10 @@ export default function OrderList() {
   }, []);
 
   // Lọc danh sách
-  const displayOrders = useMemo(() => (allOrders.length > 0 ? allOrders : invoices), [allOrders, invoices]);
+  const displayOrders = useMemo(() => {
+    const sourceOrders = allOrders.length > 0 ? allOrders : invoices;
+    return sourceOrders.filter(inv => isOrderVisibleInActiveList(inv, nowMs));
+  }, [allOrders, invoices, nowMs]);
   const normalizedSearch = search.trim().toLowerCase();
   const filtered = useMemo(() => displayOrders.filter(inv => {
     const matchSearch =
@@ -289,6 +350,7 @@ export default function OrderList() {
       (inv.customer_name || '').toLowerCase().includes(normalizedSearch);
     const sourceKey = getOrderSourceKey(inv);
     const matchStatus = filterStatus === 'all' ||
+      (filterStatus === 'cancelled' && isCancelledOrderStatus(inv.status)) ||
       inv.status === filterStatus ||
       (filterStatus === 'offline' && inv._isOffline);
     const matchSource = filterSource === 'all' ||
@@ -341,7 +403,7 @@ export default function OrderList() {
     { key: 'pending', label: 'Chờ xác nhận', count: displayOrders.filter(inv => inv.status === 'pending').length },
     { key: 'processing', label: 'Đang xử lý', count: displayOrders.filter(inv => inv.status === 'processing').length },
     { key: 'completed', label: 'Hoàn thành', count: displayOrders.filter(inv => inv.status === 'completed').length },
-    { key: 'cancelled', label: 'Đã hủy', count: displayOrders.filter(inv => inv.status === 'cancelled').length },
+    { key: 'cancelled', label: 'Đã hủy', count: displayOrders.filter(inv => isCancelledOrderStatus(inv.status)).length },
     { key: 'offline', label: 'Offline', count: displayOrders.filter(inv => inv._isOffline).length },
   ];
 
@@ -400,9 +462,9 @@ export default function OrderList() {
       }
 
       const totalAffected = successCount + offlineOrders.length;
-      alert(`✅ Đã hủy ${totalAffected} đơn hàng!`);
+      alert(`✅ Đã hủy ${totalAffected} đơn hàng! Đơn đã hủy sẽ tự động xóa sau 24 giờ.`);
       setSelectedOrders([]);
-      // Refresh data - cancelled orders will disappear from list
+      // Refresh data - cancelled online orders remain visible for 24h before automatic cleanup.
       notifyOrderChanged({ reason: 'orders-cancelled' });
       await fetchInvoices();
       apiJson('/products/all/with-variants').catch(() => { });
@@ -820,7 +882,7 @@ export default function OrderList() {
         // Refresh product stock
         await fetchInvoices();
         apiJson('/products/all/with-variants').catch(() => { });
-        alert('✅ Đã hủy đơn hàng!');
+        alert('✅ Đã hủy đơn hàng! Đơn sẽ tự động xóa sau 24 giờ.');
       }
     } catch {
       alert('📡 Không thể kết nối server!');
@@ -1063,7 +1125,9 @@ export default function OrderList() {
                 <span className="text-xs text-gray-400">{filtered.length} đơn</span>
               </div>
               {filtered.map((inv, rowIndex) => {
-                const st = STATUS_LABELS[inv.status] || STATUS_LABELS.pending;
+                const st = getOrderStatusMeta(inv.status);
+                const isCancelled = isCancelledOrderStatus(inv.status);
+                const cancelRemainingText = formatCancelAutoDeleteRemaining(inv, nowMs);
                 const formatDelivery = (d) => {
                   if (!d) return 'Chưa chốt';
                   const [y, mo, day] = d.split('-');
@@ -1074,8 +1138,8 @@ export default function OrderList() {
                 const isSelected = selectedOrders.includes(orderKey);
                 const sourceBadge = getOrderSourceBadge(inv);
                 const creatorName = inv.user_name || inv.invoice_writer || inv.created_by_user_name || '';
-                const rowBg = inv.status === 'cancelled'
-                  ? 'opacity-70 bg-gray-50'
+                const rowBg = isCancelled
+                  ? 'opacity-70 bg-red-50/60'
                   : inv.status === 'pending'
                     ? 'bg-orange-50/70'
                     : inv._isOffline
@@ -1104,6 +1168,11 @@ export default function OrderList() {
                             </span>
                             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">{isUnpaid ? 'Chưa thanh toán' : formatPaymentMethod(inv.payment_method)}</span>
                           </div>
+                          {isCancelled && cancelRemainingText && (
+                            <div className="mt-1 inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">
+                              {cancelRemainingText}
+                            </div>
+                          )}
                           {creatorName && <div className="mt-1 text-xs text-gray-400">Người tạo: {creatorName}</div>}
                         </div>
                       </div>
@@ -1155,14 +1224,16 @@ export default function OrderList() {
                       <button onClick={() => openEdit(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100" title="Sửa">
                         <Edit2 size={14} /> Sửa
                       </button>
-                      {(inv._isOffline || inv.status === 'pending' || inv.status === 'processing') && (
+                      {!isCancelled && (inv._isOffline || inv.status === 'pending' || inv.status === 'processing') && (
                         <button onClick={() => handleMarkAsPaid(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-2 text-xs font-medium text-green-700 hover:bg-green-100" title="Xác nhận thanh toán">
                           <CheckSquare size={14} /> Thanh toán
                         </button>
                       )}
-                      <button onClick={() => handleCancel(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-medium text-red-600 hover:bg-red-100" title="Hủy đơn">
-                        <Trash2 size={14} /> Hủy
-                      </button>
+                      {!isCancelled && (
+                        <button onClick={() => handleCancel(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-medium text-red-600 hover:bg-red-100" title="Hủy đơn">
+                          <Trash2 size={14} /> Hủy
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1209,7 +1280,9 @@ export default function OrderList() {
             </thead>
             <tbody>
               {filtered.map((inv, rowIndex) => {
-                const st = STATUS_LABELS[inv.status] || STATUS_LABELS.pending;
+                const st = getOrderStatusMeta(inv.status);
+                const isCancelled = isCancelledOrderStatus(inv.status);
+                const cancelRemainingText = formatCancelAutoDeleteRemaining(inv, nowMs);
                 const formatDelivery = (d) => {
                   if (!d) return '—';
                   const [y, mo, day] = d.split('-');
@@ -1223,8 +1296,8 @@ export default function OrderList() {
                   : <span className="order-payment-badge bg-emerald-50 text-emerald-700">{formatPaymentMethod(inv.payment_method)}</span>;
                 const sourceBadge = getOrderSourceBadge(inv);
                 const creatorName = inv.user_name || inv.invoice_writer || inv.created_by_user_name || '';
-                const rowBg = inv.status === 'cancelled'
-                  ? 'opacity-60 bg-gray-50'
+                const rowBg = isCancelled
+                  ? 'opacity-70 bg-red-50/60'
                   : inv.status === 'pending'
                     ? 'bg-orange-50/60'
                     : inv._isOffline
@@ -1252,6 +1325,11 @@ export default function OrderList() {
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                             {inv.note && (
                               <span className="rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 max-w-[220px] truncate">{inv.note}</span>
+                            )}
+                            {isCancelled && cancelRemainingText && (
+                              <span className="rounded-full bg-red-50 text-red-600 px-2 py-0.5 font-semibold max-w-[260px] truncate">
+                                {cancelRemainingText}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -1307,14 +1385,16 @@ export default function OrderList() {
                         <button onClick={() => openInvoicePrint(inv, { quick: true })} className="order-table-action-btn border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100" title="In nhanh hóa đơn A5">
                           <FileDown size={14} /> In nhanh
                         </button>
-                        {(inv._isOffline || inv.status === 'pending' || inv.status === 'processing') && (
+                        {!isCancelled && (inv._isOffline || inv.status === 'pending' || inv.status === 'processing') && (
                           <button onClick={() => handleMarkAsPaid(inv)} className="order-table-action-btn border border-green-200 bg-green-50 text-green-700 hover:bg-green-100" title="Xác nhận thanh toán">
                             <CheckSquare size={14} /> Thanh toán
                           </button>
                         )}
-                        <button onClick={() => handleCancel(inv)} className="order-table-action-btn border border-red-200 bg-red-50 text-red-600 hover:bg-red-100" title="Hủy đơn">
-                          <Trash2 size={14} /> Hủy
-                        </button>
+                        {!isCancelled && (
+                          <button onClick={() => handleCancel(inv)} className="order-table-action-btn border border-red-200 bg-red-50 text-red-600 hover:bg-red-100" title="Hủy đơn">
+                            <Trash2 size={14} /> Hủy
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1367,7 +1447,10 @@ export default function OrderList() {
               <div><span className="text-gray-500">Khách hàng:</span> <b>{showView.customer_name || 'Khách lẻ'}</b></div>
               <div><span className="text-gray-500">Ngày tạo:</span> <b>{formatDate(showView.created_at)}</b></div>
               <div><span className="text-gray-500">Thanh toán:</span> <b>{formatPaymentMethod(showView.payment_method)}</b></div>
-              <div><span className="text-gray-500">Trạng thái:</span> <b>{STATUS_LABELS[showView.status]?.text}</b></div>
+              <div><span className="text-gray-500">Trạng thái:</span> <b>{getOrderStatusMeta(showView.status)?.text}</b></div>
+              {isCancelledOrderStatus(showView.status) && (
+                <div><span className="text-gray-500">Tự động xóa:</span> <b className="text-red-600">{formatCancelAutoDeleteRemaining(showView, nowMs)}</b></div>
+              )}
               <div><span className="text-gray-500">Nguồn tạo:</span> <b>{getOrderSourceBadge(showView).text}</b></div>
               <div><span className="text-gray-500">Người tạo:</span> <b>{showView.user_name || showView.invoice_writer || '—'}</b></div>
               {showView.note && <div className="sm:col-span-2"><span className="text-gray-500">Ghi chú:</span> {showView.note}</div>}

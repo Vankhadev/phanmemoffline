@@ -43,7 +43,16 @@ const INITIAL_EMP_FORM = Object.freeze({
   email: '',
   phone: '',
   password: '',
+  role: 'employee',
 });
+
+const USER_ROLE_OPTIONS = Object.freeze([
+  { value: 'admin', label: 'Admin', description: 'Toàn quyền hệ thống và kế toán.' },
+  { value: 'accountant', label: 'Kế toán', description: 'Đầy đủ module kế toán, thuế, tồn kho, công nợ và nhật ký.' },
+  { value: 'cashier', label: 'Thu ngân', description: 'Chỉ xem doanh thu trong module kế toán.' },
+  { value: 'employee', label: 'Nhân viên', description: 'Không có quyền module kế toán.' },
+  { value: 'user', label: 'User cũ', description: 'Vai trò legacy được giữ tương thích.' },
+]);
 
 const INITIAL_TYPE_FORM = Object.freeze({
   name: '',
@@ -249,6 +258,25 @@ function normalizeStorePayload(payload = {}) {
   };
 }
 
+function normalizeRoleValue(value) {
+  const role = String(value || '').trim().toLowerCase();
+  return USER_ROLE_OPTIONS.some(option => option.value === role) ? role : 'user';
+}
+
+function getRoleOption(role) {
+  const normalized = normalizeRoleValue(role);
+  return USER_ROLE_OPTIONS.find(option => option.value === normalized) || USER_ROLE_OPTIONS[USER_ROLE_OPTIONS.length - 1];
+}
+
+function getRoleBadgeClass(role) {
+  const normalized = normalizeRoleValue(role);
+  if (normalized === 'admin') return 'bg-purple-100 text-purple-700 border-purple-200';
+  if (normalized === 'accountant') return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+  if (normalized === 'cashier') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+  if (normalized === 'employee') return 'bg-blue-100 text-blue-700 border-blue-200';
+  return 'bg-gray-100 text-gray-700 border-gray-200';
+}
+
 function normalizeEmployeeForm(payload = {}) {
   return {
     ...INITIAL_EMP_FORM,
@@ -256,6 +284,7 @@ function normalizeEmployeeForm(payload = {}) {
     email: String(payload?.email || ''),
     phone: String(payload?.phone || ''),
     password: '',
+    role: normalizeRoleValue(payload?.role || INITIAL_EMP_FORM.role),
   };
 }
 
@@ -287,6 +316,7 @@ function sanitizeEmployeePayload(form = {}) {
     name: normalized.name.trim(),
     email: normalized.email.trim().toLowerCase(),
     phone: normalized.phone.trim(),
+    role: normalizeRoleValue(normalized.role),
   };
   if (normalized.password) payload.password = normalized.password;
   return payload;
@@ -892,10 +922,14 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
       if (empEdit) {
         await usersApi.update(empEdit.id, payload);
       } else {
-        await apiJson('/users/register', {
+        const created = await apiJson('/users/register', {
           method: 'POST',
           body: payload,
         }, 'Không thể tạo nhân viên mới.');
+        const createdId = created?.user?.id || created?.id;
+        if (createdId && payload.role && payload.role !== 'user') {
+          await usersApi.update(createdId, { role: payload.role });
+        }
       }
 
       await loadEmployees();
@@ -1523,9 +1557,12 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                       <td className="px-3 py-3 text-gray-600">{employee.email || '—'}</td>
                       <td className="px-3 py-3">{employee.phone || '—'}</td>
                       <td className="px-3 py-3">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${employee.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {employee.role === 'admin' ? 'Admin' : 'Nhân viên'}
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getRoleBadgeClass(employee.role)}`}>
+                          {getRoleOption(employee.role).label}
                         </span>
+                        {normalizeRoleValue(employee.role) === 'user' && (
+                          <div className="mt-1 text-[11px] text-gray-400">Legacy tương thích</div>
+                        )}
                       </td>
                       <td className="px-3 py-3 text-gray-600">{formatDateTime(employee.last_login)}</td>
                       <td className="px-3 py-3">
@@ -2128,10 +2165,26 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                   value={empForm.password}
                   onChange={event => setEmpForm(current => ({ ...current, password: event.target.value }))}
                 />
+                <div>
+                  <label htmlFor="emp-role" className="text-sm font-medium text-gray-700">Vai trò</label>
+                  <select
+                    id="emp-role"
+                    className="input-field mt-1 w-full"
+                    value={empForm.role}
+                    onChange={event => setEmpForm(current => ({ ...current, role: event.target.value }))}
+                  >
+                    {USER_ROLE_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  <div className="mt-1 text-xs text-gray-500">
+                    {getRoleOption(empForm.role).description}
+                  </div>
+                </div>
               </div>
 
               <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                Server tự động gán quyền: tài khoản đầu tiên là ADMIN, các tài khoản sau là USER. Client không gửi role khi tạo mới.
+                Vai trò hỗ trợ: admin, kế toán, thu ngân, nhân viên và user cũ. Khi tạo mới, backend vẫn tự cấp role ban đầu theo cơ chế cũ; client sẽ cập nhật lại role đã chọn ngay sau khi tạo nếu có quyền quản lý người dùng.
               </div>
             </div>
 
@@ -2244,7 +2297,8 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
               <h3 className="mb-2 font-bold text-gray-800">Tab Nhân viên</h3>
               <ul className="list-disc space-y-1 pl-5">
                 <li>Thêm, sửa hoặc vô hiệu tài khoản nhân viên.</li>
-                <li>Tài khoản đầu tiên luôn là ADMIN; các tài khoản tạo sau sẽ là USER do server tự gán.</li>
+                <li>Có thể chọn role Admin, Kế toán, Thu ngân, Nhân viên hoặc User cũ để giữ tương thích dữ liệu legacy.</li>
+                <li>Admin toàn quyền; kế toán truy cập module kế toán; thu ngân chỉ xem doanh thu; nhân viên/user cũ không vào module kế toán.</li>
                 <li>Khi sửa nhân viên, có thể để trống mật khẩu nếu không muốn đổi.</li>
               </ul>
             </div>

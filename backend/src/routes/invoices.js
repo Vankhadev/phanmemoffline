@@ -5,7 +5,21 @@
  */
 const express = require('express');
 const router = express.Router();
-const { getAll, getOne, insert, update, remove, now, getNextSeq, normalizePaymentMethod, getActiveAccountId, withAtomicDbWrite } = require('../db/database');
+const {
+  getAll,
+  getOne,
+  insert,
+  update,
+  remove,
+  now,
+  getNextSeq,
+  normalizePaymentMethod,
+  getActiveAccountId,
+  withAtomicDbWrite,
+  isCancelledInvoiceStatus,
+  isInvoiceVisibleInActiveList,
+  deleteExpiredCancelledInvoices,
+} = require('../db/database');
 const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
 const {
   createInvoiceFromPayload,
@@ -22,6 +36,7 @@ const {
   buildNegativeStockErrorResponse,
 } = require('../utils/negativeStock');
 const { resolveInvoicePrintTemplate } = require('../services/printTemplateService');
+const { logActivity } = require('../services/accountingLogService');
 
 // ─────────────────────────────────────────────
 // Helper: tạo mã đơn tự động HD000001
@@ -74,6 +89,21 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
 
 function mergeDuplicateDetails(details) {
   return mergeInvoiceDetails(details);
+}
+
+function cleanupExpiredCancelledInvoicesForList() {
+  const result = deleteExpiredCancelledInvoices();
+  if (result.deletedCount > 0) {
+    console.log(`[KHA INVOICE CLEANUP] Đã xóa ${result.deletedCount} đơn hủy quá 24 giờ khi tải danh sách`);
+  }
+  return result;
+}
+
+function invoiceMatchesStatus(invoice = {}, status = '') {
+  const normalizedStatus = String(status || '').trim();
+  if (!normalizedStatus || normalizedStatus === 'all') return true;
+  if (normalizedStatus === 'cancelled') return isCancelledInvoiceStatus(invoice.status);
+  return invoice.status === normalizedStatus;
 }
 
 // ─────────────────────────────────────────────
@@ -409,12 +439,14 @@ router.get('/reports/customer-orders', (req, res) => {
     const customer = getOne('customers', c => Number(c.id) === customerId && c.active !== 0);
     if (!customer) return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
 
+    cleanupExpiredCancelledInvoicesForList();
     const allDetails = getAll('invoice_details');
     const invoices = getAll('invoices')
+      .filter(inv => isInvoiceVisibleInActiveList(inv))
       .filter(inv => Number(inv.customer_id) === customerId)
       .filter(inv => {
-        if (status && status !== 'all') return inv.status === status;
-        return inv.status !== 'cancelled';
+        if (status && status !== 'all') return invoiceMatchesStatus(inv, status);
+        return !isCancelledInvoiceStatus(inv.status);
       })
       .filter(inv => {
         const createdAt = parseInvoiceDate(inv.created_at);
@@ -453,6 +485,7 @@ router.get('/reports/customer-orders', (req, res) => {
           remaining_amount: Number(inv.remaining_amount) || 0,
           delivery_fee: Number(inv.delivery_fee) || 0,
           status: inv.status || '',
+          cancelled_at: inv.cancelled_at || null,
           payment_method: inv.payment_method || '',
           note: inv.note || '',
         };
@@ -496,19 +529,23 @@ router.get('/', async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 0, 0), 1000);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
     const includeMeta = String(req.query.meta || '').trim() === '1';
-    let rows = await Promise.resolve(getAll('invoices').map(inv => ({
-      ...inv,
-      customer_name: getOne('customers', c => Number(c.id) === Number(inv.customer_id))?.name || '',
-      user_name: getOne('users', u => Number(u.id) === Number(inv.user_id))?.name || '',
-      total: Number(inv.total) || 0,
-      subtotal: Number(inv.subtotal) || 0,
-      paid_amount: Number(inv.paid_amount) || 0,
-      remaining_amount: Number(inv.remaining_amount) || 0,
-      status: inv.status || 'pending',
-      payment_method: inv.payment_method || 'cash',
-      source: inv.source || inv.order_source || 'web',
-    })));
-    if (status) rows = rows.filter(r => r.status === status);
+    cleanupExpiredCancelledInvoicesForList();
+    let rows = await Promise.resolve(getAll('invoices')
+      .filter(inv => isInvoiceVisibleInActiveList(inv))
+      .map(inv => ({
+        ...inv,
+        customer_name: getOne('customers', c => Number(c.id) === Number(inv.customer_id))?.name || '',
+        user_name: getOne('users', u => Number(u.id) === Number(inv.user_id))?.name || '',
+        total: Number(inv.total) || 0,
+        subtotal: Number(inv.subtotal) || 0,
+        paid_amount: Number(inv.paid_amount) || 0,
+        remaining_amount: Number(inv.remaining_amount) || 0,
+        status: inv.status || 'pending',
+        cancelled_at: inv.cancelled_at || null,
+        payment_method: inv.payment_method || 'cash',
+        source: inv.source || inv.order_source || 'web',
+      })));
+    if (status && status !== 'all') rows = rows.filter(r => invoiceMatchesStatus(r, status));
     if (delivery === 'pending') rows = rows.filter(r => !r.delivery_date);
     if (delivery === 'done') rows = rows.filter(r => !!r.delivery_date);
     if (from) rows = rows.filter(r => r.created_at && r.created_at >= from);
@@ -543,8 +580,9 @@ router.get('/:idOrCode/print', async (req, res) => {
 // ─────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
+    cleanupExpiredCancelledInvoicesForList();
     const inv = await Promise.resolve(getOne('invoices', i => Number(i.id) === Number(req.params.id)));
-    if (!inv) return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+    if (!inv || !isInvoiceVisibleInActiveList(inv)) return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
     const details = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id))
       .map(detail => ({
         ...detail,
@@ -592,7 +630,7 @@ router.put('/:id', async (req, res) => {
         err.status = 404;
         throw err;
       }
-      if (inv.status === 'cancelled') {
+      if (isCancelledInvoiceStatus(inv.status)) {
         const err = new Error('Không thể sửa đơn đã hủy');
         err.status = 400;
         throw err;
@@ -656,7 +694,12 @@ router.put('/:id', async (req, res) => {
           ...detail,
           ...resolveInvoiceDetailDisplayFields(detail, id => getOne('products', product => Number(product.id) === Number(id))),
         }));
-      syncInvoiceAccounting(updatedInvoice, { skipSave: true, previousCreatedAt, timestamp: now() });
+      syncInvoiceAccounting(updatedInvoice, { skipSave: true, previousCreatedAt, timestamp: now(), userId: req.user?.id || updatedInvoice.user_id || null });
+      logActivity(req, 'invoice.update', {
+        type: 'invoice',
+        id: updatedInvoice.id,
+        code: updatedInvoice.invoice_code,
+      }, inv, updatedInvoice, `Cập nhật đơn hàng ${updatedInvoice.invoice_code || updatedInvoice.id}`, { skipSave: true, accountId: updatedInvoice.account_id || req.accountId });
       return { ok: true, invoice: updatedInvoice, details: updatedDetails };
     }));
 
@@ -682,25 +725,44 @@ router.delete('/:id', async (req, res) => {
       }
 
       const previousCreatedAt = inv.created_at;
+      const cancelledAt = inv.cancelled_at || now();
+
+      if (isCancelledInvoiceStatus(inv.status)) {
+        const cancelledInvoice = update('invoices', inv.id, {
+          status: 'cancelled',
+          cancelled_at: cancelledAt,
+        }, { skipSave: true }) || inv;
+        return {
+          ok: true,
+          invoice_id: inv.id,
+          status: cancelledInvoice.status || 'cancelled',
+          cancelled_at: cancelledInvoice.cancelled_at || cancelledAt,
+          already_cancelled: true,
+        };
+      }
+
       const details = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id));
       for (const d of details) {
         const stockProductId = getInvoiceDetailProductId(d);
         if (stockProductId) restoreInvoiceStock(stockProductId, +d.quantity || 0, { skipSave: true });
       }
-      for (const detail of details) {
-        remove('invoice_details', detail.id, { skipSave: true });
-      }
 
-      update('invoices', inv.id, { status: 'cancelled' }, { skipSave: true });
+      update('invoices', inv.id, { status: 'cancelled', cancelled_at: cancelledAt }, { skipSave: true });
       const cancelledInvoice = getOne('invoices', i => Number(i.id) === Number(inv.id));
       syncInvoiceAccounting(cancelledInvoice, {
         skipSave: true,
         previousCreatedAt,
-        timestamp: now(),
+        timestamp: cancelledAt,
         voidReason: 'invoice_cancelled',
+        userId: req.user?.id || cancelledInvoice.user_id || null,
       });
+      logActivity(req, 'invoice.cancel', {
+        type: 'invoice',
+        id: cancelledInvoice.id,
+        code: cancelledInvoice.invoice_code,
+      }, inv, cancelledInvoice, `Hủy đơn hàng ${cancelledInvoice.invoice_code || cancelledInvoice.id}`, { skipSave: true, accountId: cancelledInvoice.account_id || req.accountId });
 
-      return { ok: true, invoice_id: inv.id, status: 'cancelled' };
+      return { ok: true, invoice_id: inv.id, status: 'cancelled', cancelled_at: cancelledInvoice.cancelled_at || cancelledAt };
     }));
 
     res.json(result);
@@ -722,7 +784,7 @@ router.patch('/:id/confirm', async (req, res) => {
         err.status = 404;
         throw err;
       }
-      if (inv.status === 'cancelled') {
+      if (isCancelledInvoiceStatus(inv.status)) {
         const err = new Error('Không thể xác nhận đơn đã hủy');
         err.status = 400;
         throw err;
@@ -736,7 +798,12 @@ router.patch('/:id/confirm', async (req, res) => {
       const previousCreatedAt = inv.created_at;
       update('invoices', inv.id, { status: 'completed' }, { skipSave: true });
       const completedInvoice = getOne('invoices', i => Number(i.id) === Number(inv.id));
-      syncInvoiceAccounting(completedInvoice, { skipSave: true, previousCreatedAt, timestamp: now() });
+      syncInvoiceAccounting(completedInvoice, { skipSave: true, previousCreatedAt, timestamp: now(), userId: req.user?.id || completedInvoice.user_id || null });
+      logActivity(req, 'invoice.confirm', {
+        type: 'invoice',
+        id: completedInvoice.id,
+        code: completedInvoice.invoice_code,
+      }, inv, completedInvoice, `Xác nhận hoàn thành đơn hàng ${completedInvoice.invoice_code || completedInvoice.id}`, { skipSave: true, accountId: completedInvoice.account_id || req.accountId });
 
       return { ok: true, invoice_id: inv.id, status: 'completed', message: 'Đơn đã được xác nhận' };
     }));

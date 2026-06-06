@@ -231,7 +231,7 @@ function logResolvedApiBase(details) {
 function shouldUseDevApiProxyPath(pathname) {
   if (!pathname || !pathname.startsWith('/')) return false;
   if (pathname === '/api' || pathname.startsWith('/api/')) return false;
-  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|excel-imports|store|settings|stats|cash-book|cashbook|payrolls|partners|combos|sync|features|updates|print-templates|dashboard)(\/|\?|$)/i.test(pathname);
+  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|inventory|accounting|excel-imports|store|settings|stats|cash-book|cashbook|payrolls|partners|combos|sync|features|updates|print-templates|dashboard)(\/|\?|$)/i.test(pathname);
 }
 
 function normalizeDevApiProxyPath(input) {
@@ -638,6 +638,48 @@ async function apiJsonOptional(input, init = {}, options = {}) {
     return options.fallback ?? null;
   }
 }
+
+function buildQuerySuffix(params = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    if (typeof value === 'boolean') query.set(key, value ? '1' : '0');
+    else query.set(key, String(value));
+  });
+  return query.toString() ? `?${query.toString()}` : '';
+}
+
+export const accountingApi = {
+  taxReport(params = {}) { return apiJsonChecked(`/accounting/tax-report${buildQuerySuffix(params)}`, {}, 'Không thể tải báo cáo thuế GTGT.'); },
+  generateTaxReport(payload = {}) { return apiJsonChecked('/accounting/tax-reports/generate', { method: 'POST', body: payload }, 'Không thể tạo snapshot báo cáo thuế GTGT.'); },
+  taxReports(params = {}) { return apiJsonChecked(`/accounting/tax-reports${buildQuerySuffix(params)}`, {}, 'Không thể tải lịch sử báo cáo thuế.'); },
+  taxReportDetail(id) { return apiJsonChecked(`/accounting/tax-reports/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết báo cáo thuế.'); },
+  revenueProfit(params = {}) { return apiJsonChecked(`/accounting/summary/revenue-profit${buildQuerySuffix(params)}`, {}, 'Không thể tải tổng hợp doanh thu/lợi nhuận.'); },
+  cashFund(params = {}) { return apiJsonChecked(`/accounting/cash-fund${buildQuerySuffix(params)}`, {}, 'Không thể tải quỹ kế toán.'); },
+  customerDebts(params = {}) { return apiJsonChecked(`/accounting/debts/customers${buildQuerySuffix(params)}`, {}, 'Không thể tải công nợ khách hàng.'); },
+  supplierDebts(params = {}) { return apiJsonChecked(`/accounting/debts/suppliers${buildQuerySuffix(params)}`, {}, 'Không thể tải công nợ nhà cung cấp.'); },
+  einvoiceIn: {
+    list(params = {}) { return apiJsonChecked(`/accounting/einvoice-in${buildQuerySuffix(params)}`, {}, 'Không thể tải hóa đơn điện tử đầu vào.'); },
+    create(payload = {}) { return apiJsonChecked('/accounting/einvoice-in', { method: 'POST', body: payload }, 'Không thể tạo hóa đơn điện tử đầu vào.'); },
+    update(id, payload = {}) { return apiJsonChecked(`/accounting/einvoice-in/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật hóa đơn điện tử đầu vào.'); },
+    remove(id) { return apiJsonChecked(`/accounting/einvoice-in/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể xóa hóa đơn điện tử đầu vào.'); },
+  },
+  einvoiceOut: {
+    list(params = {}) { return apiJsonChecked(`/accounting/einvoice-out${buildQuerySuffix(params)}`, {}, 'Không thể tải hóa đơn điện tử đầu ra.'); },
+    create(payload = {}) { return apiJsonChecked('/accounting/einvoice-out', { method: 'POST', body: payload }, 'Không thể tạo hóa đơn điện tử đầu ra.'); },
+    update(id, payload = {}) { return apiJsonChecked(`/accounting/einvoice-out/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật hóa đơn điện tử đầu ra.'); },
+    remove(id) { return apiJsonChecked(`/accounting/einvoice-out/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể xóa hóa đơn điện tử đầu ra.'); },
+  },
+  bankAccounts(params = {}) { return apiJsonChecked(`/accounting/bank-accounts${buildQuerySuffix(params)}`, {}, 'Không thể tải tài khoản ngân hàng.'); },
+  createBankAccount(payload = {}) { return apiJsonChecked('/accounting/bank-accounts', { method: 'POST', body: payload }, 'Không thể tạo tài khoản ngân hàng.'); },
+  logs(params = {}) { return apiJsonChecked(`/accounting/logs${buildQuerySuffix(params)}`, {}, 'Không thể tải nhật ký hoạt động.'); },
+  logDetail(id) { return apiJsonChecked(`/accounting/logs/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết nhật ký hoạt động.'); },
+};
+
+export const inventoryApi = {
+  report(params = {}) { return apiJsonChecked(`/inventory/report${buildQuerySuffix(params)}`, {}, 'Không thể tải báo cáo tồn kho.'); },
+  negativeStock(params = {}) { return apiJsonChecked(`/inventory/negative-stock${buildQuerySuffix(params)}`, {}, 'Không thể tải danh sách âm kho.'); },
+};
 
 export const excelImportApi = {
   preview(payload = {}) { return apiJson('/excel-imports/preview', { method: 'POST', body: payload }, 'Không thể preview import Excel.'); },

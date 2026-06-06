@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.5.0 - 2026-06-06
+
+### Thay đổi chính
+
+- Bổ sung nền tảng module kế toán: schema JSON cho ledger, quỹ kế toán, tài khoản ngân hàng, công nợ, hóa đơn điện tử, snapshot báo cáo và nhật ký hoạt động.
+- Thêm API/page kế toán cho tổng quan doanh thu/lợi nhuận, báo cáo thuế GTGT, báo cáo tồn kho và nhật ký hoạt động; hỗ trợ phân quyền mới cho kế toán, thu ngân, nhân viên.
+- Kết nối luồng bán hàng/nhập hàng với kế toán: ghi bút toán, quỹ, công nợ, hóa đơn điện tử, đảo bút toán khi hủy và log thao tác nghiệp vụ.
+- Cải thiện kiểm soát tồn kho và thao tác chọn số lượng: báo cáo tồn kho có cảnh báo sắp hết/hết/âm kho, order/import picker dùng QuantityStepper và kiểm tra âm kho.
+
+### Vận hành và dữ liệu
+
+- Tạo backup database JSON trước migration kế toán và backup định kỳ/startup với retention cấu hình được; tự dọn đơn đã hủy quá 24 giờ khi tải danh sách hoặc theo lịch.
+- Mở rộng sync metadata/pull có giới hạn cho các bảng kế toán mới để tránh kéo payload quá lớn.
+
+### Phát hành
+
+- Đồng bộ version phát hành 1.5.0 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
+- Cập nhật tài liệu release, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.5.0.
+- GitHub Actions sẽ build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json từ artifact thực tế sau khi push tag.
+
+### Lưu ý quan trọng
+
+- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.5.0-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.5.0-ia32.exe`.
+- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
+- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới, đặc biệt vì bản này có migration schema kế toán và tự tạo backup trước migration.
+- Metadata production generated latest.yml/update-manifest.json chỉ sinh lại từ installer thực tế, không chỉnh tay trước publish.
+
 ## v1.4.9 - 2026-06-03
 
 ### Thay đổi chính

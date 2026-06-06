@@ -24,6 +24,16 @@ const PULL_TABLES = [
   'combos',
   'combo_items',
   'cash_book',
+  'accounting_transactions',
+  'cash_fund',
+  'bank_accounts',
+  'customer_debts',
+  'supplier_debts',
+  'einvoice_in',
+  'einvoice_out',
+  'tax_reports',
+  'revenue_reports',
+  'profit_reports',
   'return_logs',
   'return_details',
   'daily_stats',
@@ -488,7 +498,12 @@ router.post('/sync/pull', requireAuth, requirePermission('sync.read'), (req, res
   const data = {};
   for (const table of requestedTables) {
     if (table === 'invoices' || table === 'invoice_details') continue;
-    data[table] = cloneRows(getAll(table));
+    let rows = getAll(table);
+    if (['accounting_transactions', 'cash_fund', 'customer_debts', 'supplier_debts', 'einvoice_in', 'einvoice_out', 'tax_reports', 'revenue_reports', 'profit_reports'].includes(table)) {
+      const limit = Math.min(Math.max(Number(body.accountingLimit || body.accounting_limit || 200) || 200, 1), 1000);
+      rows = rows.slice().sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)).slice(0, limit);
+    }
+    data[table] = cloneRows(rows);
   }
 
   const wantsInvoices = !hasExplicitTables || requestedTables.includes('invoices') || requestedTables.includes('invoice_details');

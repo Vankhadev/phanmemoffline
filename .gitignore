@@ -27,6 +27,7 @@ release/update-manifest.json
 !release/update-manifest.example.json
 
 # Runtime databases and backups
+backend/data/backups/
 phanmienoffline.db.json
 phanmienoffline.db.json.backup*
 *.db

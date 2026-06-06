@@ -5,6 +5,7 @@ const express = require('express');
 const router = express.Router();
 const { getAll, today, normalizeDateKey, normalizeNumber, isCompletedInvoiceStatus } = require('../db/database');
 const { getNegativeStockPolicy } = require('../utils/negativeStock');
+const { calculateTaxReport } = require('../services/accountingService');
 
 function normalizeDailyStatsRow(row = {}) {
   return {
@@ -403,46 +404,17 @@ router.get('/product-report', (req, res) => {
 router.get('/tax-report', (req, res) => {
   try {
     const { from = '1970-01-01', to = '2099-12-31' } = req.query;
-    // Chuyển thành full timestamp để so sánh chính xác
-    const fromDate = from + 'T00:00:00.000Z';
-    const toDate = to + 'T23:59:59.999Z';
-
-    // Lấy tất cả hóa đơn trong khoảng thời gian (chỉ lấy đơn completed)
-    const invoices = getAll('invoices', inv =>
-      isCompletedInvoiceStatus(inv.status) &&
-      inv.created_at &&
-      inv.created_at >= fromDate &&
-      inv.created_at <= toDate
-    );
-
-    let total_taxable_revenue = 0;   // Doanh thu chịu thuế (subtotal)
-    let total_vat = 0;               // Thuế GTGT (vat_amount)
-    let total_profit = 0;            // Lợi nhuận (doanh thu bán - giá nhập)
-
-    // Duyệt từng hóa đơn để tính lợi nhuận từ chi tiết
-    for (const inv of invoices) {
-      // Doanh thu chịu thuế = subtotal (đã bao gồm VAT hay chưa tùy cấu hình)
-      // Thông thường: subtotal là tổng tiền hàng chưa VAT
-      total_taxable_revenue += inv.subtotal || 0;
-      total_vat += inv.vat_amount || 0;
-
-      // Tính lợi nhuận từ chi tiết hóa đơn
-      const details = getAll('invoice_details', d => d.invoice_id === inv.id);
-      for (const d of details) {
-        const quantity = d.quantity || 0;
-        const unit_price = d.unit_price || 0;
-        const import_price = d.import_price || 0;
-        const line_profit = (unit_price - import_price) * quantity;
-        total_profit += line_profit;
-      }
-    }
-
+    const report = calculateTaxReport({ from, to });
     res.json({
-      period: { from, to },
-      total_taxable_revenue: Math.round(total_taxable_revenue),
-      total_vat: Math.round(total_vat),
-      total_profit: Math.round(total_profit),
-      invoice_count: invoices.length,
+      period: report.period,
+      total_taxable_revenue: Math.round(report.output_taxable_amount),
+      total_vat: Math.round(report.total_output_vat),
+      total_input_vat: Math.round(report.total_input_vat),
+      total_output_vat: Math.round(report.total_output_vat),
+      vat_payable: Math.round(report.vat_payable),
+      output_sources: report.output_sources,
+      input_sources: report.input_sources,
+      invoice_count: report.output_sources.length,
     });
   } catch (err) {
     res.status(500).json({ error: 'Lỗi khi tính báo cáo thuế: ' + err.message });

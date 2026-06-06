@@ -15,6 +15,9 @@ function resolveDBPath() {
 }
 
 const DB_PATH = resolveDBPath();
+const DB_BACKUP_DIR = path.resolve(process.env.KHA_DB_BACKUP_DIR || path.join(path.dirname(DB_PATH), 'backups'));
+const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.KHA_DB_BACKUP_RETENTION_COUNT) || 14);
+const DB_BACKUP_MIN_INTERVAL_MS = Math.max(0, Number(process.env.KHA_DB_BACKUP_MIN_INTERVAL_MS) || 20 * 60 * 60 * 1000);
 const DEFAULT_ACCOUNT_SLUG = 'default';
 const requestContext = new AsyncLocalStorage();
 
@@ -45,6 +48,17 @@ const SCHEMA = {
   customer_types: [],
   counters: [],
   cash_book: [],
+  accounting_transactions: [],
+  cash_fund: [],
+  bank_accounts: [],
+  customer_debts: [],
+  supplier_debts: [],
+  einvoice_in: [],
+  einvoice_out: [],
+  tax_reports: [],
+  revenue_reports: [],
+  profit_reports: [],
+  accounting_logs: [],
   payrolls: [],
   excel_import_runs: [],
   excel_import_details: [],
@@ -59,8 +73,10 @@ const INITIAL_NEXT_ID = Object.keys(SCHEMA).reduce((acc, table) => {
 const ACCOUNT_SCOPED_TABLES = new Set([
   'store_info', 'users', 'customers', 'products', 'product_categories', 'partners',
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
-  'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book', 'payrolls',
-  'excel_import_runs', 'excel_import_details',
+  'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book',
+  'accounting_transactions', 'cash_fund', 'bank_accounts', 'customer_debts', 'supplier_debts',
+  'einvoice_in', 'einvoice_out', 'tax_reports', 'revenue_reports', 'profit_reports', 'accounting_logs',
+  'payrolls', 'excel_import_runs', 'excel_import_details',
   'sync_metadata', 'audit_logs', 'system_settings',
 ]);
 
@@ -92,6 +108,20 @@ const DEFAULT_PERMISSIONS = [
   ['stats.read', 'Xem thống kê', 'Xem báo cáo thống kê'],
   ['cashbook.read', 'Xem sổ quỹ', 'Xem sổ quỹ'],
   ['cashbook.manage', 'Quản lý sổ quỹ', 'Tạo, sửa chứng từ sổ quỹ'],
+  ['accounting.read', 'Xem kế toán', 'Xem dữ liệu tổng quan module kế toán'],
+  ['accounting.manage', 'Quản lý kế toán', 'Tạo, sửa, đảo bút toán kế toán'],
+  ['tax_reports.read', 'Xem báo cáo thuế', 'Xem báo cáo thuế GTGT'],
+  ['tax_reports.manage', 'Quản lý báo cáo thuế', 'Tạo snapshot và quản lý báo cáo thuế'],
+  ['inventory_reports.read', 'Xem báo cáo tồn kho', 'Xem báo cáo tổng hợp tồn kho'],
+  ['revenue_reports.read', 'Xem báo cáo doanh thu', 'Xem tổng hợp doanh thu'],
+  ['profit_reports.read', 'Xem báo cáo lợi nhuận', 'Xem tổng hợp lợi nhuận'],
+  ['debts.read', 'Xem công nợ', 'Xem công nợ khách hàng và nhà cung cấp'],
+  ['debts.manage', 'Quản lý công nợ', 'Tạo, sửa, đối soát công nợ'],
+  ['einvoices.read', 'Xem hóa đơn điện tử', 'Xem hóa đơn điện tử đầu vào/đầu ra'],
+  ['einvoices.manage', 'Quản lý hóa đơn điện tử', 'Tạo, sửa, xóa hóa đơn điện tử'],
+  ['bank_accounts.read', 'Xem tài khoản ngân hàng', 'Xem danh mục tài khoản ngân hàng'],
+  ['bank_accounts.manage', 'Quản lý tài khoản ngân hàng', 'Tạo, sửa, xóa tài khoản ngân hàng'],
+  ['activity_logs.read', 'Xem nhật ký hoạt động', 'Xem nhật ký hoạt động nghiệp vụ'],
   ['payrolls.read', 'Xem lương', 'Xem bảng lương'],
   ['payrolls.manage', 'Quản lý lương', 'Tạo, sửa bảng lương'],
   ['sync.read', 'Xem đồng bộ', 'Xem trạng thái đồng bộ'],
@@ -109,11 +139,50 @@ const DEFAULT_USER_PERMISSION_KEYS = [
   'settings.read',
 ];
 
+const DEFAULT_EMPLOYEE_PERMISSION_KEYS = [
+  'store.read', 'products.read', 'customers.read', 'partners.read', 'invoices.read', 'imports.read',
+  'combos.read', 'returns.read', 'sync.read', 'settings.read',
+];
+
+const DEFAULT_ACCOUNTANT_PERMISSION_KEYS = [
+  'stats.read', 'cashbook.read', 'cashbook.manage', 'accounting.read', 'accounting.manage',
+  'tax_reports.read', 'tax_reports.manage', 'inventory_reports.read', 'revenue_reports.read',
+  'profit_reports.read', 'debts.read', 'debts.manage', 'einvoices.read', 'einvoices.manage',
+  'bank_accounts.read', 'bank_accounts.manage', 'activity_logs.read', 'imports.read', 'invoices.read',
+  'customers.read', 'partners.read', 'products.read',
+];
+
+const DEFAULT_CASHIER_PERMISSION_KEYS = [
+  'revenue_reports.read',
+];
+
+const ROLE_ALIASES = Object.freeze({
+  administrator: 'admin',
+  quan_tri: 'admin',
+  quantri: 'admin',
+  'quản_trị': 'admin',
+  ke_toan: 'accountant',
+  ketoan: 'accountant',
+  'kế_toán': 'accountant',
+  thu_ngan: 'cashier',
+  thungan: 'cashier',
+  'thu_ngân': 'cashier',
+  nhan_vien: 'employee',
+  nhanvien: 'employee',
+  'nhân_viên': 'employee',
+  staff: 'employee',
+});
+
+const ACCOUNTING_SCHEMA_SETTING_KEY = 'accounting_schema_version';
+const ACCOUNTING_SCHEMA_VERSION = '1';
+
 const SYNC_TRACKED_TABLES = [
   'store_info', 'users', 'customers', 'products', 'product_categories', 'partners',
   'invoices', 'invoice_details', 'import_logs', 'import_details', 'combos', 'combo_items',
-  'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book', 'payrolls',
-  'excel_import_runs', 'excel_import_details', 'system_settings',
+  'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book',
+  'accounting_transactions', 'cash_fund', 'bank_accounts', 'customer_debts', 'supplier_debts',
+  'einvoice_in', 'einvoice_out', 'tax_reports', 'revenue_reports', 'profit_reports', 'accounting_logs',
+  'payrolls', 'excel_import_runs', 'excel_import_details', 'system_settings',
   'feature_catalog', 'update_releases',
 ];
 
@@ -152,6 +221,8 @@ const INVOICE_COMPLETED_STATUSES = new Set([
   'đã thanh toán',
   'dã thanh toán',
 ]);
+const INVOICE_CANCEL_RETENTION_MS = 24 * 60 * 60 * 1000;
+const INVOICE_STATUS_CANCELLED_AT_INDEX_FIELDS = Object.freeze(['status', 'cancelled_at']);
 const DB_TMP_CLEANUP_MAX_AGE_MS = 5 * 60 * 1000;
 const DB_WRITE_RETRY_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
 const DB_WRITE_RETRY_ATTEMPTS = Math.max(1, Number(process.env.KHA_DB_WRITE_RETRY_ATTEMPTS) || 8);
@@ -372,6 +443,63 @@ function isCompletedInvoiceStatus(status) {
   return INVOICE_COMPLETED_STATUSES.has(normalizeStatusText(status));
 }
 
+function parseTimestampMs(value) {
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isNaN(time) ? null : time;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const time = new Date(text).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function resolveTimestampIso(value, fallback = now()) {
+  const time = parseTimestampMs(value);
+  if (time != null) return new Date(time).toISOString();
+  const fallbackTime = parseTimestampMs(fallback);
+  return new Date(fallbackTime == null ? Date.now() : fallbackTime).toISOString();
+}
+
+function getInvoiceCancellationCutoffMs(referenceTime = Date.now()) {
+  const referenceMs = parseTimestampMs(referenceTime);
+  return (referenceMs == null ? Date.now() : referenceMs) - INVOICE_CANCEL_RETENTION_MS;
+}
+
+function isExpiredCancelledInvoice(invoice, referenceTime = Date.now()) {
+  if (!invoice || !isCancelledInvoiceStatus(invoice.status)) return false;
+  const cancelledAtMs = parseTimestampMs(invoice.cancelled_at);
+  if (cancelledAtMs == null) return false;
+  return cancelledAtMs <= getInvoiceCancellationCutoffMs(referenceTime);
+}
+
+function isInvoiceVisibleInActiveList(invoice, referenceTime = Date.now()) {
+  return !isExpiredCancelledInvoice(invoice, referenceTime);
+}
+
+function normalizeInvoiceCancellationSchema() {
+  const current = getDb();
+  let changed = false;
+  if (!Array.isArray(current.invoices)) return changed;
+
+  for (const invoice of current.invoices) {
+    if (!invoice || typeof invoice !== 'object') continue;
+    if (isCancelledInvoiceStatus(invoice.status)) {
+      const currentCancelledAt = parseTimestampMs(invoice.cancelled_at);
+      if (currentCancelledAt == null) {
+        invoice.cancelled_at = resolveTimestampIso(invoice.updated_at || invoice.created_at || now());
+        changed = true;
+      }
+    } else if (invoice.cancelled_at !== null) {
+      invoice.cancelled_at = null;
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
 function normalizeDateKey(value) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
   const text = String(value || '').trim();
@@ -421,11 +549,87 @@ const DEFAULT_SYSTEM_SETTINGS = [
   },
 ];
 
-function backupDB(reason = 'migration') {
+function sanitizeBackupReason(reason = 'manual') {
+  return String(reason || 'manual').trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').slice(0, 80) || 'manual';
+}
+
+function ensureDbBackupDirectoryExists() {
+  fs.mkdirSync(DB_BACKUP_DIR, { recursive: true });
+}
+
+function listDbBackups() {
+  try {
+    ensureDbBackupDirectoryExists();
+    return fs.readdirSync(DB_BACKUP_DIR)
+      .filter(file => file.startsWith('phanmienoffline-db-') && file.endsWith('.json'))
+      .map(file => {
+        const fullPath = path.join(DB_BACKUP_DIR, file);
+        try {
+          const stat = fs.statSync(fullPath);
+          return { file, path: fullPath, size: stat.size, mtimeMs: stat.mtimeMs, mtime: new Date(stat.mtimeMs).toISOString() };
+        } catch (_error) {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+  } catch (_error) {
+    return [];
+  }
+}
+
+function pruneDbBackups(retentionCount = DB_BACKUP_RETENTION_COUNT) {
+  const keep = Math.max(1, Number(retentionCount) || DB_BACKUP_RETENTION_COUNT);
+  const backups = listDbBackups();
+  for (const backup of backups.slice(keep)) {
+    try {
+      fs.unlinkSync(backup.path);
+    } catch (_error) {
+      // Best-effort retention cleanup only.
+    }
+  }
+  return backups.slice(0, keep);
+}
+
+function createDbBackup(reason = 'manual', options = {}) {
   if (!fs.existsSync(DB_PATH)) return null;
-  const backupPath = `${DB_PATH}.${reason}.${Date.now()}.bak`;
+  ensureDbBackupDirectoryExists();
+  const safeReason = sanitizeBackupReason(reason);
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = path.join(DB_BACKUP_DIR, `phanmienoffline-db-${stamp}-${safeReason}.json`);
   fs.copyFileSync(DB_PATH, backupPath);
-  return backupPath;
+  const stat = fs.statSync(backupPath);
+  if (options.skipRetention !== true) pruneDbBackups(options.retentionCount || DB_BACKUP_RETENTION_COUNT);
+  return {
+    path: backupPath,
+    file: path.basename(backupPath),
+    reason: safeReason,
+    size: stat.size,
+    created_at: new Date().toISOString(),
+  };
+}
+
+function backupDB(reason = 'migration') {
+  const backup = createDbBackup(reason, { skipRetention: false });
+  return backup ? backup.path : null;
+}
+
+function runScheduledDbBackup(reason = 'scheduled', options = {}) {
+  const backups = listDbBackups();
+  const newest = backups[0] || null;
+  const minIntervalMs = options.minIntervalMs === undefined ? DB_BACKUP_MIN_INTERVAL_MS : Math.max(0, Number(options.minIntervalMs) || 0);
+  if (newest && minIntervalMs > 0 && Date.now() - newest.mtimeMs < minIntervalMs) {
+    return { ok: true, skipped: true, reason: 'recent_backup_exists', latest: newest };
+  }
+
+  const backup = createDbBackup(reason, { retentionCount: options.retentionCount || DB_BACKUP_RETENTION_COUNT });
+  if (!backup) return { ok: false, skipped: true, reason: 'db_file_missing' };
+  try {
+    auditLog('db.backup', { backup, reason: backup.reason }, { skipSave: true });
+  } catch (_error) {
+    // Audit is best-effort and must never block backup.
+  }
+  return { ok: true, backup };
 }
 
 function recalculateNextIds() {
@@ -440,7 +644,9 @@ function recalculateNextIds() {
 }
 
 function normalizeRoleValue(role) {
-  return String(role || '').trim().toLowerCase() || 'user';
+  const raw = String(role || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (!raw) return 'user';
+  return ROLE_ALIASES[raw] || raw;
 }
 
 function normalizeDBData() {
@@ -556,6 +762,9 @@ function seedDefaultRolePermissions() {
     admin: allKeys,
     owner: allKeys,
     manager: allKeys.filter(key => !key.endsWith('.manage') || !['admin_panel.manage', 'features.manage', 'updates.manage', 'users.manage', 'print_templates.manage'].includes(key)),
+    accountant: DEFAULT_ACCOUNTANT_PERMISSION_KEYS.map(normalizePermissionKey),
+    cashier: DEFAULT_CASHIER_PERMISSION_KEYS.map(normalizePermissionKey),
+    employee: DEFAULT_EMPLOYEE_PERMISSION_KEYS.map(normalizePermissionKey),
     user: DEFAULT_USER_PERMISSION_KEYS.map(normalizePermissionKey),
   };
 
@@ -731,6 +940,206 @@ function ensureAuthAndSyncSchema() {
   seedDefaultAdmin(defaultAccount.id);
 }
 
+function getAccountingSchemaVersionSetting(accountId = null) {
+  const current = getDb();
+  return (current.system_settings || []).find(row => row
+    && normalizeTextKey(row.key || row.setting_key) === ACCOUNTING_SCHEMA_SETTING_KEY
+    && (accountId == null || row.account_id == null || Number(row.account_id) === Number(accountId))) || null;
+}
+
+function hasAccountingSchemaVersion() {
+  const setting = getAccountingSchemaVersionSetting();
+  return setting && String(setting.value || '') === ACCOUNTING_SCHEMA_VERSION;
+}
+
+function ensureAccountingMigrationBackup() {
+  if (hasAccountingSchemaVersion()) return null;
+  try {
+    return createDbBackup('before-accounting-schema', { skipRetention: false });
+  } catch (error) {
+    console.warn(`[KHA DB] Không thể tạo backup trước migration kế toán: ${error.message}`);
+    return null;
+  }
+}
+
+function ensureRowId(table, row) {
+  const current = getDb();
+  if (!row || row.id != null) return false;
+  const id = current.nextId?.[table] || 1;
+  row.id = id;
+  current.nextId[table] = id + 1;
+  return true;
+}
+
+function normalizeAccountingTableRows(defaultAccountId) {
+  const current = getDb();
+  let changed = false;
+  const timestamp = now();
+  const accountingTables = [
+    'accounting_transactions', 'cash_fund', 'bank_accounts', 'customer_debts', 'supplier_debts',
+    'einvoice_in', 'einvoice_out', 'tax_reports', 'revenue_reports', 'profit_reports', 'accounting_logs',
+  ];
+
+  for (const table of accountingTables) {
+    const rows = current[table];
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      if (ensureRowId(table, row)) changed = true;
+      if (row.account_id == null) {
+        row.account_id = defaultAccountId;
+        changed = true;
+      }
+      if (row.created_at == null) {
+        row.created_at = timestamp;
+        changed = true;
+      }
+      if (table !== 'accounting_logs' && row.updated_at == null) {
+        row.updated_at = row.created_at || timestamp;
+        changed = true;
+      }
+      if (table === 'accounting_transactions' && !row.status) {
+        row.status = 'posted';
+        changed = true;
+      }
+      if (table === 'cash_fund' && row.active == null) {
+        row.active = 1;
+        changed = true;
+      }
+      if (table === 'bank_accounts' && row.active == null) {
+        row.active = 1;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+function normalizeInvoiceAccountingFields() {
+  const current = getDb();
+  let changed = false;
+  const timestamp = now();
+  for (const invoice of current.invoices || []) {
+    if (!invoice || typeof invoice !== 'object') continue;
+    if (!invoice.stock_effect_status) {
+      invoice.stock_effect_status = isCancelledInvoiceStatus(invoice.status) ? 'restored_on_cancel' : 'deducted_on_create';
+      changed = true;
+    }
+    if (!invoice.stock_effect_source) {
+      invoice.stock_effect_source = 'legacy_create_invoice_flow';
+      changed = true;
+    }
+    if (invoice.accounting_status == null) {
+      invoice.accounting_status = isCompletedInvoiceStatus(invoice.status) ? 'pending' : (isCancelledInvoiceStatus(invoice.status) ? 'reversed' : 'not_posted');
+      changed = true;
+    }
+    if (invoice.posted_at === undefined) {
+      invoice.posted_at = null;
+      changed = true;
+    }
+    if (invoice.reversed_at === undefined) {
+      invoice.reversed_at = isCancelledInvoiceStatus(invoice.status) ? (invoice.cancelled_at || invoice.updated_at || timestamp) : null;
+      changed = true;
+    }
+  }
+
+  for (const importLog of current.import_logs || []) {
+    if (!importLog || typeof importLog !== 'object') continue;
+    if (importLog.accounting_status == null) {
+      importLog.accounting_status = normalizeStatusText(importLog.status) === 'received' ? 'pending' : (normalizeStatusText(importLog.status) === 'cancelled' ? 'reversed' : 'not_posted');
+      changed = true;
+    }
+    if (importLog.posted_at === undefined) {
+      importLog.posted_at = null;
+      changed = true;
+    }
+    if (importLog.reversed_at === undefined) {
+      importLog.reversed_at = normalizeStatusText(importLog.status) === 'cancelled' ? (importLog.cancelled_at || importLog.updated_at || timestamp) : null;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function backfillCashFundFromCashBook(defaultAccountId) {
+  const current = getDb();
+  let changed = false;
+  const existingCashBookIds = new Set((current.cash_fund || [])
+    .map(row => Number(row?.cash_book_id))
+    .filter(id => Number.isFinite(id) && id > 0));
+
+  for (const row of current.cash_book || []) {
+    if (!row || row.id == null || existingCashBookIds.has(Number(row.id))) continue;
+    const id = current.nextId.cash_fund || 1;
+    current.nextId.cash_fund = id + 1;
+    const method = normalizePaymentMethod(row.payment_method || 'cash');
+    current.cash_fund.push({
+      id,
+      account_id: row.account_id || defaultAccountId,
+      date: row.date || normalizeDateKey(row.created_at) || today(),
+      time: row.time || String(row.created_at || now()).slice(11, 19) || '00:00:00',
+      fund_type: method === 'bank' ? 'bank' : 'cash',
+      bank_account_id: row.bank_account_id || null,
+      type: row.type === 'expense' ? 'expense' : 'income',
+      category: row.category || '',
+      amount: normalizeNumber(row.amount, 0),
+      payment_method: method,
+      note: row.note || '',
+      source_type: row.reference_type || 'cash_book',
+      source_id: row.reference_id || row.id,
+      cash_book_id: row.id,
+      active: row.active === 0 ? 0 : 1,
+      voided_at: row.voided_at || null,
+      void_reason: row.void_reason || '',
+      created_by: row.created_by || row.user_id || null,
+      created_at: row.created_at || now(),
+      updated_at: row.updated_at || row.created_at || now(),
+    });
+    existingCashBookIds.add(Number(row.id));
+    changed = true;
+  }
+  return changed;
+}
+
+function ensureAccountingSchemaVersionSetting(defaultAccountId) {
+  const current = getDb();
+  const existing = getAccountingSchemaVersionSetting(defaultAccountId);
+  const timestamp = now();
+  if (existing) {
+    if (String(existing.value || '') === ACCOUNTING_SCHEMA_VERSION) return false;
+    existing.value = ACCOUNTING_SCHEMA_VERSION;
+    existing.value_type = 'string';
+    existing.category = 'accounting';
+    existing.description = existing.description || 'Phiên bản schema kế toán backend JSON';
+    existing.updated_at = timestamp;
+    return true;
+  }
+
+  const id = current.nextId.system_settings || 1;
+  current.nextId.system_settings = id + 1;
+  current.system_settings.push({
+    id,
+    account_id: defaultAccountId,
+    key: ACCOUNTING_SCHEMA_SETTING_KEY,
+    value: ACCOUNTING_SCHEMA_VERSION,
+    value_type: 'string',
+    category: 'accounting',
+    description: 'Phiên bản schema kế toán backend JSON',
+    created_at: timestamp,
+    updated_at: timestamp,
+  });
+  return true;
+}
+
+function migrateAccountingSchema() {
+  const defaultAccount = ensureDefaultAccount();
+  ensureAccountingMigrationBackup();
+  normalizeAccountingTableRows(defaultAccount.id);
+  normalizeInvoiceAccountingFields();
+  backfillCashFundFromCashBook(defaultAccount.id);
+  ensureAccountingSchemaVersionSetting(defaultAccount.id);
+}
+
 function buildDailyStatsRowsFromInvoices() {
   const current = getDb();
   const defaultAccount = ensureDefaultAccount();
@@ -806,6 +1215,8 @@ function migrateDB() {
   seedDefaultFeatureCatalog();
   ensureAuthAndSyncSchema();
   seedDefaultSystemSettings();
+  migrateAccountingSchema();
+  normalizeInvoiceCancellationSchema();
   rebuildAllDailyStatsFromInvoices();
   recalculateNextIds();
 }
@@ -934,20 +1345,36 @@ function normalizeInsertRow(table, row = {}, options = {}) {
   if (normalized.created_at == null) normalized.created_at = timestamp;
   if (normalized.updated_at == null) normalized.updated_at = timestamp;
   if (table === 'users' && normalized.role != null) normalized.role = normalizeRoleValue(normalized.role);
-  if ((table === 'invoices' || table === 'return_logs' || table === 'cash_book') && normalized.payment_method != null) {
+  if ((table === 'invoices' || table === 'return_logs' || table === 'cash_book' || table === 'cash_fund') && normalized.payment_method != null) {
     normalized.payment_method = normalizePaymentMethod(normalized.payment_method);
+  }
+  if (table === 'invoices') {
+    if (isCancelledInvoiceStatus(normalized.status)) {
+      normalized.cancelled_at = resolveTimestampIso(normalized.cancelled_at || timestamp);
+    } else if (normalized.cancelled_at === undefined) {
+      normalized.cancelled_at = null;
+    }
   }
   return normalized;
 }
 
-function normalizeUpdateChanges(table, _current, changes = {}) {
+function normalizeUpdateChanges(table, current = {}, changes = {}) {
+  const timestamp = now();
   const normalized = { ...(changes || {}) };
   delete normalized.id;
   if (table === 'users' && normalized.role != null) normalized.role = normalizeRoleValue(normalized.role);
-  if ((table === 'invoices' || table === 'return_logs' || table === 'cash_book') && normalized.payment_method != null) {
+  if ((table === 'invoices' || table === 'return_logs' || table === 'cash_book' || table === 'cash_fund') && normalized.payment_method != null) {
     normalized.payment_method = normalizePaymentMethod(normalized.payment_method);
   }
-  normalized.updated_at = normalized.updated_at || now();
+  if (table === 'invoices') {
+    const nextStatus = Object.prototype.hasOwnProperty.call(normalized, 'status') ? normalized.status : current?.status;
+    if (isCancelledInvoiceStatus(nextStatus)) {
+      normalized.cancelled_at = resolveTimestampIso(normalized.cancelled_at || current?.cancelled_at || timestamp);
+    } else if (Object.prototype.hasOwnProperty.call(normalized, 'status') && normalized.cancelled_at === undefined) {
+      normalized.cancelled_at = null;
+    }
+  }
+  normalized.updated_at = normalized.updated_at || timestamp;
   return normalized;
 }
 
@@ -1023,6 +1450,57 @@ function getAll(table, filter, options = {}) {
   return ensureTable(table)
     .filter(row => isRowVisibleForCurrentScope(table, row, effectiveOptions))
     .filter(row => matchesFilter(row, filter));
+}
+
+function getExpiredCancelledInvoices(referenceTime = Date.now(), options = {}) {
+  return getAll(
+    'invoices',
+    invoice => isExpiredCancelledInvoice(invoice, referenceTime),
+    { skipAccountScope: true, ...options }
+  );
+}
+
+function deleteExpiredCancelledInvoices(options = {}) {
+  const referenceTime = options.referenceTime || options.now || Date.now();
+  const expiredInvoices = getExpiredCancelledInvoices(referenceTime, { skipAccountScope: true });
+  if (expiredInvoices.length === 0) {
+    return { ok: true, deletedCount: 0, deletedDetailCount: 0, invoiceIds: [] };
+  }
+
+  return withAtomicDbWrite(() => {
+    const invoiceIds = [];
+    let deletedDetailCount = 0;
+
+    for (const expiredInvoice of expiredInvoices) {
+      const invoice = getOne('invoices', row => Number(row.id) === Number(expiredInvoice.id), { skipAccountScope: true });
+      if (!isExpiredCancelledInvoice(invoice, referenceTime)) continue;
+
+      const details = getAll('invoice_details', detail => Number(detail.invoice_id) === Number(invoice.id), { skipAccountScope: true });
+      for (const detail of details) {
+        if (remove('invoice_details', detail.id, {
+          skipAccountScope: true,
+          skipSave: true,
+          accountId: detail.account_id || invoice.account_id || null,
+        })) {
+          deletedDetailCount += 1;
+        }
+      }
+
+      const removedInvoice = remove('invoices', invoice.id, {
+        skipAccountScope: true,
+        skipSave: true,
+        accountId: invoice.account_id || null,
+      });
+      if (removedInvoice) invoiceIds.push(removedInvoice.id);
+    }
+
+    return {
+      ok: true,
+      deletedCount: invoiceIds.length,
+      deletedDetailCount,
+      invoiceIds,
+    };
+  });
 }
 
 function getOne(table, filter, options = {}) {
@@ -1176,17 +1654,26 @@ module.exports = {
   runWithRequestContext,
   getDefaultAccount,
   DB_PATH,
+  DB_BACKUP_DIR,
   SCHEMA,
   INITIAL_NEXT_ID,
   DEFAULT_ACCOUNT_SLUG,
   ACCOUNT_SCOPED_TABLES,
   DEFAULT_PERMISSIONS,
   DEFAULT_USER_PERMISSION_KEYS,
+  DEFAULT_EMPLOYEE_PERMISSION_KEYS,
+  DEFAULT_ACCOUNTANT_PERMISSION_KEYS,
+  DEFAULT_CASHIER_PERMISSION_KEYS,
   SYNC_TRACKED_TABLES,
   DEFAULT_PRODUCT_CATEGORIES,
   DEFAULT_SYSTEM_SETTINGS,
   loadDB,
   saveDB,
+  backupDB,
+  createDbBackup,
+  listDbBackups,
+  pruneDbBackups,
+  runScheduledDbBackup,
   getDb,
   insert,
   update,
@@ -1214,9 +1701,18 @@ module.exports = {
   findCategoryByText,
   ensureField,
   normalizePermissionKey,
+  normalizeRoleValue,
   normalizeDateKey,
   isCancelledInvoiceStatus,
   isCompletedInvoiceStatus,
+  parseTimestampMs,
+  resolveTimestampIso,
+  isExpiredCancelledInvoice,
+  isInvoiceVisibleInActiveList,
+  getExpiredCancelledInvoices,
+  deleteExpiredCancelledInvoices,
+  INVOICE_CANCEL_RETENTION_MS,
+  INVOICE_STATUS_CANCELLED_AT_INDEX_FIELDS,
   cleanupDatabaseTempFiles,
   withAtomicDbWrite,
 };
