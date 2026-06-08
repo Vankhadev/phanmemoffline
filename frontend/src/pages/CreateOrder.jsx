@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, SYNC_UPDATED_EVENT, apiJsonChecked, getApiErrorMessage, resolveApiUrl } from '../utils/apiClient';
 import {
-  Search, Plus, ShoppingCart, Trash2, ChevronDown, ChevronRight, Filter, UserPlus, Users, Printer
+  Search, Plus, ShoppingCart, Trash2, ChevronDown, ChevronRight, Filter, UserPlus, Users, FileText, ReceiptText
 } from 'lucide-react';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, getProductDisplayName, getProductVariants, getVariantIdentity } from '../utils/productSearch';
 import { attachClientOrderMetadata, generateClientOrderId } from '../utils/clientOrderId';
@@ -203,6 +203,7 @@ export default function CreateOrder({ user, store }) {
     stock: '', unit: 'cái', category: '', default_category_id: '', supplier_id: ''
   });
   const customerDropdownRef = useRef();
+  const productSearchInputRef = useRef(null);
   const comboLastFetchedAtRef = useRef(0);
   const comboFetchInFlightRef = useRef(null);
   const lastStockLimitToastRef = useRef('');
@@ -786,7 +787,13 @@ export default function CreateOrder({ user, store }) {
     if (!item?.id) return;
     const key = getOrderPickerKey(item, kind);
     setProductPickerSelections(prev => {
-      if (prev.some(selection => selection.key === key)) return prev;
+      if (prev.some(selection => selection.key === key)) {
+        return prev.map(selection => (
+          selection.key === key
+            ? { ...selection, quantity: normalizeDecimalQuantity(parseDecimalQuantity(selection.quantity, 0) + 1, 1) }
+            : selection
+        ));
+      }
       const line = kind === 'combo' ? buildComboCartLine(item, 1) : buildProductCartLine(item, 1);
       return [...prev, {
         key,
@@ -799,6 +806,10 @@ export default function CreateOrder({ user, store }) {
         appliedQuantity: 0,
       }];
     });
+    window.setTimeout(() => {
+      productSearchInputRef.current?.focus();
+      productSearchInputRef.current?.select?.();
+    }, 0);
   };
 
   const updateOrderPickerQuantity = (key, nextValue) => {
@@ -824,6 +835,9 @@ export default function CreateOrder({ user, store }) {
   const orderPickerHasQuantityError = productPickerSelections.some(selection => !isValidQuantityInput(selection.quantity));
   const orderPickerTotalQuantity = productPickerSelections.reduce((sum, selection) => (
     sum + (isValidQuantityInput(selection.quantity) ? parseDecimalQuantity(selection.quantity, 0) : 0)
+  ), 0);
+  const orderPickerEstimatedTotal = productPickerSelections.reduce((sum, selection) => (
+    sum + (isValidQuantityInput(selection.quantity) ? parseDecimalQuantity(selection.quantity, 0) * Number(selection.line.unit_price || 0) : 0)
   ), 0);
 
   const orderPickerPreviewCart = useMemo(() => {
@@ -851,11 +865,7 @@ export default function CreateOrder({ user, store }) {
       return;
     }
     setCart(orderPickerPreviewCart);
-    setProductPickerSelections(prev => prev.map(selection => ({
-      ...selection,
-      quantity: normalizeDecimalQuantity(selection.quantity, 1),
-      appliedQuantity: normalizeDecimalQuantity(selection.quantity, 1),
-    })));
+    setProductPickerSelections([]);
     setProductSearch('');
     setShowProductPanel(false);
   };
@@ -865,19 +875,30 @@ export default function CreateOrder({ user, store }) {
       <div className="border-b border-blue-100 bg-blue-50 px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="text-sm font-bold text-blue-800">Sản phẩm đã chọn</div>
+            <div className="text-sm font-bold text-blue-800">Danh sách chọn nhanh</div>
             <div className="text-[11px] text-blue-600">
-              Tổng {productPickerSelections.length.toLocaleString('vi-VN')} dòng · {orderPickerTotalQuantity.toLocaleString('vi-VN')} sản phẩm
+              {productPickerSelections.length.toLocaleString('vi-VN')} dòng · {orderPickerTotalQuantity.toLocaleString('vi-VN')} sản phẩm · {formatVND(orderPickerEstimatedTotal)}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={finishOrderProductSelection}
-            disabled={productPickerSelections.length === 0 || orderPickerHasQuantityError || orderPickerStockValidation.hasInvalid}
-            className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-          >
-            Chọn xong
-          </button>
+          <div className="flex items-center gap-2">
+            {productPickerSelections.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setProductPickerSelections([])}
+                className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100"
+              >
+                Xóa chọn
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={finishOrderProductSelection}
+              disabled={productPickerSelections.length === 0 || orderPickerHasQuantityError || orderPickerStockValidation.hasInvalid}
+              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              Thêm vào đơn
+            </button>
+          </div>
         </div>
         {orderPickerStockValidation.hasInvalid && (
           <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700">
@@ -893,7 +914,7 @@ export default function CreateOrder({ user, store }) {
       <div className="max-h-72 overflow-y-auto p-2 space-y-2 scroll-smooth">
         {productPickerSelections.length === 0 ? (
           <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-xs text-gray-400">
-            Bấm nút + màu xanh ngay cạnh tên sản phẩm để đưa vào danh sách tạm.
+            Bấm nút + cạnh sản phẩm, nhập số lượng tại đây, rồi bấm Thêm vào đơn để chuyển xuống bảng đơn hàng.
           </div>
         ) : productPickerSelections.map(selection => {
           const stockState = getSaleStockStateForLine(orderPickerStockValidation, selection.line);
@@ -1271,13 +1292,16 @@ export default function CreateOrder({ user, store }) {
     }
   };
 
-  const openLastInvoicePrint = (quick = false) => {
+  const openLastInvoicePrint = (mode = 'invoice', quick = false) => {
     const target = lastInvoice?.id || lastInvoice?.invoice_code || '';
     if (!lastInvoice || !target || String(lastInvoice.invoice_code || '').startsWith('LOCAL_')) {
       alert('Đơn offline chưa có dữ liệu hóa đơn thật trên server để in. Vui lòng đồng bộ đơn trước khi in.');
       return;
     }
-    navigate(`/hoa-don-in/${encodeURIComponent(target)}${quick ? '?print=1' : ''}`);
+    const params = new URLSearchParams();
+    params.set('mode', mode === 'estimate' ? 'estimate' : 'invoice');
+    if (quick) params.set('print', '1');
+    navigate(`/hoa-don-in/${encodeURIComponent(target)}?${params.toString()}`);
   };
 
   const resetForm = () => {
@@ -1512,7 +1536,7 @@ export default function CreateOrder({ user, store }) {
             <div className="p-3 border-b flex flex-col gap-2 bg-gray-50 lg:flex-row lg:items-center">
               <div className="flex-1 relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input className="input-field pl-9 w-full text-sm"
+                <input ref={productSearchInputRef} className="input-field pl-9 w-full text-sm"
                   placeholder="Tìm sản phẩm/variant theo tên/SKU... Chọn tab Combo để tìm combo (F3)"
                   value={productSearch}
                   onFocus={handleProductSearchFocus}
@@ -1667,6 +1691,14 @@ export default function CreateOrder({ user, store }) {
             )}
 
             {/* Product table */}
+            <div className="border-b bg-white px-3 py-2">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs font-bold text-gray-700">Danh sách đơn hàng vừa chọn</div>
+                <div className="text-[11px] font-semibold text-gray-500">
+                  {cart.length.toLocaleString('vi-VN')} dòng · {cart.reduce((s, i) => s + (Number(i.quantity) || 0), 0).toLocaleString('vi-VN')} sản phẩm · sửa số lượng, giá và chiết khấu trực tiếp trong bảng
+                </div>
+              </div>
+            </div>
             <div className="system-table-scroll">
               <table className="system-table pos-order-table text-sm">
                 <colgroup>
@@ -1812,7 +1844,7 @@ export default function CreateOrder({ user, store }) {
                 <div className="flex flex-col gap-2 mb-2 lg:flex-row">
                   <div className="flex-1 relative">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input className="input-field pl-9 w-full text-sm"
+                    <input ref={productSearchInputRef} className="input-field pl-9 w-full text-sm"
                       placeholder="Tìm sản phẩm/variant theo tên/SKU... Chọn tab Combo để tìm combo theo tên/SKU"
                       value={productSearch}
                       onFocus={handleProductSearchFocus}
@@ -2084,7 +2116,7 @@ export default function CreateOrder({ user, store }) {
             <div className="px-5 py-4 border-b bg-blue-50 flex items-center justify-between">
               <div>
                 <div className="text-lg font-bold text-blue-800">Xem lại đơn hàng</div>
-                <div className="text-xs text-blue-600">Kiểm tra lại thông tin đơn hàng vừa tạo</div>
+                <div className="text-xs text-blue-600">Kiểm tra lại thông tin, sau đó chọn in tạm tính hoặc in hóa đơn</div>
               </div>
               <button onClick={resetForm} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
@@ -2140,16 +2172,16 @@ export default function CreateOrder({ user, store }) {
                 Đóng
               </button>
               <button
-                onClick={() => openLastInvoicePrint(false)}
+                onClick={() => openLastInvoicePrint('estimate')}
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold inline-flex items-center justify-center gap-2"
               >
-                <Printer size={16} /> Mở hóa đơn A5
+                <FileText size={16} /> In tạm tính
               </button>
               <button
-                onClick={() => openLastInvoicePrint(true)}
+                onClick={() => openLastInvoicePrint('invoice')}
                 className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold inline-flex items-center justify-center gap-2"
               >
-                <Printer size={16} /> In nhanh
+                <ReceiptText size={16} /> In hóa đơn
               </button>
             </div>
           </div>

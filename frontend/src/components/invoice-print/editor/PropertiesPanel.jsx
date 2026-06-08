@@ -1,5 +1,5 @@
 import { AlignCenter, AlignLeft, AlignRight } from 'lucide-react';
-import { getElementLabel, getTableStyleElement, TABLE_COLUMN_LABELS, TABLE_STYLE_ELEMENT_ID } from './templateSchemaAdapter';
+import { getEditorPaperDimensions, getElementLabel, getTableStyleElement, PAGE_ZONE_ID, TABLE_COLUMN_LABELS, TABLE_STYLE_ELEMENT_ID } from './templateSchemaAdapter';
 
 function NumberField({ label, value, min, max, step = 0.5, suffix = 'mm', onChange }) {
   return (
@@ -90,9 +90,57 @@ const OBJECT_FIT_OPTIONS = [
   { value: 'fill', label: 'Fill' },
 ];
 
+const PAPER_SIZE_OPTIONS = [
+  { value: 'A4', label: 'A4' },
+  { value: 'A5', label: 'A5' },
+  { value: 'K80', label: 'K80' },
+  { value: 'K57', label: 'K57' },
+];
+
+const ORIENTATION_OPTIONS = [
+  { value: 'portrait', label: 'Dọc' },
+  { value: 'landscape', label: 'Ngang' },
+];
+
+const FONT_WEIGHT_OPTIONS = [
+  { value: '400', label: '400' },
+  { value: '500', label: '500' },
+  { value: '600', label: '600' },
+  { value: '700', label: '700' },
+  { value: '800', label: '800' },
+  { value: '900', label: '900' },
+];
+
+function AlignPresetButtons({ onAlign }) {
+  return (
+    <div className="invoice-editor-align-presets">
+      <button type="button" onClick={() => onAlign?.('left')}>Trái</button>
+      <button type="button" onClick={() => onAlign?.('center')}>Giữa</button>
+      <button type="button" onClick={() => onAlign?.('right')}>Phải</button>
+      <button type="button" onClick={() => onAlign?.('top')}>Trên</button>
+      <button type="button" onClick={() => onAlign?.('middle')}>Dọc giữa</button>
+      <button type="button" onClick={() => onAlign?.('bottom')}>Dưới</button>
+    </div>
+  );
+}
+
+function buildAlignedFrame(frame = {}, page = {}, mode = 'left') {
+  const width = Number(frame.w) || 1;
+  const height = frame.h === 'auto' ? 0 : (Number(frame.h) || 1);
+  const next = { ...frame };
+  if (mode === 'left') next.x = 0;
+  if (mode === 'center') next.x = Math.max(0, (Number(page.width) - width) / 2);
+  if (mode === 'right') next.x = Math.max(0, Number(page.width) - width);
+  if (mode === 'top') next.y = 0;
+  if (mode === 'middle' && height > 0) next.y = Math.max(0, (Number(page.height) - height) / 2);
+  if (mode === 'bottom' && height > 0) next.y = Math.max(0, Number(page.height) - height);
+  return next;
+}
+
 function TableProperties({ document, onUpdateTable, onUpdateElement }) {
   const table = document.table || {};
   const frame = table.frame || {};
+  const page = getEditorPaperDimensions(document);
   const styleElement = getTableStyleElement(document) || {};
   const style = styleElement.style || {};
   const columns = Array.isArray(table.columns) ? table.columns : [];
@@ -111,6 +159,7 @@ function TableProperties({ document, onUpdateTable, onUpdateElement }) {
     <div className="invoice-editor-properties-content">
       <section>
         <h4>Khung sản phẩm</h4>
+        <AlignPresetButtons onAlign={mode => onUpdateTable?.({ zoneId: PAGE_ZONE_ID, frame: buildAlignedFrame(frame, page, mode) })} />
         <div className="invoice-editor-prop-grid">
           <NumberField label="X" value={frame.x || 0} onChange={value => updateFrame({ x: Number(value) || 0 })} />
           <NumberField label="Y" value={frame.y || 0} onChange={value => updateFrame({ y: Number(value) || 0 })} />
@@ -120,6 +169,8 @@ function TableProperties({ document, onUpdateTable, onUpdateElement }) {
           <NumberField label="Row gap" value={style.rowGapMm ?? 0} min={0} max={4} step={0.1} onChange={value => updateStyle({ rowGapMm: Number(value) || 0 })} />
           <NumberField label="Font" value={style.fontSizePt ?? 8.2} min={5} max={14} step={0.25} suffix="pt" onChange={value => updateStyle({ fontSizePt: Number(value) || 8 })} />
           <NumberField label="Header font" value={style.headerFontSizePt ?? 7.6} min={5} max={14} step={0.25} suffix="pt" onChange={value => updateStyle({ headerFontSizePt: Number(value) || 7.5 })} />
+          <SelectField label="Đậm chữ" value={String(style.fontWeight || 400)} options={FONT_WEIGHT_OPTIONS} onChange={value => updateStyle({ fontWeight: Number(value) || 400 })} />
+          <SelectField label="Đậm header" value={String(style.headerFontWeight || 900)} options={FONT_WEIGHT_OPTIONS} onChange={value => updateStyle({ headerFontWeight: Number(value) || 900 })} />
           <NumberField label="Border" value={style.borderWidthMm ?? 0.22} min={0} max={1} step={0.05} onChange={value => updateStyle({ borderWidthMm: Number(value) || 0 })} />
           <NumberField label="Line height" value={style.lineHeight ?? 1.18} min={1} max={2} step={0.05} suffix="x" onChange={value => updateStyle({ lineHeight: Number(value) || 1.18 })} />
           <ColorField label="Màu viền" value={style.borderColor || '#cbd5e1'} onChange={value => updateStyle({ borderColor: value })} />
@@ -175,6 +226,8 @@ export default function PropertiesPanel({
   onSetDocument,
 }) {
   const editor = settings?.editor || {};
+  const page = getEditorPaperDimensions(document);
+  const paperSize = document.canvas?.pageSize || 'A5';
   const isTable = selectedId === 'itemsTable' || selectedElement?.type === 'itemsTable';
   const element = !isTable && selectedElement && selectedElement.id !== TABLE_STYLE_ELEMENT_ID ? selectedElement : null;
 
@@ -183,13 +236,27 @@ export default function PropertiesPanel({
     onUpdateElement?.(element.id, { style: { ...element.style, ...patch } });
   };
 
+  const updateCanvas = (patch) => {
+    const nextPaperSize = patch.pageSize || document.canvas?.pageSize || 'A5';
+    onSetDocument?.({
+      ...document,
+      canvas: {
+        ...document.canvas,
+        ...patch,
+        orientation: String(nextPaperSize).startsWith('K') ? 'portrait' : (patch.orientation || document.canvas?.orientation || 'portrait'),
+      },
+    });
+  };
+
   return (
     <aside className="invoice-editor-panel invoice-editor-properties">
       <div className="invoice-editor-panel-title">Thuộc tính</div>
       <section className="invoice-editor-properties-section">
         <h4>Canvas</h4>
         <div className="invoice-editor-prop-grid">
-          <NumberField label="Safe" value={document.canvas?.safePaddingMm ?? 8} min={0} max={30} step={0.5} onChange={value => onSetDocument?.({ ...document, canvas: { ...document.canvas, safePaddingMm: Number(value) || 0 } })} />
+          <SelectField label="Khổ giấy" value={paperSize} options={PAPER_SIZE_OPTIONS} onChange={value => updateCanvas({ pageSize: value })} />
+          <SelectField label="Hướng" value={document.canvas?.orientation || 'portrait'} options={ORIENTATION_OPTIONS} onChange={value => updateCanvas({ orientation: value })} />
+          <NumberField label="Safe" value={document.canvas?.safePaddingMm ?? 8} min={0} max={30} step={0.5} onChange={value => updateCanvas({ safePaddingMm: Number(value) || 0 })} />
           <NumberField label="Grid" value={editor.snapGridMm ?? 1} min={0.1} max={10} step={0.1} onChange={value => onUpdateSettings?.(current => ({ ...current, editor: { ...current.editor, snapGridMm: Number(value) || 1 } }))} />
         </div>
         <ToggleField label="Hiện ruler" checked={editor.showRuler !== false} onChange={value => onUpdateSettings?.(current => ({ ...current, editor: { ...current.editor, showRuler: value } }))} />
@@ -202,6 +269,7 @@ export default function PropertiesPanel({
         <div className="invoice-editor-properties-content">
           <section>
             <h4>{getElementLabel(element)}</h4>
+            <AlignPresetButtons onAlign={mode => onUpdateElement?.(element.id, { zoneId: PAGE_ZONE_ID, frame: buildAlignedFrame(element.frame || {}, page, mode) })} />
             <div className="invoice-editor-prop-grid">
               <NumberField label="X" value={element.frame?.x || 0} onChange={value => onUpdateElement?.(element.id, { frame: { ...element.frame, x: Number(value) || 0 } })} />
               <NumberField label="Y" value={element.frame?.y || 0} onChange={value => onUpdateElement?.(element.id, { frame: { ...element.frame, y: Number(value) || 0 } })} />

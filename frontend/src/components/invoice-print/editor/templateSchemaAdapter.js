@@ -1,6 +1,7 @@
 import { getPaperDimensions } from '../templateDefaults';
 
 export const EDITOR_SCHEMA_VERSION = 2;
+export const PAGE_ZONE_ID = 'page';
 export const TABLE_STYLE_ELEMENT_ID = '__itemsTableStyle';
 export const TABLE_STYLE_ELEMENT_TYPE = 'rectangle';
 
@@ -301,6 +302,8 @@ function defaultTableStyleElement(bodyZone, tableFrame) {
       rowGapMm: 0,
       fontSizePt: 7.8,
       headerFontSizePt: 7.2,
+      fontWeight: 400,
+      headerFontWeight: 900,
       lineHeight: 1.15,
       widthPercent: 100,
     },
@@ -380,11 +383,14 @@ function normalizeZones(input, canvas) {
     };
   });
 
-  if (!zones.some(zone => zone.id === 'header')) zones.unshift({ id: 'header', type: 'absolute', frame: { x: safe, y: safe, w: contentWidth, h: 34 } });
-  if (!zones.some(zone => zone.id === 'body')) zones.push({ id: 'body', type: 'flow', frame: { x: safe, y: safe + 38, w: contentWidth, h: Math.max(24, page.height - safe * 2 - 76) } });
-  if (!zones.some(zone => zone.id === 'footer')) zones.push({ id: 'footer', type: 'absolute', frame: { x: safe, y: Math.max(safe + 80, page.height - safe - 54), w: contentWidth, h: 34 } });
-  if (!zones.some(zone => zone.id === 'signatures')) zones.push({ id: 'signatures', type: 'absolute', frame: { x: safe, y: Math.max(safe + 100, page.height - safe - 18), w: contentWidth, h: 18 } });
-  return zones;
+  const pageZone = { id: PAGE_ZONE_ID, type: 'absolute', frame: { x: 0, y: 0, w: page.width, h: page.height } };
+  const nonPageZones = zones.filter(zone => zone.id !== PAGE_ZONE_ID);
+
+  if (!nonPageZones.some(zone => zone.id === 'header')) nonPageZones.unshift({ id: 'header', type: 'absolute', frame: { x: safe, y: safe, w: contentWidth, h: 34 } });
+  if (!nonPageZones.some(zone => zone.id === 'body')) nonPageZones.push({ id: 'body', type: 'flow', frame: { x: safe, y: safe + 38, w: contentWidth, h: Math.max(24, page.height - safe * 2 - 76) } });
+  if (!nonPageZones.some(zone => zone.id === 'footer')) nonPageZones.push({ id: 'footer', type: 'absolute', frame: { x: safe, y: Math.max(safe + 80, page.height - safe - 54), w: contentWidth, h: 34 } });
+  if (!nonPageZones.some(zone => zone.id === 'signatures')) nonPageZones.push({ id: 'signatures', type: 'absolute', frame: { x: safe, y: Math.max(safe + 100, page.height - safe - 18), w: contentWidth, h: 18 } });
+  return [pageZone, ...nonPageZones];
 }
 
 function normalizeCanvas(input = {}, template = {}) {
@@ -569,9 +575,71 @@ export function normalizeEditorSettings(input = {}, options = {}) {
   };
 }
 
+function toPageFrame(frame = {}, zone = {}) {
+  return {
+    ...frame,
+    x: roundMm(Number(zone?.frame?.x || 0) + Number(frame.x || 0)),
+    y: roundMm(Number(zone?.frame?.y || 0) + Number(frame.y || 0)),
+  };
+}
+
+function promoteDocumentToPageZone(document = {}) {
+  const zones = Array.isArray(document.zones) ? document.zones : [];
+  const zonesById = new Map(zones.map(zone => [zone.id, zone]));
+  const pageZone = zonesById.get(PAGE_ZONE_ID) || zones[0] || { id: PAGE_ZONE_ID, frame: { x: 0, y: 0, w: 80, h: 120 } };
+  const table = document.table || {};
+  const tableZone = zonesById.get(table.zoneId) || pageZone;
+  const tablePageFrame = table.zoneId === PAGE_ZONE_ID
+    ? (table.frame || {})
+    : toPageFrame(table.frame || {}, tableZone);
+  const nextTable = {
+    ...table,
+    zoneId: PAGE_ZONE_ID,
+    frame: clampFrameToZone(tablePageFrame, pageZone, { minW: 12, minH: 8 }),
+  };
+  const defaultTableStyle = defaultTableStyleElement(pageZone, nextTable.frame);
+  const elements = (document.elements || []).map(element => {
+    if (element.id === TABLE_STYLE_ELEMENT_ID) {
+      return {
+        ...defaultTableStyle,
+        ...element,
+        id: TABLE_STYLE_ELEMENT_ID,
+        type: TABLE_STYLE_ELEMENT_TYPE,
+        zoneId: PAGE_ZONE_ID,
+        frame: defaultTableStyle.frame,
+        visible: false,
+        locked: true,
+        style: { ...defaultTableStyle.style, ...(element.style || {}) },
+      };
+    }
+
+    const zone = zonesById.get(element.zoneId) || pageZone;
+    const pageFrame = element.zoneId === PAGE_ZONE_ID
+      ? (element.frame || {})
+      : toPageFrame(element.frame || {}, zone);
+
+    return {
+      ...element,
+      zoneId: PAGE_ZONE_ID,
+      frame: clampFrameToZone(pageFrame, pageZone, { minW: element.type === 'line' ? 2 : 3, minH: element.type === 'line' ? 0.5 : 3 }),
+    };
+  });
+
+  if (!elements.some(element => element.id === TABLE_STYLE_ELEMENT_ID)) {
+    elements.push(defaultTableStyle);
+  }
+
+  return {
+    ...document,
+    zones,
+    elements,
+    table: nextTable,
+  };
+}
+
 export function normalizeEditorDocument(input = {}, template = {}) {
   if (!isPlainObject(input) || Number(input.schema_version || input.schemaVersion) !== EDITOR_SCHEMA_VERSION) {
-    return createDefaultEditorDocument({ paperSize: template.paper_size, orientation: template.orientation, template });
+    return normalizeEditorDocument(createDefaultEditorDocument({ paperSize: template.paper_size, orientation: template.orientation, template }), template);
   }
 
   const canvas = normalizeCanvas(input.canvas, template);
@@ -599,7 +667,7 @@ export function normalizeEditorDocument(input = {}, template = {}) {
       : element))
     : [...normalizedElements, defaultTableStyleElement(bodyZone, table.frame)];
 
-  return {
+  const normalizedDocument = {
     schema_version: EDITOR_SCHEMA_VERSION,
     canvas,
     zones,
@@ -615,6 +683,8 @@ export function normalizeEditorDocument(input = {}, template = {}) {
       exactColorAdjust: input.print?.exactColorAdjust !== false,
     },
   };
+
+  return promoteDocumentToPageZone(normalizedDocument);
 }
 
 function getDocumentSource(template = {}, preferDraft = true) {

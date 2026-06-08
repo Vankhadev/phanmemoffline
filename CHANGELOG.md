@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.5.1 - 2026-06-09
+
+### Thay đổi chính
+
+- Bổ sung trình chỉnh sửa mẫu in hóa đơn kiểu kéo thả/Sapo: resize khung, căn chỉnh bằng ruler/snap grid, autosave draft và publish layout in thật.
+- Thêm fallback mẫu in local khi thiếu cấu hình MySQL cho module mẫu in, giúp trang cài đặt và trang in vẫn thao tác được.
+- Cải thiện luồng tạo đơn: chọn nhanh sản phẩm qua danh sách tạm, bấm "Thêm vào đơn" rồi chỉnh số lượng, giá, chiết khấu trong bảng đơn hàng.
+- Thêm lựa chọn in tạm tính/in hóa đơn, chọn kiểu máy in, khổ K80/K57/A5/A4 và scale nội dung trước khi mở hộp thoại in.
+- Cho phép chỉnh kích thước khung bảng sản phẩm trong mẫu in và chỉnh độ đậm font nội dung/header của bảng.
+
+### Phát hành
+
+- Đồng bộ version phát hành 1.5.1 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
+- Tạo tag GitHub `v1.5.1` cho bản release này.
+
 ## v1.5.0 - 2026-06-06
 
 ### Thay đổi chính

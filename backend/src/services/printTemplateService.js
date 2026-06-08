@@ -3,7 +3,12 @@ const {
   isPrintTemplatesTableMissingError,
   resetPrintTemplatesSchemaReady,
 } = require('../db/printTemplatesSchema');
-const { getPrintTemplatesPool, normalizePrintTemplatesMySqlError, query } = require('../db/printTemplatesMySql');
+const {
+  getPrintTemplatesPool,
+  isPrintTemplatesMySqlConfigured,
+  normalizePrintTemplatesMySqlError,
+  query,
+} = require('../db/printTemplatesMySql');
 const {
   DEFAULT_LAYOUT_V2,
   DEFAULT_SETTINGS_V2,
@@ -1383,6 +1388,23 @@ async function resolveInvoicePrintTemplate(options = {}) {
   return serializePrintTemplateForInvoice(rows?.[0] || null);
 }
 
+function getLocalPrintTemplateService() {
+  return require('./printTemplateLocalService');
+}
+
+function shouldUseLocalPrintTemplateStorage() {
+  return !isPrintTemplatesMySqlConfigured();
+}
+
+function withLocalPrintTemplateStorage(methodName, mysqlHandler) {
+  return async function runPrintTemplateStorageMethod(...args) {
+    if (shouldUseLocalPrintTemplateStorage()) {
+      return getLocalPrintTemplateService()[methodName](...args);
+    }
+    return mysqlHandler(...args);
+  };
+}
+
 module.exports = {
   DEFAULT_LAYOUT_JSON,
   DEFAULT_SETTINGS_JSON,
@@ -1394,20 +1416,20 @@ module.exports = {
   serializePrintTemplate,
   serializePrintTemplateForInvoice,
   buildPrintTemplatePayload,
-  ensureDefaultTemplateForAccount,
-  listPrintTemplates,
-  getPrintTemplateById,
-  getDefaultPrintTemplate,
-  getCurrentPrintTemplate,
-  createPrintTemplate,
-  updatePrintTemplate,
-  autosavePrintTemplateDraft,
-  publishPrintTemplateDraft,
-  discardPrintTemplateDraft,
-  setDefaultPrintTemplate,
-  softDeletePrintTemplate,
-  attachLogoToPrintTemplate,
-  removeLogoFromPrintTemplate,
-  countTemplatesUsingLogoPath,
-  resolveInvoicePrintTemplate,
+  ensureDefaultTemplateForAccount: withLocalPrintTemplateStorage('ensureDefaultTemplateForAccount', ensureDefaultTemplateForAccount),
+  listPrintTemplates: withLocalPrintTemplateStorage('listPrintTemplates', listPrintTemplates),
+  getPrintTemplateById: withLocalPrintTemplateStorage('getPrintTemplateById', getPrintTemplateById),
+  getDefaultPrintTemplate: withLocalPrintTemplateStorage('getDefaultPrintTemplate', getDefaultPrintTemplate),
+  getCurrentPrintTemplate: withLocalPrintTemplateStorage('getCurrentPrintTemplate', getCurrentPrintTemplate),
+  createPrintTemplate: withLocalPrintTemplateStorage('createPrintTemplate', createPrintTemplate),
+  updatePrintTemplate: withLocalPrintTemplateStorage('updatePrintTemplate', updatePrintTemplate),
+  autosavePrintTemplateDraft: withLocalPrintTemplateStorage('autosavePrintTemplateDraft', autosavePrintTemplateDraft),
+  publishPrintTemplateDraft: withLocalPrintTemplateStorage('publishPrintTemplateDraft', publishPrintTemplateDraft),
+  discardPrintTemplateDraft: withLocalPrintTemplateStorage('discardPrintTemplateDraft', discardPrintTemplateDraft),
+  setDefaultPrintTemplate: withLocalPrintTemplateStorage('setDefaultPrintTemplate', setDefaultPrintTemplate),
+  softDeletePrintTemplate: withLocalPrintTemplateStorage('softDeletePrintTemplate', softDeletePrintTemplate),
+  attachLogoToPrintTemplate: withLocalPrintTemplateStorage('attachLogoToPrintTemplate', attachLogoToPrintTemplate),
+  removeLogoFromPrintTemplate: withLocalPrintTemplateStorage('removeLogoFromPrintTemplate', removeLogoFromPrintTemplate),
+  countTemplatesUsingLogoPath: withLocalPrintTemplateStorage('countTemplatesUsingLogoPath', countTemplatesUsingLogoPath),
+  resolveInvoicePrintTemplate: withLocalPrintTemplateStorage('resolveInvoicePrintTemplate', resolveInvoicePrintTemplate),
 };

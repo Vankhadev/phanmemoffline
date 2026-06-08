@@ -610,6 +610,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       if (negativeStockAutosaveTimerRef.current) {
@@ -1050,6 +1051,29 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     } finally {
       if (mountedRef.current) setPrintTemplateSaving(false);
     }
+  };
+
+  const openDemoPrintTemplateEditor = () => {
+    const demo = normalizePrintTemplate({
+      id: null,
+      template_name: 'Mẫu thiết kế thử',
+      description: 'Bản demo local để thiết kế kéo thả khi chưa có MySQL mẫu in.',
+      shop_name: storeForm.name,
+      shop_address: storeForm.address,
+      shop_phone: storeForm.phone,
+      paper_size: 'A5',
+      orientation: 'portrait',
+      status: 'draft',
+      is_default: false,
+      revision: 1,
+    });
+    setPrintTemplateEdit({ ...demo, local_demo: true });
+    setPrintTemplateNotice(null);
+    setShowPrintTemplateModal(true);
+    setTimedNotice('print-templates', setPrintTemplatesNotice, {
+      tone: 'info',
+      message: 'Đang mở editor demo local. Để lưu/publish thật, hãy cấu hình MySQL và tạo mẫu in trên server.',
+    }, 5000);
   };
 
   const openEditPrintTemplate = (template) => {
@@ -1845,6 +1869,13 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
             </div>
           ) : printTemplates.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">
+              {canManagePrintTemplates && (
+                <div className="mb-4 flex flex-wrap justify-center gap-2">
+                  <button type="button" onClick={openDemoPrintTemplateEditor} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">
+                    <Edit2 size={14} /> Thiết kế thử
+                  </button>
+                </div>
+              )}
               Chưa có mẫu in hóa đơn. Nhấn “Thêm mẫu in” để tạo mẫu đầu tiên.
             </div>
           ) : (

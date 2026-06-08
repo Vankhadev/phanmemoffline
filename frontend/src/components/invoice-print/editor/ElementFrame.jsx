@@ -3,6 +3,16 @@ import { clampFrameToZone, getElementLabel, TABLE_STYLE_ELEMENT_ID } from './tem
 
 const PX_PER_MM = 3.7795275591;
 const RESIZE_HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+const RESIZE_HANDLE_STYLES = {
+  nw: { left: '-5px', top: '-5px', cursor: 'nw-resize' },
+  n: { left: '50%', top: '-5px', transform: 'translateX(-50%)', cursor: 'n-resize' },
+  ne: { right: '-5px', top: '-5px', cursor: 'ne-resize' },
+  e: { right: '-5px', top: '50%', transform: 'translateY(-50%)', cursor: 'e-resize' },
+  se: { right: '-5px', bottom: '-5px', cursor: 'se-resize' },
+  s: { left: '50%', bottom: '-5px', transform: 'translateX(-50%)', cursor: 's-resize' },
+  sw: { left: '-5px', bottom: '-5px', cursor: 'sw-resize' },
+  w: { left: '-5px', top: '50%', transform: 'translateY(-50%)', cursor: 'w-resize' },
+};
 const ALIGN_SNAP_TOLERANCE_MM = 1.1;
 
 function frameToPx(frame = {}, zoom = 1) {
@@ -147,6 +157,8 @@ export default function ElementFrame({
   onSelect,
   onFrameChange,
   onGuideChange,
+  onGestureStart,
+  onGestureEnd,
 }) {
   const gestureRef = useRef(null);
   const [dragging, setDragging] = useState(false);
@@ -155,12 +167,13 @@ export default function ElementFrame({
   const locked = readOnly || element.locked || !selectable;
 
   const finishGesture = useCallback(() => {
+    if (gestureRef.current) onGestureEnd?.();
     gestureRef.current = null;
     setDragging(false);
     onGuideChange?.({ x: [], y: [] });
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
-  }, [onGuideChange]);
+  }, [onGestureEnd, onGuideChange]);
 
   const handlePointerMove = useCallback((event) => {
     const gesture = gestureRef.current;
@@ -205,6 +218,7 @@ export default function ElementFrame({
     event.preventDefault();
     event.stopPropagation();
     onSelect?.(element.id);
+    onGestureStart?.();
     gestureRef.current = {
       mode,
       handle,
@@ -223,7 +237,7 @@ export default function ElementFrame({
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
     window.addEventListener('pointerup', handlePointerUp, { passive: false });
     window.addEventListener('pointercancel', handlePointerUp, { passive: false });
-  }, [element.frame, element.id, handlePointerMove, handlePointerUp, locked, onSelect, snapEnabled, snapGridMm, snapTargets, zone, zoom]);
+  }, [element.frame, element.id, handlePointerMove, handlePointerUp, locked, onGestureStart, onSelect, snapEnabled, snapGridMm, snapTargets, zone, zoom]);
 
   useEffect(() => () => finishGesture(), [finishGesture]);
 
@@ -254,6 +268,7 @@ export default function ElementFrame({
             <span
               key={handle}
               className={`invoice-editor-resize-handle invoice-editor-resize-${handle}`}
+              style={RESIZE_HANDLE_STYLES[handle]}
               onPointerDown={(event) => startGesture(event, 'resize', handle)}
               aria-hidden="true"
             />

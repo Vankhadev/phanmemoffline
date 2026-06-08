@@ -1,6 +1,7 @@
 import { forwardRef, useMemo } from 'react';
 import { getPaperDimensions, normalizeTemplateSettings } from './templateDefaults';
 import { getActiveEditorDocument, getTableStyleElement, TABLE_COLUMN_LABELS } from './editor/templateSchemaAdapter';
+import { isHtmlTemplateSource, renderHtmlTemplate, sanitizeTemplateCss } from './htmlTemplateEngine';
 import { resolveBackendAssetUrl } from '../../utils/apiClient';
 
 function formatVND(value) {
@@ -172,6 +173,8 @@ function normalizePayload(payload = {}, template = {}, settings = {}, logoPrevie
   const remainingAmount = toMoneyNumber(paymentSource.remaining_amount ?? totalsSource.remaining_amount ?? invoice.remaining_amount, Math.max(0, total - paidAmount));
   const changeAmount = toMoneyNumber(paymentSource.change_amount ?? totalsSource.change_amount ?? invoice.change_amount, Math.max(0, paidAmount - total));
   const userName = firstNonEmpty(metadata.user_name, metadata.created_by_user_name, invoice.user_name, invoice.invoice_writer, invoice.created_by_name);
+  const documentTitle = firstNonEmpty(metadata.document_title, metadata.documentTitle, invoice.document_title, invoice.documentTitle, source.document_title, source.documentTitle);
+  const printMode = firstNonEmpty(metadata.print_mode, metadata.printMode, invoice.print_mode, invoice.printMode, source.print_mode, source.printMode);
 
   return {
     store: mergeStore(source.store, template, settings, logoPreviewUrl),
@@ -182,7 +185,7 @@ function normalizePayload(payload = {}, template = {}, settings = {}, logoPrevie
       address: firstNonEmpty(customer.address, invoice.customer_address),
       tax_code: firstNonEmpty(customer.tax_code, invoice.customer_tax_code),
     },
-    invoice: { ...invoice, created_at: createdAt, note: firstNonEmpty(invoice.note, source.note) },
+    invoice: { ...invoice, created_at: createdAt, note: firstNonEmpty(invoice.note, source.note), document_title: documentTitle, print_mode: printMode },
     items,
     totals: {
       ...totalsSource,
@@ -205,7 +208,7 @@ function normalizePayload(payload = {}, template = {}, settings = {}, logoPrevie
       method_label: firstNonEmpty(paymentSource.method_label, paymentSource.payment_method_label, invoice.payment_method),
     },
     signatures: safeObject(source.signatures),
-    metadata: { ...metadata, user_name: userName },
+    metadata: { ...metadata, user_name: userName, document_title: documentTitle, print_mode: printMode },
   };
 }
 
@@ -341,9 +344,10 @@ function V2Element({ element, data, template }) {
   }
 
   if (element.type === 'invoiceTitle') {
+    const runtimeTitle = firstNonEmpty(metadata.document_title, invoice.document_title);
     return (
       <div className="invoice-template-v2-title" style={getElementCssStyle(element)}>
-        {isStyleEnabled(style, 'showTitle') && <h1>{style.titleText || 'HÓA ĐƠN'}</h1>}
+        {isStyleEnabled(style, 'showTitle') && <h1>{runtimeTitle || style.titleText || 'HÓA ĐƠN'}</h1>}
         {isStyleEnabled(style, 'showSubtitle') && <h2>{style.subtitleText || 'BÁN HÀNG'}</h2>}
         {isStyleEnabled(style, 'showInvoiceCode') && <div>{invoiceCode}</div>}
       </div>
@@ -444,6 +448,7 @@ function V2ItemsTable({ document, data }) {
   const tableStyle = tableStyleElement.style || {};
   const columns = Array.isArray(table.columns) && table.columns.length ? table.columns : [];
   const items = data.items || [];
+  const fixedHeight = frame.h === 'auto' ? null : Number(frame.h);
 
   return (
     <section
@@ -454,6 +459,7 @@ function V2ItemsTable({ document, data }) {
         left: `${Number(zone.frame?.x || 0) + Number(frame.x || 0)}mm`,
         top: `${Number(zone.frame?.y || 0) + Number(frame.y || 0)}mm`,
         width: `${Number(frame.w || zone.frame?.w || 100)}mm`,
+        ...(Number.isFinite(fixedHeight) && fixedHeight > 0 ? { minHeight: `${fixedHeight}mm` } : {}),
         '--invoice-v2-table-border-width': `${tableStyle.tableBorder === false ? 0 : (tableStyle.borderWidthMm ?? 0.22)}mm`,
         '--invoice-v2-table-border-color': tableStyle.borderColor || document.theme?.borderColor || '#cbd5e1',
         '--invoice-v2-table-header-bg': tableStyle.headerBackgroundColor || '#e2e8f0',
@@ -461,6 +467,8 @@ function V2ItemsTable({ document, data }) {
         '--invoice-v2-table-padding': `${tableStyle.paddingMm ?? 1.35}mm`,
         '--invoice-v2-table-font-size': `${tableStyle.fontSizePt ?? 8.2}pt`,
         '--invoice-v2-table-header-font-size': `${tableStyle.headerFontSizePt ?? 7.6}pt`,
+        '--invoice-v2-table-font-weight': tableStyle.fontWeight ?? 400,
+        '--invoice-v2-table-header-font-weight': tableStyle.headerFontWeight ?? 900,
         '--invoice-v2-table-line-height': tableStyle.lineHeight ?? 1.18,
       }}
     >
@@ -585,6 +593,59 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
   );
 }
 
+function HtmlTemplateRenderer({ refProp, payload, template, settingsOverride = {}, logoPreviewUrl, className, printScale, previewZoom, renderMode }) {
+  const templateSource = template || {};
+  const settings = useMemo(
+    () => normalizeTemplateSettings({
+      ...templateSource,
+      settings_json: {
+        ...(templateSource.settings_json || templateSource.settings || {}),
+        ...settingsOverride,
+      },
+      paper_size: settingsOverride.paperSize || settingsOverride.paper_size || templateSource.paper_size,
+      orientation: settingsOverride.orientation || templateSource.orientation,
+    }),
+    [settingsOverride, templateSource],
+  );
+
+  const normalized = useMemo(
+    () => normalizePayload(payload, templateSource, settings, logoPreviewUrl),
+    [logoPreviewUrl, payload, settings, templateSource],
+  );
+  const page = getPaperDimensions(settings.paperSize, settings.orientation);
+  const scale = Number.isFinite(Number(printScale)) ? Number(printScale) : settings.scale;
+  const zoom = Number.isFinite(Number(previewZoom)) ? Number(previewZoom) : settings.previewZoom;
+  const previewScale = renderMode === 'print' ? 1 : zoom;
+  const templateHtml = templateSource.template_data || templateSource.templateData || '';
+  const renderedHtml = useMemo(() => renderHtmlTemplate(templateHtml, normalized), [normalized, templateHtml]);
+  const customCss = useMemo(() => sanitizeTemplateCss(templateSource.css_style || templateSource.css || ''), [templateSource.css, templateSource.css_style]);
+
+  return (
+    <article
+      ref={refProp}
+      className={`invoice-paper invoice-print invoice-print-${page.paperSize.toLowerCase()} invoice-print-${page.orientation} invoice-print-html ${className}`.trim()}
+      style={{
+        '--invoice-page-width': `${page.width}mm`,
+        '--invoice-page-height': `${page.height}mm`,
+        '--invoice-paper-padding': `${settings.paddingMm}mm`,
+        '--invoice-paper-margin': `${settings.marginMm}mm`,
+        '--invoice-font-size': `${settings.fontSize}pt`,
+        '--invoice-line-height': settings.lineSpacing,
+        '--invoice-print-scale': scale,
+        '--invoice-preview-scale': previewScale,
+      }}
+      data-paper-size={page.paperSize}
+      data-orientation={page.orientation}
+      data-template-schema="html"
+    >
+      {customCss && <style>{customCss}</style>}
+      <div className="invoice-print-inner">
+        <div className="invoice-template-html" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+      </div>
+    </article>
+  );
+}
+
 function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPreviewUrl, className, printScale, previewZoom, renderMode }) {
   const templateSource = template || {};
   const settings = useMemo(
@@ -653,7 +714,7 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
             </div>
           </div>
           <div className="invoice-template-title-block">
-            <h1>HÓA ĐƠN BÁN HÀNG</h1>
+            <h1>{metadata.document_title || invoice.document_title || 'HÓA ĐƠN BÁN HÀNG'}</h1>
           </div>
           <section className="invoice-template-meta-grid">
             <InfoPair label="Mã đơn" value={invoice.invoice_code || invoice.code || invoice.id || '—'} strong />
@@ -756,6 +817,10 @@ function hasEditorDocument(template = {}) {
   return Number(template?.layout_json?.schema_version || template?.layout?.schema_version) === 2;
 }
 
+function hasHtmlTemplate(template = {}) {
+  return isHtmlTemplateSource(template?.template_data || template?.templateData || '');
+}
+
 const InvoiceTemplateRenderer = forwardRef(function InvoiceTemplateRenderer({
   payload = {},
   template = null,
@@ -767,6 +832,22 @@ const InvoiceTemplateRenderer = forwardRef(function InvoiceTemplateRenderer({
   renderMode = 'preview',
 }, ref) {
   const templateSource = template || {};
+  if (hasHtmlTemplate(templateSource)) {
+    return (
+      <HtmlTemplateRenderer
+        refProp={ref}
+        payload={payload}
+        template={templateSource}
+        settingsOverride={settingsOverride}
+        logoPreviewUrl={logoPreviewUrl}
+        className={className}
+        printScale={printScale}
+        previewZoom={previewZoom}
+        renderMode={renderMode}
+      />
+    );
+  }
+
   const shouldUseEditorRenderer = hasEditorDocument(templateSource);
   if (shouldUseEditorRenderer) {
     return (

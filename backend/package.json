@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-backend",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Backend for Bán hàng offline - by Van kha mmo",
   "main": "src/server.js",
   "scripts": {

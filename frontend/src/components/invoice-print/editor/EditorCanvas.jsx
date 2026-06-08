@@ -5,6 +5,7 @@ import {
   clampFrameToZone,
   getEditorPaperDimensions,
   getElementLabel,
+  PAGE_ZONE_ID,
   getTableStyleElement,
   TABLE_STYLE_ELEMENT_ID,
   TABLE_COLUMN_LABELS,
@@ -256,7 +257,7 @@ function getPageTableFrame(document = {}) {
   };
 }
 
-function TablePreview({ document, payload, selected, zoom, snapEnabled, snapGridMm, snapTargets, guides, onSelect, onUpdateTable, onGuideChange }) {
+function TablePreview({ document, payload, selected, zoom, snapEnabled, snapGridMm, snapTargets, guides, pageZone, onSelect, onUpdateTable, onGuideChange, onBeginHistory, onEndHistory }) {
   const table = document.table || {};
   const { zone, frame, pageFrame } = getPageTableFrame(document);
   const items = Array.isArray(payload.items) ? payload.items.slice(0, 5) : [];
@@ -275,15 +276,19 @@ function TablePreview({ document, payload, selected, zoom, snapEnabled, snapGrid
       snapGridMm={snapGridMm}
       snapTargets={snapTargets}
       onGuideChange={onGuideChange}
+      onGestureStart={onBeginHistory}
+      onGestureEnd={onEndHistory}
       onSelect={onSelect}
       onFrameChange={(nextPageFrame) => {
+        const targetZone = pageZone || zone;
         onUpdateTable?.({
+          zoneId: targetZone.id,
           frame: clampFrameToZone({
-            x: nextPageFrame.x - Number(zone.frame?.x || 0),
-            y: nextPageFrame.y - Number(zone.frame?.y || 0),
+            x: nextPageFrame.x - Number(targetZone.frame?.x || 0),
+            y: nextPageFrame.y - Number(targetZone.frame?.y || 0),
             w: nextPageFrame.w,
             h: nextPageFrame.h,
-          }, zone, { minW: 12, minH: 8 }),
+          }, targetZone, { minW: 12, minH: 8 }),
         });
       }}
     >
@@ -384,6 +389,8 @@ export default function EditorCanvas({
   onAddElement,
   onUpdateElement,
   onUpdateTable,
+  onBeginHistory,
+  onEndHistory,
 }) {
   const pageRef = useRef(null);
   const page = getEditorPaperDimensions(document);
@@ -400,6 +407,8 @@ export default function EditorCanvas({
 
   const zones = useMemo(() => Array.isArray(document.zones) ? document.zones : [], [document.zones]);
   const zonesById = useMemo(() => new Map(zones.map(zone => [zone.id, zone])), [zones]);
+  const pageZone = zonesById.get(PAGE_ZONE_ID) || { id: PAGE_ZONE_ID, frame: { x: 0, y: 0, w: page.width, h: page.height } };
+  const guideZones = useMemo(() => zones.filter(zone => zone.id !== PAGE_ZONE_ID), [zones]);
   const visibleElements = useMemo(() => [...(document.elements || [])]
     .filter(element => element.id !== TABLE_STYLE_ELEMENT_ID && element.type !== 'paymentQr' && element.visible !== false)
     .sort((a, b) => (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0)), [document.elements]);
@@ -407,30 +416,22 @@ export default function EditorCanvas({
   const rulerXTicks = useMemo(() => buildRulerTicks(page.width, zoom, 'x'), [page.width, zoom]);
   const rulerYTicks = useMemo(() => buildRulerTicks(page.height, zoom, 'y'), [page.height, zoom]);
 
-  const findZoneAt = useCallback((xMm, yMm) => {
-    return zones.find(zone => {
-      const frame = zone.frame || {};
-      return xMm >= frame.x && yMm >= frame.y && xMm <= frame.x + frame.w && yMm <= frame.y + frame.h;
-    }) || zones[0];
-  }, [zones]);
-
   const handleDrop = useCallback((event) => {
     const type = event.dataTransfer.getData('application/x-kha-invoice-element');
     if (!type || !pageRef.current) return;
     event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
     const rect = pageRef.current.getBoundingClientRect();
     const xMm = (event.clientX - rect.left) / (PX_PER_MM * zoom);
     const yMm = (event.clientY - rect.top) / (PX_PER_MM * zoom);
-    const zone = findZoneAt(xMm, yMm);
-    if (!zone) return;
     onAddElement?.(type, {
-      zoneId: zone.id,
+      zoneId: PAGE_ZONE_ID,
       frame: {
-        x: Math.max(0, clampToGrid(xMm - zone.frame.x, snapGridMm, snapEnabled)),
-        y: Math.max(0, clampToGrid(yMm - zone.frame.y, snapGridMm, snapEnabled)),
+        x: Math.max(0, clampToGrid(xMm, snapGridMm, snapEnabled)),
+        y: Math.max(0, clampToGrid(yMm, snapGridMm, snapEnabled)),
       },
     });
-  }, [findZoneAt, onAddElement, snapEnabled, snapGridMm, zoom]);
+  }, [onAddElement, snapEnabled, snapGridMm, zoom]);
 
   useEffect(() => {
     const handler = (event) => {
@@ -493,7 +494,7 @@ export default function EditorCanvas({
               }}
             />
           )}
-          {zones.map(zone => (
+          {guideZones.map(zone => (
             <div
               key={zone.id}
               className={`invoice-editor-zone invoice-editor-zone-${zone.type}`}
@@ -522,9 +523,12 @@ export default function EditorCanvas({
             snapGridMm={snapGridMm}
             snapTargets={snapTargets}
             guides={guides}
+            pageZone={pageZone}
             onSelect={onSelect}
             onUpdateTable={onUpdateTable}
             onGuideChange={setGuides}
+            onBeginHistory={onBeginHistory}
+            onEndHistory={onEndHistory}
           />
           {visibleElements.map(element => {
             const zone = zonesById.get(element.zoneId);
@@ -546,14 +550,20 @@ export default function EditorCanvas({
                 snapGridMm={snapGridMm}
                 snapTargets={snapTargets}
                 onGuideChange={setGuides}
+                onGestureStart={onBeginHistory}
+                onGestureEnd={onEndHistory}
                 onSelect={onSelect}
                 onFrameChange={(nextPageFrame) => {
+                  const targetZone = pageZone;
                   const localFrame = {
                     ...nextPageFrame,
-                    x: nextPageFrame.x - Number(zone.frame.x || 0),
-                    y: nextPageFrame.y - Number(zone.frame.y || 0),
+                    x: nextPageFrame.x - Number(targetZone.frame.x || 0),
+                    y: nextPageFrame.y - Number(targetZone.frame.y || 0),
                   };
-                  onUpdateElement?.(element.id, { frame: clampFrameToZone(localFrame, zone, { minW: element.type === 'line' ? 2 : 3, minH: element.type === 'line' ? 0.5 : 3 }) });
+                  onUpdateElement?.(element.id, {
+                    zoneId: targetZone.id,
+                    frame: clampFrameToZone(localFrame, targetZone, { minW: element.type === 'line' ? 2 : 3, minH: element.type === 'line' ? 0.5 : 3 }),
+                  });
                 }}
               >
                 <ElementContent element={element} template={template} payload={payload} />

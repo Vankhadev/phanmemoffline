@@ -8,7 +8,11 @@ import { getPaperDimensions, normalizeTemplateSettings } from '../components/inv
 import { getApiErrorMessage, invoicesApi, PRINT_TEMPLATE_UPDATED_EVENT, printTemplatesApi } from '../utils/apiClient';
 
 const PRINT_SETTINGS_KEY = 'kha.invoicePrint.settings';
-const PAPER_OPTIONS = ['K80', 'A5', 'A4'];
+const PAPER_OPTIONS = ['K80', 'K57', 'A5', 'A4'];
+const PRINTER_MODE_OPTIONS = [
+  { value: 'office', label: 'Máy in A4/A5' },
+  { value: 'thermal', label: 'Máy in nhiệt' },
+];
 const SCALE_PRESETS = [0.8, 0.9, 0.95, 1];
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 1;
@@ -46,6 +50,27 @@ function readPrintSettings() {
   } catch (_error) {
     return fallback;
   }
+}
+
+function readInitialPrintSettings(searchParams) {
+  const stored = readPrintSettings();
+  if (!searchParams || typeof searchParams.get !== 'function') return stored;
+  const paperParam = searchParams.get('paper') || searchParams.get('paper_size') || searchParams.get('paperSize');
+  const scaleParam = searchParams.get('scale');
+  const orientationParam = searchParams.get('orientation');
+  const paperSize = paperParam ? normalizePaperSize(paperParam) : stored.paperSize;
+  const orientation = paperSize.startsWith('K')
+    ? 'portrait'
+    : (orientationParam === 'landscape' || orientationParam === 'portrait' ? orientationParam : stored.orientation);
+
+  return {
+    ...stored,
+    paperSize,
+    paperSizeOverride: stored.paperSizeOverride || Boolean(paperParam),
+    scale: scaleParam ? normalizeScale(Number(scaleParam)) : stored.scale,
+    orientation,
+    orientationOverride: stored.orientationOverride || Boolean(orientationParam),
+  };
 }
 
 function writePrintSettings(settings) {
@@ -149,6 +174,9 @@ export default function InvoicePrint() {
   const [searchParams] = useSearchParams();
   const autoPrint = searchParams.get('print') === '1';
   const templateId = searchParams.get('template_id') || searchParams.get('templateId') || '';
+  const documentMode = (searchParams.get('mode') || searchParams.get('type')) === 'estimate' ? 'estimate' : 'invoice';
+  const documentLabel = documentMode === 'estimate' ? 'Tạm tính' : 'Hóa đơn';
+  const documentTitle = documentMode === 'estimate' ? 'PHIẾU TẠM TÍNH' : 'HÓA ĐƠN BÁN HÀNG';
   const printRef = useRef(null);
   const autoPrintedRef = useRef(false);
   const [data, setData] = useState(null);
@@ -157,7 +185,8 @@ export default function InvoicePrint() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [printError, setPrintError] = useState('');
   const [toast, setToast] = useState(null);
-  const [settings, setSettings] = useState(() => readPrintSettings());
+  const [settings, setSettings] = useState(() => readInitialPrintSettings(searchParams));
+  const [printerMode, setPrinterMode] = useState(() => readInitialPrintSettings(searchParams).paperSize.startsWith('K') ? 'thermal' : 'office');
 
   const invoiceCode = data?.invoice?.invoice_code || idOrCode || 'hoa-don';
   const backendTemplate = getBackendTemplate(data);
@@ -181,6 +210,23 @@ export default function InvoicePrint() {
   );
   const page = getPaperDimensions(templateSettings.paperSize, templateSettings.orientation);
   const scalePercent = Math.round(settings.scale * 100);
+  const printableData = useMemo(() => {
+    if (!data) return data;
+    if (documentMode !== 'estimate') return data;
+    return {
+      ...data,
+      invoice: {
+        ...(data.invoice || {}),
+        document_title: documentTitle,
+        print_mode: documentMode,
+      },
+      metadata: {
+        ...(data.metadata || {}),
+        document_title: documentTitle,
+        print_mode: documentMode,
+      },
+    };
+  }, [data, documentMode, documentTitle]);
 
   useEffect(() => {
     writePrintSettings(settings);
@@ -326,7 +372,9 @@ export default function InvoicePrint() {
     setPrintError('');
     try {
       const previousTitle = typeof document !== 'undefined' ? document.title : '';
-      if (typeof document !== 'undefined') document.title = `Hoa_don_${sanitizeFileName(invoiceCode)}`;
+      if (typeof document !== 'undefined') {
+        document.title = `${documentMode === 'estimate' ? 'Tam_tinh' : 'Hoa_don'}_${sanitizeFileName(invoiceCode)}`;
+      }
       window.requestAnimationFrame(() => {
         window.print();
         window.setTimeout(() => {
@@ -336,7 +384,7 @@ export default function InvoicePrint() {
     } catch (err) {
       setPrintError(err?.message || 'Không thể mở hộp thoại in của hệ điều hành.');
     }
-  }, [data, invoiceCode]);
+  }, [data, documentMode, invoiceCode]);
 
   useEffect(() => {
     if (!autoPrint || !data || loading || autoPrintedRef.current) return undefined;
@@ -358,8 +406,26 @@ export default function InvoicePrint() {
   }, []);
 
   const setPaperSize = useCallback((nextPaperSize) => {
+    const paperSize = normalizePaperSize(nextPaperSize);
+    setPrinterMode(paperSize.startsWith('K') ? 'thermal' : 'office');
     setSettings(prev => {
-      const paperSize = normalizePaperSize(nextPaperSize);
+      return {
+        ...prev,
+        paperSize,
+        paperSizeOverride: true,
+        orientation: paperSize.startsWith('K') ? 'portrait' : prev.orientation,
+      };
+    });
+  }, []);
+
+  const handlePrinterModeChange = useCallback((nextMode) => {
+    const mode = nextMode === 'thermal' ? 'thermal' : 'office';
+    setPrinterMode(mode);
+    setSettings(prev => {
+      const currentPaperSize = normalizePaperSize(prev.paperSize);
+      const paperSize = mode === 'thermal'
+        ? (currentPaperSize.startsWith('K') ? currentPaperSize : 'K80')
+        : (currentPaperSize.startsWith('K') ? 'A5' : currentPaperSize);
       return {
         ...prev,
         paperSize,
@@ -430,13 +496,13 @@ export default function InvoicePrint() {
       }
       const imgData = canvas.toDataURL('image/png', 1);
       pdf.addImage(imgData, 'PNG', 0, 0, page.width, page.height, undefined, 'FAST');
-      pdf.save(`Hoa_don_${sanitizeFileName(invoiceCode)}.pdf`);
+      pdf.save(`${documentMode === 'estimate' ? 'Tam_tinh' : 'Hoa_don'}_${sanitizeFileName(invoiceCode)}.pdf`);
     } catch (err) {
       setPrintError(err?.message || 'Không thể tải PDF hóa đơn.');
     } finally {
       setPdfLoading(false);
     }
-  }, [data, invoiceCode, page.height, page.orientation, page.width]);
+  }, [data, documentMode, invoiceCode, page.height, page.orientation, page.width]);
 
   return (
     <div className="invoice-print-page">
@@ -446,7 +512,7 @@ export default function InvoicePrint() {
             <ArrowLeft size={16} /> Quay lại
           </button>
           <div>
-            <h1>In hóa đơn {page.paperSize}</h1>
+            <h1>In {documentLabel.toLowerCase()} {page.paperSize}</h1>
             <p>
               {invoiceCode ? `Mã/ID: ${invoiceCode}` : 'Preview gọi dữ liệu thật từ API backend'}
               {hasBackendTemplate ? ` · Mẫu: ${activeTemplate.template_name || activeTemplate.name || activeTemplate.id}` : ` · Mặc định ${page.paperSize}`}
@@ -455,6 +521,12 @@ export default function InvoicePrint() {
         </div>
 
         <div className="invoice-toolbar-actions">
+          <label className="invoice-control-group invoice-control-wide">
+            <span>Kiểu máy</span>
+            <select value={printerMode} onChange={event => handlePrinterModeChange(event.target.value)}>
+              {PRINTER_MODE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
           <label className="invoice-control-group">
             <span>Khổ giấy</span>
             <select value={page.paperSize} onChange={event => setPaperSize(event.target.value)}>
@@ -505,7 +577,7 @@ export default function InvoicePrint() {
             {pdfLoading ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Tải PDF
           </button>
           <button type="button" onClick={handlePrintInvoice} disabled={!data} className="invoice-toolbar-btn invoice-toolbar-btn-primary">
-            <Printer size={16} /> In nhanh
+            <Printer size={16} /> In
           </button>
         </div>
       </div>
@@ -541,7 +613,7 @@ export default function InvoicePrint() {
           <div className="invoice-print-preview-frame">
             <InvoiceTemplateRenderer
               ref={printRef}
-              payload={data}
+              payload={printableData}
               template={activeTemplate}
               settingsOverride={settingsOverride}
               printScale={settings.scale}

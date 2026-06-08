@@ -1,6 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  Code2,
+  FileText,
+  Italic,
+  Loader2,
+  RefreshCw,
+  Save,
+  Table,
+  Type,
+  Underline,
+  X,
+} from 'lucide-react';
 import InvoiceTemplateRenderer from './InvoiceTemplateRenderer';
+import mockInvoicePayload from './mockInvoicePayload';
 import EditorCanvas from './editor/EditorCanvas';
 import EditorToolbar from './editor/EditorToolbar';
 import ElementPalette from './editor/ElementPalette';
@@ -9,6 +26,12 @@ import PropertiesPanel from './editor/PropertiesPanel';
 import useTemplateAutosave from './editor/useTemplateAutosave';
 import useTemplateEditorState from './editor/useTemplateEditorState';
 import { buildEditorMeta, getEditorPaperDimensions } from './editor/templateSchemaAdapter';
+import {
+  DEFAULT_SAPO_TEMPLATE_CSS,
+  DEFAULT_SAPO_TEMPLATE_HTML,
+  SAPO_TEMPLATE_VARIABLE_GROUPS,
+  isHtmlTemplateSource,
+} from './htmlTemplateEngine';
 import { getApiErrorMessage, invoicesApi, printTemplatesApi } from '../../utils/apiClient';
 
 function normalizeApiItem(data) {
@@ -51,6 +74,41 @@ function buildConflictNotice(error, fallback = 'Mẫu in đã được cập nh�
 }
 
 const PX_PER_MM = 3.7795275591;
+const SAPO_PAPER_OPTIONS = Object.freeze(['A4', 'A5', 'K80', 'K57']);
+
+function normalizeSapoPaperSize(value) {
+  const requested = String(value || '').trim().toUpperCase();
+  if (requested === 'K58') return 'K57';
+  return SAPO_PAPER_OPTIONS.includes(requested) ? requested : 'A4';
+}
+
+function normalizeSapoOrientation(value, paperSize = 'A4') {
+  if (String(paperSize || '').toUpperCase().startsWith('K')) return 'portrait';
+  return value === 'landscape' ? 'landscape' : 'portrait';
+}
+
+function buildSapoDraftFromTemplate(item = {}) {
+  const paperSize = normalizeSapoPaperSize(item?.paper_size || item?.settings_json?.paperSize || item?.settings?.paperSize || 'A4');
+  const orientation = normalizeSapoOrientation(item?.orientation || item?.settings_json?.orientation || item?.settings?.orientation, paperSize);
+  const templateData = item?.template_data || item?.templateData || '';
+  return {
+    html: isHtmlTemplateSource(templateData) ? String(templateData) : DEFAULT_SAPO_TEMPLATE_HTML,
+    css: String(item?.css_style || item?.css || DEFAULT_SAPO_TEMPLATE_CSS),
+    paperSize,
+    orientation,
+  };
+}
+
+function getSapoPreviewZoom(paperSize) {
+  const normalized = normalizeSapoPaperSize(paperSize);
+  if (normalized === 'A4') return 0.5;
+  if (normalized === 'A5') return 0.64;
+  return 0.92;
+}
+
+function hasPreviewPayload(payload) {
+  return Boolean(payload && typeof payload === 'object' && Object.keys(payload).length > 0);
+}
 
 function makeAutosaveBaselineKey(item = {}, fallback = {}) {
   return `${item?.id || fallback?.id || 'template'}:${item?.revision || fallback?.revision || 1}:${item?.updated_at || item?.last_autosaved_at || item?.published_at || Date.now()}`;
@@ -70,6 +128,9 @@ export default function PrintTemplateEditorModal({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
   const [autosaveBaselineKey, setAutosaveBaselineKey] = useState('initial');
+  const [editorMode, setEditorMode] = useState('canvas');
+  const [sapoDraft, setSapoDraft] = useState(() => buildSapoDraftFromTemplate(template || {}));
+  const htmlEditorRef = useRef(null);
 
   const editor = useTemplateEditorState(template || {});
   const activeTemplate = editor.template || template || {};
@@ -85,6 +146,7 @@ export default function PrintTemplateEditorModal({
       const data = await printTemplatesApi.detail(template.id);
       const item = normalizeApiItem(data);
       editor.setTemplateFromServer(item || template);
+      setSapoDraft(buildSapoDraftFromTemplate(item || template));
       setAutosaveBaselineKey(makeAutosaveBaselineKey(item, template));
       return item;
     } catch (error) {
@@ -170,6 +232,35 @@ export default function PrintTemplateEditorModal({
     revision: editor.revision,
   }), [activeTemplate, editor.document, editor.revision, editor.settings]);
 
+  const sapoPreviewTemplate = useMemo(() => {
+    const paperSize = normalizeSapoPaperSize(sapoDraft.paperSize);
+    const orientation = normalizeSapoOrientation(sapoDraft.orientation, paperSize);
+    return {
+      ...activeTemplate,
+      template_data: sapoDraft.html,
+      css_style: sapoDraft.css,
+      paper_size: paperSize,
+      orientation,
+      settings_json: {
+        ...(activeTemplate.settings_json || activeTemplate.settings || {}),
+        paperSize,
+        paper_size: paperSize,
+        orientation,
+        previewZoom: getSapoPreviewZoom(paperSize),
+        scale: activeTemplate.print_scale || activeTemplate.settings_json?.scale || 1,
+        paddingMm: paperSize === 'A4' ? 10 : 5,
+        marginMm: 0,
+        fontSize: 10,
+        lineSpacing: 1.35,
+      },
+    };
+  }, [activeTemplate, sapoDraft.css, sapoDraft.html, sapoDraft.orientation, sapoDraft.paperSize]);
+
+  const sapoPreviewPayload = useMemo(
+    () => (hasPreviewPayload(previewPayload) ? previewPayload : mockInvoicePayload),
+    [previewPayload],
+  );
+
   const autosave = useTemplateAutosave({
     templateId: activeTemplate?.id,
     enabled: show && canManage && hasTemplateId && !loading,
@@ -212,7 +303,10 @@ export default function PrintTemplateEditorModal({
   }, [editor.document, setEditorSettings]);
 
   const saveDraftNow = useCallback(async () => {
-    if (!activeTemplate?.id) return null;
+    if (!activeTemplate?.id) {
+      setNotice(buildNotice('error', 'Mẫu demo chưa có trên server. Hãy cấu hình MySQL và tạo mẫu in trước khi lưu draft.'));
+      return null;
+    }
     setBusy('draft');
     setNotice(null);
     try {
@@ -244,7 +338,10 @@ export default function PrintTemplateEditorModal({
   }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved]);
 
   const handlePublish = useCallback(async () => {
-    if (!activeTemplate?.id) return;
+    if (!activeTemplate?.id) {
+      setNotice(buildNotice('error', 'Mẫu demo chưa có trên server. Hãy tạo mẫu in trên server trước khi publish.'));
+      return;
+    }
     setBusy('publish');
     setNotice(null);
     try {
@@ -356,6 +453,174 @@ export default function PrintTemplateEditorModal({
     }
   }, [activeTemplate?.id, editor, onSaved]);
 
+  const hasEditableSelection = Boolean(editor.selectedId && editor.selectedId !== 'itemsTable');
+
+  const handleDuplicateSelected = useCallback(() => {
+    if (!hasEditableSelection) return;
+    editor.duplicateElement(editor.selectedId);
+  }, [editor, hasEditableSelection]);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (!hasEditableSelection) return;
+    editor.removeElement(editor.selectedId);
+  }, [editor, hasEditableSelection]);
+
+  const handleBringSelectedToFront = useCallback(() => {
+    if (!hasEditableSelection) return;
+    editor.bringElementToFront(editor.selectedId);
+  }, [editor, hasEditableSelection]);
+
+  const handleSendSelectedToBack = useCallback(() => {
+    if (!hasEditableSelection) return;
+    editor.sendElementToBack(editor.selectedId);
+  }, [editor, hasEditableSelection]);
+
+  useEffect(() => {
+    if (!show || editorMode !== 'canvas') return undefined;
+
+    const handleShortcut = (event) => {
+      const target = event.target;
+      const tagName = String(target?.tagName || '').toUpperCase();
+      const isEditingField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName) || target?.isContentEditable;
+      const key = String(event.key || '').toLowerCase();
+      const modifier = event.ctrlKey || event.metaKey;
+
+      if (modifier && key === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) editor.redo();
+        else editor.undo();
+        return;
+      }
+
+      if (modifier && key === 'y') {
+        event.preventDefault();
+        editor.redo();
+        return;
+      }
+
+      if (modifier && key === 'd' && hasEditableSelection) {
+        event.preventDefault();
+        handleDuplicateSelected();
+        return;
+      }
+
+      if (!isEditingField && (key === 'delete' || key === 'backspace') && hasEditableSelection) {
+        event.preventDefault();
+        handleDeleteSelected();
+      }
+    };
+
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [editor, editorMode, handleDeleteSelected, handleDuplicateSelected, hasEditableSelection, show]);
+
+  const insertIntoSapoHtml = useCallback((snippet) => {
+    setSapoDraft(current => {
+      const source = current.html || '';
+      const textarea = htmlEditorRef.current;
+      const start = textarea ? textarea.selectionStart : source.length;
+      const end = textarea ? textarea.selectionEnd : source.length;
+      const next = `${source.slice(0, start)}${snippet}${source.slice(end)}`;
+      window.requestAnimationFrame(() => {
+        if (!htmlEditorRef.current) return;
+        const cursor = start + String(snippet).length;
+        htmlEditorRef.current.focus();
+        htmlEditorRef.current.setSelectionRange(cursor, cursor);
+      });
+      return { ...current, html: next };
+    });
+  }, []);
+
+  const wrapSapoSelection = useCallback((before, after = '') => {
+    setSapoDraft(current => {
+      const source = current.html || '';
+      const textarea = htmlEditorRef.current;
+      const start = textarea ? textarea.selectionStart : source.length;
+      const end = textarea ? textarea.selectionEnd : source.length;
+      const selected = source.slice(start, end) || 'Nội dung';
+      const replacement = `${before}${selected}${after}`;
+      const next = `${source.slice(0, start)}${replacement}${source.slice(end)}`;
+      window.requestAnimationFrame(() => {
+        if (!htmlEditorRef.current) return;
+        const contentStart = start + before.length;
+        htmlEditorRef.current.focus();
+        htmlEditorRef.current.setSelectionRange(contentStart, contentStart + selected.length);
+      });
+      return { ...current, html: next };
+    });
+  }, []);
+
+  const updateSapoPaperSize = useCallback((value) => {
+    const paperSize = normalizeSapoPaperSize(value);
+    setSapoDraft(current => ({
+      ...current,
+      paperSize,
+      orientation: normalizeSapoOrientation(current.orientation, paperSize),
+    }));
+  }, []);
+
+  const updateSapoOrientation = useCallback((value) => {
+    setSapoDraft(current => ({
+      ...current,
+      orientation: normalizeSapoOrientation(value, current.paperSize),
+    }));
+  }, []);
+
+  const handleUseDefaultSapoTemplate = useCallback(() => {
+    setSapoDraft(current => ({
+      ...current,
+      html: DEFAULT_SAPO_TEMPLATE_HTML,
+      css: DEFAULT_SAPO_TEMPLATE_CSS,
+      paperSize: 'A4',
+      orientation: 'portrait',
+    }));
+    setNotice(buildNotice('success', 'Đã nạp mẫu đơn hàng A4 mặc định.'));
+  }, []);
+
+  const handleSapoReload = useCallback(async () => {
+    setBusy('sapo-reload');
+    try {
+      const item = await loadTemplateDetail();
+      if (item) onSaved?.(item);
+      await loadPreviewInvoice(item?.id || activeTemplate?.id);
+    } finally {
+      setBusy('');
+    }
+  }, [activeTemplate?.id, loadPreviewInvoice, loadTemplateDetail, onSaved]);
+
+  const handleSapoSave = useCallback(async () => {
+    if (!activeTemplate?.id) {
+      setNotice(buildNotice('error', 'Cần lưu mẫu in trước khi chỉnh nội dung kiểu Sapo.'));
+      return;
+    }
+    setBusy('sapo-save');
+    setNotice(null);
+    try {
+      const paperSize = normalizeSapoPaperSize(sapoDraft.paperSize);
+      const orientation = normalizeSapoOrientation(sapoDraft.orientation, paperSize);
+      const data = await printTemplatesApi.update(activeTemplate.id, {
+        template_data: sapoDraft.html,
+        css_style: sapoDraft.css,
+        paper_size: paperSize,
+        orientation,
+        template_type: activeTemplate.template_type || 'order',
+        status: activeTemplate.status === 'archived' ? 'active' : activeTemplate.status || 'active',
+      });
+      const item = normalizeApiItem(data);
+      if (item) {
+        editor.setTemplateFromServer(item, { preferDraft: false });
+        setSapoDraft(buildSapoDraftFromTemplate(item));
+        setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
+        onSaved?.(item);
+      }
+      setNotice(buildNotice('success', 'Đã lưu mẫu in kiểu Sapo. Trang in hóa đơn sẽ dùng bản HTML mới.'));
+    } catch (error) {
+      setNotice(buildNotice('error', getErrorMessage(error, 'Không thể lưu mẫu in kiểu Sapo.')));
+    } finally {
+      setBusy('');
+    }
+  }, [activeTemplate, editor, onSaved, sapoDraft.css, sapoDraft.html, sapoDraft.orientation, sapoDraft.paperSize]);
+
   if (!show) return null;
 
   return (
@@ -363,33 +628,91 @@ export default function PrintTemplateEditorModal({
       <div className="invoice-editor-shell" role="dialog" aria-modal="true" aria-labelledby="invoice-editor-title">
         <div className="invoice-editor-topbar">
           <div>
-            <h1 id="invoice-editor-title">Editor mẫu in hóa đơn kiểu Canva</h1>
-            <p>Kéo thả, resize, snap grid, autosave draft theo revision và publish sang layout in thật.</p>
+            <h1 id="invoice-editor-title">Chỉnh sửa mẫu in đơn hàng</h1>
+            <p>{editorMode === 'sapo' ? 'Soạn nội dung mẫu in, chèn từ khóa và xem trước A4 theo dữ liệu hóa đơn thật.' : 'Kéo thả, resize, snap grid, autosave draft theo revision và publish sang layout in thật.'}</p>
           </div>
-          <button type="button" className="invoice-editor-close" onClick={onClose} disabled={busy === 'publish'}>
-            <X size={20} />
-          </button>
+          <div className="invoice-editor-topbar-actions">
+            <div className="invoice-editor-mode-toggle" role="tablist" aria-label="Chế độ chỉnh sửa mẫu in">
+              <button type="button" className={editorMode === 'sapo' ? 'is-active' : ''} onClick={() => setEditorMode('sapo')}>
+                <Code2 size={15} /> Sapo
+              </button>
+              <button type="button" className={editorMode === 'canvas' ? 'is-active' : ''} onClick={() => setEditorMode('canvas')}>
+                <Type size={15} /> Kéo thả
+              </button>
+            </div>
+            <button type="button" className="invoice-editor-close" onClick={onClose} disabled={busy === 'publish' || busy === 'sapo-save'}>
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
-        <EditorToolbar
-          template={activeTemplate}
-          settings={editor.settings}
-          autosaveStatus={autosave.status}
-          lastSavedAt={autosave.lastSavedAt}
-          busy={busy}
-          canManage={canManage}
-          onZoomChange={(zoom) => setEditorSettings(current => ({ ...current, editor: { ...current.editor, zoom } }))}
-          onToggleGrid={() => setEditorSettings(current => ({ ...current, editor: { ...current.editor, showGrid: current.editor?.showGrid === false } }))}
-          onToggleRuler={() => setEditorSettings(current => ({ ...current, editor: { ...current.editor, showRuler: current.editor?.showRuler === false } }))}
-          onToggleSnap={() => setEditorSettings(current => ({ ...current, editor: { ...current.editor, snapEnabled: current.editor?.snapEnabled === false } }))}
-          onFitZoom={handleFitZoom}
-          onSaveDraft={saveDraftNow}
-          onPublish={hasConflict ? undefined : handlePublish}
-          onDiscardDraft={handleDiscardDraft}
-          onReload={handleReload}
-          onLogoChange={handleLogoChange}
-          onRemoveLogo={handleRemoveLogo}
-        />
+        {editorMode === 'canvas' ? (
+          <EditorToolbar
+            template={activeTemplate}
+            settings={editor.settings}
+            autosaveStatus={autosave.status}
+            lastSavedAt={autosave.lastSavedAt}
+            busy={busy}
+            canManage={canManage}
+            selectedId={editor.selectedId}
+            canUndo={editor.canUndo}
+            canRedo={editor.canRedo}
+            onZoomChange={(zoom) => setEditorSettings(current => ({ ...current, editor: { ...current.editor, zoom } }))}
+            onToggleGrid={() => setEditorSettings(current => ({ ...current, editor: { ...current.editor, showGrid: current.editor?.showGrid === false } }))}
+            onToggleRuler={() => setEditorSettings(current => ({ ...current, editor: { ...current.editor, showRuler: current.editor?.showRuler === false } }))}
+            onToggleSnap={() => setEditorSettings(current => ({ ...current, editor: { ...current.editor, snapEnabled: current.editor?.snapEnabled === false } }))}
+            onFitZoom={handleFitZoom}
+            onSaveDraft={saveDraftNow}
+            onPublish={hasConflict ? undefined : handlePublish}
+            onDiscardDraft={handleDiscardDraft}
+            onReload={handleReload}
+            onLogoChange={handleLogoChange}
+            onRemoveLogo={handleRemoveLogo}
+            onUndo={editor.undo}
+            onRedo={editor.redo}
+            onDuplicateSelected={handleDuplicateSelected}
+            onDeleteSelected={handleDeleteSelected}
+            onBringToFront={handleBringSelectedToFront}
+            onSendToBack={handleSendSelectedToBack}
+          />
+        ) : (
+          <div className="invoice-sapo-toolbar">
+            <div className="invoice-sapo-toolbar-group">
+              <button type="button" title="Đậm" aria-label="Đậm" onClick={() => wrapSapoSelection('<strong>', '</strong>')}><Bold size={16} /></button>
+              <button type="button" title="Nghiêng" aria-label="Nghiêng" onClick={() => wrapSapoSelection('<em>', '</em>')}><Italic size={16} /></button>
+              <button type="button" title="Gạch chân" aria-label="Gạch chân" onClick={() => wrapSapoSelection('<u>', '</u>')}><Underline size={16} /></button>
+              <button type="button" title="Tiêu đề" aria-label="Tiêu đề" onClick={() => wrapSapoSelection('<h2>', '</h2>')}><Type size={16} /></button>
+              <button type="button" title="Căn trái" aria-label="Căn trái" onClick={() => wrapSapoSelection('<div style="text-align:left">', '</div>')}><AlignLeft size={16} /></button>
+              <button type="button" title="Căn giữa" aria-label="Căn giữa" onClick={() => wrapSapoSelection('<div style="text-align:center">', '</div>')}><AlignCenter size={16} /></button>
+              <button type="button" title="Căn phải" aria-label="Căn phải" onClick={() => wrapSapoSelection('<div style="text-align:right">', '</div>')}><AlignRight size={16} /></button>
+              <button type="button" title="Chèn bảng hàng" aria-label="Chèn bảng hàng" onClick={() => insertIntoSapoHtml('\n{{items_table}}\n')}><Table size={16} /></button>
+            </div>
+
+            <div className="invoice-sapo-toolbar-group">
+              <label>
+                <span>Khổ giấy</span>
+                <select value={sapoDraft.paperSize} onChange={event => updateSapoPaperSize(event.target.value)}>
+                  {SAPO_PAPER_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Hướng</span>
+                <select value={sapoDraft.orientation} onChange={event => updateSapoOrientation(event.target.value)} disabled={String(sapoDraft.paperSize || '').startsWith('K')}>
+                  <option value="portrait">Dọc</option>
+                  <option value="landscape">Ngang</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="invoice-sapo-toolbar-group invoice-sapo-toolbar-actions">
+              <button type="button" onClick={handleUseDefaultSapoTemplate}><FileText size={16} /> Mẫu A4</button>
+              <button type="button" onClick={handleSapoReload} disabled={busy === 'sapo-reload'}><RefreshCw size={16} className={busy === 'sapo-reload' ? 'animate-spin' : ''} /> Tải lại</button>
+              <button type="button" className="invoice-sapo-save" onClick={handleSapoSave} disabled={!canManage || busy === 'sapo-save'}>
+                {busy === 'sapo-save' ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Lưu mẫu
+              </button>
+            </div>
+          </div>
+        )}
 
         {notice?.message && (
           <div className={`invoice-editor-notice invoice-editor-notice-${notice.tone}`}>
@@ -402,7 +725,7 @@ export default function PrintTemplateEditorModal({
           <div className="invoice-editor-loading">
             <Loader2 size={24} className="animate-spin" /> Đang tải editor document từ API template...
           </div>
-        ) : (
+        ) : editorMode === 'canvas' ? (
           <div className="invoice-editor-workspace">
             <div className="invoice-editor-left">
               <ElementPalette onAddElement={(type, options) => editor.addElement(type, options)} />
@@ -413,6 +736,8 @@ export default function PrintTemplateEditorModal({
                 onUpdateElement={editor.updateElement}
                 onRemoveElement={editor.removeElement}
                 onDuplicateElement={editor.duplicateElement}
+                onBringToFront={editor.bringElementToFront}
+                onSendToBack={editor.sendElementToBack}
               />
             </div>
 
@@ -431,6 +756,8 @@ export default function PrintTemplateEditorModal({
                 onAddElement={editor.addElement}
                 onUpdateElement={editor.updateElement}
                 onUpdateTable={editor.updateTable}
+                onBeginHistory={editor.beginHistory}
+                onEndHistory={editor.endHistory}
                 onSetDocument={setEditorDocument}
               />
             </div>
@@ -457,6 +784,76 @@ export default function PrintTemplateEditorModal({
                 )}
               </section>
             </div>
+          </div>
+        ) : (
+          <div className="invoice-sapo-workspace">
+            <aside className="invoice-sapo-variables">
+              <div className="invoice-editor-panel-title">Từ khóa</div>
+              <div className="invoice-sapo-variable-list">
+                {SAPO_TEMPLATE_VARIABLE_GROUPS.map(group => (
+                  <section key={group.group}>
+                    <h4>{group.group}</h4>
+                    <div>
+                      {group.variables.map(variable => (
+                        <button
+                          key={`${group.group}-${variable.label}`}
+                          type="button"
+                          onClick={() => insertIntoSapoHtml(variable.token)}
+                          title={variable.token}
+                        >
+                          <span>{variable.label}</span>
+                          <code>{variable.token}</code>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </aside>
+
+            <section className="invoice-sapo-editor-pane">
+              <div className="invoice-sapo-editor-header">
+                <span>Nội dung mẫu in</span>
+                <code>{sapoDraft.html.length.toLocaleString('vi-VN')} ký tự</code>
+              </div>
+              <textarea
+                ref={htmlEditorRef}
+                className="invoice-sapo-code-textarea"
+                value={sapoDraft.html}
+                spellCheck={false}
+                onChange={event => setSapoDraft(current => ({ ...current, html: event.target.value }))}
+              />
+
+              <div className="invoice-sapo-editor-header invoice-sapo-css-header">
+                <span>CSS riêng</span>
+                <code>{sapoDraft.css.length.toLocaleString('vi-VN')} ký tự</code>
+              </div>
+              <textarea
+                className="invoice-sapo-css-textarea"
+                value={sapoDraft.css}
+                spellCheck={false}
+                onChange={event => setSapoDraft(current => ({ ...current, css: event.target.value }))}
+              />
+            </section>
+
+            <section className="invoice-sapo-preview-pane">
+              {previewLoading && (
+                <div className="invoice-editor-preview-source"><Loader2 size={14} className="animate-spin" /> Đang nạp hóa đơn thật để preview...</div>
+              )}
+              {previewError && <div className="invoice-editor-preview-source invoice-editor-preview-source-warning">{previewError}</div>}
+              <div className="invoice-sapo-preview-meta">
+                <span>Preview</span>
+                <code>{sapoDraft.paperSize} · {sapoDraft.orientation === 'landscape' ? 'Ngang' : 'Dọc'}</code>
+              </div>
+              <div className="invoice-print-preview-frame invoice-sapo-preview-frame">
+                <InvoiceTemplateRenderer
+                  payload={sapoPreviewPayload}
+                  template={sapoPreviewTemplate}
+                  previewZoom={getSapoPreviewZoom(sapoDraft.paperSize)}
+                  renderMode="editor-preview"
+                />
+              </div>
+            </section>
           </div>
         )}
       </div>
