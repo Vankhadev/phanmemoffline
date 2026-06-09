@@ -38,6 +38,10 @@ function roundToGrid(value, grid = 1, enabled = true) {
   return roundMm(Math.round((Number(value) || 0) / step) * step);
 }
 
+function framesMatch(left = {}, right = {}) {
+  return ['x', 'y', 'w', 'h'].every(key => String(left?.[key] ?? '') === String(right?.[key] ?? ''));
+}
+
 function buildResizeFrame(startFrame, deltaMm, handle) {
   const next = { ...startFrame };
   const dx = deltaMm.x;
@@ -159,21 +163,52 @@ export default function ElementFrame({
   onGuideChange,
   onGestureStart,
   onGestureEnd,
+  lockY = false,
 }) {
   const gestureRef = useRef(null);
+  const lastFrameRef = useRef(null);
+  const pendingFrameRef = useRef(null);
+  const pendingGuidesRef = useRef({ x: [], y: [] });
+  const animationFrameRef = useRef(0);
+  const lastGuidesKeyRef = useRef('');
+  const onFrameChangeRef = useRef(onFrameChange);
+  const onGuideChangeRef = useRef(onGuideChange);
+  const onGestureEndRef = useRef(onGestureEnd);
   const [dragging, setDragging] = useState(false);
-  const framePx = frameToPx(element.frame, zoom);
+  const [draftFrame, setDraftFrame] = useState(null);
+  const renderFrame = dragging && draftFrame ? draftFrame : element.frame;
+  const framePx = frameToPx(renderFrame, zoom);
   const selectable = element.id !== TABLE_STYLE_ELEMENT_ID;
   const locked = readOnly || element.locked || !selectable;
 
-  const finishGesture = useCallback(() => {
-    if (gestureRef.current) onGestureEnd?.();
+  useEffect(() => {
+    onFrameChangeRef.current = onFrameChange;
+    onGuideChangeRef.current = onGuideChange;
+    onGestureEndRef.current = onGestureEnd;
+  }, [onFrameChange, onGestureEnd, onGuideChange]);
+
+  const finishGesture = useCallback((options = {}) => {
+    const gesture = gestureRef.current;
+    const shouldCommit = gesture && options.commit !== false && lastFrameRef.current && !framesMatch(gesture.startFrame, lastFrameRef.current);
+    if (shouldCommit) {
+      onFrameChangeRef.current?.(lastFrameRef.current);
+    }
+    if (gesture) {
+      onGestureEndRef.current?.();
+    }
+    if (animationFrameRef.current) window.cancelAnimationFrame(animationFrameRef.current);
+    animationFrameRef.current = 0;
     gestureRef.current = null;
+    lastFrameRef.current = null;
+    pendingFrameRef.current = null;
+    pendingGuidesRef.current = { x: [], y: [] };
+    lastGuidesKeyRef.current = '';
+    setDraftFrame(null);
     setDragging(false);
-    onGuideChange?.({ x: [], y: [] });
+    onGuideChangeRef.current?.({ x: [], y: [] });
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
-  }, [onGestureEnd, onGuideChange]);
+  }, []);
 
   const handlePointerMove = useCallback((event) => {
     const gesture = gestureRef.current;
@@ -201,9 +236,23 @@ export default function ElementFrame({
 
     const snapped = applyAlignmentSnap(nextFrame, gesture);
     const clamped = clampFrameToZone(snapped.frame, gesture.zone, { minW: element.type === 'line' ? 2 : 3, minH: element.type === 'line' ? 0.5 : 3 });
-    onGuideChange?.(snapped.guides);
-    onFrameChange?.(clamped);
-  }, [element.type, onFrameChange, onGuideChange]);
+    if (gesture.lockY) clamped.y = Number(gesture.startFrame.y) || 0;
+    lastFrameRef.current = clamped;
+    pendingFrameRef.current = clamped;
+    pendingGuidesRef.current = snapped.guides;
+    if (!animationFrameRef.current) {
+      animationFrameRef.current = window.requestAnimationFrame(() => {
+        animationFrameRef.current = 0;
+        if (pendingFrameRef.current) setDraftFrame(pendingFrameRef.current);
+        const nextGuides = pendingGuidesRef.current || { x: [], y: [] };
+        const guidesKey = `${nextGuides.x.join(',')}|${nextGuides.y.join(',')}`;
+        if (guidesKey !== lastGuidesKeyRef.current) {
+          lastGuidesKeyRef.current = guidesKey;
+          onGuideChangeRef.current?.(nextGuides);
+        }
+      });
+    }
+  }, [element.type]);
 
   const handlePointerUp = useCallback((event) => {
     event.preventDefault();
@@ -230,16 +279,19 @@ export default function ElementFrame({
       snap: snapEnabled,
       grid: snapGridMm,
       snapTargets,
+      lockY,
     };
+    lastFrameRef.current = { ...element.frame };
+    setDraftFrame({ ...element.frame });
     setDragging(true);
     document.body.style.cursor = mode === 'move' ? 'grabbing' : `${handle}-resize`;
     document.body.style.userSelect = 'none';
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
     window.addEventListener('pointerup', handlePointerUp, { passive: false });
     window.addEventListener('pointercancel', handlePointerUp, { passive: false });
-  }, [element.frame, element.id, handlePointerMove, handlePointerUp, locked, onGestureStart, onSelect, snapEnabled, snapGridMm, snapTargets, zone, zoom]);
+  }, [element.frame, element.id, handlePointerMove, handlePointerUp, lockY, locked, onGestureStart, onSelect, snapEnabled, snapGridMm, snapTargets, zone, zoom]);
 
-  useEffect(() => () => finishGesture(), [finishGesture]);
+  useEffect(() => () => finishGesture({ commit: false }), [finishGesture]);
 
   return (
     <div

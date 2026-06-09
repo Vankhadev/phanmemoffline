@@ -389,15 +389,19 @@ function V2Element({ element, data, template }) {
   if (element.type === 'totals') {
     const paidAmount = Number(totals.paid_amount ?? totals.paid ?? 0) || 0;
     const remainingAmount = Number(totals.remaining_amount ?? totals.debt_amount ?? Math.max(0, (Number(totals.total) || 0) - paidAmount)) || 0;
+    const showSubtotal = style.showSubtotal !== false;
+    const showDiscount = style.showDiscount !== false;
+    const showGrandTotal = style.showGrandTotal !== false;
+    const showDebt = style.showDebt !== false;
     return (
       <div className="invoice-template-v2-totals" style={getElementCssStyle(element)}>
-        <MoneyLine label="Tổng tiền hàng" value={totals.subtotal ?? totals.total_before_discount ?? totals.total} />
+        {showSubtotal && <MoneyLine label="Tổng tiền hàng" value={totals.subtotal ?? totals.total_before_discount ?? totals.total} />}
         <MoneyLine label={`VAT (${Number(totals.vat_percent) || 0}%)`} value={totals.vat_amount} hiddenWhenZero />
-        <MoneyLine label="Chiết khấu" value={totals.discount_amount} negative hiddenWhenZero />
+        {showDiscount && <MoneyLine label="Chiết khấu" value={totals.discount_amount} negative hiddenWhenZero />}
         <MoneyLine label="Phí giao hàng" value={totals.delivery_fee} hiddenWhenZero />
-        <MoneyLine label="Tổng tiền" value={totals.total ?? totals.grand_total} highlight />
+        {showGrandTotal && <MoneyLine label="Tổng tiền" value={totals.total ?? totals.grand_total} highlight />}
         <MoneyLine label="Đã thanh toán" value={paidAmount} hiddenWhenZero />
-        <MoneyLine label="Công nợ" value={remainingAmount} hiddenWhenZero />
+        {showDebt && <MoneyLine label="Công nợ" value={remainingAmount} hiddenWhenZero />}
         <MoneyLine label="Tiền thừa" value={totals.change_amount} hiddenWhenZero />
       </div>
     );

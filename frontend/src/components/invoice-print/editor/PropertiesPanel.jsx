@@ -308,6 +308,16 @@ export default function PropertiesPanel({
               <p className="invoice-editor-prop-note">Khi bật, khối tổng tiền tự chạy xuống dưới chân bảng sản phẩm theo số dòng của đơn hàng; kéo ngang vẫn dùng X/Width, vị trí Y do hệ thống tính.</p>
             </section>
           )}
+          {element.type === 'totals' && (
+            <section>
+              <h4>Dòng hiển thị</h4>
+              <ToggleField label="Tổng tiền hàng" checked={element.style?.showSubtotal !== false} onChange={value => updateElementStyle({ showSubtotal: value })} />
+              <ToggleField label="Chiết khấu" checked={element.style?.showDiscount !== false} onChange={value => updateElementStyle({ showDiscount: value })} />
+              <ToggleField label="Tổng tiền" checked={element.style?.showGrandTotal !== false} onChange={value => updateElementStyle({ showGrandTotal: value })} />
+              <ToggleField label="Công nợ" checked={element.style?.showDebt !== false} onChange={value => updateElementStyle({ showDebt: value })} />
+              <p className="invoice-editor-prop-note">Tắt dòng nào thì dòng đó ẩn khỏi khung thiết kế và bản in hóa đơn.</p>
+            </section>
+          )}
           {element.type === 'storeInfo' && (
             <section>
               <h4>Thông tin cửa hàng</h4>

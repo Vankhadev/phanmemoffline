@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Search, Plus, X, Save, Package, Tag, FileText, AlertCircle, CheckCircle, Building, Trash2, CreditCard, RotateCcw } from 'lucide-react';
+import { Search, Plus, X, Save, Package, Tag, FileText, AlertCircle, CheckCircle, Building, Trash2, CreditCard, RotateCcw, Settings, ChevronDown } from 'lucide-react';
 import { SYNC_UPDATED_EVENT, apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
 import { buildCategoriesById, categoryFields, getProductDisplayName, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
@@ -2221,10 +2221,6 @@ const Nhaphang = ({ store }) => {
           {currentOrder && <span className="text-xs font-medium text-gray-400">{isEditingOrder ? 'Đang sửa' : 'Đang xem'} {currentOrder.maDonHang}</span>}
         </button>
         <div className="sapo-actions">
-          <button type="button" onClick={handleOpenReturns} disabled={saving} className="sapo-btn">
-            <RotateCcw className="w-4 h-4" />
-            Hoàn trả hàng
-          </button>
           <button onClick={handleExit} disabled={saving} className="sapo-btn">
             Thoát
           </button>
@@ -2261,7 +2257,622 @@ const Nhaphang = ({ store }) => {
           </div>
         )}
 
+        {/* Sapo purchase order layout */}
+        <div className="space-y-4">
+          <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="sapo-card min-w-0">
+              <div className="sapo-card-header">
+                <h2>Thông tin nhà cung cấp</h2>
+              </div>
+              <div className="p-4">
+                <div className="relative" ref={supplierSearchContainerRef}>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      ref={supplierInputRef}
+                      value={supplierSearchQuery}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        if (selectedSupplier && !prepareSupplierChange(null)) {
+                          setSupplierSearchQuery(selectedSupplier.tenNCC || '');
+                          return;
+                        }
+                        setSupplierSearchQuery(nextValue);
+                        setShowAllSuppliers(false);
+                        setSelectedSupplier(null);
+                        setError(null);
+                      }}
+                      onFocus={() => {
+                        setShowSupplierResults(true);
+                        setShowAllSuppliers(true);
+                      }}
+                      placeholder="Tìm kiếm nhà cung cấp"
+                      className="input-field w-full pl-10 pr-4 text-sm"
+                      disabled={saving}
+                    />
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    {loading && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></div>
+                      </div>
+                    )}
+                    {showSupplierResults && (
+                      <div
+                        ref={supplierResultsRef}
+                        className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-sm border border-gray-200 bg-white shadow-lg"
+                      >
+                        {(supplierSearchQuery || showAllSuppliers) ? (
+                          loading && supplierSearchQuery ? (
+                            <div className="p-3 text-center text-sm text-gray-500">Đang tìm kiếm...</div>
+                          ) : filteredSuppliers.length > 0 ? (
+                            filteredSuppliers.map(supplier => (
+                              <div
+                                key={supplier.id}
+                                onClick={() => handleSelectSupplier(supplier)}
+                                className="cursor-pointer border-b border-gray-100 px-3 py-2 last:border-b-0 hover:bg-blue-50"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="truncate text-sm font-medium text-gray-900">{supplier.name}</span>
+                                  <span className="shrink-0 text-xs text-gray-500">({supplier.id || supplier.maNCC || 'N/A'})</span>
+                                </div>
+                                <div className="mt-0.5 truncate text-xs text-gray-500">{supplier.address || '---'}</div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="p-3 text-center text-sm text-gray-500">Không tìm thấy</div>
+                          )
+                        ) : (
+                          suppliers.map(supplier => (
+                            <div
+                              key={supplier.id}
+                              onClick={() => handleSelectSupplier(supplier)}
+                              className="cursor-pointer border-b border-gray-100 px-3 py-2 last:border-b-0 hover:bg-blue-50"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="truncate text-sm font-medium text-gray-900">{supplier.name}</span>
+                                <span className="shrink-0 text-xs text-gray-500">({supplier.id || supplier.maNCC || 'N/A'})</span>
+                              </div>
+                              <div className="mt-0.5 truncate text-xs text-gray-500">{supplier.address || '---'}</div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {selectedSupplier ? (
+                  <div className="mt-4 rounded-sm border border-blue-100 bg-blue-50 px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-gray-900">{selectedSupplier.tenNCC}</div>
+                        <div className="mt-1 text-xs text-gray-600">Mã: {selectedSupplier.maNCC || 'N/A'}</div>
+                        <div className="mt-0.5 truncate text-xs text-gray-600">{selectedSupplier.diaChi || 'Chưa có địa chỉ'}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleClearSupplier}
+                        disabled={saving}
+                        className="shrink-0 rounded-sm p-1 text-gray-400 hover:bg-white hover:text-gray-700 disabled:text-gray-300"
+                        title="Bỏ chọn nhà cung cấp"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="sapo-muted-empty">
+                    <Building className="h-10 w-10 text-gray-300" />
+                    <div>Chưa có thông tin nhà cung cấp</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="sapo-card min-w-0">
+              <div className="sapo-card-header">
+                <h2>Thông tin đơn nhập hàng</h2>
+              </div>
+              <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-1">
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-xs font-medium text-gray-500">Mã phiếu</span>
+                  <input className="input-field w-full bg-gray-50" value={currentOrder?.maDonHang || 'Tự động'} readOnly />
+                </label>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-xs font-medium text-gray-500">Chi nhánh</span>
+                  <input className="input-field w-full bg-gray-50" value={store?.name || 'Chi nhánh mặc định'} readOnly />
+                </label>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-xs font-medium text-gray-500">Nhân viên phụ trách</span>
+                  <input className="input-field w-full bg-gray-50" value={currentOrder?.nguoiNhap || 'Người dùng'} readOnly />
+                </label>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-xs font-medium text-gray-500">Ngày hẹn giao</span>
+                  <input className="input-field w-full" type="date" disabled={saving} />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="sapo-card min-w-0">
+            <div className="sapo-card-header flex-wrap">
+              <h2>Thông tin sản phẩm</h2>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                <label className="inline-flex items-center gap-2">
+                  <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" disabled={saving} />
+                  Tách dòng
+                </label>
+                <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-gray-300 text-gray-500 hover:bg-gray-50" title="Cấu hình bảng">
+                  <Settings className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="border-b border-gray-100 p-4">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                <div className="relative min-w-[280px] flex-1" ref={productSearchContainerRef}>
+                  <input
+                    type="text"
+                    ref={searchInputRef}
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setShowSearchResults(true);
+                      setSelectedProduct(null);
+                      setError(null);
+                    }}
+                    onFocus={() => {
+                      if (!selectedSupplier) {
+                        showSupplierRequiredHint();
+                        return;
+                      }
+                      setFilteredProducts(getScopedProductSearchResults(searchQuery));
+                      setShowSearchResults(true);
+                    }}
+                    placeholder={selectedSupplier ? 'Tìm sản phẩm theo tên, SKU hoặc quét Barcode' : 'Chọn nhà cung cấp trước khi tìm sản phẩm'}
+                    className="input-field w-full pl-10 pr-4 text-sm disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                    aria-disabled={saving || !selectedSupplier}
+                    disabled={saving || !selectedSupplier}
+                  />
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  {loading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></div>
+                    </div>
+                  )}
+                  {showSearchResults && (
+                    <div
+                      ref={searchResultsRef}
+                      className="absolute left-0 right-0 z-30 mt-1 rounded-sm border border-gray-200 bg-white p-2 shadow-lg xl:min-w-[780px]"
+                    >
+                      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+                        <div className="max-h-72 overflow-y-auto rounded-sm border border-gray-100 bg-white">
+                          {loading ? (
+                            <div className="p-3 text-center text-sm text-gray-500">Đang tìm kiếm...</div>
+                          ) : filteredProducts.length > 0 ? (
+                            filteredProducts.map(product => {
+                              const price = product.retail_price || product.import_price || product.giaNhap || 0;
+                              const isVariant = isImportVariantProduct(product, product.parent || null);
+                              const name = isVariant ? getProductDisplayName(product, product.parent || null) : (product.name || product.tenSP || '');
+                              const sku = product.sku || product.maSP || '';
+                              const unit = product.unit || product.donVi || 'cái';
+                              const categoryName = product.default_category?.name || product.category || '';
+                              const parentName = !isVariant ? (product.parent_name || product.parent?.name || '') : '';
+                              const availableQuantity = getProductAvailableQuantity(product);
+                              return (
+                                <div
+                                  key={`${product.is_variant ? 'v' : 'p'}-${product.id}`}
+                                  onClick={() => editingProductIndex !== null ? handleSelectProduct(product) : handleAddImportPickerSelection(product)}
+                                  className="cursor-pointer border-b border-gray-100 px-3 py-2 last:border-b-0 hover:bg-blue-50"
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-gray-900">
+                                      <span className="truncate">{name}{parentName ? <span className="text-xs text-gray-400"> · {parentName}</span> : null}</span>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          editingProductIndex !== null ? handleSelectProduct(product) : handleAddImportPickerSelection(product);
+                                        }}
+                                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700"
+                                        title="Thêm sản phẩm vào danh sách tạm"
+                                      >
+                                        <Plus className="h-3.5 w-3.5" />
+                                      </button>
+                                    </span>
+                                    <span className="shrink-0 text-xs text-gray-500">({sku || 'N/A'})</span>
+                                  </div>
+                                  <div className="mt-1 flex items-center justify-between gap-3">
+                                    <span className="truncate text-xs text-gray-500">
+                                      Đơn vị: {unit}{categoryName ? ` · ${categoryName}` : ''} · Tồn: {availableQuantity.toLocaleString('vi-VN')}
+                                    </span>
+                                    <span className="whitespace-nowrap text-sm font-medium text-blue-600">{formatVND(price)}</span>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="p-3 text-center text-sm text-gray-500">
+                              {searchQuery.trim() ? 'Không có sản phẩm phù hợp' : 'Chưa có sản phẩm trong hệ thống'}
+                            </div>
+                          )}
+                        </div>
+                        {renderImportPickerSelections()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedSupplier) {
+                      showSupplierRequiredHint();
+                      return;
+                    }
+                    setFilteredProducts(getScopedProductSearchResults(searchQuery));
+                    setShowSearchResults(true);
+                    searchInputRef.current?.focus();
+                  }}
+                  disabled={saving}
+                  className="sapo-btn"
+                >
+                  Chọn nhiều
+                </button>
+                <button
+                  type="button"
+                  onClick={() => searchInputRef.current?.focus()}
+                  disabled={saving || !selectedSupplier}
+                  className="sapo-btn"
+                >
+                  (F10)
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+                <select className="input-field min-w-[140px] text-sm" defaultValue="import" disabled={saving}>
+                  <option value="import">Giá nhập</option>
+                  <option value="retail">Giá bán lẻ</option>
+                  <option value="cost">Giá vốn</option>
+                </select>
+              </div>
+              {!selectedSupplier && (
+                <p className="mt-2 text-xs text-amber-600">Chọn nhà cung cấp trước để thêm sản phẩm vào phiếu nhập.</p>
+              )}
+            </div>
+            <div className="w-full max-w-full overflow-x-auto">
+              <table className="w-full min-w-[900px] table-fixed text-sm xl:min-w-0">
+                <thead className="border-b border-gray-200 bg-gray-50">
+                  <tr>
+                    <th className="w-10 px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">STT</th>
+                    <th className="w-12 px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Ảnh</th>
+                    <th className="w-[24%] px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tên sản phẩm</th>
+                    <th className="w-16 px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Đơn vị</th>
+                    <th className="w-24 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Số lượng</th>
+                    <th className="w-28 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Giá nhập</th>
+                    <th className="w-24 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Chiết khấu</th>
+                    <th className="w-24 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Thuế GTGT</th>
+                    <th className="w-28 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Thành tiền</th>
+                    <th className="w-12 px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Xóa</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {products.map((product, index) => {
+                    const lineAmounts = calculateImportLineAmounts(product.giaNhap ?? product.import_price, product.soLuongNhap, product.chietKhau, product.thueGTGT ?? product.tax_percent ?? product.vat_percent);
+                    const rowQuantityError = getImportQuantityInputError(product.soLuongNhap);
+                    return (
+                      <tr key={`${getImportRowKey(product) || 'row'}-${index}`} className={`hover:bg-gray-50 ${editingProductIndex === index ? 'bg-blue-50' : rowQuantityError ? 'bg-red-50/50' : ''}`}>
+                        <td className="px-2 py-3 align-top text-sm text-gray-600">{index + 1}</td>
+                        <td className="px-2 py-3 text-center align-top">
+                          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-sm bg-gray-100 text-gray-300">
+                            <Package className="h-5 w-5" />
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 align-top text-sm font-medium text-gray-900">
+                          <div className="min-w-0">
+                            <div className="truncate" title={product.tenSP}>{product.tenSP}</div>
+                            <div className="mt-1 truncate text-xs text-gray-500" title={product.maSP || ''}>Mã: {product.maSP || 'N/A'}</div>
+                            <button type="button" onClick={() => handleEditProductRow(index)} disabled={saving} className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-blue-300">Đổi sản phẩm</button>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 align-top text-sm text-gray-600">{product.donVi || product.unit || 'cái'}</td>
+                        <td className="px-2 py-3 align-top">
+                          <input type="number" min="0.0001" step="1" value={product.soLuongNhap ?? ''} onChange={(e) => handleUpdateProduct(index, 'soLuongNhap', e.target.value)} className={`min-h-10 w-full rounded-sm border px-2 py-2 text-right text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 ${rowQuantityError ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300'}`} disabled={saving} />
+                          {rowQuantityError && <div className="mt-1 text-[11px] font-medium text-red-600">{rowQuantityError}</div>}
+                        </td>
+                        <td className="px-2 py-3 align-top">
+                          <input type="number" min="0" step="1000" value={lineAmounts.price} onChange={(e) => handleUpdateProduct(index, 'giaNhap', e.target.value)} className="min-h-10 w-full rounded-sm border border-gray-300 px-2 py-2 text-right text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" disabled={saving} />
+                        </td>
+                        <td className="px-2 py-3 align-top">
+                          <div className="flex items-center gap-1">
+                            <input type="number" min="0" max="100" step="0.1" value={lineAmounts.discountPercent} onChange={(e) => handleUpdateProduct(index, 'chietKhau', e.target.value)} className="min-h-10 w-full rounded-sm border border-gray-300 px-2 py-2 text-right text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" disabled={saving} />
+                            <span className="text-xs text-gray-500">%</span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 align-top">
+                          <div className="flex items-center gap-1">
+                            <input type="number" min="0" max="100" step="0.1" value={lineAmounts.taxPercent} onChange={(e) => handleUpdateProduct(index, 'thueGTGT', e.target.value)} className="min-h-10 w-full rounded-sm border border-gray-300 px-2 py-2 text-right text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" disabled={saving} />
+                            <span className="text-xs text-gray-500">%</span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 text-right align-top text-sm font-semibold text-green-600">
+                          <div>{formatVND(lineAmounts.lineTotal)}</div>
+                          <div className="mt-1 text-[11px] font-normal text-gray-500">Thuế: {formatVND(lineAmounts.taxAmount)}</div>
+                        </td>
+                        <td className="px-2 py-3 text-center align-top">
+                          <button type="button" onClick={() => handleRemoveProduct(index)} disabled={saving} className="p-1 text-gray-400 transition-colors hover:text-red-600 disabled:text-gray-300" title="Xóa dòng"><X className="h-4 w-4" /></button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {products.length === 0 && (
+                    <tr>
+                      <td colSpan="10" className="px-4 py-16 text-center text-sm text-gray-400">
+                        <div className="sticky left-0 mx-auto flex min-h-[180px] w-[560px] max-w-[calc(100vw-4rem)] flex-col items-center justify-center">
+                          <Package className="mb-3 h-12 w-12 text-gray-200" />
+                          <div className="mb-4">Đơn nhập hàng của bạn chưa có sản phẩm nào</div>
+                          <button type="button" onClick={() => searchInputRef.current?.focus()} disabled={saving || !selectedSupplier} className="sapo-btn">
+                            Thêm sản phẩm
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot className="border-t border-gray-200 bg-gray-50">
+                  <tr>
+                    <td colSpan="5" className="px-2 py-3 text-right text-sm text-gray-600">Tổng ({totalStats.quantity.toLocaleString('vi-VN')} sản phẩm)</td>
+                    <td colSpan="3" className="px-2 py-3 text-right text-sm text-gray-600">
+                      <div>Chiết khấu: <span className="font-medium">{formatVND(totalStats.discountValue)}</span></div>
+                      <div>Thuế GTGT: <span className="font-medium">{formatVND(totalStats.taxValue)}</span></div>
+                    </td>
+                    <td className="px-2 py-3 text-right"><div className="text-lg font-bold text-green-600">{formatVND(totalAmount)}</div></td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          {selectedProduct && (
+            <div className={`sapo-card ${selectedProductQuantityError ? 'border-red-300 ring-1 ring-red-200' : ''}`}>
+              <div className="border-b border-gray-200 bg-blue-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="flex items-center gap-2 text-base font-semibold text-blue-900">
+                      <Package className="h-4 w-4 shrink-0" />
+                      {editingProductIndex !== null ? `Cập nhật dòng #${editingProductIndex + 1}` : 'Thêm sản phẩm vào phiếu'}
+                    </h2>
+                    <p className="mt-0.5 truncate text-sm text-blue-700" title={selectedProduct.tenSP}>{selectedProduct.tenSP} · Mã: {selectedProduct.maSP || 'N/A'}</p>
+                  </div>
+                  <button type="button" onClick={resetProductSearchState} disabled={saving} className="p-1 text-blue-600 hover:text-blue-800 disabled:text-blue-300" title="Hủy chọn sản phẩm">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-4 p-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-xs font-medium text-gray-600">Số lượng</span>
+                    <input
+                      type="number"
+                      min="0.0001"
+                      step="1"
+                      value={selectedProduct.soLuongNhap ?? ''}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        const nextLine = calculateImportLineAmounts(
+                          selectedProduct.giaNhap ?? selectedProduct.import_price,
+                          nextValue,
+                          selectedProduct.chietKhau,
+                          selectedProduct.thueGTGT ?? selectedProduct.tax_percent ?? selectedProduct.vat_percent
+                        );
+                        setSelectedProduct({
+                          ...selectedProduct,
+                          soLuongNhap: nextValue,
+                          tienSauChietKhau: nextLine.afterDiscount,
+                          thueGTGTAmount: nextLine.taxAmount,
+                          thanhTien: nextLine.lineTotal
+                        });
+                      }}
+                      className={`min-h-10 w-full rounded-sm border px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 ${selectedProductQuantityError ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300'}`}
+                      disabled={saving}
+                    />
+                    {selectedProductQuantityError && <span className="mt-1 block text-xs font-medium text-red-600">{selectedProductQuantityError}</span>}
+                  </label>
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-xs font-medium text-gray-600">Giá nhập</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1000"
+                      value={selectedProduct.giaNhap ?? selectedProduct.import_price ?? 0}
+                      onChange={(e) => {
+                        const nextPrice = Math.max(0, Number(e.target.value) || 0);
+                        const nextLine = calculateImportLineAmounts(nextPrice, selectedProduct.soLuongNhap, selectedProduct.chietKhau, selectedProduct.thueGTGT);
+                        setSelectedProduct({
+                          ...selectedProduct,
+                          giaNhap: nextPrice,
+                          import_price: nextPrice,
+                          tienSauChietKhau: nextLine.afterDiscount,
+                          thueGTGTAmount: nextLine.taxAmount,
+                          thanhTien: nextLine.lineTotal
+                        });
+                      }}
+                      className="min-h-10 w-full rounded-sm border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                      disabled={saving}
+                    />
+                  </label>
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-xs font-medium text-gray-600">Chiết khấu (%)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={selectedProduct.chietKhau ?? 0}
+                      onChange={(e) => {
+                        const nextDiscount = clampImportPercent(e.target.value);
+                        const nextLine = calculateImportLineAmounts(selectedProduct.giaNhap ?? selectedProduct.import_price, selectedProduct.soLuongNhap, nextDiscount, selectedProduct.thueGTGT);
+                        setSelectedProduct({
+                          ...selectedProduct,
+                          chietKhau: nextDiscount,
+                          tienSauChietKhau: nextLine.afterDiscount,
+                          thueGTGTAmount: nextLine.taxAmount,
+                          thanhTien: nextLine.lineTotal
+                        });
+                      }}
+                      className="min-h-10 w-full rounded-sm border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                      disabled={saving}
+                    />
+                  </label>
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-xs font-medium text-gray-600">Thuế GTGT (%)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={selectedProduct.thueGTGT ?? 0}
+                      onChange={(e) => {
+                        const nextTaxPercent = clampImportPercent(e.target.value);
+                        const nextLine = calculateImportLineAmounts(selectedProduct.giaNhap ?? selectedProduct.import_price, selectedProduct.soLuongNhap, selectedProduct.chietKhau, nextTaxPercent);
+                        setSelectedProduct({
+                          ...selectedProduct,
+                          thueGTGT: nextTaxPercent,
+                          tienSauChietKhau: nextLine.afterDiscount,
+                          thueGTGTAmount: nextLine.taxAmount,
+                          thanhTien: nextLine.lineTotal
+                        });
+                      }}
+                      className="min-h-10 w-full rounded-sm border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                      disabled={saving}
+                    />
+                  </label>
+                </div>
+
+                {selectedProductLinePreview && (
+                  <div className="grid grid-cols-1 gap-3 rounded-sm border border-gray-200 bg-gray-50 p-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                    <div><div className="text-xs text-gray-500">Tiền hàng</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.grossAmount)}</div></div>
+                    <div><div className="text-xs text-gray-500">Sau chiết khấu</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.afterDiscount)}</div></div>
+                    <div><div className="text-xs text-gray-500">Thuế GTGT</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.taxAmount)}</div></div>
+                    <div><div className="text-xs text-gray-500">Thành tiền</div><div className="text-lg font-bold text-green-600">{formatVND(selectedProductLinePreview.lineTotal)}</div></div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <button onClick={() => handleAddProduct({ keepSearching: false })} disabled={saving || Boolean(selectedProductQuantityError)} className="flex w-full items-center justify-center gap-2 rounded-sm bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-400">
+                    <Plus className="h-4 w-4" />
+                    {editingProductIndex !== null ? 'Cập nhật dòng sản phẩm' : 'Thêm vào danh sách'}
+                  </button>
+                  <button onClick={() => handleAddProduct({ keepSearching: true })} disabled={saving || Boolean(selectedProductQuantityError)} className="flex w-full items-center justify-center gap-2 rounded-sm bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:bg-emerald-400" title="Thêm sản phẩm và giữ ô tìm kiếm để nhập tiếp">
+                    <Search className="h-4 w-4" />
+                    Thêm và tìm tiếp
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="sapo-card min-w-0">
+              <div className="sapo-card-header">
+                <h2>Ghi chú đơn</h2>
+              </div>
+              <div className="grid grid-cols-1 gap-6 p-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <FileText className="h-4 w-4 text-gray-400" />
+                    Ghi chú đơn
+                  </label>
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    rows="4"
+                    placeholder="Nhập ghi chú..."
+                    className="w-full resize-none rounded-sm border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                    disabled={saving}
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <Tag className="h-4 w-4 text-gray-400" />
+                    Tags
+                  </label>
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={handleAddTag}
+                    placeholder="Nhấn Enter để thêm tag..."
+                    className="mb-2 w-full rounded-sm border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                    disabled={saving}
+                  />
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {tags.map((tag, index) => (
+                        <span key={index} className="inline-flex items-center gap-1 rounded-sm bg-blue-100 px-2.5 py-1 text-sm text-blue-700">
+                          {tag}
+                          <button onClick={() => handleRemoveTag(tag)} disabled={saving} className="hover:text-blue-900 disabled:text-blue-400">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="sapo-card min-w-0">
+              <div className="sapo-card-header">
+                <h2>Thông tin thanh toán</h2>
+              </div>
+              <div className="space-y-3 p-4">
+                <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Sản phẩm</span><span className="text-sm font-semibold text-gray-900">{products.length}</span></div>
+                <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Tổng số lượng</span><span className="text-sm font-semibold text-gray-900">{totalStats.quantity.toLocaleString('vi-VN')}</span></div>
+                <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Tiền hàng</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.subtotal)}</span></div>
+                <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Tổng chiết khấu</span><span className="text-sm font-semibold text-red-600">-{formatVND(totalStats.discountValue)}</span></div>
+                <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Thuế GTGT</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.taxValue)}</span></div>
+                <div className="pt-2">
+                  <div className="text-sm font-semibold text-gray-900">Tổng thanh toán</div>
+                  <div className="mt-1 break-words text-2xl font-bold text-green-600">{formatVND(totalAmount)}</div>
+                </div>
+
+                <div className="mt-4 border-t border-gray-200 pt-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-xs font-semibold uppercase text-gray-500">Thanh toán</h3>
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getPaymentBadgeClass(paymentSummary.payment_status)}`}>
+                      {getPaymentLabel(paymentSummary.payment_status)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handlePayCurrentOrder}
+                    disabled={isPaymentButtonDisabled}
+                    className="flex w-full items-center justify-center gap-2 rounded-sm bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    {paymentSummary.payment_status === 'paid' ? 'Đã thanh toán' : 'Thanh toán'}
+                  </button>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-sm bg-gray-50 p-2">
+                      <div className="text-gray-500">Đã trả</div>
+                      <div className="font-semibold text-gray-900">{formatVND(paymentSummary.paid_amount)}</div>
+                    </div>
+                    <div className="rounded-sm bg-gray-50 p-2">
+                      <div className="text-gray-500">Còn phải trả</div>
+                      <div className="font-semibold text-gray-900">{formatVND(paymentSummary.remaining_amount)}</div>
+                    </div>
+                  </div>
+                  {(!selectedSupplier || products.length === 0) && (
+                    <p className="mt-3 text-center text-xs text-gray-500">
+                      {!selectedSupplier ? 'Vui lòng chọn nhà cung cấp' : 'Vui lòng thêm sản phẩm'}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Main Content Grid */}
+        {false && (
         <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
           {/* Left Column - Input Form */}
           <div className="min-w-0 space-y-4">
@@ -2880,6 +3491,7 @@ const Nhaphang = ({ store }) => {
             </div>
           </div>
         </div>
+        )}
 
         {/* Order History */}
         {orderHistory.length > 0 && (

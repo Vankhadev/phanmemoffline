@@ -200,12 +200,16 @@ function ElementContent({ element, template, payload }) {
   if (element.type === 'totals') {
     const paid = Number(totals.paid_amount ?? totals.paid ?? 0) || 0;
     const remaining = Number(totals.remaining_amount ?? totals.debt_amount ?? Math.max(0, (Number(totals.total) || 0) - paid)) || 0;
+    const showSubtotal = style.showSubtotal !== false;
+    const showDiscount = style.showDiscount !== false;
+    const showGrandTotal = style.showGrandTotal !== false;
+    const showDebt = style.showDebt !== false;
     return (
       <div className="invoice-editor-preview-totals" style={baseStyle}>
-        <div><span>Tổng tiền hàng</span><b>{formatVND(totals.subtotal ?? totals.total)}</b></div>
-        <div><span>Chiết khấu</span><b>{formatVND(totals.discount_amount)}</b></div>
-        <div className="is-total"><span>Tổng tiền</span><b>{formatVND(totals.total ?? totals.grand_total)}</b></div>
-        <div><span>Công nợ</span><b>{formatVND(remaining)}</b></div>
+        {showSubtotal && <div><span>Tổng tiền hàng</span><b>{formatVND(totals.subtotal ?? totals.total)}</b></div>}
+        {showDiscount && <div><span>Chiết khấu</span><b>{formatVND(totals.discount_amount)}</b></div>}
+        {showGrandTotal && <div className="is-total"><span>Tổng tiền</span><b>{formatVND(totals.total ?? totals.grand_total)}</b></div>}
+        {showDebt && <div><span>Công nợ</span><b>{formatVND(remaining)}</b></div>}
       </div>
     );
   }
@@ -559,6 +563,7 @@ export default function EditorCanvas({
                 snapEnabled={snapEnabled}
                 snapGridMm={snapGridMm}
                 snapTargets={snapTargets}
+                lockY={isAutoBelowItems}
                 onGuideChange={setGuides}
                 onGestureStart={onBeginHistory}
                 onGestureEnd={onEndHistory}

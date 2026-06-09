@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.5.3 - 2026-06-09
+
+### Thay đổi chính
+
+- Thiết kế lại trang nhập hàng theo bố cục Sapo: tách thông tin nhà cung cấp và thông tin đơn, đưa bảng sản phẩm ra toàn chiều rộng, bổ sung thanh tìm nhanh/chọn nhiều và khu ghi chú, thanh toán phía dưới.
+- Bổ sung công tắc ON/OFF cho từng dòng trong khối tổng tiền của mẫu hóa đơn, gồm Tổng tiền hàng, Chiết khấu, Tổng tiền và Công nợ; trạng thái áp dụng đồng thời cho canvas thiết kế và bản in thật.
+- Tối ưu trình chỉnh sửa mẫu in: kéo/resize cập nhật cục bộ theo khung hình, chỉ ghi layout khi thả chuột, tạm dừng preview in thật trong lúc kéo và giữ ổn định vị trí khối tổng tiền tự động.
+
+### Phát hành
+
+- Đồng bộ version phát hành 1.5.3 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
+- Tạo tag GitHub `v1.5.3`; GitHub Actions sẽ build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json.
+
 ## v1.5.2 - 2026-06-09
 
 ### Thay đổi chính

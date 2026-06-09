@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   AlignCenter,
@@ -130,6 +130,7 @@ export default function PrintTemplateEditorModal({
   const [autosaveBaselineKey, setAutosaveBaselineKey] = useState('initial');
   const [editorMode, setEditorMode] = useState('canvas');
   const [sapoDraft, setSapoDraft] = useState(() => buildSapoDraftFromTemplate(template || {}));
+  const [canvasInteracting, setCanvasInteracting] = useState(false);
   const htmlEditorRef = useRef(null);
 
   const editor = useTemplateEditorState(template || {});
@@ -231,6 +232,7 @@ export default function PrintTemplateEditorModal({
     orientation: editor.document.canvas?.orientation || activeTemplate.orientation || 'portrait',
     revision: editor.revision,
   }), [activeTemplate, editor.document, editor.revision, editor.settings]);
+  const deferredPreviewTemplate = useDeferredValue(previewTemplate);
 
   const sapoPreviewTemplate = useMemo(() => {
     const paperSize = normalizeSapoPaperSize(sapoDraft.paperSize);
@@ -474,6 +476,16 @@ export default function PrintTemplateEditorModal({
     if (!hasEditableSelection) return;
     editor.sendElementToBack(editor.selectedId);
   }, [editor, hasEditableSelection]);
+
+  const handleCanvasGestureStart = useCallback(() => {
+    setCanvasInteracting(true);
+    editor.beginHistory();
+  }, [editor]);
+
+  const handleCanvasGestureEnd = useCallback(() => {
+    editor.endHistory();
+    window.requestAnimationFrame(() => setCanvasInteracting(false));
+  }, [editor]);
 
   useEffect(() => {
     if (!show || editorMode !== 'canvas') return undefined;
@@ -756,8 +768,8 @@ export default function PrintTemplateEditorModal({
                 onAddElement={editor.addElement}
                 onUpdateElement={editor.updateElement}
                 onUpdateTable={editor.updateTable}
-                onBeginHistory={editor.beginHistory}
-                onEndHistory={editor.endHistory}
+                onBeginHistory={handleCanvasGestureStart}
+                onEndHistory={handleCanvasGestureEnd}
                 onSetDocument={setEditorDocument}
               />
             </div>
@@ -775,9 +787,11 @@ export default function PrintTemplateEditorModal({
               />
               <section className="invoice-editor-render-preview">
                 <div className="invoice-editor-panel-title">Preview renderer in thật</div>
-                {previewPayload !== null ? (
+                {canvasInteracting ? (
+                  <div className="invoice-editor-empty-preview">Đang kéo thả, preview in thật sẽ cập nhật khi thả chuột.</div>
+                ) : previewPayload !== null ? (
                   <div className="invoice-print-preview-frame invoice-editor-render-preview-frame">
-                    <InvoiceTemplateRenderer payload={previewPayload} template={previewTemplate} previewZoom={0.38} renderMode="editor-preview" />
+                    <InvoiceTemplateRenderer payload={previewPayload} template={deferredPreviewTemplate} previewZoom={0.38} renderMode="editor-preview" />
                   </div>
                 ) : (
                   <div className="invoice-editor-empty-preview">Chưa có dữ liệu hóa đơn để render preview.</div>
