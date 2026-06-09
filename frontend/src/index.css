@@ -397,6 +397,14 @@
     white-space: nowrap;
   }
 
+  .pos-product-name-wrap {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.3;
+  }
+
   .toast-stack {
     position: fixed;
     right: 1rem;
@@ -2321,6 +2329,30 @@
     background: rgb(16 185 129 / 0.035);
   }
 
+  .invoice-editor-page-break {
+    position: absolute;
+    right: 0;
+    left: 0;
+    z-index: 8;
+    height: 0;
+    pointer-events: none;
+    border-top: 2px dashed #2563eb;
+    box-shadow: 0 -8px 0 #f1f5f9, 0 8px 0 #f1f5f9;
+  }
+
+  .invoice-editor-page-break span {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    border: 1px solid #bfdbfe;
+    border-radius: 4px;
+    background: #eff6ff;
+    padding: 2px 6px;
+    color: #1d4ed8;
+    font-size: 0.65rem;
+    font-weight: 800;
+  }
+
   .invoice-editor-zone {
     pointer-events: none;
     border: 1px dashed rgb(100 116 139 / 0.28);
@@ -3977,6 +4009,25 @@
       box-sizing: border-box !important;
       transform: scale(var(--invoice-print-scale, 1)) !important;
       transform-origin: top center !important;
+    }
+
+    .invoice-print-v2.invoice-print {
+      height: auto !important;
+      min-height: var(--invoice-content-height, var(--invoice-physical-page-height, var(--invoice-page-height, 210mm))) !important;
+      break-inside: auto !important;
+      page-break-inside: auto !important;
+    }
+
+    .invoice-print-v2 .invoice-print-inner,
+    .invoice-template-v2-document {
+      min-height: var(--invoice-content-height, var(--invoice-physical-page-height, var(--invoice-page-height, 210mm))) !important;
+      break-inside: auto !important;
+      page-break-inside: auto !important;
+    }
+
+    .invoice-template-v2-table-wrap {
+      break-inside: auto !important;
+      page-break-inside: auto !important;
     }
 
     .invoice-print *,

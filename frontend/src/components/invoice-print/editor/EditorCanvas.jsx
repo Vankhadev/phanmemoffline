@@ -2,14 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ElementFrame from './ElementFrame';
 import { resolveBackendAssetUrl } from '../../../utils/apiClient';
 import {
+  buildFlowElementTopOverrides,
   clampFrameToZone,
   getEditorPaperDimensions,
   getElementLabel,
-  getAutoBelowItemsGapMm,
+  getFlowElementBaseTopMm,
+  getFlowElementHeightMm,
   getItemsTablePageMetrics,
   PAGE_ZONE_ID,
   getTableStyleElement,
   isAutoBelowItemsElement,
+  shouldFlowElementAfterItems,
   TABLE_STYLE_ELEMENT_ID,
   TABLE_COLUMN_LABELS,
 } from './templateSchemaAdapter';
@@ -248,26 +251,27 @@ function ElementContent({ element, template, payload }) {
   return <div className="invoice-editor-preview-custom-text" style={{ ...baseStyle, whiteSpace: 'pre-wrap' }}>{style.text || 'Text tùy chỉnh'}</div>;
 }
 
-function getPageTableFrame(document = {}) {
+function getPageTableFrame(document = {}, itemCount = 0) {
   const table = document.table || {};
   const zone = (document.zones || []).find(item => item.id === table.zoneId) || (document.zones || [])[0] || { frame: { x: 0, y: 0, w: 100, h: 30 } };
   const frame = table.frame || { x: 0, y: 0, w: zone.frame?.w || 100, h: 32 };
+  const metrics = getItemsTablePageMetrics(document, itemCount);
   return {
     zone,
     frame,
     pageFrame: {
-      x: Number(zone.frame?.x || 0) + Number(frame.x || 0),
-      y: Number(zone.frame?.y || 0) + Number(frame.y || 0),
-      w: Number(frame.w || zone.frame?.w || 100),
-      h: Number(frame.h) || 32,
+      x: metrics.x,
+      y: metrics.y,
+      w: metrics.w,
+      h: metrics.h,
     },
   };
 }
 
 function TablePreview({ document, payload, selected, zoom, snapEnabled, snapGridMm, snapTargets, guides, pageZone, onSelect, onUpdateTable, onGuideChange, onBeginHistory, onEndHistory }) {
   const table = document.table || {};
-  const { zone, frame, pageFrame } = getPageTableFrame(document);
-  const items = Array.isArray(payload.items) ? payload.items.slice(0, 5) : [];
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  const { zone, frame, pageFrame } = getPageTableFrame(document, items.length);
   const columns = Array.isArray(table.columns) && table.columns.length ? table.columns : [];
   const page = getEditorPaperDimensions(document);
   const tableStyleElement = getTableStyleElement(document) || {};
@@ -342,7 +346,7 @@ function addFrameSnapPoints(points, frame = {}) {
   points.y.push(y, y + h / 2, y + h);
 }
 
-function buildSnapTargets(document = {}, page = {}, selectedId = '') {
+function buildSnapTargets(document = {}, page = {}, selectedId = '', itemCount = 0) {
   const points = {
     enabled: true,
     x: [0, page.width / 2, page.width],
@@ -356,7 +360,7 @@ function buildSnapTargets(document = {}, page = {}, selectedId = '') {
 
   for (const zone of document.zones || []) addFrameSnapPoints(points, zone.frame || {});
 
-  const tableFrame = getPageTableFrame(document).pageFrame;
+  const tableFrame = getPageTableFrame(document, itemCount).pageFrame;
   if (selectedId !== 'itemsTable') addFrameSnapPoints(points, tableFrame);
 
   const zonesById = new Map((document.zones || []).map(zone => [zone.id, zone]));
@@ -409,7 +413,6 @@ export default function EditorCanvas({
   const snapEnabled = editor.snapEnabled !== false;
   const snapGridMm = Number(editor.snapGridMm) || document.canvas?.snapGridMm || 1;
   const pageWidthPx = page.width * PX_PER_MM * zoom;
-  const pageHeightPx = page.height * PX_PER_MM * zoom;
   const [guides, setGuides] = useState({ x: [], y: [] });
 
   const zones = useMemo(() => Array.isArray(document.zones) ? document.zones : [], [document.zones]);
@@ -424,9 +427,34 @@ export default function EditorCanvas({
     () => getItemsTablePageMetrics(document, itemCountForAutoLayout),
     [document, itemCountForAutoLayout],
   );
-  const snapTargets = useMemo(() => buildSnapTargets(document, page, selectedId), [document, page, selectedId]);
+  const flowElementIds = useMemo(() => new Set(
+    visibleElements
+      .filter(element => shouldFlowElementAfterItems(element, zonesById, itemsTableMetrics.y))
+      .map(element => element.id),
+  ), [itemsTableMetrics.y, visibleElements, zonesById]);
+  const elementTopOverridesMm = useMemo(() => buildFlowElementTopOverrides({
+    elements: visibleElements,
+    zonesById,
+    tableTopMm: itemsTableMetrics.y,
+    tableBottomMm: itemsTableMetrics.bottom,
+    pageHeightMm: page.height,
+    safePaddingMm: Number(document.canvas?.safePaddingMm ?? 5) || 0,
+  }), [document.canvas?.safePaddingMm, itemsTableMetrics.bottom, itemsTableMetrics.y, page.height, visibleElements, zonesById]);
+  const contentHeightMm = useMemo(() => {
+    const elementBottom = visibleElements.reduce((max, element) => {
+      const topMm = elementTopOverridesMm.has(element.id)
+        ? elementTopOverridesMm.get(element.id)
+        : getFlowElementBaseTopMm(element, zonesById);
+      return Math.max(max, topMm + getFlowElementHeightMm(element));
+    }, itemsTableMetrics.bottom);
+    return Math.ceil(Math.max(page.height, elementBottom + 3) / page.height) * page.height;
+  }, [elementTopOverridesMm, itemsTableMetrics.bottom, page.height, visibleElements, zonesById]);
+  const pageHeightPx = contentHeightMm * PX_PER_MM * zoom;
+  const physicalPageHeightPx = page.height * PX_PER_MM * zoom;
+  const editorPageCount = Math.max(1, Math.ceil(contentHeightMm / page.height));
+  const snapTargets = useMemo(() => buildSnapTargets(document, page, selectedId, itemCountForAutoLayout), [document, itemCountForAutoLayout, page, selectedId]);
   const rulerXTicks = useMemo(() => buildRulerTicks(page.width, zoom, 'x'), [page.width, zoom]);
-  const rulerYTicks = useMemo(() => buildRulerTicks(page.height, zoom, 'y'), [page.height, zoom]);
+  const rulerYTicks = useMemo(() => buildRulerTicks(contentHeightMm, zoom, 'y'), [contentHeightMm, zoom]);
 
   const handleDrop = useCallback((event) => {
     const type = event.dataTransfer.getData('application/x-kha-invoice-element');
@@ -506,6 +534,15 @@ export default function EditorCanvas({
               }}
             />
           )}
+          {editorPageCount > 1 && Array.from({ length: editorPageCount - 1 }).map((_, index) => (
+            <div
+              key={`page-break-${index}`}
+              className="invoice-editor-page-break"
+              style={{ top: `${(index + 1) * physicalPageHeightPx}px` }}
+            >
+              <span>Trang {index + 2}</span>
+            </div>
+          ))}
           {guideZones.map(zone => (
             <div
               key={zone.id}
@@ -546,13 +583,18 @@ export default function EditorCanvas({
             const zone = zonesById.get(element.zoneId);
             if (!zone) return null;
             const isAutoBelowItems = isAutoBelowItemsElement(element);
-            const autoY = itemsTableMetrics.bottom + getAutoBelowItemsGapMm(element);
+            const baseTopMm = getFlowElementBaseTopMm(element, zonesById);
+            const topMm = elementTopOverridesMm.has(element.id)
+              ? elementTopOverridesMm.get(element.id)
+              : baseTopMm;
+            const isFlowShifted = flowElementIds.has(element.id) && Math.abs(topMm - baseTopMm) > 0.001;
             const pageFrame = {
               ...element.frame,
               x: Number(zone.frame.x || 0) + Number(element.frame.x || 0),
-              y: isAutoBelowItems ? autoY : Number(zone.frame.y || 0) + Number(element.frame.y || 0),
+              y: topMm,
             };
-            const interactionZone = { ...zone, frame: { x: 0, y: 0, w: page.width, h: page.height } };
+            const interactionZone = { ...zone, frame: { x: 0, y: 0, w: page.width, h: contentHeightMm } };
+            const lockY = isAutoBelowItems || isFlowShifted;
             return (
               <ElementFrame
                 key={element.id}
@@ -563,7 +605,7 @@ export default function EditorCanvas({
                 snapEnabled={snapEnabled}
                 snapGridMm={snapGridMm}
                 snapTargets={snapTargets}
-                lockY={isAutoBelowItems}
+                lockY={lockY}
                 onGuideChange={setGuides}
                 onGestureStart={onBeginHistory}
                 onGestureEnd={onEndHistory}
@@ -573,7 +615,7 @@ export default function EditorCanvas({
                   const localFrame = {
                     ...nextPageFrame,
                     x: nextPageFrame.x - Number(targetZone.frame.x || 0),
-                    y: isAutoBelowItems ? Number(element.frame?.y || 0) : nextPageFrame.y - Number(targetZone.frame.y || 0),
+                    y: lockY ? Number(element.frame?.y || 0) : nextPageFrame.y - Number(targetZone.frame.y || 0),
                   };
                   onUpdateElement?.(element.id, {
                     zoneId: targetZone.id,

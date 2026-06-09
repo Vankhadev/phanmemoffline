@@ -1,11 +1,14 @@
 import { forwardRef, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { getPaperDimensions, normalizeTemplateSettings } from './templateDefaults';
 import {
+  buildFlowElementTopOverrides,
   getActiveEditorDocument,
-  getAutoBelowItemsGapMm,
+  getFlowElementBaseTopMm,
+  getFlowElementHeightMm,
   getItemsTablePageMetrics,
   getTableStyleElement,
-  isAutoBelowItemsElement,
+  roundMm,
+  shouldFlowElementAfterItems,
   TABLE_COLUMN_LABELS,
 } from './editor/templateSchemaAdapter';
 import { isHtmlTemplateSource, renderHtmlTemplate, sanitizeTemplateCss } from './htmlTemplateEngine';
@@ -547,6 +550,7 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
   const zonesById = useMemo(() => new Map((document.zones || []).map(zone => [zone.id, zone])), [document.zones]);
   const articleRef = useRef(null);
   const [measuredTableBottomMm, setMeasuredTableBottomMm] = useState(null);
+  const [measuredElementHeightsMm, setMeasuredElementHeightsMm] = useState({});
   const tableMetrics = useMemo(
     () => getItemsTablePageMetrics(document, normalized.items.length),
     [document, normalized.items.length],
@@ -559,12 +563,24 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
   const elements = useMemo(() => [...(document.elements || [])]
     .filter(element => element.visible !== false && element.id !== '__itemsTableStyle' && element.type !== 'paymentQr')
     .sort((a, b) => (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0)), [document.elements]);
+  const flowElementIds = useMemo(() => new Set(
+    elements
+      .filter(element => shouldFlowElementAfterItems(element, zonesById, tableMetrics.y))
+      .map(element => element.id),
+  ), [elements, tableMetrics.y, zonesById]);
+  const elementTopOverridesMm = useMemo(() => buildFlowElementTopOverrides({
+    elements,
+    zonesById,
+    tableTopMm: tableMetrics.y,
+    tableBottomMm,
+    pageHeightMm: page.height,
+    safePaddingMm: Number(document.canvas?.safePaddingMm ?? 5) || 0,
+    measuredHeights: measuredElementHeightsMm,
+  }), [document.canvas?.safePaddingMm, elements, measuredElementHeightsMm, page.height, tableBottomMm, tableMetrics.y, zonesById]);
   const getElementTopMm = useCallback((element) => {
-    if (isAutoBelowItemsElement(element)) return tableBottomMm + getAutoBelowItemsGapMm(element);
-    const zone = zonesById.get(element.zoneId) || { frame: { y: 0 } };
-    const frame = element.frame || {};
-    return Number(zone.frame?.y || 0) + Number(frame.y || 0);
-  }, [tableBottomMm, zonesById]);
+    if (elementTopOverridesMm.has(element.id)) return elementTopOverridesMm.get(element.id);
+    return getFlowElementBaseTopMm(element, zonesById);
+  }, [elementTopOverridesMm, zonesById]);
 
   useLayoutEffect(() => {
     const article = articleRef.current;
@@ -580,6 +596,23 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
       const nextBottom = Math.round(((Number(tableNode.offsetTop) + Number(tableNode.offsetHeight)) / pxPerMm) * 1000) / 1000;
       if (!Number.isFinite(nextBottom)) return;
       setMeasuredTableBottomMm(current => (Math.abs((Number(current) || 0) - nextBottom) > 0.25 ? nextBottom : current));
+
+      const nextHeights = {};
+      article.querySelectorAll('.invoice-template-v2-element[data-invoice-element-id]').forEach(node => {
+        const id = node.getAttribute('data-invoice-element-id');
+        if (!id) return;
+        const heightMm = roundMm((Number(node.offsetHeight) || 0) / pxPerMm);
+        if (heightMm > 0) nextHeights[id] = heightMm;
+      });
+      setMeasuredElementHeightsMm(current => {
+        const keys = new Set([...Object.keys(current || {}), ...Object.keys(nextHeights)]);
+        for (const key of keys) {
+          if (Math.abs((Number(current?.[key]) || 0) - (Number(nextHeights[key]) || 0)) > 0.25) {
+            return nextHeights;
+          }
+        }
+        return current;
+      });
     };
 
     measure();
@@ -587,16 +620,18 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
     const observer = new ResizeObserver(measure);
     observer.observe(tableNode);
     observer.observe(documentNode);
+    article.querySelectorAll('.invoice-template-v2-element[data-invoice-element-id]').forEach(node => observer.observe(node));
     return () => observer.disconnect();
-  }, [document, normalized.items.length, page.width]);
+  }, [document, elements, normalized.items.length, page.width]);
 
   const contentHeightMm = useMemo(() => {
     const elementBottom = elements.reduce((max, element) => {
       const frame = element.frame || {};
-      return Math.max(max, getElementTopMm(element) + Number(frame.h || 0));
+      return Math.max(max, getElementTopMm(element) + getFlowElementHeightMm(element, measuredElementHeightsMm), getElementTopMm(element) + Number(frame.h || 0));
     }, page.height);
-    return Math.ceil(Math.max(page.height, elementBottom, tableBottomMm + 6));
-  }, [elements, getElementTopMm, page.height, tableBottomMm]);
+    const maxContentBottom = Math.max(page.height, elementBottom, tableBottomMm + 6);
+    return Math.ceil(maxContentBottom / page.height) * page.height;
+  }, [elements, getElementTopMm, measuredElementHeightsMm, page.height, tableBottomMm]);
 
   return (
     <article
@@ -629,6 +664,8 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
           return (
             <section
               key={element.id}
+              data-invoice-element-id={element.id}
+              data-invoice-flow-after-items={flowElementIds.has(element.id) ? 'true' : undefined}
               className={`invoice-template-v2-element invoice-template-v2-element-${element.type}`}
               style={{
                 left: `${Number(zone.frame?.x || 0) + Number(frame.x || 0)}mm`,
@@ -1014,6 +1051,22 @@ export function buildInvoicePageStyle(template = {}, settingsOverride = {}) {
         overflow: visible !important;
         background: #fff !important;
         box-sizing: border-box !important;
+      }
+      .invoice-print-v2.invoice-print {
+        height: auto !important;
+        min-height: var(--invoice-content-height, ${minHeightRule}) !important;
+        break-inside: auto !important;
+        page-break-inside: auto !important;
+      }
+      .invoice-print-v2 .invoice-print-inner,
+      .invoice-template-v2-document {
+        min-height: var(--invoice-content-height, ${minHeightRule}) !important;
+        break-inside: auto !important;
+        page-break-inside: auto !important;
+      }
+      .invoice-template-v2-table-wrap {
+        break-inside: auto !important;
+        page-break-inside: auto !important;
       }
     }
   `;

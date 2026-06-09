@@ -109,6 +109,9 @@ export function roundMm(value) {
   return Math.round(number * 1000) / 1000;
 }
 
+const FLOW_AFTER_ITEMS_ZONE_IDS = new Set(['footer', 'signatures']);
+const FLOW_AFTER_ITEMS_ELEMENT_TYPES = new Set(['totals', 'note', 'signatures', 'footerText', 'customText', 'text']);
+
 function cleanText(value, maxLength = 1000) {
   if (value === undefined || value === null) return '';
   return String(value).trim().slice(0, maxLength);
@@ -290,6 +293,123 @@ export function isAutoBelowItemsElement(element = {}) {
 export function getAutoBelowItemsGapMm(element = {}) {
   const value = Number(element?.style?.autoGapMm);
   return Number.isFinite(value) ? Math.max(0, value) : 3;
+}
+
+export function getFlowElementBaseTopMm(element = {}, zonesById = new Map()) {
+  const zone = zonesById.get(element.zoneId) || { frame: { y: 0 } };
+  const frame = element.frame || {};
+  return Number(zone.frame?.y || 0) + Number(frame.y || 0);
+}
+
+export function shouldFlowElementAfterItems(element = {}, zonesById = new Map(), tableTopMm = 0) {
+  if (isAutoBelowItemsElement(element)) return true;
+  if (FLOW_AFTER_ITEMS_ZONE_IDS.has(element.zoneId)) return true;
+  if (!FLOW_AFTER_ITEMS_ELEMENT_TYPES.has(element.type)) return false;
+  return getFlowElementBaseTopMm(element, zonesById) >= tableTopMm;
+}
+
+export function getFlowElementPriority(element = {}) {
+  if (element.type === 'totals') return 10;
+  if (element.type === 'note') return 20;
+  if (element.type === 'signatures') return 30;
+  if (element.type === 'footerText') return 40;
+  return 100 + (Number(element.zIndex) || 0);
+}
+
+export function getFlowElementHeightMm(element = {}, measuredHeights = {}) {
+  const frame = element.frame || {};
+  const configuredHeight = Number(frame.h) || 0;
+  const measuredHeight = Number(measuredHeights[element.id]) || 0;
+  const style = element.style || {};
+  const signatureMinimum = element.type === 'signatures'
+    ? 6 + Number(style.blankHeightMm || 10)
+    : 0;
+  return Math.max(1, configuredHeight, measuredHeight, signatureMinimum);
+}
+
+export function fitFlowBlockTopToPhysicalPage(topMm, heightMm, pageHeightMm, safePaddingMm = 5) {
+  const top = Math.max(0, Number(topMm) || 0);
+  const height = Math.max(0, Number(heightMm) || 0);
+  const pageHeight = Math.max(1, Number(pageHeightMm) || 1);
+  const safe = Math.max(0, Math.min(Number(safePaddingMm) || 0, pageHeight / 3));
+  const pageIndex = Math.max(0, Math.floor(top / pageHeight));
+  const pageStart = pageIndex * pageHeight;
+  const safeTop = pageStart + safe;
+  const safeBottom = pageStart + pageHeight - safe;
+  const candidate = Math.max(top, safeTop);
+  if (height > Math.max(1, safeBottom - safeTop)) return candidate;
+  return candidate + height <= safeBottom ? candidate : pageStart + pageHeight + safe;
+}
+
+export function buildFlowElementTopOverrides({
+  elements = [],
+  zonesById = new Map(),
+  tableTopMm = 0,
+  tableBottomMm = 0,
+  pageHeightMm = 210,
+  safePaddingMm = 5,
+  measuredHeights = {},
+  getElementHeightMm = getFlowElementHeightMm,
+} = {}) {
+  const flowGapMm = Math.max(1.5, safePaddingMm > 0 ? Math.min(3, safePaddingMm * 0.45) : 2);
+  const flowElements = elements
+    .filter(element => shouldFlowElementAfterItems(element, zonesById, tableTopMm))
+    .map(element => {
+      const baseTop = getFlowElementBaseTopMm(element, zonesById);
+      const height = getElementHeightMm(element, measuredHeights);
+      return {
+        element,
+        baseTop,
+        baseBottom: baseTop + height,
+        height,
+      };
+    })
+    .sort((left, right) => {
+      if (Math.abs(left.baseTop - right.baseTop) > 0.001) return left.baseTop - right.baseTop;
+      return getFlowElementPriority(left.element) - getFlowElementPriority(right.element);
+    });
+
+  const groups = [];
+  const groupToleranceMm = 1;
+  flowElements.forEach(entry => {
+    const last = groups[groups.length - 1];
+    if (last && entry.baseTop <= last.baseBottom + groupToleranceMm) {
+      last.entries.push(entry);
+      last.baseTop = Math.min(last.baseTop, entry.baseTop);
+      last.baseBottom = Math.max(last.baseBottom, entry.baseBottom);
+      last.height = Math.max(last.height, last.baseBottom - last.baseTop);
+      return;
+    }
+    groups.push({
+      baseTop: entry.baseTop,
+      baseBottom: entry.baseBottom,
+      height: entry.height,
+      entries: [entry],
+    });
+  });
+
+  const overrides = new Map();
+  let cursor = Number(tableBottomMm) || 0;
+  groups.forEach(group => {
+    const hasAutoElement = group.entries.some(entry => isAutoBelowItemsElement(entry.element));
+    const autoGapMm = group.entries.reduce((max, entry) => (
+      isAutoBelowItemsElement(entry.element)
+        ? Math.max(max, getAutoBelowItemsGapMm(entry.element))
+        : max
+    ), flowGapMm);
+    const requestedTop = Math.max(
+      hasAutoElement ? 0 : group.baseTop,
+      (Number(tableBottomMm) || 0) + autoGapMm,
+      cursor + flowGapMm,
+    );
+    const safeTop = fitFlowBlockTopToPhysicalPage(requestedTop, group.height, pageHeightMm, safePaddingMm);
+    group.entries.forEach(entry => {
+      overrides.set(entry.element.id, roundMm(safeTop + (entry.baseTop - group.baseTop)));
+    });
+    cursor = safeTop + group.height;
+  });
+
+  return overrides;
 }
 
 export function estimateItemsTableHeightMm(document = {}, itemCount = 0) {
