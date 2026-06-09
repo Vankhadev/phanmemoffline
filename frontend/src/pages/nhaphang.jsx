@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Search, Plus, X, Save, Package, Tag, FileText, AlertCircle, CheckCircle, Building, Trash2, CreditCard, RotateCcw, Settings, ChevronDown } from 'lucide-react';
-import { SYNC_UPDATED_EVENT, apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
+import { Search, Plus, X, Save, Package, Tag, FileText, AlertCircle, CheckCircle, Building, Trash2, CreditCard, RotateCcw, Settings, ChevronDown, Minus, Image as ImageIcon } from 'lucide-react';
+import { SYNC_UPDATED_EVENT, apiJson, apiJsonChecked, resolveApiUrl, resolveBackendAssetUrl } from '../utils/apiClient';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
 import { buildCategoriesById, categoryFields, getProductDisplayName, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
 import QuantityStepper from '../components/QuantityStepper';
@@ -724,6 +724,8 @@ const Nhaphang = ({ store }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [editingProductIndex, setEditingProductIndex] = useState(null);
   const [importPickerSelections, setImportPickerSelections] = useState([]);
+  const [showImportProductPicker, setShowImportProductPicker] = useState(false);
+  const [importPickerAddingKey, setImportPickerAddingKey] = useState('');
   const [note, setNote] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('unpaid');
   const [tags, setTags] = useState([]);
@@ -741,6 +743,7 @@ const Nhaphang = ({ store }) => {
   const [selectedHistoryIds, setSelectedHistoryIds] = useState([]);
   const [showAllSuppliers, setShowAllSuppliers] = useState(false); // Thêm state để hiển thị full khi focus
   const searchInputRef = useRef(null);
+  const importPickerSearchInputRef = useRef(null);
   const productSearchContainerRef = useRef(null);
   const searchResultsRef = useRef(null);
   const supplierSearchContainerRef = useRef(null);
@@ -771,6 +774,17 @@ const Nhaphang = ({ store }) => {
     const timer = setTimeout(() => setStockToast(null), 3400);
     return () => clearTimeout(timer);
   }, [stockToast]);
+
+  useEffect(() => {
+    if (!showImportProductPicker) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const timer = window.setTimeout(() => importPickerSearchInputRef.current?.focus(), 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showImportProductPicker]);
 
   const showStockLimitToast = useCallback((message) => {
     setStockToast({ id: Date.now(), message });
@@ -866,7 +880,7 @@ const Nhaphang = ({ store }) => {
 
     const trimmedQuery = searchQuery.trim();
 
-    if (!showSearchResults && !trimmedQuery) {
+    if (!showSearchResults && !showImportProductPicker && !trimmedQuery) {
       setFilteredProducts([]);
       setLoading(false);
       return () => {
@@ -917,7 +931,7 @@ const Nhaphang = ({ store }) => {
         clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [searchQuery, showSearchResults, getScopedProductSearchResults, allProducts.length]);
+  }, [searchQuery, showSearchResults, showImportProductPicker, getScopedProductSearchResults, allProducts.length]);
 
   // Filter suppliers when search query changes
   useEffect(() => {
@@ -1046,12 +1060,30 @@ const Nhaphang = ({ store }) => {
     }, 0);
   }, [getScopedProductSearchResults]);
 
-  const handleStartAddProduct = () => {
+  const openImportProductPicker = useCallback(() => {
     if (!selectedSupplier) {
       showSupplierRequiredHint();
       return;
     }
-    openProductSearch(null);
+    setEditingProductIndex(null);
+    setSelectedProduct(null);
+    setSearchQuery('');
+    setFilteredProducts(getScopedProductSearchResults(''));
+    setShowSearchResults(false);
+    setShowImportProductPicker(true);
+    setError(null);
+    setSuccess(null);
+  }, [getScopedProductSearchResults, selectedSupplier]);
+
+  const closeImportProductPicker = useCallback(() => {
+    setShowImportProductPicker(false);
+    setSearchQuery('');
+    setFilteredProducts([]);
+    setImportPickerAddingKey('');
+  }, []);
+
+  const handleStartAddProduct = () => {
+    openImportProductPicker();
   };
 
   const handleEditProductRow = (index) => {
@@ -1217,15 +1249,25 @@ const Nhaphang = ({ store }) => {
     });
   };
 
-  const getImportPickerKey = (product = {}) => getImportRowKey(product) || `product:${product.id || product.sku || product.maSP || Math.random()}`;
+  const getImportPickerKey = (product = {}) => {
+    const rowKey = getImportRowKey(product);
+    if (rowKey) return rowKey;
+    const fallbackIdentity = firstImportValue(product.id, product.sku, product.maSP, product.name, product.tenSP) || 'unknown';
+    return `product:${compactImportSearchText(fallbackIdentity)}`;
+  };
+  const importPickerSelectionByKey = useMemo(() => (
+    new Map(importPickerSelections.map(selection => [selection.key, selection]))
+  ), [importPickerSelections]);
 
   const handleAddImportPickerSelection = async (product) => {
     if (!selectedSupplier) {
       showSupplierRequiredHint();
       return;
     }
+    const candidateKey = getImportPickerKey(product);
+    if (importPickerSelectionByKey.has(candidateKey)) return;
     try {
-      setLoading(true);
+      setImportPickerAddingKey(candidateKey);
       const draft = await buildImportProductDraftFromSearch(product);
       const key = getImportPickerKey(draft);
       setImportPickerSelections(prev => {
@@ -1234,7 +1276,7 @@ const Nhaphang = ({ store }) => {
       });
       setError(null);
     } finally {
-      setLoading(false);
+      setImportPickerAddingKey(currentKey => currentKey === candidateKey ? '' : currentKey);
     }
   };
 
@@ -1262,6 +1304,11 @@ const Nhaphang = ({ store }) => {
   const importPickerTotalQuantity = importPickerSelections.reduce((sum, selection) => (
     sum + (isValidImportQuantityInput(selection.quantity) ? parseImportQuantity(selection.quantity, 0) : 0)
   ), 0);
+  const importPickerEstimatedTotal = importPickerSelections.reduce((sum, selection) => {
+    const quantity = isValidImportQuantityInput(selection.quantity) ? parseImportQuantity(selection.quantity, 0) : 0;
+    const price = Math.max(0, getFirstFiniteNumber(selection.product.giaNhap, selection.product.import_price, selection.product.retail_price));
+    return sum + quantity * price;
+  }, 0);
 
   const finishImportPickerSelection = () => {
     if (importPickerSelections.length === 0 || importPickerHasQuantityError) return;
@@ -1281,8 +1328,11 @@ const Nhaphang = ({ store }) => {
       setPaymentStatus('unpaid');
       setProducts(prev => changes.reduce((nextProducts, change) => applyImportProductQuantityDelta(nextProducts, change.selection, change.quantityDelta), prev));
     }
-    setImportPickerSelections(normalizedSelections.map(selection => ({ ...selection, appliedQuantity: selection.quantity })));
+    setImportPickerSelections([]);
     setShowSearchResults(false);
+    setShowImportProductPicker(false);
+    setSearchQuery('');
+    setFilteredProducts([]);
     setSelectedProduct(null);
     setEditingProductIndex(null);
     setError(null);
@@ -1342,6 +1392,240 @@ const Nhaphang = ({ store }) => {
       </div>
     </div>
   );
+
+  const getImportProductImageUrl = (product = {}) => {
+    const parent = product?.parent || {};
+    const rawUrl = firstImportValue(
+      product?.hinhAnh,
+      product?.image_url,
+      product?.imageUrl,
+      product?.thumbnail_url,
+      product?.thumbnail,
+      product?.image,
+      product?.photo_url,
+      product?.photo,
+      parent?.hinhAnh,
+      parent?.image_url,
+      parent?.imageUrl,
+      parent?.thumbnail_url,
+      parent?.thumbnail,
+      parent?.image,
+      parent?.photo_url,
+      parent?.photo,
+    ) || '';
+    return resolveBackendAssetUrl(rawUrl);
+  };
+
+  const getImportPickerSelection = (product = {}) => (
+    importPickerSelectionByKey.get(getImportPickerKey(product))
+  );
+
+  const renderImportProductPickerQuantityControl = (product = {}) => {
+    const key = getImportPickerKey(product);
+    const selection = importPickerSelectionByKey.get(key);
+    const isAdding = importPickerAddingKey === key;
+
+    if (!selection) {
+      return (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            handleAddImportPickerSelection(product);
+          }}
+          disabled={Boolean(importPickerAddingKey)}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-500 text-white shadow-sm transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+          title="Thêm sản phẩm"
+        >
+          {isAdding ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/80 border-t-transparent" /> : <Plus size={15} strokeWidth={3} />}
+        </button>
+      );
+    }
+
+    const quantityInvalid = !isValidImportQuantityInput(selection.quantity);
+    return (
+      <div className="inline-flex items-center gap-2" onClick={event => event.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => {
+            const currentQuantity = parseImportQuantity(selection.quantity, 1);
+            if (currentQuantity <= 1) removeImportPickerSelection(selection.key);
+            else stepImportPickerQuantity(selection.key, -1);
+          }}
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-400 text-white transition hover:bg-slate-500"
+          title="Giảm số lượng"
+        >
+          <Minus size={12} strokeWidth={3} />
+        </button>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={selection.quantity}
+          onChange={event => updateImportPickerQuantity(selection.key, event.target.value)}
+          onFocus={event => event.currentTarget.select()}
+          className={`h-7 w-12 border-0 border-b-2 bg-transparent px-1 text-center text-sm font-semibold outline-none focus:ring-0 ${quantityInvalid ? 'border-red-500 text-red-600' : 'border-sky-500 text-slate-700'}`}
+          aria-label="Số lượng chọn"
+        />
+        <button
+          type="button"
+          onClick={() => stepImportPickerQuantity(selection.key, 1)}
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-400 text-white transition hover:bg-slate-500"
+          title="Tăng số lượng"
+        >
+          <Plus size={12} strokeWidth={3} />
+        </button>
+      </div>
+    );
+  };
+
+  const renderImportProductPickerRow = (product = {}) => {
+    const selection = getImportPickerSelection(product);
+    const isVariant = isImportVariantProduct(product, product.parent || null);
+    const parent = product.parent || null;
+    const name = isVariant ? getProductDisplayName(product, parent) : (product.name || product.tenSP || '');
+    const sku = product.sku || product.maSP || '';
+    const unit = product.unit || product.donVi || 'cái';
+    const categoryName = product.default_category?.name || product.category || '';
+    const parentName = !isVariant ? (product.parent_name || product.parent?.name || '') : '';
+    const price = Math.max(0, getFirstFiniteNumber(product.import_price, product.giaNhap, product.retail_price));
+    const availableQuantity = getProductAvailableQuantity(product);
+    const imageUrl = getImportProductImageUrl(product);
+    const rowKey = `import-picker-${getImportPickerKey(product) || product.id || sku || name}`;
+
+    return (
+      <div
+        key={rowKey}
+        onClick={() => {
+          if (!selection) handleAddImportPickerSelection(product);
+        }}
+        className={`grid cursor-pointer grid-cols-[54px_minmax(0,1fr)_132px] gap-3 border-b border-slate-100 px-5 py-3.5 transition hover:bg-sky-50/50 sm:grid-cols-[56px_minmax(0,1fr)_156px] ${selection ? 'bg-sky-50/40' : 'bg-white'}`}
+      >
+        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded bg-slate-100 text-slate-300 ring-1 ring-slate-100">
+          {imageUrl ? (
+            <img src={imageUrl} alt={name} className="h-full w-full object-cover" />
+          ) : (
+            <ImageIcon size={23} strokeWidth={1.6} />
+          )}
+        </div>
+        <div className="min-w-0 pt-0.5">
+          <div className="line-clamp-2 text-[13px] font-medium leading-5 text-slate-800" title={name}>
+            {name || 'Sản phẩm'}
+            {parentName ? <span className="text-xs text-slate-400"> · {parentName}</span> : null}
+          </div>
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] leading-4">
+            <span className="text-slate-400">{sku || 'N/A'}</span>
+            <span className="max-w-full truncate font-medium text-sky-700">
+              {unit}{categoryName ? ` · ${categoryName}` : ''}
+            </span>
+          </div>
+          {isVariant && parent?.name && (
+            <div className="mt-0.5 truncate text-[11px] text-slate-400">Thuộc: {parent.name}</div>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-col items-end justify-start gap-2 pt-0.5 text-right">
+          <div className="max-w-full truncate text-sm font-semibold text-slate-700">{formatVND(price)}</div>
+          <div className="whitespace-nowrap text-[12px] leading-4 text-slate-400">
+            Tồn: <b className={availableQuantity < 0 ? 'text-red-500' : 'text-slate-500'}>{availableQuantity.toLocaleString('vi-VN')}</b>
+          </div>
+          {renderImportProductPickerQuantityControl(product)}
+        </div>
+      </div>
+    );
+  };
+
+  const renderImportProductPickerModal = () => {
+    if (!showImportProductPicker) return null;
+    const hasRows = filteredProducts.length > 0;
+
+    return (
+      <div
+        className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-3 sm:p-6"
+        role="presentation"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeImportProductPicker();
+        }}
+      >
+        <div className="flex max-h-[92dvh] w-full max-w-[750px] flex-col overflow-hidden rounded bg-white text-slate-800 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="import-product-picker-title">
+          <div className="flex items-center justify-between px-6 pb-3 pt-5">
+            <h2 id="import-product-picker-title" className="text-xl font-semibold tracking-normal text-slate-900">
+              Chọn sản phẩm để nhập hàng
+            </h2>
+            <button
+              type="button"
+              onClick={closeImportProductPicker}
+              className="inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              title="Thoát"
+            >
+              <X size={22} />
+            </button>
+          </div>
+          <div className="px-6 pb-3">
+            <div className="relative">
+              <Search size={19} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                ref={importPickerSearchInputRef}
+                className="h-10 w-full rounded-none border border-slate-300 bg-white pl-11 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                placeholder="Tìm kiếm sản phẩm"
+                value={searchQuery}
+                onChange={event => setSearchQuery(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 px-6 pb-2 text-xs">
+            <button
+              type="button"
+              className="rounded-full border border-sky-500 bg-sky-50 px-3 py-1.5 font-medium text-sky-700"
+            >
+              Sản phẩm ({filteredProducts.length.toLocaleString('vi-VN')})
+            </button>
+            {selectedSupplier && (
+              <span className="min-w-0 truncate text-slate-400">Nhà cung cấp: {selectedSupplier.tenNCC}</span>
+            )}
+            {loading && <span className="text-sky-600">Đang tải dữ liệu...</span>}
+          </div>
+          <div className="min-h-[240px] flex-1 overflow-y-auto border-y border-slate-100 bg-white sm:min-h-[380px]">
+            {hasRows ? (
+              filteredProducts.map(product => renderImportProductPickerRow(product))
+            ) : !loading ? (
+              <div className="flex h-56 items-center justify-center px-6 text-center text-sm text-slate-400">
+                {searchQuery.trim() ? 'Không tìm thấy sản phẩm phù hợp' : 'Chưa có sản phẩm cho nhà cung cấp này'}
+              </div>
+            ) : null}
+          </div>
+          <div className="border-t border-slate-100 bg-white px-6 py-4">
+            {importPickerHasQuantityError && (
+              <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                Số lượng phải là số dương, không nhập chữ hoặc số âm.
+              </div>
+            )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm font-semibold text-sky-700">
+                Bạn đã chọn {importPickerSelections.length.toLocaleString('vi-VN')} sản phẩm
+                {importPickerSelections.length > 0 ? ` · ${importPickerTotalQuantity.toLocaleString('vi-VN')} cái · ${formatVND(importPickerEstimatedTotal)}` : ''}
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeImportProductPicker}
+                  className="inline-flex min-h-10 min-w-20 items-center justify-center rounded border border-sky-600 bg-white px-4 text-sm font-semibold text-sky-700 transition hover:bg-sky-50"
+                >
+                  Thoát
+                </button>
+                <button
+                  type="button"
+                  onClick={finishImportPickerSelection}
+                  disabled={importPickerSelections.length === 0 || importPickerHasQuantityError || saving}
+                  className="inline-flex min-h-10 min-w-28 items-center justify-center rounded bg-sky-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  Chọn xong
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Handle product selection from search
   const handleSelectProduct = async (product) => {
@@ -2188,6 +2472,7 @@ const Nhaphang = ({ store }) => {
       }
       // Escape to close search
       if (e.key === 'Escape') {
+        if (showImportProductPicker) closeImportProductPicker();
         if (showSearchResults) setShowSearchResults(false);
         if (showSupplierResults) setShowSupplierResults(false);
       }
@@ -2195,7 +2480,7 @@ const Nhaphang = ({ store }) => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedProduct, showSearchResults, showSupplierResults]);
+  }, [selectedProduct, showImportProductPicker, showSearchResults, showSupplierResults, closeImportProductPicker]);
 
   const isPaymentButtonDisabled = saving || !editingImportKey || paymentSummary.payment_status === 'paid' || hasUnsavedPaymentAffectingChanges;
 
@@ -2208,6 +2493,7 @@ const Nhaphang = ({ store }) => {
           </div>
         </div>
       )}
+      {renderImportProductPickerModal()}
       {/* Header khu vực nhập hàng */}
       <div className="sapo-topbar">
         <button
@@ -2503,15 +2789,7 @@ const Nhaphang = ({ store }) => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!selectedSupplier) {
-                      showSupplierRequiredHint();
-                      return;
-                    }
-                    setFilteredProducts(getScopedProductSearchResults(searchQuery));
-                    setShowSearchResults(true);
-                    searchInputRef.current?.focus();
-                  }}
+                  onClick={handleStartAddProduct}
                   disabled={saving}
                   className="sapo-btn"
                 >
@@ -2519,7 +2797,7 @@ const Nhaphang = ({ store }) => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => searchInputRef.current?.focus()}
+                  onClick={handleStartAddProduct}
                   disabled={saving || !selectedSupplier}
                   className="sapo-btn"
                 >
@@ -2607,7 +2885,7 @@ const Nhaphang = ({ store }) => {
                         <div className="sticky left-0 mx-auto flex min-h-[180px] w-[560px] max-w-[calc(100vw-4rem)] flex-col items-center justify-center">
                           <Package className="mb-3 h-12 w-12 text-gray-200" />
                           <div className="mb-4">Đơn nhập hàng của bạn chưa có sản phẩm nào</div>
-                          <button type="button" onClick={() => searchInputRef.current?.focus()} disabled={saving || !selectedSupplier} className="sapo-btn">
+                          <button type="button" onClick={handleStartAddProduct} disabled={saving || !selectedSupplier} className="sapo-btn">
                             Thêm sản phẩm
                           </button>
                         </div>

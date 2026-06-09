@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.5.4 - 2026-06-09
+
+### Thay đổi chính
+
+- Thiết kế lại luồng thêm sản phẩm trong trang nhập hàng: khi bấm Thêm sản phẩm/Chọn nhiều sẽ mở modal chọn sản phẩm giống trang tạo đơn hàng.
+- Modal nhập hàng hỗ trợ tìm kiếm sản phẩm, ảnh/placeholder, thông tin tồn kho, nút cộng nhanh và chỉnh số lượng trực tiếp bằng nút +/- hoặc ô nhập.
+- Khi bấm Chọn xong, danh sách đã chọn được đưa xuống bảng nhập hàng, tự gộp sản phẩm trùng và vẫn cho chỉnh số lượng, giá nhập, chiết khấu, thuế trong bảng.
+
+### Phát hành
+
+- Đồng bộ version phát hành 1.5.4 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
+- Tạo tag GitHub `v1.5.4`; GitHub Actions sẽ build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json.
+
 ## v1.5.3 - 2026-06-09
 
 ### Thay đổi chính
