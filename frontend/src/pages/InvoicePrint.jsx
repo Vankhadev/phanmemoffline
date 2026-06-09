@@ -375,12 +375,23 @@ export default function InvoicePrint() {
       if (typeof document !== 'undefined') {
         document.title = `${documentMode === 'estimate' ? 'Tam_tinh' : 'Hoa_don'}_${sanitizeFileName(invoiceCode)}`;
       }
-      window.requestAnimationFrame(() => {
-        window.print();
-        window.setTimeout(() => {
-          if (typeof document !== 'undefined' && previousTitle) document.title = previousTitle;
-        }, 800);
-      });
+      const openPrintDialog = () => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            window.setTimeout(() => {
+              window.print();
+              window.setTimeout(() => {
+                if (typeof document !== 'undefined' && previousTitle) document.title = previousTitle;
+              }, 800);
+            }, 80);
+          });
+        });
+      };
+      if (typeof document !== 'undefined' && document.fonts?.ready) {
+        document.fonts.ready.then(openPrintDialog, openPrintDialog);
+      } else {
+        openPrintDialog();
+      }
     } catch (err) {
       setPrintError(err?.message || 'Không thể mở hộp thoại in của hệ điều hành.');
     }

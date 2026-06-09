@@ -11,13 +11,33 @@ import { attachClientOrderMetadata, ensureClientOrderId } from './clientOrderId'
 
 export const AUTH_EXPIRED_EVENT = 'vankha-auth:expired';
 export const SYNC_UPDATED_EVENT = 'vankha-sync:updated';
+export const SYNC_BROADCAST_REQUEST_EVENT = 'vankha-sync:broadcast-request';
 export const SYNC_CHECK_REQUEST_EVENT = 'vankha-sync:check-now';
 export const PRINT_TEMPLATE_UPDATED_EVENT = 'vankha-print-template:updated';
+
+function normalizeChangedTables(value = []) {
+  const list = Array.isArray(value) ? value : [value];
+  return Array.from(new Set(list.map(item => String(item || '').trim()).filter(Boolean)));
+}
 
 export function requestSyncCheck(detail = {}) {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(SYNC_CHECK_REQUEST_EVENT, {
     detail: { reason: 'manual', ...detail },
+  }));
+}
+
+export function requestCrossTabSyncUpdate(detail = {}) {
+  if (typeof window === 'undefined') return;
+  const changedTables = normalizeChangedTables(detail.changedTables || detail.tables || []);
+  if (changedTables.length === 0) return;
+  window.dispatchEvent(new CustomEvent(SYNC_BROADCAST_REQUEST_EVENT, {
+    detail: {
+      ...detail,
+      changedTables,
+      tables: changedTables,
+      ts: Number(detail.ts) || Date.now(),
+    },
   }));
 }
 
@@ -231,7 +251,7 @@ function logResolvedApiBase(details) {
 function shouldUseDevApiProxyPath(pathname) {
   if (!pathname || !pathname.startsWith('/')) return false;
   if (pathname === '/api' || pathname.startsWith('/api/')) return false;
-  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|inventory|accounting|excel-imports|store|settings|stats|cash-book|cashbook|payrolls|partners|combos|sync|features|updates|print-templates|dashboard)(\/|\?|$)/i.test(pathname);
+  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|inventory|accounting|excel-imports|store|settings|stats|cash-book|cashbook|payrolls|partners|combos|sync|features|updates|print-templates|marketplaces|dashboard)(\/|\?|$)/i.test(pathname);
 }
 
 function normalizeDevApiProxyPath(input) {
@@ -409,11 +429,12 @@ function isApiRequestUrl(url) {
 
 function buildInterceptedRequest(input, init = {}) {
   const url = resolveApiUrl(typeof input === 'string' ? input : String(input?.url || ''));
+  const { syncBroadcast: _syncBroadcast, ...fetchInit } = init || {};
   const headers = buildHeaders(init.headers, {
     skipAuth: Boolean(init.skipAuth) || isPublicAuthEndpoint(url),
     jsonBody: init.body && !(init.body instanceof FormData) && !(init.body instanceof Blob) && !(init.body instanceof ArrayBuffer),
   });
-  const requestInit = { ...init, headers };
+  const requestInit = { ...fetchInit, headers };
   if (requestInit.body && headers.get('Content-Type') === 'application/json' && typeof requestInit.body !== 'string') {
     requestInit.body = JSON.stringify(requestInit.body);
   }
@@ -443,6 +464,75 @@ function shouldTreatAsExpiredSession(url, requestInit = {}) {
   }
 }
 
+function normalizeApiPathForSync(url) {
+  try {
+    const parsed = new URL(String(url || ''), typeof window !== 'undefined' ? window.location.href : 'http://localhost');
+    const pathname = String(parsed.pathname || '');
+    const apiIndex = pathname.toLowerCase().lastIndexOf('/api');
+    const normalized = apiIndex >= 0 ? pathname.slice(apiIndex + 4) : pathname;
+    return normalized.startsWith('/') ? normalized : `/${normalized}`;
+  } catch (_) {
+    const text = String(url || '').split('?')[0] || '';
+    const apiMatch = text.match(/\/api(\/.*)?$/i);
+    return apiMatch ? (apiMatch[1] || '/') : text;
+  }
+}
+
+function getMutationMethod(init = {}) {
+  return String(init?.method || 'GET').trim().toUpperCase();
+}
+
+function isMutationMethod(method) {
+  return method && !['GET', 'HEAD', 'OPTIONS'].includes(method);
+}
+
+function inferChangedTablesFromRequest(url, init = {}) {
+  const method = getMutationMethod(init);
+  if (!isMutationMethod(method)) return [];
+  const path = normalizeApiPathForSync(url).toLowerCase();
+  if (!path || path === '/') return [];
+  if (/^\/users\/(login|register|bootstrap-status|bootstrap-admin)(\/|$)/.test(path)) return [];
+
+  const tables = new Set();
+  const add = (...items) => items.forEach(item => {
+    if (item) tables.add(item);
+  });
+
+  if (path.startsWith('/products/variants') || /^\/products(\/|$)/.test(path)) add('products');
+  if (path.startsWith('/product-categories')) add('product_categories', 'products');
+  if (path.startsWith('/combos')) add('combos', 'products');
+  if (path.startsWith('/imports')) add('imports', 'import_details', 'products');
+  if (path.startsWith('/invoices')) add('invoices', 'invoice_details', 'products');
+  if (path.startsWith('/customers')) add('customers');
+  if (path.startsWith('/customer-types')) add('customer_types', 'customers');
+  if (path.startsWith('/partners')) add('partners');
+  if (path.startsWith('/inventory')) add('products');
+  if (path.startsWith('/excel-imports')) add('products', 'product_categories');
+  if (path.startsWith('/settings/negative-stock')) add('settings');
+  if (path.startsWith('/print-templates')) add('print_templates');
+  if (path.startsWith('/marketplaces')) add('marketplace_shops', 'marketplace_orders');
+  if (path.startsWith('/users')) add('users');
+  if (path.startsWith('/cashbook')) add('cashbook');
+  if (path.startsWith('/accounting')) add('accounting');
+
+  return Array.from(tables);
+}
+
+function notifyApiMutation(input, init = {}, data = null) {
+  if (init?.syncBroadcast === false) return;
+  const method = getMutationMethod(init);
+  const changedTables = inferChangedTablesFromRequest(input, init);
+  if (changedTables.length === 0) return;
+  if (data && typeof data === 'object' && !Array.isArray(data) && data.ok === false) return;
+  requestCrossTabSyncUpdate({
+    reason: `api-${method.toLowerCase()}:${normalizeApiPathForSync(input)}`,
+    changedTables,
+    method,
+    path: normalizeApiPathForSync(input),
+    source: 'api-client',
+  });
+}
+
 export function installAuthenticatedFetch() {
   if (typeof window === 'undefined' || typeof window.fetch !== 'function' || window.__vankhaFetchPatched) return;
   const originalFetch = window.fetch.bind(window);
@@ -455,6 +545,7 @@ export function installAuthenticatedFetch() {
     if (response.status === 401 && shouldTreatAsExpiredSession(url, requestInit)) {
       handleUnauthorizedResponse({ status: response.status, url });
     }
+    if (response.ok) notifyApiMutation(url, init);
     return response;
   };
   window.__vankhaFetchPatched = true;
@@ -606,6 +697,7 @@ export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu AP
       response,
     });
   }
+  notifyApiMutation(input, init, data);
   return data;
 }
 
@@ -727,6 +819,35 @@ export const invoicesApi = {
   update(id, payload = {}) { return apiJsonChecked(`/invoices/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật đơn hàng.'); },
   remove(id) { return apiJsonChecked(`/invoices/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể hủy đơn hàng.'); },
   confirm(id) { return apiJsonChecked(`/invoices/${encodeURIComponent(id)}/confirm`, { method: 'PATCH' }, 'Không thể xác nhận thanh toán.'); },
+};
+
+export const marketplacesApi = {
+  platforms() { return apiJsonChecked('/marketplaces/platforms', {}, 'Không thể tải danh sách sàn thương mại điện tử.'); },
+  shops(params = {}) {
+    const query = new URLSearchParams();
+    if (params.platform) query.set('platform', params.platform);
+    if (params.includeInactive) query.set('includeInactive', '1');
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiJsonChecked(`/marketplaces/shops${suffix}`, {}, 'Không thể tải danh sách gian hàng sàn.');
+  },
+  createShop(payload = {}) { return apiJsonChecked('/marketplaces/shops', { method: 'POST', body: payload }, 'Không thể kết nối gian hàng.'); },
+  updateShop(id, payload = {}) { return apiJsonChecked(`/marketplaces/shops/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật gian hàng.'); },
+  removeShop(id) { return apiJsonChecked(`/marketplaces/shops/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể xóa liên kết gian hàng.'); },
+  orders(params = {}) {
+    const query = new URLSearchParams();
+    if (params.platform) query.set('platform', params.platform);
+    if (params.status) query.set('status', params.status);
+    if (params.search) query.set('search', params.search);
+    if (params.shop_id) query.set('shop_id', params.shop_id);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiJsonChecked(`/marketplaces/orders${suffix}`, {}, 'Không thể tải danh sách đơn hàng sàn.');
+  },
+  createOrder(payload = {}) { return apiJsonChecked('/marketplaces/orders', { method: 'POST', body: payload }, 'Không thể tạo đơn hàng sàn.'); },
+  updateOrder(id, payload = {}) { return apiJsonChecked(`/marketplaces/orders/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật đơn hàng sàn.'); },
+  removeOrder(id) { return apiJsonChecked(`/marketplaces/orders/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Không thể xóa đơn hàng sàn.'); },
+  sync(payload = {}) { return apiJsonChecked('/marketplaces/sync', { method: 'POST', body: payload }, 'Không thể đồng bộ đơn hàng sàn.'); },
 };
 
 function unwrapPrintTemplateItem(data) {

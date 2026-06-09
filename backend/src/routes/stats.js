@@ -257,6 +257,21 @@ function getDetailSku(detail = {}, productsById = new Map()) {
 // Báo cáo thống kê bán hàng theo sản phẩm trong khoảng ngày local Asia/Saigon
 // Query: from, to (YYYY-MM-DD), period=day|month|year|custom, status=completed mặc định
 // ─────────────────────────────────────────────
+function getDetailUnitCost(detail = {}, productsById = new Map(), comboItemsByComboId = new Map()) {
+  const snapshotCost = toNumber(detail.import_price, Number.NaN);
+  if (Number.isFinite(snapshotCost) && snapshotCost > 0) return snapshotCost;
+
+  if (detail.combo_id) {
+    return roundMoney((comboItemsByComboId.get(Number(detail.combo_id)) || []).reduce((sum, item) => {
+      const product = productsById.get(Number(item.variant_id)) || productsById.get(Number(item.product_id));
+      return sum + toNumber(item.quantity, 1) * toNumber(product?.import_price);
+    }, 0));
+  }
+
+  const product = productsById.get(Number(detail.variant_id)) || productsById.get(Number(detail.product_id));
+  return Math.max(0, toNumber(product?.import_price));
+}
+
 router.get('/product-report', (req, res) => {
   try {
     const { from, to, period } = buildProductReportRange(req.query);
@@ -280,13 +295,23 @@ router.get('/product-report', (req, res) => {
     }
 
     const productsById = new Map(getAll('products').map(product => [Number(product.id), product]));
+    const comboItemsByComboId = new Map();
+    for (const item of getAll('combo_items')) {
+      const comboId = Number(item?.combo_id);
+      if (!comboId) continue;
+      if (!comboItemsByComboId.has(comboId)) comboItemsByComboId.set(comboId, []);
+      comboItemsByComboId.get(comboId).push(item || {});
+    }
     const rowMap = new Map();
+    const orders = [];
     let totalQuantity = 0;
     let totalGrossAmount = 0;
     let totalProductDiscount = 0;
     let totalAllocatedDiscount = 0;
     let totalTaxAmount = 0;
     let totalNetAmount = 0;
+    let totalCost = 0;
+    let totalEstimatedProfit = 0;
 
     for (const invoice of invoices) {
       const invoiceId = Number(invoice.id);
@@ -295,6 +320,10 @@ router.get('/product-report', (req, res) => {
       const invoiceSubtotal = toNumber(invoice.subtotal);
       const invoiceDiscount = toNumber(invoice.discount_amount);
       const invoiceVat = toNumber(invoice.vat_amount);
+      const orderProducts = [];
+      let orderRevenueBeforeTax = 0;
+      let orderCost = 0;
+      let orderEstimatedProfit = 0;
 
       for (const detail of details) {
         const quantity = toNumber(detail.quantity);
@@ -305,7 +334,11 @@ router.get('/product-report', (req, res) => {
         const ratio = invoiceSubtotal > 0 && lineTotal > 0 ? lineTotal / invoiceSubtotal : 0;
         const allocatedDiscount = invoiceDiscount * ratio;
         const taxAmount = invoiceVat * ratio;
+        const revenueBeforeTax = grossAmount - productDiscount - allocatedDiscount;
         const netAmount = grossAmount - productDiscount - allocatedDiscount + taxAmount;
+        const unitCost = getDetailUnitCost(detail, productsById, comboItemsByComboId);
+        const costAmount = quantity * unitCost;
+        const estimatedProfit = revenueBeforeTax - costAmount;
         const productName = getDetailProductName(detail, productsById);
         const sku = getDetailSku(detail, productsById);
         const type = detail.type || detail.item_type || (detail.combo_id ? 'combo' : 'product');
@@ -326,6 +359,9 @@ router.get('/product-report', (req, res) => {
             allocatedDiscount: 0,
             taxAmount: 0,
             netAmount: 0,
+            revenueBeforeTax: 0,
+            costAmount: 0,
+            estimatedProfit: 0,
             orderCount: 0,
             _invoiceIds: new Set(),
           });
@@ -338,15 +374,44 @@ router.get('/product-report', (req, res) => {
         row.allocatedDiscount += allocatedDiscount;
         row.taxAmount += taxAmount;
         row.netAmount += netAmount;
+        row.revenueBeforeTax += revenueBeforeTax;
+        row.costAmount += costAmount;
+        row.estimatedProfit += estimatedProfit;
         row._invoiceIds.add(invoiceId);
 
+        orderProducts.push({
+          productName,
+          sku,
+          type,
+          quantity: roundMoney(quantity),
+          revenueBeforeTax: roundMoney(revenueBeforeTax),
+          costAmount: roundMoney(costAmount),
+          estimatedProfit: roundMoney(estimatedProfit),
+        });
+        orderRevenueBeforeTax += revenueBeforeTax;
+        orderCost += costAmount;
+        orderEstimatedProfit += estimatedProfit;
         totalQuantity += quantity;
         totalGrossAmount += grossAmount;
         totalProductDiscount += productDiscount;
         totalAllocatedDiscount += allocatedDiscount;
         totalTaxAmount += taxAmount;
         totalNetAmount += netAmount;
+        totalCost += costAmount;
+        totalEstimatedProfit += estimatedProfit;
       }
+
+      orders.push({
+        date: dateKey,
+        invoiceId,
+        invoiceCode: invoice.invoice_code || `HD-${invoiceId}`,
+        customerName: invoice.customer_name || 'Khách lẻ',
+        createdAt: invoice.created_at,
+        revenueBeforeTax: roundMoney(orderRevenueBeforeTax),
+        costAmount: roundMoney(orderCost),
+        estimatedProfit: roundMoney(orderEstimatedProfit),
+        products: orderProducts,
+      });
     }
 
     const rows = Array.from(rowMap.values())
@@ -358,6 +423,9 @@ router.get('/product-report', (req, res) => {
         allocatedDiscount: roundMoney(row.allocatedDiscount),
         taxAmount: roundMoney(row.taxAmount),
         netAmount: roundMoney(row.netAmount),
+        revenueBeforeTax: roundMoney(row.revenueBeforeTax),
+        costAmount: roundMoney(row.costAmount),
+        estimatedProfit: roundMoney(row.estimatedProfit),
         orderCount: row._invoiceIds.size,
         _invoiceIds: undefined,
       }))
@@ -388,7 +456,10 @@ router.get('/product-report', (req, res) => {
         allocatedDiscount: roundMoney(totalAllocatedDiscount),
         taxAmount: roundMoney(totalTaxAmount),
         netAmount: roundMoney(totalNetAmount),
+        totalCost: roundMoney(totalCost),
+        estimatedProfit: roundMoney(totalEstimatedProfit),
       },
+      orders: orders.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))),
       rows,
     });
   } catch (err) {

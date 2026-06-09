@@ -21,6 +21,7 @@ import AccountingDashboard from './pages/AccountingDashboard';
 import TaxReport from './pages/TaxReport';
 import InventoryReport from './pages/InventoryReport';
 import AccountingLogs from './pages/AccountingLogs';
+import MarketplaceManager from './pages/MarketplaceManager';
 import {
   BadgeDollarSign,
   BarChart3,
@@ -41,6 +42,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Sliders,
+  Store,
   Truck,
   Users,
   Wallet,
@@ -67,6 +69,8 @@ const ROUTE_ALIASES = {
   '/orders': '/danh-sach-don-hang',
   '/products': '/san-pham',
   '/customers': '/khach-hang',
+  '/marketplaces': '/san-thuong-mai-dien-tu',
+  '/san-tmdt': '/san-thuong-mai-dien-tu',
 };
 
 const HOME_ROUTE = '/';
@@ -140,6 +144,7 @@ const ROUTE_PERMISSIONS = {
   '/bang-luong-nhan-vien': ['payrolls.read'],
   '/bao-cao-theo-don-hang': ['invoices.read'],
   '/bao-cao-theo-san-pham': ['stats.read'],
+  '/san-thuong-mai-dien-tu': ['settings.read', 'invoices.read'],
   '/cai-dat': ['settings.read', 'settings.manage', 'store.read', 'store.manage', 'users.read', 'users.manage', 'customers.read', 'customers.manage', 'updates.read', 'updates.manage', 'print_templates.read', 'print_templates.manage'],
 };
 
@@ -268,7 +273,7 @@ function AppLayout({
     don_hang: location.pathname.startsWith('/tao-don-hang') || location.pathname.startsWith('/danh-sach-don-hang'),
     danh_muc: location.pathname.startsWith('/san-pham') || location.pathname.startsWith('/kho-hang') || location.pathname.startsWith('/khach-hang') || location.pathname.startsWith('/nhap-hang') || location.pathname.startsWith('/nha-cung-cap'),
     ke_toan: location.pathname.startsWith('/ke-toan'),
-    quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat'),
+    quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/san-thuong-mai-dien-tu') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat'),
   }));
   const [updateToast, setUpdateToast] = useState(null);
   const [updateToastVisible, setUpdateToastVisible] = useState(false);
@@ -312,7 +317,7 @@ function AppLayout({
         don_hang: ['/tao-don-hang', '/danh-sach-don-hang'],
         danh_muc: ['/san-pham', '/kho-hang', '/khach-hang', '/nhap-hang', '/nha-cung-cap'],
         ke_toan: ['/ke-toan'],
-        quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/bang-luong-nhan-vien', '/cai-dat'],
+        quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/san-thuong-mai-dien-tu', '/bang-luong-nhan-vien', '/cai-dat'],
       };
 
       Object.entries(autoOpenMatchers).forEach(([key, routes]) => {
@@ -377,6 +382,7 @@ function AppLayout({
           { to: '/so-quy', label: 'Sổ quỹ', icon: Wallet },
           { to: '/bao-cao-theo-don-hang', label: 'Báo cáo theo đơn hàng', icon: FileText },
           { to: '/bao-cao-theo-san-pham', label: 'Báo cáo sản phẩm', icon: Boxes },
+          { to: '/san-thuong-mai-dien-tu', label: 'Sàn TMĐT', icon: Store },
           { to: '/bang-luong-nhan-vien', label: 'Bảng lương nhân viên', icon: BadgeDollarSign },
           { to: '/cai-dat', label: 'Cài đặt', icon: SettingsIcon },
         ],
@@ -478,6 +484,7 @@ function AppLayout({
             <Route path="/bang-luong-nhan-vien" element={<ProtectedRoute user={user} permissions={permissions} path="/bang-luong-nhan-vien"><Payroll /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><CustomerOrderReport /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ProductReport /></ProtectedRoute>} />
+            <Route path="/san-thuong-mai-dien-tu" element={<ProtectedRoute user={user} permissions={permissions} path="/san-thuong-mai-dien-tu"><MarketplaceManager /></ProtectedRoute>} />
             <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><Settings store={store} onStoreChange={onStoreChange} permissions={permissions} /></ProtectedRoute>} />
             <Route path={LOGIN_REGISTER_ROUTE} element={<Navigate to={firstAccessibleRoute(user, permissions)} replace />} />
             {Object.entries(ROUTE_ALIASES).map(([from, to]) => (

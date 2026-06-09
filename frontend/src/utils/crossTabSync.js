@@ -1,4 +1,4 @@
-import { SYNC_UPDATED_EVENT } from './apiClient';
+import { SYNC_BROADCAST_REQUEST_EVENT, SYNC_UPDATED_EVENT } from './apiClient';
 
 const CROSS_TAB_SYNC_CHANNEL = 'vankha-cross-tab-sync';
 const CROSS_TAB_SYNC_STORAGE_KEY = 'vankha.cross-tab-sync.payload';
@@ -6,6 +6,8 @@ const TAB_ID = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slic
 
 let bridgeInstalled = false;
 let broadcastChannel = null;
+let lastPostedSignature = '';
+let lastPostedAt = 0;
 
 function isBrowserRuntime() {
   return typeof window !== 'undefined';
@@ -49,12 +51,23 @@ function ensureBroadcastChannel() {
 
 function postCrossTabPayload(detail = {}) {
   if (!isBrowserRuntime()) return;
+  const normalizedDetail = normalizeSyncDetail(detail);
+  const signature = [
+    normalizeChangedTables(normalizedDetail.changedTables).sort().join(','),
+    String(normalizedDetail.reason || ''),
+    String(normalizedDetail.method || ''),
+    String(normalizedDetail.path || ''),
+  ].join('|');
+  const now = Date.now();
+  if (signature && signature === lastPostedSignature && now - lastPostedAt < 150) return;
+  lastPostedSignature = signature;
+  lastPostedAt = now;
 
   const payload = {
     type: 'sync-update',
     sourceTabId: TAB_ID,
     ts: Date.now(),
-    detail: normalizeSyncDetail(detail),
+    detail: normalizedDetail,
   };
 
   const channel = ensureBroadcastChannel();
@@ -114,5 +127,9 @@ export function installCrossTabSyncBridge() {
     if (detail.__crossTabSyncSkipBroadcast) return;
     if (detail.sourceTabId === TAB_ID) return;
     postCrossTabPayload(detail);
+  });
+
+  window.addEventListener(SYNC_BROADCAST_REQUEST_EVENT, (event) => {
+    postCrossTabPayload(event.detail || {});
   });
 }

@@ -37,6 +37,8 @@ const PULL_TABLES = [
   'return_logs',
   'return_details',
   'daily_stats',
+  'marketplace_shops',
+  'marketplace_orders',
   'system_settings',
 ];
 

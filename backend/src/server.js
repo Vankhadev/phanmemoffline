@@ -53,6 +53,7 @@ const inventoryRoutes = require('./routes/inventory');
 const accountingRoutes = require('./routes/accounting');
 const settingsRoutes = require('./routes/settings');
 const printTemplatesRoutes = require('./routes/printTemplates');
+const marketplacesRoutes = require('./routes/marketplaces');
 
 // ============================================================
 //  EXPRESS APP
@@ -256,6 +257,7 @@ app.use('/api/accounting', requireAuth, requireAnyPermission(['accounting.read',
 app.use('/api/settings', requireAuth, requireAnyPermission(['settings.read', 'settings.manage']), settingsRoutes);
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);
 app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
+app.use('/api/marketplaces', requireAuth, requireAnyPermission(['settings.read', 'settings.manage', 'invoices.read', 'invoices.manage']), marketplacesRoutes);
 
 // ----- Dashboard -----
 function buildDashboardPayload() {

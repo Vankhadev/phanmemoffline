@@ -552,10 +552,10 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
   const [measuredTableBottomMm, setMeasuredTableBottomMm] = useState(null);
   const [measuredElementHeightsMm, setMeasuredElementHeightsMm] = useState({});
   const tableMetrics = useMemo(
-    () => getItemsTablePageMetrics(document, normalized.items.length),
-    [document, normalized.items.length],
+    () => getItemsTablePageMetrics(document, normalized.items.length, normalized.items),
+    [document, normalized.items],
   );
-  const tableBottomMm = measuredTableBottomMm || tableMetrics.bottom;
+  const tableBottomMm = Math.max(Number(measuredTableBottomMm) || 0, tableMetrics.bottom);
   const setArticleRef = useCallback((node) => {
     articleRef.current = node;
     assignForwardedRef(refProp, node);
@@ -593,7 +593,8 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
       const widthPx = Number(documentNode.offsetWidth) || 0;
       const pxPerMm = widthPx > 0 && page.width > 0 ? widthPx / page.width : 0;
       if (!pxPerMm) return;
-      const nextBottom = Math.round(((Number(tableNode.offsetTop) + Number(tableNode.offsetHeight)) / pxPerMm) * 1000) / 1000;
+      const tableHeightPx = Math.max(Number(tableNode.offsetHeight) || 0, Number(tableNode.scrollHeight) || 0);
+      const nextBottom = Math.round(((Number(tableNode.offsetTop) + tableHeightPx) / pxPerMm) * 1000) / 1000;
       if (!Number.isFinite(nextBottom)) return;
       setMeasuredTableBottomMm(current => (Math.abs((Number(current) || 0) - nextBottom) > 0.25 ? nextBottom : current));
 

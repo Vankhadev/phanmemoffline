@@ -301,6 +301,23 @@ export function getFlowElementBaseTopMm(element = {}, zonesById = new Map()) {
   return Number(zone.frame?.y || 0) + Number(frame.y || 0);
 }
 
+function getFlowElementBaseRectMm(element = {}, zonesById = new Map(), measuredHeights = {}, getElementHeightMm = getFlowElementHeightMm) {
+  const zone = zonesById.get(element.zoneId) || { frame: { x: 0, y: 0 } };
+  const frame = element.frame || {};
+  const left = Number(zone.frame?.x || 0) + Number(frame.x || 0);
+  const top = Number(zone.frame?.y || 0) + Number(frame.y || 0);
+  const width = Math.max(0.1, Number(frame.w) || 1);
+  const height = getElementHeightMm(element, measuredHeights);
+  return {
+    left,
+    right: left + width,
+    top,
+    bottom: top + height,
+    width,
+    height,
+  };
+}
+
 export function shouldFlowElementAfterItems(element = {}, zonesById = new Map(), tableTopMm = 0) {
   if (isAutoBelowItemsElement(element)) return true;
   if (FLOW_AFTER_ITEMS_ZONE_IDS.has(element.zoneId)) return true;
@@ -341,6 +358,18 @@ export function fitFlowBlockTopToPhysicalPage(topMm, heightMm, pageHeightMm, saf
   return candidate + height <= safeBottom ? candidate : pageStart + pageHeight + safe;
 }
 
+function flowRangesOverlap(leftStart, leftEnd, rightStart, rightEnd, toleranceMm = 0.5) {
+  return Math.max(Number(leftStart) || 0, Number(rightStart) || 0) + toleranceMm
+    < Math.min(Number(leftEnd) || 0, Number(rightEnd) || 0);
+}
+
+function updateFlowRowMetrics(row) {
+  row.baseTop = Math.min(...row.entries.map(entry => entry.baseTop));
+  row.baseBottom = Math.max(...row.entries.map(entry => entry.baseBottom));
+  row.height = Math.max(...row.entries.map(entry => (entry.baseTop - row.baseTop) + entry.height));
+  return row;
+}
+
 export function buildFlowElementTopOverrides({
   elements = [],
   zonesById = new Map(),
@@ -355,13 +384,14 @@ export function buildFlowElementTopOverrides({
   const flowElements = elements
     .filter(element => shouldFlowElementAfterItems(element, zonesById, tableTopMm))
     .map(element => {
-      const baseTop = getFlowElementBaseTopMm(element, zonesById);
-      const height = getElementHeightMm(element, measuredHeights);
+      const rect = getFlowElementBaseRectMm(element, zonesById, measuredHeights, getElementHeightMm);
       return {
         element,
-        baseTop,
-        baseBottom: baseTop + height,
-        height,
+        baseLeft: rect.left,
+        baseRight: rect.right,
+        baseTop: rect.top,
+        baseBottom: rect.bottom,
+        height: rect.height,
       };
     })
     .sort((left, right) => {
@@ -369,18 +399,20 @@ export function buildFlowElementTopOverrides({
       return getFlowElementPriority(left.element) - getFlowElementPriority(right.element);
     });
 
-  const groups = [];
-  const groupToleranceMm = 1;
+  const rows = [];
+  const verticalToleranceMm = 1;
+  const horizontalToleranceMm = 0.5;
   flowElements.forEach(entry => {
-    const last = groups[groups.length - 1];
-    if (last && entry.baseTop <= last.baseBottom + groupToleranceMm) {
+    const last = rows[rows.length - 1];
+    const fitsSameVisualRow = last
+      && entry.baseTop <= last.baseBottom + verticalToleranceMm
+      && !last.entries.some(rowEntry => flowRangesOverlap(entry.baseLeft, entry.baseRight, rowEntry.baseLeft, rowEntry.baseRight, horizontalToleranceMm));
+    if (fitsSameVisualRow) {
       last.entries.push(entry);
-      last.baseTop = Math.min(last.baseTop, entry.baseTop);
-      last.baseBottom = Math.max(last.baseBottom, entry.baseBottom);
-      last.height = Math.max(last.height, last.baseBottom - last.baseTop);
+      updateFlowRowMetrics(last);
       return;
     }
-    groups.push({
+    rows.push({
       baseTop: entry.baseTop,
       baseBottom: entry.baseBottom,
       height: entry.height,
@@ -390,58 +422,141 @@ export function buildFlowElementTopOverrides({
 
   const overrides = new Map();
   let cursor = Number(tableBottomMm) || 0;
-  groups.forEach(group => {
-    const hasAutoElement = group.entries.some(entry => isAutoBelowItemsElement(entry.element));
-    const autoGapMm = group.entries.reduce((max, entry) => (
+  rows.forEach(row => {
+    const hasAutoElement = row.entries.some(entry => isAutoBelowItemsElement(entry.element));
+    const autoGapMm = row.entries.reduce((max, entry) => (
       isAutoBelowItemsElement(entry.element)
         ? Math.max(max, getAutoBelowItemsGapMm(entry.element))
         : max
     ), flowGapMm);
     const requestedTop = Math.max(
-      hasAutoElement ? 0 : group.baseTop,
+      hasAutoElement ? 0 : row.baseTop,
       (Number(tableBottomMm) || 0) + autoGapMm,
       cursor + flowGapMm,
     );
-    const safeTop = fitFlowBlockTopToPhysicalPage(requestedTop, group.height, pageHeightMm, safePaddingMm);
-    group.entries.forEach(entry => {
-      overrides.set(entry.element.id, roundMm(safeTop + (entry.baseTop - group.baseTop)));
+    const safeTop = fitFlowBlockTopToPhysicalPage(requestedTop, row.height, pageHeightMm, safePaddingMm);
+    row.entries.forEach(entry => {
+      overrides.set(entry.element.id, roundMm(safeTop + (entry.baseTop - row.baseTop)));
     });
-    cursor = safeTop + group.height;
+    cursor = safeTop + row.height;
   });
 
   return overrides;
 }
 
-export function estimateItemsTableHeightMm(document = {}, itemCount = 0) {
+function getEstimatedItemCellText(item = {}, key = 'name', index = 0) {
+  switch (key) {
+    case 'no': return String(index + 1);
+    case 'name':
+      return String(item.name || item.product_name || item.productName || item.variant_name || 'Sản phẩm');
+    case 'sku': return String(item.sku || item.product_sku || '');
+    case 'unit': return String(item.unit || item.unit_name || item.uom || '');
+    case 'qty':
+    case 'quantity': return String(item.quantity ?? '');
+    case 'unitPrice': return String(item.unit_price ?? item.price ?? '');
+    case 'discount': return String(item.discount_amount ?? item.discount ?? item.discount_percent ?? '');
+    case 'lineTotal': return String(item.line_total ?? item.total ?? '');
+    case 'note': return String(item.note || '');
+    default: return String(item[key] ?? '');
+  }
+}
+
+function estimateTextLineCount(text = '', widthMm = 20, fontSizePt = 8.2) {
+  const clean = String(text || '').trim();
+  if (!clean) return 1;
+  const averageCharWidthMm = Math.max(0.95, Number(fontSizePt) * 0.3528 * 0.42);
+  const charsPerLine = Math.max(4, Math.floor((Number(widthMm) || 20) / averageCharWidthMm));
+  return clean
+    .split(/\n+/)
+    .reduce((sum, part) => sum + Math.max(1, Math.ceil(part.trim().length / charsPerLine)), 0);
+}
+
+function estimateItemsTableRowHeightMm(item = {}, index = 0, columns = [], tableStyle = {}) {
+  const padding = Number(tableStyle.paddingMm ?? 1.35);
+  const lineHeight = Number(tableStyle.lineHeight) || 1.18;
+  const bodyFont = Number(tableStyle.fontSizePt) || 8.2;
+  const lineMm = Math.max(2.8, bodyFont * 0.3528 * lineHeight);
+  const baseRowMm = Math.max(4.8, lineMm + padding * 2);
+  const maxLines = (Array.isArray(columns) && columns.length ? columns : DEFAULT_TABLE_COLUMNS).reduce((max, column) => {
+    const key = column.key || 'name';
+    const width = Math.max(4, Number(column.widthMm) || 20);
+    let lines = estimateTextLineCount(getEstimatedItemCellText(item, key, index), width, bodyFont);
+    if (key === 'name') {
+      if (item.sku || item.product_sku) lines += 1;
+      if (item.note) lines += estimateTextLineCount(item.note, width, Math.max(6, bodyFont * 0.85));
+    }
+    return Math.max(max, lines);
+  }, 1);
+  return roundMm(Math.max(baseRowMm, maxLines * lineMm + padding * 2 + 0.4));
+}
+
+function getEstimatedItemsTableParts(document = {}, itemCount = 0, items = []) {
   const style = getTableStyleElement(document)?.style || {};
+  const columns = Array.isArray(document?.table?.columns) && document.table.columns.length ? document.table.columns : DEFAULT_TABLE_COLUMNS;
   const padding = Number(style.paddingMm ?? 1.35);
   const lineHeight = Number(style.lineHeight) || 1.18;
   const bodyFont = Number(style.fontSizePt) || 8.2;
   const headerFont = Number(style.headerFontSizePt) || bodyFont;
   const headerMm = Math.max(5.2, headerFont * 0.48 * lineHeight + padding * 2);
   const rowMm = Math.max(4.8, bodyFont * 0.48 * lineHeight + padding * 2);
-  return roundMm(headerMm + Math.max(1, Number(itemCount) || 0) * rowMm);
+  const itemRows = Array.isArray(items) ? items : [];
+  const rowHeights = itemRows.map((item, index) => estimateItemsTableRowHeightMm(item, index, columns, style));
+  const desiredRowCount = Math.max(1, Number(itemCount) || itemRows.length);
+  while (rowHeights.length < desiredRowCount) rowHeights.push(rowMm);
+  return {
+    headerMm: roundMm(headerMm),
+    rowHeights,
+  };
 }
 
-export function getItemsTablePageMetrics(document = {}, itemCount = 0) {
+export function estimateItemsTableHeightMm(document = {}, itemCount = 0, items = []) {
+  const { headerMm, rowHeights } = getEstimatedItemsTableParts(document, itemCount, items);
+  return roundMm(headerMm + rowHeights.reduce((sum, height) => sum + height, 0));
+}
+
+function estimateItemsTablePrintedBottomMm(document = {}, tableTopMm = 0, itemCount = 0, items = []) {
+  const page = getEditorPaperDimensions(document);
+  const pageHeightMm = Math.max(1, Number(page.height) || 210);
+  const safePaddingMm = clampNumber(document.canvas?.safePaddingMm, 0, pageHeightMm / 4, 5);
+  const { headerMm, rowHeights } = getEstimatedItemsTableParts(document, itemCount, items);
+  let pageStartMm = Math.floor(Math.max(0, Number(tableTopMm) || 0) / pageHeightMm) * pageHeightMm;
+  let pageSafeBottomMm = pageStartMm + pageHeightMm - safePaddingMm;
+  let cursorMm = (Number(tableTopMm) || 0) + headerMm;
+
+  rowHeights.forEach(rowHeightMm => {
+    const heightMm = Math.max(0.1, Number(rowHeightMm) || 0);
+    if (cursorMm + heightMm > pageSafeBottomMm && cursorMm > pageStartMm + safePaddingMm) {
+      pageStartMm += pageHeightMm;
+      cursorMm = pageStartMm + safePaddingMm + headerMm;
+      pageSafeBottomMm = pageStartMm + pageHeightMm - safePaddingMm;
+    }
+    cursorMm += heightMm;
+  });
+
+  return roundMm(cursorMm);
+}
+
+export function getItemsTablePageMetrics(document = {}, itemCount = 0, items = []) {
   const table = document.table || {};
   const zones = Array.isArray(document.zones) ? document.zones : [];
   const zone = zones.find(item => item.id === table.zoneId) || zones[0] || { frame: { x: 0, y: 0, w: 100, h: 30 } };
   const frame = table.frame || { x: 0, y: 0, w: zone.frame?.w || 100, h: 'auto' };
-  const estimatedHeight = estimateItemsTableHeightMm(document, itemCount);
+  const estimatedHeight = estimateItemsTableHeightMm(document, itemCount, items);
   const configuredHeight = frame.h === 'auto'
     ? estimatedHeight
     : Math.max(Number(frame.h) || 0, estimatedHeight);
   const x = roundMm(Number(zone.frame?.x || 0) + Number(frame.x || 0));
   const y = roundMm(Number(zone.frame?.y || 0) + Number(frame.y || 0));
   const w = roundMm(Number(frame.w || zone.frame?.w || 100));
-  const h = roundMm(configuredHeight);
+  const printedBottom = estimateItemsTablePrintedBottomMm(document, y, itemCount, items);
+  const bottom = roundMm(Math.max(y + configuredHeight, printedBottom));
+  const h = roundMm(bottom - y);
   return {
     x,
     y,
     w,
     h,
-    bottom: roundMm(y + h),
+    bottom,
   };
 }
 

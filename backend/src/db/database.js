@@ -63,6 +63,8 @@ const SCHEMA = {
   excel_import_runs: [],
   excel_import_details: [],
   print_templates: [],
+  marketplace_shops: [],
+  marketplace_orders: [],
   update_releases: [],
 };
 
@@ -78,7 +80,7 @@ const ACCOUNT_SCOPED_TABLES = new Set([
   'accounting_transactions', 'cash_fund', 'bank_accounts', 'customer_debts', 'supplier_debts',
   'einvoice_in', 'einvoice_out', 'tax_reports', 'revenue_reports', 'profit_reports', 'accounting_logs',
   'payrolls', 'excel_import_runs', 'excel_import_details',
-  'print_templates', 'sync_metadata', 'audit_logs', 'system_settings',
+  'print_templates', 'marketplace_shops', 'marketplace_orders', 'sync_metadata', 'audit_logs', 'system_settings',
 ]);
 
 const DEFAULT_PERMISSIONS = [
@@ -183,7 +185,8 @@ const SYNC_TRACKED_TABLES = [
   'daily_stats', 'return_logs', 'return_details', 'customer_types', 'counters', 'cash_book',
   'accounting_transactions', 'cash_fund', 'bank_accounts', 'customer_debts', 'supplier_debts',
   'einvoice_in', 'einvoice_out', 'tax_reports', 'revenue_reports', 'profit_reports', 'accounting_logs',
-  'payrolls', 'excel_import_runs', 'excel_import_details', 'print_templates', 'system_settings',
+  'payrolls', 'excel_import_runs', 'excel_import_details', 'print_templates', 'marketplace_shops',
+  'marketplace_orders', 'system_settings',
   'feature_catalog', 'update_releases',
 ];
 

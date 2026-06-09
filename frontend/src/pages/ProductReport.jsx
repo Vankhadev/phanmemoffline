@@ -625,6 +625,82 @@ function DateRangePopover({ from, to, label, onApply, disabled = false }) {
   );
 }
 
+function DateRangeInlinePicker({
+  from,
+  to,
+  label,
+  onFromChange,
+  onToChange,
+  onApply,
+  disabled = false,
+}) {
+  const [isApplying, setIsApplying] = useState(false);
+  const normalizedFrom = normalizeDateInputValue(from);
+  const normalizedTo = normalizeDateInputValue(to);
+  const hasInvalidRange = Boolean(normalizedFrom && normalizedTo && normalizedFrom > normalizedTo);
+  const helperText = hasInvalidRange
+    ? 'Ngày bắt đầu không được lớn hơn ngày kết thúc.'
+    : label;
+  const canApply = !disabled && !isApplying && Boolean(normalizedFrom && normalizedTo && !hasInvalidRange);
+
+  async function handleApply() {
+    if (!canApply) return;
+    setIsApplying(true);
+    try {
+      await onApply({ from: normalizedFrom, to: normalizedTo });
+    } finally {
+      setIsApplying(false);
+    }
+  }
+
+  return (
+    <div className={`rounded-2xl border p-3 shadow-sm ${disabled ? 'border-gray-200 bg-gray-100 text-gray-400' : 'border-blue-100 bg-white text-gray-700'}`}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-blue-700">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+            <Calendar size={15} />
+          </span>
+          Chọn khoảng ngày báo cáo
+        </div>
+        <button
+          type="button"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+          onClick={handleApply}
+          disabled={!canApply}
+        >
+          {isApplying ? <Loader size={16} className="animate-spin" /> : <Search size={16} />}
+          Áp dụng
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Từ ngày</label>
+          <DatePickerField
+            value={from}
+            onChange={onFromChange}
+            disabled={disabled || isApplying}
+            ariaLabel="Chọn từ ngày của báo cáo sản phẩm"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Đến ngày</label>
+          <DatePickerField
+            value={to}
+            onChange={onToChange}
+            disabled={disabled || isApplying}
+            ariaLabel="Chọn đến ngày của báo cáo sản phẩm"
+          />
+        </div>
+      </div>
+
+      <div className={`mt-2 text-xs font-medium ${hasInvalidRange ? 'text-red-600' : 'text-gray-500'}`}>
+        {helperText}
+      </div>
+    </div>
+  );
+}
+
 export default function ProductReport() {
   const defaultFilters = useMemo(() => getDefaultFilters(), []);
   const [period, setPeriod] = useState(defaultFilters.period);
@@ -873,11 +949,34 @@ export default function ProductReport() {
   const rangeLabel = selectedRange.valid
     ? `Từ ${formatDateKey(selectedRange.from)} đến ${formatDateKey(selectedRange.to)}`
     : selectedRange.message;
+  const rangePickerFrom = period === 'custom' ? from : (selectedRange.valid ? selectedRange.from : from);
+  const rangePickerTo = period === 'custom' ? to : (selectedRange.valid ? selectedRange.to : to);
+
+  function updateInlineRange(nextRange) {
+    setPeriod('custom');
+    setFrom(nextRange.from);
+    setTo(nextRange.to);
+    setError('');
+  }
+
+  function handleInlineRangeFromChange(value) {
+    updateInlineRange({
+      from: normalizeDateInputValue(value),
+      to: normalizeDateInputValue(rangePickerTo),
+    });
+  }
+
+  function handleInlineRangeToChange(value) {
+    updateInlineRange({
+      from: normalizeDateInputValue(rangePickerFrom),
+      to: normalizeDateInputValue(value),
+    });
+  }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-900 via-slate-900 to-purple-900 px-5 py-5 text-white">
+      <div className="overflow-visible rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-t-2xl bg-gradient-to-r from-blue-900 via-slate-900 to-purple-900 px-5 py-5 text-white">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -959,13 +1058,15 @@ export default function ProductReport() {
               </div>
             )}
 
-            <div className={period === 'custom' ? 'xl:col-span-2' : ''}>
+            <div className="xl:col-span-2">
               <label className="mb-1 block text-xs font-medium text-gray-500">Khoảng ngày</label>
-              <DateRangePopover
-                from={selectedRange.valid ? selectedRange.from : from}
-                to={selectedRange.valid ? selectedRange.to : to}
+              <DateRangeInlinePicker
+                from={rangePickerFrom}
+                to={rangePickerTo}
                 label={rangeLabel}
-                onApply={applyQuickDateRange}
+                onFromChange={handleInlineRangeFromChange}
+                onToChange={handleInlineRangeToChange}
+                onApply={({ from: appliedFrom, to: appliedTo }) => applyQuickDateRange({ from: appliedFrom, to: appliedTo })}
                 disabled={loading}
               />
             </div>

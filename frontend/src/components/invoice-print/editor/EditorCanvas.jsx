@@ -251,11 +251,11 @@ function ElementContent({ element, template, payload }) {
   return <div className="invoice-editor-preview-custom-text" style={{ ...baseStyle, whiteSpace: 'pre-wrap' }}>{style.text || 'Text tùy chỉnh'}</div>;
 }
 
-function getPageTableFrame(document = {}, itemCount = 0) {
+function getPageTableFrame(document = {}, itemCount = 0, items = []) {
   const table = document.table || {};
   const zone = (document.zones || []).find(item => item.id === table.zoneId) || (document.zones || [])[0] || { frame: { x: 0, y: 0, w: 100, h: 30 } };
   const frame = table.frame || { x: 0, y: 0, w: zone.frame?.w || 100, h: 32 };
-  const metrics = getItemsTablePageMetrics(document, itemCount);
+  const metrics = getItemsTablePageMetrics(document, itemCount, items);
   return {
     zone,
     frame,
@@ -271,7 +271,7 @@ function getPageTableFrame(document = {}, itemCount = 0) {
 function TablePreview({ document, payload, selected, zoom, snapEnabled, snapGridMm, snapTargets, guides, pageZone, onSelect, onUpdateTable, onGuideChange, onBeginHistory, onEndHistory }) {
   const table = document.table || {};
   const items = Array.isArray(payload.items) ? payload.items : [];
-  const { zone, frame, pageFrame } = getPageTableFrame(document, items.length);
+  const { zone, frame, pageFrame } = getPageTableFrame(document, items.length, items);
   const columns = Array.isArray(table.columns) && table.columns.length ? table.columns : [];
   const page = getEditorPaperDimensions(document);
   const tableStyleElement = getTableStyleElement(document) || {};
@@ -346,7 +346,7 @@ function addFrameSnapPoints(points, frame = {}) {
   points.y.push(y, y + h / 2, y + h);
 }
 
-function buildSnapTargets(document = {}, page = {}, selectedId = '', itemCount = 0) {
+function buildSnapTargets(document = {}, page = {}, selectedId = '', itemCount = 0, items = []) {
   const points = {
     enabled: true,
     x: [0, page.width / 2, page.width],
@@ -360,7 +360,7 @@ function buildSnapTargets(document = {}, page = {}, selectedId = '', itemCount =
 
   for (const zone of document.zones || []) addFrameSnapPoints(points, zone.frame || {});
 
-  const tableFrame = getPageTableFrame(document, itemCount).pageFrame;
+  const tableFrame = getPageTableFrame(document, itemCount, items).pageFrame;
   if (selectedId !== 'itemsTable') addFrameSnapPoints(points, tableFrame);
 
   const zonesById = new Map((document.zones || []).map(zone => [zone.id, zone]));
@@ -423,9 +423,10 @@ export default function EditorCanvas({
     .filter(element => element.id !== TABLE_STYLE_ELEMENT_ID && element.type !== 'paymentQr' && element.visible !== false)
     .sort((a, b) => (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0)), [document.elements]);
   const itemCountForAutoLayout = Array.isArray(payload.items) ? payload.items.length : 0;
+  const itemsForAutoLayout = useMemo(() => (Array.isArray(payload.items) ? payload.items : []), [payload.items]);
   const itemsTableMetrics = useMemo(
-    () => getItemsTablePageMetrics(document, itemCountForAutoLayout),
-    [document, itemCountForAutoLayout],
+    () => getItemsTablePageMetrics(document, itemCountForAutoLayout, itemsForAutoLayout),
+    [document, itemCountForAutoLayout, itemsForAutoLayout],
   );
   const flowElementIds = useMemo(() => new Set(
     visibleElements
@@ -452,7 +453,7 @@ export default function EditorCanvas({
   const pageHeightPx = contentHeightMm * PX_PER_MM * zoom;
   const physicalPageHeightPx = page.height * PX_PER_MM * zoom;
   const editorPageCount = Math.max(1, Math.ceil(contentHeightMm / page.height));
-  const snapTargets = useMemo(() => buildSnapTargets(document, page, selectedId, itemCountForAutoLayout), [document, itemCountForAutoLayout, page, selectedId]);
+  const snapTargets = useMemo(() => buildSnapTargets(document, page, selectedId, itemCountForAutoLayout, itemsForAutoLayout), [document, itemCountForAutoLayout, itemsForAutoLayout, page, selectedId]);
   const rulerXTicks = useMemo(() => buildRulerTicks(page.width, zoom, 'x'), [page.width, zoom]);
   const rulerYTicks = useMemo(() => buildRulerTicks(contentHeightMm, zoom, 'y'), [contentHeightMm, zoom]);
 
