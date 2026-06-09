@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.5.7 - 2026-06-09
+
+### Thay doi chinh
+
+- Phat hanh lai ban cap nhat sau khi sua quy trinh release de GitHub Actions build va upload day du installer/metadata truoc khi nguoi dung tai ve.
+- Giu nguyen cac cap nhat cua v1.5.6: quan ly san TMDT, dong bo tab, bao cao loi nhuan, mau in hoa don va lich chon khoang ngay bao cao san pham.
+
+### Phat hanh
+
+- Dong bo version phat hanh 1.5.7 cho ung dung desktop, frontend, backend va cac lockfile tuong ung.
+- Tao tag GitHub `v1.5.7`; GitHub Actions se build/publish installer Windows x64 va ia32 kem latest.yml/update-manifest.json.
+
 ## v1.5.4 - 2026-06-09
 
 ### Thay đổi chính
