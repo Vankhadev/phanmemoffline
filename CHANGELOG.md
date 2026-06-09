@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.5.2 - 2026-06-09
+
+### Thay đổi chính
+
+- Cải thiện mẫu in hóa đơn: tổng tiền có thể tự bám dưới bảng sản phẩm theo độ dài đơn hàng và phần chữ ký chỉ còn nhãn Khách hàng/Người bán kèm dòng ký tên.
+- Thiết kế lại popup chọn nhanh sản phẩm theo phong cách Sapo: tìm kiếm, ảnh/placeholder, tồn kho/có thể bán, nút cộng/trừ số lượng và nút Chọn xong.
+- Làm mới giao diện tạo đơn hàng theo bố cục Sapo với topbar hành động, thẻ thông tin khách hàng, thông tin bổ sung, bảng sản phẩm có cột ảnh và khu tổng tiền.
+- Làm mới giao diện nhập hàng theo bố cục Sapo với topbar phát hành phiếu, thẻ nhà cung cấp, thông tin đơn nhập hàng, bảng sản phẩm có cột ảnh/đơn vị và empty-state rõ ràng.
+
+### Phát hành
+
+- Đồng bộ version phát hành 1.5.2 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
+- Tạo tag GitHub `v1.5.2`; GitHub Actions sẽ build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json.
+
 ## v1.5.1 - 2026-06-09
 
 ### Thay đổi chính

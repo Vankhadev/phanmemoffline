@@ -228,6 +228,168 @@
     transform: translateY(-1px);
   }
 
+  .sapo-screen {
+    min-height: 100vh;
+    background: #f3f6f8;
+    color: #1f2937;
+  }
+
+  .sapo-shell {
+    width: 100%;
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 1rem 1.25rem 2rem;
+  }
+
+  .sapo-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 35;
+    display: flex;
+    min-height: 3.5rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fff;
+    padding: 0.5rem 1.25rem;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
+  }
+
+  .sapo-page-title {
+    min-width: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  .sapo-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+  }
+
+  .sapo-btn {
+    display: inline-flex;
+    min-height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border-radius: 0.125rem;
+    border: 1px solid #0f8fa8;
+    background: #fff;
+    padding: 0.5rem 1.1rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1rem;
+    color: #0f7c92;
+    white-space: nowrap;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .sapo-btn:hover {
+    background: #ecfeff;
+    border-color: #0891b2;
+  }
+
+  .sapo-btn-primary {
+    border-color: #0b83f6;
+    background: #0b83f6;
+    color: #fff;
+    box-shadow: 0 1px 2px rgb(2 132 199 / 0.25);
+  }
+
+  .sapo-btn-primary:hover {
+    border-color: #0476df;
+    background: #0476df;
+  }
+
+  .sapo-btn:disabled,
+  .sapo-btn-primary:disabled {
+    cursor: not-allowed;
+    border-color: #cbd5e1;
+    background: #e2e8f0;
+    color: #94a3b8;
+    box-shadow: none;
+  }
+
+  .sapo-card {
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.125rem;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+  }
+
+  .sapo-card-header {
+    display: flex;
+    min-height: 3rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid #eef2f7;
+    background: #fff;
+    padding: 0.875rem 1rem;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #1f2937;
+  }
+
+  .sapo-muted-empty {
+    display: flex;
+    min-height: 8.5rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    color: #9ca3af;
+    text-align: center;
+    font-size: 0.8125rem;
+  }
+
+  .sapo-screen .input-field,
+  .sapo-screen input,
+  .sapo-screen select,
+  .sapo-screen textarea {
+    border-radius: 0.125rem;
+  }
+
+  .sapo-screen .input-field {
+    min-height: 2.5rem;
+    border-color: #d8dde6;
+    box-shadow: none;
+  }
+
+  .sapo-screen .system-table-scroll {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .sapo-screen .system-table th,
+  .sapo-screen .system-table td {
+    border-bottom-color: #e5e7eb;
+  }
+
+  .sapo-screen .system-table th {
+    background: #fbfcfd;
+    color: #1f2937;
+    font-size: 0.8125rem;
+    text-transform: none;
+  }
+
+  .sapo-screen .order-toolbar-pill {
+    min-width: 5.5rem;
+    border-radius: 0.125rem;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .sapo-screen .order-toolbar-pill:hover {
+    transform: none;
+  }
+
   .table-text-clip {
     min-width: 0;
     overflow: hidden;

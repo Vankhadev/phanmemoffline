@@ -1,6 +1,13 @@
-import { forwardRef, useMemo } from 'react';
+import { forwardRef, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { getPaperDimensions, normalizeTemplateSettings } from './templateDefaults';
-import { getActiveEditorDocument, getTableStyleElement, TABLE_COLUMN_LABELS } from './editor/templateSchemaAdapter';
+import {
+  getActiveEditorDocument,
+  getAutoBelowItemsGapMm,
+  getItemsTablePageMetrics,
+  getTableStyleElement,
+  isAutoBelowItemsElement,
+  TABLE_COLUMN_LABELS,
+} from './editor/templateSchemaAdapter';
 import { isHtmlTemplateSource, renderHtmlTemplate, sanitizeTemplateCss } from './htmlTemplateEngine';
 import { resolveBackendAssetUrl } from '../../utils/apiClient';
 
@@ -407,12 +414,10 @@ function V2Element({ element, data, template }) {
         <div>
           <h3>{style.buyerLabel || signatures.buyer?.label || 'Khách hàng'}</h3>
           <p>{style.buyerHint || '(Ký và ghi rõ họ tên)'}</p>
-          <b>{signatures.buyer?.name || customer.name || ''}</b>
         </div>
         <div>
           <h3>{style.sellerLabel || signatures.seller?.label || 'Người bán'}</h3>
           <p>{style.sellerHint || '(Ký và ghi rõ họ tên)'}</p>
-          <b>{signatures.seller?.name || metadata.user_name || ''}</b>
         </div>
       </div>
     );
@@ -512,6 +517,19 @@ function V2ItemsTable({ document, data }) {
   );
 }
 
+function assignForwardedRef(ref, value) {
+  if (!ref) return;
+  if (typeof ref === 'function') {
+    ref(value);
+    return;
+  }
+  try {
+    ref.current = value;
+  } catch (_error) {
+    // Ignore read-only refs from callers.
+  }
+}
+
 function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPreviewUrl, className, printScale, previewZoom, renderMode }) {
   const preferDraft = renderMode === 'editor-preview' || renderMode === 'draft-preview' || renderMode === 'draft';
   const active = useMemo(() => getActiveEditorDocument(template, { preferDraft }), [preferDraft, template]);
@@ -523,28 +541,62 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
   const previewScale = renderMode === 'print' ? 1 : zoom;
   const normalized = useMemo(() => normalizePayload(payload, template, {}, logoPreviewUrl), [logoPreviewUrl, payload, template]);
   const zonesById = useMemo(() => new Map((document.zones || []).map(zone => [zone.id, zone])), [document.zones]);
+  const articleRef = useRef(null);
+  const [measuredTableBottomMm, setMeasuredTableBottomMm] = useState(null);
+  const tableMetrics = useMemo(
+    () => getItemsTablePageMetrics(document, normalized.items.length),
+    [document, normalized.items.length],
+  );
+  const tableBottomMm = measuredTableBottomMm || tableMetrics.bottom;
+  const setArticleRef = useCallback((node) => {
+    articleRef.current = node;
+    assignForwardedRef(refProp, node);
+  }, [refProp]);
   const elements = useMemo(() => [...(document.elements || [])]
     .filter(element => element.visible !== false && element.id !== '__itemsTableStyle' && element.type !== 'paymentQr')
     .sort((a, b) => (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0)), [document.elements]);
+  const getElementTopMm = useCallback((element) => {
+    if (isAutoBelowItemsElement(element)) return tableBottomMm + getAutoBelowItemsGapMm(element);
+    const zone = zonesById.get(element.zoneId) || { frame: { y: 0 } };
+    const frame = element.frame || {};
+    return Number(zone.frame?.y || 0) + Number(frame.y || 0);
+  }, [tableBottomMm, zonesById]);
+
+  useLayoutEffect(() => {
+    const article = articleRef.current;
+    if (!article || typeof window === 'undefined') return undefined;
+    const documentNode = article.querySelector('.invoice-template-v2-document');
+    const tableNode = article.querySelector('.invoice-template-v2-table-wrap');
+    if (!documentNode || !tableNode) return undefined;
+
+    const measure = () => {
+      const widthPx = Number(documentNode.offsetWidth) || 0;
+      const pxPerMm = widthPx > 0 && page.width > 0 ? widthPx / page.width : 0;
+      if (!pxPerMm) return;
+      const nextBottom = Math.round(((Number(tableNode.offsetTop) + Number(tableNode.offsetHeight)) / pxPerMm) * 1000) / 1000;
+      if (!Number.isFinite(nextBottom)) return;
+      setMeasuredTableBottomMm(current => (Math.abs((Number(current) || 0) - nextBottom) > 0.25 ? nextBottom : current));
+    };
+
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(tableNode);
+    observer.observe(documentNode);
+    return () => observer.disconnect();
+  }, [document, normalized.items.length, page.width]);
+
   const contentHeightMm = useMemo(() => {
     const elementBottom = elements.reduce((max, element) => {
-      const zone = zonesById.get(element.zoneId) || { frame: { y: 0 } };
       const frame = element.frame || {};
-      return Math.max(max, Number(zone.frame?.y || 0) + Number(frame.y || 0) + Number(frame.h || 0));
+      return Math.max(max, getElementTopMm(element) + Number(frame.h || 0));
     }, page.height);
-    const table = document.table || {};
-    const tableZone = zonesById.get(table.zoneId) || { frame: { y: 0 } };
-    const tableFrame = table.frame || {};
-    const tableStyle = getTableStyleElement(document)?.style || {};
-    const estimatedRowMm = Math.max(4.8, (Number(tableStyle.fontSizePt) || 8.2) * 0.48 * (Number(tableStyle.lineHeight) || 1.18) + (Number(tableStyle.paddingMm ?? 1.35) * 2));
-    const estimatedTableMm = 7 + Math.max(1, normalized.items.length) * estimatedRowMm;
-    const tableBottom = Number(tableZone.frame?.y || 0) + Number(tableFrame.y || 0) + (tableFrame.h === 'auto' ? estimatedTableMm : Math.max(Number(tableFrame.h) || 0, estimatedTableMm));
-    return Math.ceil(Math.max(page.height, elementBottom, tableBottom + 6));
-  }, [document, elements, normalized.items.length, page.height, zonesById]);
+    return Math.ceil(Math.max(page.height, elementBottom, tableBottomMm + 6));
+  }, [elements, getElementTopMm, page.height, tableBottomMm]);
 
   return (
     <article
-      ref={refProp}
+      ref={setArticleRef}
       className={`invoice-paper invoice-print invoice-print-${page.paperSize.toLowerCase()} invoice-print-${page.orientation} invoice-print-v2 ${className}`.trim()}
       style={{
         '--invoice-page-width': `${page.width}mm`,
@@ -569,13 +621,14 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
         {elements.map(element => {
           const zone = zonesById.get(element.zoneId) || { frame: { x: 0, y: 0 } };
           const frame = element.frame || {};
+          const topMm = getElementTopMm(element);
           return (
             <section
               key={element.id}
               className={`invoice-template-v2-element invoice-template-v2-element-${element.type}`}
               style={{
                 left: `${Number(zone.frame?.x || 0) + Number(frame.x || 0)}mm`,
-                top: `${Number(zone.frame?.y || 0) + Number(frame.y || 0)}mm`,
+                top: `${topMm}mm`,
                 width: `${Number(frame.w || 1)}mm`,
                 minHeight: `${Number(frame.h || 1)}mm`,
                 maxHeight: element.type === 'logo' || element.type === 'image' || element.type === 'rectangle' || element.type === 'line' ? `${Number(frame.h || 1)}mm` : undefined,
@@ -789,14 +842,12 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
           {settings.showSignature && (
             <div className="invoice-template-signatures">
               <div>
-                <h3>{signatures.buyer?.label || 'Người nhận hàng'}</h3>
+                <h3>{signatures.buyer?.label || 'Khách hàng'}</h3>
                 <p>(Ký và ghi rõ họ tên)</p>
-                <b>{signatures.buyer?.name || customer.name || ''}</b>
               </div>
               <div>
-                <h3>{signatures.seller?.label || 'Người viết hóa đơn'}</h3>
+                <h3>{signatures.seller?.label || 'Người bán'}</h3>
                 <p>(Ký và ghi rõ họ tên)</p>
-                <b>{signatures.seller?.name || metadata.user_name || ''}</b>
               </div>
             </div>
           )}

@@ -5,8 +5,11 @@ import {
   clampFrameToZone,
   getEditorPaperDimensions,
   getElementLabel,
+  getAutoBelowItemsGapMm,
+  getItemsTablePageMetrics,
   PAGE_ZONE_ID,
   getTableStyleElement,
+  isAutoBelowItemsElement,
   TABLE_STYLE_ELEMENT_ID,
   TABLE_COLUMN_LABELS,
 } from './templateSchemaAdapter';
@@ -412,6 +415,11 @@ export default function EditorCanvas({
   const visibleElements = useMemo(() => [...(document.elements || [])]
     .filter(element => element.id !== TABLE_STYLE_ELEMENT_ID && element.type !== 'paymentQr' && element.visible !== false)
     .sort((a, b) => (Number(a.zIndex) || 0) - (Number(b.zIndex) || 0)), [document.elements]);
+  const itemCountForAutoLayout = Array.isArray(payload.items) ? payload.items.length : 0;
+  const itemsTableMetrics = useMemo(
+    () => getItemsTablePageMetrics(document, itemCountForAutoLayout),
+    [document, itemCountForAutoLayout],
+  );
   const snapTargets = useMemo(() => buildSnapTargets(document, page, selectedId), [document, page, selectedId]);
   const rulerXTicks = useMemo(() => buildRulerTicks(page.width, zoom, 'x'), [page.width, zoom]);
   const rulerYTicks = useMemo(() => buildRulerTicks(page.height, zoom, 'y'), [page.height, zoom]);
@@ -533,17 +541,19 @@ export default function EditorCanvas({
           {visibleElements.map(element => {
             const zone = zonesById.get(element.zoneId);
             if (!zone) return null;
+            const isAutoBelowItems = isAutoBelowItemsElement(element);
+            const autoY = itemsTableMetrics.bottom + getAutoBelowItemsGapMm(element);
             const pageFrame = {
               ...element.frame,
               x: Number(zone.frame.x || 0) + Number(element.frame.x || 0),
-              y: Number(zone.frame.y || 0) + Number(element.frame.y || 0),
+              y: isAutoBelowItems ? autoY : Number(zone.frame.y || 0) + Number(element.frame.y || 0),
             };
-            const pageZone = { ...zone, frame: { x: 0, y: 0, w: page.width, h: page.height } };
+            const interactionZone = { ...zone, frame: { x: 0, y: 0, w: page.width, h: page.height } };
             return (
               <ElementFrame
                 key={element.id}
                 element={{ ...element, frame: pageFrame }}
-                zone={pageZone}
+                zone={interactionZone}
                 zoom={zoom}
                 selected={selectedId === element.id}
                 snapEnabled={snapEnabled}
@@ -554,11 +564,11 @@ export default function EditorCanvas({
                 onGestureEnd={onEndHistory}
                 onSelect={onSelect}
                 onFrameChange={(nextPageFrame) => {
-                  const targetZone = pageZone;
+                  const targetZone = interactionZone;
                   const localFrame = {
                     ...nextPageFrame,
                     x: nextPageFrame.x - Number(targetZone.frame.x || 0),
-                    y: nextPageFrame.y - Number(targetZone.frame.y || 0),
+                    y: isAutoBelowItems ? Number(element.frame?.y || 0) : nextPageFrame.y - Number(targetZone.frame.y || 0),
                   };
                   onUpdateElement?.(element.id, {
                     zoneId: targetZone.id,

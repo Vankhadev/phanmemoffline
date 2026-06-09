@@ -246,6 +246,8 @@ function defaultStyleForType(type) {
       return {
         ...commonText,
         fontSizePt: 8,
+        autoBelowItems: true,
+        autoGapMm: 3,
         highlightColor: '#ffffff',
         paddingMm: 1,
         borderWidthMm: 0.2,
@@ -275,6 +277,48 @@ function defaultStyleForType(type) {
 export function getTableStyleElement(document = {}) {
   const elements = Array.isArray(document.elements) ? document.elements : [];
   return elements.find(element => element.id === TABLE_STYLE_ELEMENT_ID) || null;
+}
+
+export function isAutoBelowItemsElement(element = {}) {
+  return element?.type === 'totals' && element?.style?.autoBelowItems !== false;
+}
+
+export function getAutoBelowItemsGapMm(element = {}) {
+  const value = Number(element?.style?.autoGapMm);
+  return Number.isFinite(value) ? Math.max(0, value) : 3;
+}
+
+export function estimateItemsTableHeightMm(document = {}, itemCount = 0) {
+  const style = getTableStyleElement(document)?.style || {};
+  const padding = Number(style.paddingMm ?? 1.35);
+  const lineHeight = Number(style.lineHeight) || 1.18;
+  const bodyFont = Number(style.fontSizePt) || 8.2;
+  const headerFont = Number(style.headerFontSizePt) || bodyFont;
+  const headerMm = Math.max(5.2, headerFont * 0.48 * lineHeight + padding * 2);
+  const rowMm = Math.max(4.8, bodyFont * 0.48 * lineHeight + padding * 2);
+  return roundMm(headerMm + Math.max(1, Number(itemCount) || 0) * rowMm);
+}
+
+export function getItemsTablePageMetrics(document = {}, itemCount = 0) {
+  const table = document.table || {};
+  const zones = Array.isArray(document.zones) ? document.zones : [];
+  const zone = zones.find(item => item.id === table.zoneId) || zones[0] || { frame: { x: 0, y: 0, w: 100, h: 30 } };
+  const frame = table.frame || { x: 0, y: 0, w: zone.frame?.w || 100, h: 'auto' };
+  const estimatedHeight = estimateItemsTableHeightMm(document, itemCount);
+  const configuredHeight = frame.h === 'auto'
+    ? estimatedHeight
+    : Math.max(Number(frame.h) || 0, estimatedHeight);
+  const x = roundMm(Number(zone.frame?.x || 0) + Number(frame.x || 0));
+  const y = roundMm(Number(zone.frame?.y || 0) + Number(frame.y || 0));
+  const w = roundMm(Number(frame.w || zone.frame?.w || 100));
+  const h = roundMm(configuredHeight);
+  return {
+    x,
+    y,
+    w,
+    h,
+    bottom: roundMm(y + h),
+  };
 }
 
 function defaultTableStyleElement(bodyZone, tableFrame) {

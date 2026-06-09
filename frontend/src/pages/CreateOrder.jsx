@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, SYNC_UPDATED_EVENT, apiJsonChecked, getApiErrorMessage, resolveApiUrl } from '../utils/apiClient';
+import { ApiError, SYNC_UPDATED_EVENT, apiJsonChecked, getApiErrorMessage, resolveApiUrl, resolveBackendAssetUrl } from '../utils/apiClient';
 import {
-  Search, Plus, ShoppingCart, Trash2, ChevronDown, ChevronRight, Filter, UserPlus, Users, FileText, ReceiptText
+  Search, Plus, Trash2, ChevronDown, ChevronRight, Filter, UserPlus, Users, FileText, ReceiptText, X, Image as ImageIcon, Minus, Package
 } from 'lucide-react';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, getProductDisplayName, getProductVariants, getVariantIdentity } from '../utils/productSearch';
 import { attachClientOrderMetadata, generateClientOrderId } from '../utils/clientOrderId';
@@ -40,6 +40,12 @@ const customerTypeToPriceType = (ct) => {
 };
 function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
+}
+
+function formatPickerStockNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '—';
+  return (Math.round((number + Number.EPSILON) * 10) / 10).toLocaleString('vi-VN');
 }
 
 const QUANTITY_STEP = 0.1;
@@ -204,6 +210,7 @@ export default function CreateOrder({ user, store }) {
   });
   const customerDropdownRef = useRef();
   const productSearchInputRef = useRef(null);
+  const productPickerSearchInputRef = useRef(null);
   const comboLastFetchedAtRef = useRef(0);
   const comboFetchInFlightRef = useRef(null);
   const lastStockLimitToastRef = useRef('');
@@ -218,6 +225,12 @@ export default function CreateOrder({ user, store }) {
     const timer = window.setTimeout(() => setStockToast(null), 3200);
     return () => window.clearTimeout(timer);
   }, [stockToast]);
+
+  useEffect(() => {
+    if (!showProductPanel) return undefined;
+    const timer = window.setTimeout(() => productPickerSearchInputRef.current?.focus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [showProductPanel]);
 
   const showStockLimitToast = (message = negativeStockLimitMessage) => {
     setStockToast({ id: Date.now(), message });
@@ -783,6 +796,68 @@ export default function CreateOrder({ user, store }) {
     setCart(prev => mergeCartLineQuantity(prev, line, line.quantity));
   };
 
+  const openOrderProductPicker = () => {
+    setShowProductPanel(true);
+    if (productResultFilter === 'combo') fetchCombos();
+  };
+
+  const closeOrderProductPicker = () => {
+    setShowProductPanel(false);
+  };
+
+  const getProductPickerSelection = (item, kind = 'product') => (
+    productPickerSelectionByKey.get(getOrderPickerKey(item, kind))
+  );
+
+  const getProductImageUrl = (item) => {
+    const parent = item?.parent || {};
+    const rawUrl = item?.image_url
+      || item?.imageUrl
+      || item?.thumbnail_url
+      || item?.thumbnail
+      || item?.image
+      || item?.photo_url
+      || item?.photo
+      || parent.image_url
+      || parent.imageUrl
+      || parent.thumbnail_url
+      || parent.thumbnail
+      || parent.image
+      || parent.photo_url
+      || parent.photo
+      || '';
+    return resolveBackendAssetUrl(rawUrl);
+  };
+
+  const getPickerStockInfo = (item, selection) => {
+    const stock = Number(item?.stock);
+    if (!Number.isFinite(stock)) return null;
+    const productId = Number(item?.id);
+    const selectedQuantity = selection && isValidQuantityInput(selection.quantity)
+      ? parseDecimalQuantity(selection.quantity, 0)
+      : 0;
+    const cartQuantity = cart.reduce((sum, line) => (
+      !isComboOrderItem(line) && Number(line.product_id) === productId
+        ? sum + (Number(line.quantity) || 0)
+        : sum
+    ), 0);
+    const baselineQuantity = editingInvoiceId ? editBaselineCart.reduce((sum, line) => (
+      !isComboOrderItem(line) && Number(line.product_id) === productId
+        ? sum + (Number(line.quantity) || 0)
+        : sum
+    ), 0) : 0;
+    const available = stock + baselineQuantity - cartQuantity - selectedQuantity;
+    return { stock, available };
+  };
+
+  const getPickerMetaText = (item, kind = 'product') => {
+    if (kind === 'combo') return getComboItemSummary(item);
+    const isVariant = Boolean(item._isVariantOption || item.is_variant);
+    const parent = item.parent || null;
+    const categoryName = isVariant ? (getCategoryName(item) || getCategoryName(parent)) : getCategoryName(item);
+    return categoryName && categoryName !== '—' ? categoryName : 'Mặc định';
+  };
+
   const addOrderPickerSelection = (item, kind = 'product') => {
     if (!item?.id) return;
     const key = getOrderPickerKey(item, kind);
@@ -807,8 +882,9 @@ export default function CreateOrder({ user, store }) {
       }];
     });
     window.setTimeout(() => {
-      productSearchInputRef.current?.focus();
-      productSearchInputRef.current?.select?.();
+      const searchInput = showProductPanel ? productPickerSearchInputRef.current : productSearchInputRef.current;
+      searchInput?.focus();
+      searchInput?.select?.();
     }, 0);
   };
 
@@ -820,11 +896,13 @@ export default function CreateOrder({ user, store }) {
     )));
   };
 
-  const stepOrderPickerQuantity = (key, direction) => {
-    setProductPickerSelections(prev => prev.map(selection => {
+  const stepOrderPickerQuantity = (key, direction, step = QUANTITY_STEP) => {
+    setProductPickerSelections(prev => prev.flatMap(selection => {
       if (selection.key !== key) return selection;
       const current = parseDecimalQuantity(selection.quantity, 1);
-      return { ...selection, quantity: normalizeDecimalQuantity(current + direction * QUANTITY_STEP, 1) };
+      const nextValue = current + direction * step;
+      if (direction < 0 && nextValue < MIN_QUANTITY) return [];
+      return { ...selection, quantity: normalizeDecimalQuantity(nextValue, 1) };
     }));
   };
 
@@ -857,6 +935,214 @@ export default function CreateOrder({ user, store }) {
     getLineKey: getCartRowKey,
     settings: negativeStockSettings,
   }), [orderPickerPreviewCart, editBaselineCart, editingInvoiceId, negativeStockSettings, products]);
+
+  const productPickerSelectionByKey = useMemo(() => (
+    new Map(productPickerSelections.map(selection => [selection.key, selection]))
+  ), [productPickerSelections]);
+
+  const renderProductPickerQuantityControl = (item, kind = 'product') => {
+    const selection = getProductPickerSelection(item, kind);
+    if (!selection) {
+      return (
+        <button
+          type="button"
+          onClick={() => addOrderPickerSelection(item, kind)}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-white shadow-sm transition hover:bg-sky-600"
+          title={kind === 'combo' ? 'Thêm combo' : 'Thêm sản phẩm'}
+        >
+          <Plus size={15} strokeWidth={3} />
+        </button>
+      );
+    }
+
+    const quantityInvalid = !isValidQuantityInput(selection.quantity);
+    return (
+      <div className="inline-flex items-center gap-2" onClick={event => event.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => stepOrderPickerQuantity(selection.key, -1, 1)}
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-400 text-white transition hover:bg-slate-500"
+          title="Giảm số lượng"
+        >
+          <Minus size={12} strokeWidth={3} />
+        </button>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={selection.quantity}
+          onChange={event => updateOrderPickerQuantity(selection.key, event.target.value)}
+          onFocus={event => event.currentTarget.select()}
+          className={`h-7 w-11 border-0 border-b-2 bg-transparent px-1 text-center text-sm font-semibold outline-none focus:ring-0 ${quantityInvalid ? 'border-red-500 text-red-600' : 'border-sky-500 text-slate-700'}`}
+          aria-label="Số lượng chọn"
+        />
+        <button
+          type="button"
+          onClick={() => stepOrderPickerQuantity(selection.key, 1, 1)}
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-400 text-white transition hover:bg-slate-500"
+          title="Tăng số lượng"
+        >
+          <Plus size={12} strokeWidth={3} />
+        </button>
+      </div>
+    );
+  };
+
+  const renderProductPickerRow = (item, kind = 'product', keyPrefix = 'picker') => {
+    const selection = getProductPickerSelection(item, kind);
+    const isVariant = kind === 'product' && Boolean(item._isVariantOption || item.is_variant);
+    const parent = item.parent || null;
+    const displayName = kind === 'combo'
+      ? (item.name || 'Combo')
+      : (isVariant ? getProductDisplayName(item, parent) : getProductDisplayName(item));
+    const sku = kind === 'combo' ? item.sku : item.sku;
+    const imageUrl = kind === 'product' ? getProductImageUrl(item) : '';
+    const price = kind === 'combo' ? getComboPrice(item) : getPrice(item);
+    const metaText = getPickerMetaText(item, kind);
+    const stockInfo = kind === 'product' ? getPickerStockInfo(item, selection) : null;
+    const availableNegative = stockInfo && Number(stockInfo.available) < 0;
+    const stockNegative = stockInfo && Number(stockInfo.stock) < 0;
+    const rowKey = `${keyPrefix}-${kind}-${item._rowKey || item.id || item.sku || displayName}`;
+
+    return (
+      <div
+        key={rowKey}
+        className={`grid grid-cols-[54px_minmax(0,1fr)_132px] gap-3 border-b border-slate-100 px-5 py-3.5 transition hover:bg-sky-50/50 sm:grid-cols-[56px_minmax(0,1fr)_156px] ${selection ? 'bg-sky-50/40' : 'bg-white'}`}
+      >
+        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded bg-slate-100 text-slate-300 ring-1 ring-slate-100">
+          {imageUrl ? (
+            <img src={imageUrl} alt={displayName} className="h-full w-full object-cover" />
+          ) : (
+            <ImageIcon size={23} strokeWidth={1.6} />
+          )}
+        </div>
+        <div className="min-w-0 pt-0.5">
+          <div className="line-clamp-2 text-[13px] font-medium leading-5 text-slate-800" title={displayName}>
+            {displayName}
+          </div>
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] leading-4">
+            <span className="text-slate-400">{sku || '—'}</span>
+            <span className="max-w-full truncate font-medium text-sky-700">{metaText}</span>
+          </div>
+          {isVariant && parent?.name && (
+            <div className="mt-0.5 truncate text-[11px] text-slate-400">Thuộc: {parent.name}</div>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-col items-end justify-start gap-2 pt-0.5 text-right">
+          <div className="max-w-full truncate text-sm font-semibold text-slate-700">{formatVND(price)}</div>
+          {stockInfo ? (
+            <div className="whitespace-nowrap text-[12px] leading-4 text-slate-400">
+              <span>Tồn: <b className={stockNegative ? 'text-red-500' : 'text-slate-500'}>{formatPickerStockNumber(stockInfo.stock)}</b></span>
+              <span className="mx-1 text-slate-300">|</span>
+              <span>Có thể bán: <b className={availableNegative ? 'text-red-500' : 'text-slate-500'}>{formatPickerStockNumber(stockInfo.available)}</b></span>
+            </div>
+          ) : (
+            <div className="truncate text-[12px] leading-4 text-purple-500">Combo bán hàng</div>
+          )}
+          {renderProductPickerQuantityControl(item, kind)}
+        </div>
+      </div>
+    );
+  };
+
+  const renderProductPickerFilterTabs = () => (
+    comboResultCount === 0 && productResultFilter !== 'combo' ? null :
+    <div className="flex flex-wrap items-center gap-2 px-6 pb-2 text-xs">
+      {[
+        ['all', `Tất cả (${allResultCount})`],
+        ['product', `Sản phẩm (${productResultCount})`],
+        ['combo', `Combo (${comboResultCount})`],
+      ].map(([key, label]) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => handleProductResultFilterChange(key)}
+          className={`rounded-full border px-3 py-1.5 font-medium transition ${productResultFilter === key ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white text-slate-500 hover:border-sky-300 hover:text-sky-700'}`}
+        >
+          {label}
+        </button>
+      ))}
+      {resultLoading && <span className="text-sky-600">Đang tải dữ liệu...</span>}
+      {resultLoadError && <span className="text-red-500">Có dữ liệu chưa tải được</span>}
+    </div>
+  );
+
+  const renderOrderProductPickerModal = () => {
+    if (!showProductPanel) return null;
+    const hasRows = selectableProductRows.length > 0 || visibleFilteredCombos.length > 0;
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-3 sm:p-6" role="presentation">
+        <div className="flex max-h-[92dvh] w-full max-w-[750px] flex-col overflow-hidden rounded bg-white text-slate-800 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="quick-product-picker-title">
+          <div className="flex items-center justify-between px-6 pb-3 pt-5">
+            <h2 id="quick-product-picker-title" className="text-xl font-semibold tracking-normal text-slate-900">
+              Chọn sản phẩm để bán hàng
+            </h2>
+            <button
+              type="button"
+              onClick={closeOrderProductPicker}
+              className="inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              title="Thoát"
+            >
+              <X size={22} />
+            </button>
+          </div>
+          <div className="px-6 pb-3">
+            <div className="relative">
+              <Search size={19} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                ref={productPickerSearchInputRef}
+                className="h-10 w-full rounded-none border border-slate-300 bg-white pl-11 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                placeholder="Tìm kiếm sản phẩm"
+                value={productSearch}
+                onFocus={handleProductSearchFocus}
+                onChange={event => setProductSearch(event.target.value)}
+              />
+            </div>
+          </div>
+          {renderProductPickerFilterTabs()}
+          <div className="min-h-[380px] flex-1 overflow-y-auto border-y border-slate-100 bg-white">
+            {visibleFilteredCombos.map(combo => renderProductPickerRow(combo, 'combo', 'quick-combo'))}
+            {selectableProductRows.map(item => renderProductPickerRow(item, 'product', 'quick-product'))}
+            {!hasRows && !resultLoading && (
+              <div className="flex h-56 items-center justify-center px-6 text-center text-sm text-slate-400">
+                {emptyProductResultMessage}
+              </div>
+            )}
+          </div>
+          <div className="border-t border-slate-100 bg-white px-6 py-4">
+            {(orderPickerStockValidation.hasInvalid || orderPickerHasQuantityError) && (
+              <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                {orderPickerHasQuantityError
+                  ? 'Số lượng phải là số dương, không nhập chữ hoặc số âm.'
+                  : (orderPickerStockValidation.summaryMessage || negativeStockLimitMessage)}
+              </div>
+            )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm font-semibold text-sky-700">
+                Bạn đã chọn {productPickerSelections.length.toLocaleString('vi-VN')} sản phẩm
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeOrderProductPicker}
+                  className="inline-flex min-h-10 min-w-20 items-center justify-center rounded border border-sky-600 bg-white px-4 text-sm font-semibold text-sky-700 transition hover:bg-sky-50"
+                >
+                  Thoát
+                </button>
+                <button
+                  type="button"
+                  onClick={finishOrderProductSelection}
+                  disabled={productPickerSelections.length === 0 || orderPickerHasQuantityError || orderPickerStockValidation.hasInvalid}
+                  className="inline-flex min-h-10 min-w-28 items-center justify-center rounded bg-sky-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  Chọn xong
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const finishOrderProductSelection = () => {
     if (productPickerSelections.length === 0 || orderPickerHasQuantityError) return;
@@ -1331,7 +1617,7 @@ export default function CreateOrder({ user, store }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-3 sm:p-4 pb-36 lg:pb-4">
+    <div className="sapo-screen sapo-create-order-page pb-36 lg:pb-4">
       <style>{`@keyframes slideUp{from{transform:translateY(120%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
       {stockToast && (
         <div className="toast-stack">
@@ -1348,60 +1634,58 @@ export default function CreateOrder({ user, store }) {
       )}
 
       {/* ===== HEADER ===== */}
-      <div className="flex flex-col gap-3 mb-3 lg:flex-row lg:items-center lg:justify-between">
-        <h1 className="text-lg sm:text-xl font-bold flex items-center gap-2 min-w-0">
-          <ShoppingCart className="text-blue-600" size={24} />
-          <span className="text-gray-800">Sản phẩm:</span>
-          <span className="text-blue-600">{editingInvoiceId ? 'Sửa đơn hàng' : 'Tạo đơn hàng'}</span>
+      <div className="sapo-topbar">
+        <h1 className="sapo-page-title">
+          {editingInvoiceId ? 'Sửa đơn hàng' : 'Tạo đơn hàng'}
         </h1>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+        <div className="sapo-actions">
           {lastInvoice && !editingInvoiceId && !lastInvoice.id && (
             <button
               onClick={handleStartEdit}
-              className="px-3 sm:px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium">
+              className="sapo-btn">
               Sửa đơn hàng
             </button>
           )}
           {editingInvoiceId && (
             <button
               onClick={resetForm}
-              className="px-3 sm:px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium">
+              className="sapo-btn">
               Hủy sửa
             </button>
           )}
           <button
             onClick={resetForm}
-            className="px-3 sm:px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium">
+            className="sapo-btn">
             Thoát
           </button>
           {editingInvoiceId ? (
             <button
               onClick={handleSaveEdit}
               disabled={cart.length === 0 || creating || hasCartStockError}
-              className="px-3 sm:px-5 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
+              className="sapo-btn sapo-btn-primary">
               {creating ? ' Đang lưu...' : 'Lưu thay đổi'}
             </button>
           ) : (
             <button
               onClick={handleCreateOrder}
               disabled={cart.length === 0 || creating || hasCartStockError}
-              className="px-3 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">
-              {creating ? ' Đang tạo...' : 'Tạo Đơn Hàng'}
+              className="sapo-btn sapo-btn-primary">
+              {creating ? ' Đang tạo...' : 'Tạo đơn hàng (F1)'}
             </button>
           )}
         </div>
       </div>
 
       {/* ===== MAIN LAYOUT ===== */}
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+      <div className="sapo-shell grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
 
         {/* ===== CONTENT: Khách hàng + Sản phẩm ===== */}
-        <div className="xl:col-span-2 flex flex-col gap-3 min-w-0">
+        <div className="flex flex-col gap-4 min-w-0">
 
           {/* Thông tin khách hàng */}
-          <div className="bg-white rounded-lg shadow-sm border">
-            <div className="px-4 py-3 border-b bg-gray-50 rounded-t-lg">
-              <span className="font-semibold text-sm text-gray-700">Thông tin khách hàng</span>
+          <div className="sapo-card">
+            <div className="sapo-card-header">
+              <span>Thông tin khách hàng</span>
             </div>
             <div className="p-3 space-y-2">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -1508,8 +1792,8 @@ export default function CreateOrder({ user, store }) {
                   }} className="text-red-400 hover:text-red-600 text-xs">✕ Bỏ chọn</button>
                 </div>
               ) : (
-                <div className="mt-2 text-center text-gray-400 text-sm py-4">
-                  <div className="text-3xl mb-1 opacity-30">👤</div>
+                <div className="sapo-muted-empty">
+                  <Users size={44} className="text-gray-200" />
                   {loadError.customers ? 'Không tải được khách hàng' : 'Chưa có thông tin khách hàng'}
                 </div>
               )}
@@ -1517,9 +1801,9 @@ export default function CreateOrder({ user, store }) {
           </div>
 
           {/* Thông tin sản phẩm */}
-          <div className="bg-white rounded-lg shadow-sm border flex-1">
-            <div className="px-4 py-3 border-b bg-gray-50 rounded-t-lg flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-              <span className="font-semibold text-sm text-gray-700">Thông tin sản phẩm</span>
+          <div className="sapo-card flex-1">
+            <div className="sapo-card-header flex-col items-start lg:flex-row lg:items-center">
+              <span>Thông tin sản phẩm</span>
               <div className="flex flex-wrap items-center gap-2 lg:gap-3 text-xs text-gray-500">
                 <label className="flex items-center gap-1 cursor-pointer">
                   <input type="checkbox" checked={splitLine} onChange={e => setSplitLine(e.target.checked)} className="accent-blue-600" />
@@ -1533,7 +1817,7 @@ export default function CreateOrder({ user, store }) {
             </div>
 
             {/* Search row */}
-            <div className="p-3 border-b flex flex-col gap-2 bg-gray-50 lg:flex-row lg:items-center">
+            <div className="p-3 border-b flex flex-col gap-2 bg-white 2xl:flex-row 2xl:items-center">
               <div className="flex-1 relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input ref={productSearchInputRef} className="input-field pl-9 w-full text-sm"
@@ -1542,7 +1826,7 @@ export default function CreateOrder({ user, store }) {
                   onFocus={handleProductSearchFocus}
                   onChange={e => setProductSearch(e.target.value)} />
               </div>
-              <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 lg:w-auto lg:flex lg:flex-wrap lg:items-center lg:justify-end">
+              <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 2xl:w-auto 2xl:flex 2xl:flex-wrap 2xl:items-center 2xl:justify-end">
                 {selectedCustomer ? (
                   <span className={`order-toolbar-pill border ${(selectedCustomer.customer_type || '').toLowerCase().includes('sỉ') || (selectedCustomer.customer_type || '').toLowerCase().includes('wholesale')
                     ? 'bg-orange-100 text-orange-700 border-orange-300'
@@ -1561,11 +1845,7 @@ export default function CreateOrder({ user, store }) {
                   ))
                 )}
                 <button
-                  onClick={() => {
-                    const nextShowProductPanel = !showProductPanel;
-                    setShowProductPanel(nextShowProductPanel);
-                    if (nextShowProductPanel && productResultFilter === 'combo') fetchCombos();
-                  }}
+                  onClick={openOrderProductPicker}
                   className="order-toolbar-pill bg-blue-600 hover:bg-blue-700 text-white">
                   <Plus size={12} /> Chọn nhanh
                 </button>
@@ -1702,17 +1982,19 @@ export default function CreateOrder({ user, store }) {
             <div className="system-table-scroll">
               <table className="system-table pos-order-table text-sm">
                 <colgroup>
-                  <col style={{ width: '8%' }} />
-                  <col style={{ width: '34%' }} />
+                  <col style={{ width: '6%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '31%' }} />
                   <col style={{ width: '12%' }} />
                   <col style={{ width: '15%' }} />
                   <col style={{ width: '12%' }} />
                   <col style={{ width: '14%' }} />
-                  <col style={{ width: '5%' }} />
+                  <col style={{ width: '3%' }} />
                 </colgroup>
                 <thead>
                   <tr>
                     <th className="text-center">STT</th>
+                    <th className="text-center">Ảnh</th>
                     <th className="text-left">Tên sản phẩm</th>
                     <th className="text-center">Số lượng</th>
                     <th className="text-right">Đơn giá</th>
@@ -1737,6 +2019,11 @@ export default function CreateOrder({ user, store }) {
                       <Fragment key={rowKey}>
                         <tr className={`align-middle ${rowStockInvalid ? 'bg-red-50 ring-1 ring-red-200' : rowNearLimit ? 'bg-orange-50' : rowProjectedStockNegative ? 'bg-red-50/60' : ''}`}>
                           <td className="text-center text-gray-500 font-medium">{idx + 1}</td>
+                          <td className="text-center">
+                            <div className="mx-auto flex h-9 w-9 items-center justify-center rounded bg-gray-100 text-gray-300">
+                              <ImageIcon size={18} strokeWidth={1.6} />
+                            </div>
+                          </td>
                           <td>
                             <div className="font-medium flex items-center gap-1 min-w-0">
                               {isCombo && (
@@ -1795,7 +2082,7 @@ export default function CreateOrder({ user, store }) {
                         </tr>
                         {isCombo && isExpanded && (
                           <tr className="bg-purple-50/60 border-b border-purple-100 text-xs">
-                            <td colSpan={7}>
+                            <td colSpan={8}>
                               <div className="border-l-2 border-purple-200 pl-3 space-y-1">
                                 {comboItems.length > 0 ? comboItems.map((comboItem, childIdx) => {
                                   const childSku = getComboChildSku(comboItem);
@@ -1825,10 +2112,10 @@ export default function CreateOrder({ user, store }) {
                   })}
                   {cart.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-center text-gray-400 py-10">
-                        <div className="text-4xl mb-2 opacity-20">📦</div>
+                      <td colSpan={8} className="text-center text-gray-400 py-12">
+                        <Package size={46} className="mx-auto mb-3 text-gray-200" />
                         <div className="mb-3">Chưa có thông tin sản phẩm</div>
-                        <button onClick={() => setShowProductPanel(true)}
+                        <button onClick={openOrderProductPicker}
                           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1">
                           <Plus size={13} /> Thêm sản phẩm
                         </button>
@@ -1839,7 +2126,7 @@ export default function CreateOrder({ user, store }) {
               </table>
             </div>
             {/* Full product panel */}
-            {showProductPanel && (
+            {false && showProductPanel && (
               <div className="p-3 border-t bg-blue-50">
                 <div className="flex flex-col gap-2 mb-2 lg:flex-row">
                   <div className="flex-1 relative">
@@ -1971,9 +2258,9 @@ export default function CreateOrder({ user, store }) {
           </div>
 
           {/* Tags + Ghi chú + Tổng tiền */}
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
             {/* Trái: Tags + Ghi chú */}
-            <div className="bg-white rounded-lg shadow-sm border p-4 space-y-3">
+            <div className="sapo-card p-4 space-y-3">
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Tags</label>
                 <input className="input-field w-full text-sm" placeholder="Nhập tag..."
@@ -1988,7 +2275,7 @@ export default function CreateOrder({ user, store }) {
             </div>
 
             {/* Phải: Tổng tiền */}
-            <div className="bg-white rounded-lg shadow-sm border p-4 space-y-2 text-sm lg:static fixed inset-x-0 bottom-0 z-30 max-h-[48dvh] overflow-auto rounded-b-none lg:rounded-b-lg">
+            <div className="sapo-card p-4 space-y-2 text-sm lg:static fixed inset-x-0 bottom-0 z-30 max-h-[48dvh] overflow-auto rounded-b-none lg:rounded-b-sm">
               <div className="flex justify-between items-center text-gray-600">
                 <span>Tổng tiền ({cart.reduce((s, i) => s + i.quantity, 0)} sp)</span>
                 <span className="font-medium">{formatVND(subtotal)}</span>
@@ -2051,7 +2338,7 @@ export default function CreateOrder({ user, store }) {
               <button
                 onClick={editingInvoiceId ? handleSaveEdit : handleCreateOrder}
                 disabled={cart.length === 0 || creating || hasCartStockError}
-                className={`w-full mt-2 py-2.5 disabled:bg-gray-300 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${editingInvoiceId ? 'bg-green-600 hover:bg-green-700' : 'bg-green-600 hover:bg-green-700'}`}>
+                className="sapo-btn sapo-btn-primary w-full mt-2">
                 {creating ? (editingInvoiceId ? ' Đang lưu...' : ' Đang tạo...') : (editingInvoiceId ? ' Lưu thay đổi' : 'Tạo đơn hàng')}
               </button>
             </div>
@@ -2059,18 +2346,31 @@ export default function CreateOrder({ user, store }) {
         </div>
 
         {/* ===== COL 3: Thông tin đơn hàng ===== */}
-        <div className="flex flex-col gap-3 min-w-0">
-          <div className="bg-white rounded-lg shadow-sm border h-fit xl:sticky xl:top-4">
-            <div className="px-4 py-3 border-b bg-gray-50 rounded-t-lg">
-              <span className="font-semibold text-sm text-gray-700">Thông tin đơn hàng</span>
+        <div className="flex flex-col gap-4 min-w-0">
+          <div className="sapo-card h-fit xl:sticky xl:top-20">
+            <div className="sapo-card-header">
+              <span>Thông tin bổ sung</span>
+              <span className="text-gray-400">⚙</span>
             </div>
             <div className="p-4 space-y-4 text-sm">
               <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Ngày bán</label>
-                <input className="input-field w-full bg-gray-50" value={saleDate} readOnly />
+                <label className="text-xs font-medium text-gray-500 block mb-1">Bán tại</label>
+                <input className="input-field w-full bg-gray-50" value={store?.name || 'Chi nhánh mặc định'} readOnly />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Ngày giao hàng</label>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Bán bởi</label>
+                <input className="input-field w-full" value={invoiceWriter} onChange={e => setInvoiceWriter(e.target.value)} placeholder="Tên nhân viên" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Nguồn</label>
+                <select className="input-field w-full" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+                  <option value="cash">Tại quầy</option>
+                  <option value="bank">Chuyển khoản</option>
+                  <option value="debt">Công nợ</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Hẹn giao</label>
                 <input
                   type="date"
                   className="input-field w-full"
@@ -2079,24 +2379,17 @@ export default function CreateOrder({ user, store }) {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Phương thức thanh toán</label>
-                <select className="input-field w-full" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
-                  <option value="cash">Tiền mặt</option>
-                  <option value="bank">Chuyển khoản</option>
-                  <option value="debt">Công nợ</option>
-                </select>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Ngày bán</label>
+                <input className="input-field w-full bg-gray-50" value={saleDate} readOnly />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-gray-500 block mb-1">Người nhập hàng</label>
-                  <div className="text-[10px] text-gray-400 italic mb-1">(Ký và ghi rõ họ tên)</div>
-                  <input className="input-field w-full" value={receiverName} onChange={e => setReceiverName(e.target.value)} placeholder="Tên người nhập hàng" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-500 block mb-1">Bên giao hàng</label>
-                  <div className="text-[10px] text-gray-400 italic mb-1">(Ký và ghi rõ họ tên)</div>
-                  <input className="input-field w-full" value={invoiceWriter} onChange={e => setInvoiceWriter(e.target.value)} placeholder="Tên bên giao hàng" />
-                </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Người nhận</label>
+                <input
+                  className="input-field w-full"
+                  value={receiverName}
+                  onChange={e => setReceiverName(e.target.value)}
+                  placeholder="Tên người nhận"
+                />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Trạng thái đơn</label>
@@ -2109,6 +2402,8 @@ export default function CreateOrder({ user, store }) {
           </div>
         </div>
       </div>
+
+      {renderOrderProductPickerModal()}
 
       {lastInvoice && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">

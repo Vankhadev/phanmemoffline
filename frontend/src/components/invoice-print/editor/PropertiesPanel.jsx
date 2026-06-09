@@ -1,12 +1,12 @@
 import { AlignCenter, AlignLeft, AlignRight } from 'lucide-react';
 import { getEditorPaperDimensions, getElementLabel, getTableStyleElement, PAGE_ZONE_ID, TABLE_COLUMN_LABELS, TABLE_STYLE_ELEMENT_ID } from './templateSchemaAdapter';
 
-function NumberField({ label, value, min, max, step = 0.5, suffix = 'mm', onChange }) {
+function NumberField({ label, value, min, max, step = 0.5, suffix = 'mm', disabled = false, onChange }) {
   return (
     <label className="invoice-editor-prop-field">
       <span>{label}</span>
       <div>
-        <input type="number" value={value ?? ''} min={min} max={max} step={step} onChange={event => onChange?.(event.target.value === '' ? '' : Number(event.target.value))} />
+        <input type="number" value={value ?? ''} min={min} max={max} step={step} disabled={disabled} onChange={event => onChange?.(event.target.value === '' ? '' : Number(event.target.value))} />
         {suffix && <small>{suffix}</small>}
       </div>
     </label>
@@ -230,6 +230,7 @@ export default function PropertiesPanel({
   const paperSize = document.canvas?.pageSize || 'A5';
   const isTable = selectedId === 'itemsTable' || selectedElement?.type === 'itemsTable';
   const element = !isTable && selectedElement && selectedElement.id !== TABLE_STYLE_ELEMENT_ID ? selectedElement : null;
+  const isTotalsAuto = element?.type === 'totals' && element.style?.autoBelowItems !== false;
 
   const updateElementStyle = (patch) => {
     if (!element) return;
@@ -272,7 +273,7 @@ export default function PropertiesPanel({
             <AlignPresetButtons onAlign={mode => onUpdateElement?.(element.id, { zoneId: PAGE_ZONE_ID, frame: buildAlignedFrame(element.frame || {}, page, mode) })} />
             <div className="invoice-editor-prop-grid">
               <NumberField label="X" value={element.frame?.x || 0} onChange={value => onUpdateElement?.(element.id, { frame: { ...element.frame, x: Number(value) || 0 } })} />
-              <NumberField label="Y" value={element.frame?.y || 0} onChange={value => onUpdateElement?.(element.id, { frame: { ...element.frame, y: Number(value) || 0 } })} />
+              <NumberField label={isTotalsAuto ? 'Y (auto)' : 'Y'} value={element.frame?.y || 0} disabled={isTotalsAuto} onChange={value => onUpdateElement?.(element.id, { frame: { ...element.frame, y: Number(value) || 0 } })} />
               <NumberField label="Width" value={element.frame?.w || 0} min={1} onChange={value => onUpdateElement?.(element.id, { frame: { ...element.frame, w: Number(value) || 1 } })} />
               <NumberField label="Height" value={element.frame?.h || 0} min={0.5} onChange={value => onUpdateElement?.(element.id, { frame: { ...element.frame, h: Number(value) || 1 } })} />
             </div>
@@ -297,6 +298,16 @@ export default function PropertiesPanel({
             <AlignField value={element.style?.align || 'left'} onChange={value => updateElementStyle({ align: value })} />
             <ToggleField label="Bold" checked={element.style?.bold === true} onChange={value => updateElementStyle({ bold: value })} />
           </section>
+          {element.type === 'totals' && (
+            <section>
+              <h4>Tự động theo đơn hàng</h4>
+              <ToggleField label="Nằm dưới danh sách sản phẩm" checked={isTotalsAuto} onChange={value => updateElementStyle({ autoBelowItems: value })} />
+              <div className="invoice-editor-prop-grid">
+                <NumberField label="Cách bảng" value={element.style?.autoGapMm ?? 3} min={0} max={30} step={0.5} disabled={!isTotalsAuto} onChange={value => updateElementStyle({ autoGapMm: Number(value) || 0 })} />
+              </div>
+              <p className="invoice-editor-prop-note">Khi bật, khối tổng tiền tự chạy xuống dưới chân bảng sản phẩm theo số dòng của đơn hàng; kéo ngang vẫn dùng X/Width, vị trí Y do hệ thống tính.</p>
+            </section>
+          )}
           {element.type === 'storeInfo' && (
             <section>
               <h4>Thông tin cửa hàng</h4>
