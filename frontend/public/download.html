@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#166534" />
+    <title>Tải Phần mềm POS Offline</title>
+    <link rel="icon" href="/icons/app-icon-192.png" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #172033;
+        background: #f3f5f7;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        padding: max(20px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
+        background: #f3f5f7;
+      }
+
+      main {
+        width: min(100%, 760px);
+        margin: 0 auto;
+      }
+
+      .app-heading {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 8px 2px 22px;
+      }
+
+      .app-icon {
+        width: 64px;
+        height: 64px;
+        flex: 0 0 64px;
+        border-radius: 14px;
+        box-shadow: 0 8px 22px rgba(23, 32, 51, 0.14);
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: clamp(23px, 6vw, 32px);
+        line-height: 1.15;
+      }
+
+      .subtitle {
+        margin-top: 6px;
+        color: #667085;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .platforms {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .platform {
+        min-width: 0;
+        padding: 22px;
+        border: 1px solid #dfe3e8;
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 6px 18px rgba(23, 32, 51, 0.06);
+      }
+
+      .platform.recommended {
+        border-color: #86b99a;
+        box-shadow: 0 7px 22px rgba(22, 101, 52, 0.12);
+      }
+
+      .platform.is-hidden {
+        display: none;
+      }
+
+      .platform-label {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: #edf7f0;
+        color: #166534;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      h2 {
+        margin-top: 14px;
+        font-size: 20px;
+      }
+
+      .platform p {
+        margin-top: 8px;
+        color: #667085;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .button {
+        display: inline-flex;
+        width: 100%;
+        min-height: 48px;
+        align-items: center;
+        justify-content: center;
+        margin-top: 18px;
+        padding: 12px 16px;
+        border: 0;
+        border-radius: 7px;
+        background: #166534;
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 750;
+        text-align: center;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .button.secondary {
+        background: #1455a0;
+      }
+
+      .security-help {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border: 1px solid #f1c27d;
+        border-radius: 7px;
+        background: #fff8e7;
+        color: #7a4408;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .security-help strong {
+        color: #5f3100;
+      }
+
+      .steps {
+        margin: 18px 0 0;
+        padding-left: 22px;
+        color: #344054;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .steps li + li {
+        margin-top: 6px;
+      }
+
+      .notice {
+        margin-top: 14px;
+        padding: 14px 16px;
+        border-left: 4px solid #d97706;
+        background: #fffbeb;
+        color: #854d0e;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .address {
+        margin-top: 16px;
+        padding: 14px 16px;
+        border: 1px solid #dfe3e8;
+        border-radius: 7px;
+        background: #ffffff;
+        color: #475467;
+        font-size: 13px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+      }
+
+      .address strong {
+        color: #172033;
+      }
+
+      @media (max-width: 640px) {
+        body {
+          padding-left: 12px;
+          padding-right: 12px;
+        }
+
+        .platforms {
+          grid-template-columns: 1fr;
+        }
+
+        .platform {
+          padding: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="app-heading">
+        <img class="app-icon" src="/icons/app-icon-192.png" alt="Biểu tượng ứng dụng" />
+        <div>
+          <h1>Phần mềm POS Offline</h1>
+          <p class="subtitle">Cài ứng dụng lên điện thoại để sử dụng như một app riêng.</p>
+        </div>
+      </header>
+
+      <section class="platforms" aria-label="Lựa chọn cài đặt">
+        <article class="platform" id="android-card">
+          <span class="platform-label">Android</span>
+          <h2>Tải file APK</h2>
+          <p>Dành cho điện thoại Samsung, Oppo, Xiaomi, Vivo, Realme và các máy Android khác.</p>
+          <a
+            class="button"
+            href="/downloads/phan-mem-pos-offline.apk?v=202"
+            download="phan-mem-pos-offline.apk"
+          >
+            Tải Phần mềm POS Offline Android 2.0.2
+          </a>
+          <div class="security-help">
+            Nếu Chrome báo <strong>“Không thể tải tệp xuống một cách an toàn”</strong>, hãy nhấn
+            <strong>“Giữ lại”</strong>. Đây là cảnh báo do tải qua Wi-Fi nội bộ, không phải file APK bị lỗi.
+          </div>
+          <ol class="steps">
+            <li>Trong hộp cảnh báo của Chrome, nhấn Giữ lại.</li>
+            <li>Mở file APK vừa tải.</li>
+            <li>Cho phép cài ứng dụng không rõ nguồn nếu điện thoại yêu cầu.</li>
+            <li>Nhấn Cài đặt rồi mở ứng dụng.</li>
+          </ol>
+        </article>
+
+        <article class="platform" id="ios-card">
+          <span class="platform-label">iPhone / iPad</span>
+          <h2>Thêm ra màn hình chính</h2>
+          <p>Phiên bản iPhone hiện cài bằng Safari. Ứng dụng sẽ có biểu tượng riêng và mở toàn màn hình.</p>
+          <a class="button secondary" href="/">Mở ứng dụng bằng Safari</a>
+          <ol class="steps">
+            <li>Nhấn nút Chia sẻ trong Safari.</li>
+            <li>Chọn Thêm vào Màn hình chính.</li>
+            <li>Nhấn Thêm để hoàn tất.</li>
+          </ol>
+        </article>
+      </section>
+
+      <div class="notice">
+        App có thể đăng nhập cục bộ trên điện thoại bằng tài khoản đã lưu/default ở bất kỳ Wi-Fi nào. Khi cần đồng bộ dữ liệu với máy tính,
+        hãy mở phần mềm trên máy tính và dùng địa chỉ LAN <strong>192.168.1.19</strong> qua cổng <strong>5174/api</strong>.
+      </div>
+
+      <div class="address">
+        <strong>Địa chỉ trang cài đặt:</strong>
+        <span id="install-address"></span>
+      </div>
+    </main>
+
+    <script>
+      const userAgent = navigator.userAgent || "";
+      const isAndroid = /Android/i.test(userAgent);
+      const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
+      const installAddress = document.getElementById("install-address");
+
+      installAddress.textContent = window.location.href;
+
+      if (isAndroid) {
+        document.getElementById("android-card").classList.add("recommended");
+        document.getElementById("ios-card").classList.add("is-hidden");
+      } else if (isIOS) {
+        document.getElementById("ios-card").classList.add("recommended");
+        document.getElementById("android-card").classList.add("is-hidden");
+      }
+    </script>
+  </body>
+</html>

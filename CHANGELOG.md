@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.5.9 - 2026-06-10
+
+### Thay doi chinh
+
+- Chan trung ma phieu nhap va ma don hang; bo sung migration tu dong sua cac ma hoa don bi lap trong du lieu cu va dong bo lai bo dem `invoice_seq`.
+- Cai thien bao cao theo don hang: tim/goi y khach hang bang o tim kiem, chon khach tu dropdown va xu ly loi API an toan hon.
+- Sua cau hinh API frontend/development proxy de bo qua placeholder env chua duoc resolve nhu `%KHA_BACKEND_PORT%` va fallback ve backend local `3001`.
+- Dong bo cac thay doi ung dung/mobile hien co, icon va cau hinh build phuc vu phat hanh.
+
+### Phat hanh
+
+- Dong bo version phat hanh 1.5.9 cho ung dung desktop, frontend, backend va cac lockfile tuong ung.
+- Tao tag GitHub `v1.5.9`; GitHub Actions se build/publish installer Windows x64 va ia32 kem latest.yml/update-manifest.json.
+
 ## v1.5.7 - 2026-06-09
 
 ### Thay doi chinh

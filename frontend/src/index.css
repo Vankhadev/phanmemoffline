@@ -565,6 +565,413 @@
     font-size: 0.875rem;
   }
 
+  @supports (height: 100dvh) {
+    .mobile-app-shell {
+      height: 100dvh;
+    }
+  }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 90;
+    display: grid;
+    grid-template-columns: repeat(var(--mobile-tab-count, 5), minmax(0, 1fr));
+    align-items: end;
+    min-height: calc(4.85rem + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid rgb(148 163 184 / 0.22);
+    background: #070d1a;
+    box-shadow: 0 -18px 42px rgb(15 23 42 / 0.24);
+    padding: 0.45rem 0.5rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+    overflow: visible;
+  }
+
+  .mobile-bottom-tab {
+    display: flex;
+    min-width: 0;
+    min-height: 4.1rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    border: 0;
+    background: transparent;
+    color: #94a3b8;
+    flex-direction: column;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    touch-action: manipulation;
+    transition: color 160ms ease, transform 160ms ease;
+  }
+
+  .mobile-bottom-tab:hover,
+  .mobile-bottom-tab:focus-visible {
+    color: #dbeafe;
+  }
+
+  .mobile-bottom-icon-wrap {
+    display: inline-flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    color: currentColor;
+    transition: width 160ms ease, height 160ms ease, margin 160ms ease, background-color 160ms ease, box-shadow 160ms ease, color 160ms ease;
+  }
+
+  .mobile-bottom-label {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 0.1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-bottom-tab-primary .mobile-bottom-icon-wrap {
+    width: 2.7rem;
+    height: 2.7rem;
+    background: #1d4ed8;
+    color: #fff;
+    box-shadow: 0 12px 26px rgb(37 99 235 / 0.28);
+  }
+
+  .mobile-bottom-tab-active {
+    color: #60a5fa;
+  }
+
+  .mobile-bottom-tab-active .mobile-bottom-icon-wrap {
+    width: 3rem;
+    height: 3rem;
+    margin-top: -0.62rem;
+    background: #3b82f6;
+    color: #fff;
+    box-shadow: 0 12px 30px rgb(37 99 235 / 0.34);
+  }
+
+  .mobile-bottom-tab-primary.mobile-bottom-tab-active .mobile-bottom-icon-wrap {
+    width: 3.15rem;
+    height: 3.15rem;
+    margin-top: -0.75rem;
+  }
+
+  .mobile-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    border: 0;
+    background: rgb(15 23 42 / 0.42);
+    padding: 0;
+  }
+
+  .mobile-bottom-sheet {
+    position: fixed;
+    right: 0.75rem;
+    bottom: calc(5.45rem + env(safe-area-inset-bottom, 0px));
+    left: 0.75rem;
+    z-index: 75;
+    display: flex;
+    max-height: min(76dvh, calc(100dvh - 7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #dbe3ef;
+    border-radius: 0.5rem;
+    background: #fff;
+    box-shadow: 0 24px 58px rgb(15 23 42 / 0.28);
+    color: #0f172a;
+  }
+
+  .mobile-sheet-header {
+    display: flex;
+    flex: 0 0 auto;
+    min-height: 3.5rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 0.8rem 0.9rem;
+  }
+
+  .mobile-sheet-header h2 {
+    margin: 0;
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 0.95rem;
+    font-weight: 900;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-sheet-header p {
+    margin: 0.12rem 0 0;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-sheet-close {
+    display: inline-flex;
+    width: 2.45rem;
+    height: 2.45rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    background: #f8fafc;
+    color: #334155;
+  }
+
+  .mobile-sheet-scroll {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 0.75rem;
+    overscroll-behavior: contain;
+    scroll-padding-bottom: 0.75rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-sheet-group + .mobile-sheet-group {
+    margin-top: 0.75rem;
+    border-top: 1px solid #eef2f7;
+    padding-top: 0.75rem;
+  }
+
+  .mobile-sheet-group-title {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 900;
+    line-height: 1.1;
+    text-transform: uppercase;
+  }
+
+  .mobile-sheet-group-title span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .mobile-sheet-route {
+    display: flex;
+    min-width: 0;
+    min-height: 3.4rem;
+    align-items: center;
+    gap: 0.55rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    background: #f8fafc;
+    padding: 0.6rem;
+    color: #334155;
+    font-size: 0.8125rem;
+    font-weight: 800;
+    line-height: 1.15;
+    transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+  }
+
+  .mobile-sheet-route span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .mobile-sheet-route-active {
+    border-color: #93c5fd;
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+
+  .mobile-sheet-empty {
+    display: flex;
+    min-height: 7rem;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .mobile-account-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .mobile-sheet-scroll .mobile-account-panel {
+    margin-top: 0.85rem;
+    border-top: 1px solid #e2e8f0;
+    padding: 0.85rem 0 0;
+  }
+
+  .mobile-account-summary {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    background: #f8fafc;
+    padding: 0.75rem;
+  }
+
+  .mobile-account-avatar {
+    display: inline-flex;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: #1d4ed8;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 900;
+  }
+
+  .mobile-account-name {
+    min-width: 0;
+    color: #0f172a;
+    font-size: 0.95rem;
+    font-weight: 900;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .mobile-account-subtitle {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 0.35rem;
+    margin-top: 0.25rem;
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .mobile-account-subtitle span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .mobile-logout-btn {
+    display: inline-flex;
+    min-height: 2.85rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 1px solid #fecaca;
+    border-radius: 0.5rem;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-size: 0.875rem;
+    font-weight: 900;
+  }
+
+  .mobile-update-notice {
+    position: fixed;
+    right: 0.75rem;
+    bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+    left: 0.75rem;
+    z-index: 120;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.6rem;
+    border: 1px solid #bfdbfe;
+    border-radius: 0.5rem;
+    background: #eff6ff;
+    box-shadow: 0 18px 44px rgb(15 23 42 / 0.22);
+    color: #0f172a;
+    padding: 0.65rem;
+  }
+
+  .mobile-update-copy {
+    min-width: 0;
+  }
+
+  .mobile-update-title {
+    color: #1d4ed8;
+    font-size: 0.82rem;
+    font-weight: 950;
+    line-height: 1.15;
+  }
+
+  .mobile-update-text {
+    margin-top: 0.18rem;
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.22;
+  }
+
+  .mobile-update-download,
+  .mobile-update-dismiss {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 0.5rem;
+    font-weight: 900;
+  }
+
+  .mobile-update-download {
+    min-height: 2.35rem;
+    gap: 0.35rem;
+    background: #2563eb;
+    color: #fff;
+    padding: 0 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .mobile-update-dismiss {
+    width: 2.35rem;
+    height: 2.35rem;
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  @media (min-width: 768px) {
+    .mobile-update-notice {
+      right: 1rem;
+      bottom: 1rem;
+      left: auto;
+      width: min(25rem, calc(100vw - 2rem));
+    }
+  }
+
+  @media (max-width: 390px) {
+    .mobile-sheet-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
   @media (max-width: 1023px) {
     .system-table th,
     .system-table td {
@@ -574,8 +981,63 @@
 
   @media (max-width: 767px) {
     .app-main-scroll {
-      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+      align-self: flex-start;
+      height: calc(100dvh - 5.55rem - env(safe-area-inset-bottom, 0px));
+      padding: 0.75rem;
       overscroll-behavior: contain;
+    }
+
+    .sapo-screen {
+      min-height: auto;
+      padding-bottom: 0.75rem;
+    }
+
+    .sapo-shell {
+      padding: 0.75rem 0 1rem;
+    }
+
+    .sapo-topbar {
+      position: static;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      align-items: start;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 0.125rem;
+      padding: 0.75rem;
+    }
+
+    .sapo-page-title {
+      align-self: center;
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1.3;
+    }
+
+    .sapo-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      width: 100%;
+      gap: 0.5rem;
+    }
+
+    .sapo-actions .sapo-btn {
+      min-height: 2.75rem;
+      padding-inline: 0.85rem;
+      white-space: normal;
+    }
+
+    .sapo-actions .sapo-btn-primary {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+
+    .sapo-order-summary {
+      position: static;
+      max-height: none;
+      overflow: visible;
+      border-radius: 0.125rem;
     }
 
     .app-main-scroll input,
@@ -619,7 +1081,7 @@
 
     .toast-stack {
       inset-inline: 0.75rem;
-      bottom: 0.75rem;
+      bottom: calc(5.45rem + env(safe-area-inset-bottom, 0px));
       width: auto;
     }
 

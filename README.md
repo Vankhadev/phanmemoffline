@@ -114,6 +114,7 @@ Chi tiết xem `docs/offline-first-sync.md`.
 
 - `HOW-TO-RUN.md`
 - `UPDATE-RELEASE.md`
+- `docs/mobile-release.md`
 - `docs/offline-first-sync.md`
 - Tài liệu nội bộ liên quan đến quy trình phát hành và cập nhật
 

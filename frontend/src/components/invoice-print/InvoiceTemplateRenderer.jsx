@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { getPaperDimensions, normalizeTemplateSettings } from './templateDefaults';
 import {
+  buildItemsTablePhysicalPages,
   buildFlowElementTopOverrides,
   getActiveEditorDocument,
   getFlowElementBaseTopMm,
@@ -451,7 +452,7 @@ function V2Element({ element, data, template }) {
   return <div className="invoice-template-v2-custom-text" style={getElementCssStyle(element)}>{style.text || ''}</div>;
 }
 
-function V2ItemsTable({ document, data }) {
+function V2ItemsTable({ document, data, segment }) {
   const table = document.table || {};
   const zonesById = new Map((document.zones || []).map(zone => [zone.id, zone]));
   const zone = zonesById.get(table.zoneId) || (document.zones || [])[0] || { frame: { x: 0, y: 0, w: 100 } };
@@ -459,19 +460,24 @@ function V2ItemsTable({ document, data }) {
   const tableStyleElement = getTableStyleElement(document) || {};
   const tableStyle = tableStyleElement.style || {};
   const columns = Array.isArray(table.columns) && table.columns.length ? table.columns : [];
-  const items = data.items || [];
-  const fixedHeight = frame.h === 'auto' ? null : Number(frame.h);
+  const allItems = data.items || [];
+  const startIndex = Number(segment?.startIndex) || 0;
+  const endIndex = Number.isFinite(Number(segment?.endIndex)) ? Number(segment.endIndex) : allItems.length;
+  const items = allItems.slice(startIndex, endIndex);
+  const tableLeftMm = Number(segment?.x ?? (Number(zone.frame?.x || 0) + Number(frame.x || 0)));
+  const tableTopMm = Number(segment?.localTopMm ?? (Number(zone.frame?.y || 0) + Number(frame.y || 0)));
+  const tableWidthMm = Number(segment?.w ?? frame.w ?? zone.frame?.w ?? 100);
 
   return (
     <section
       className="invoice-template-v2-table-wrap"
+      data-invoice-table-page={segment?.pageIndex}
       style={{
-        '--invoice-v2-table-left': `${Number(zone.frame?.x || 0) + Number(frame.x || 0)}mm`,
-        '--invoice-v2-table-top': `${Number(zone.frame?.y || 0) + Number(frame.y || 0)}mm`,
-        left: `${Number(zone.frame?.x || 0) + Number(frame.x || 0)}mm`,
-        top: `${Number(zone.frame?.y || 0) + Number(frame.y || 0)}mm`,
-        width: `${Number(frame.w || zone.frame?.w || 100)}mm`,
-        ...(Number.isFinite(fixedHeight) && fixedHeight > 0 ? { minHeight: `${fixedHeight}mm` } : {}),
+        '--invoice-v2-table-left': `${tableLeftMm}mm`,
+        '--invoice-v2-table-top': `${tableTopMm}mm`,
+        left: `${tableLeftMm}mm`,
+        top: `${tableTopMm}mm`,
+        width: `${tableWidthMm}mm`,
         '--invoice-v2-table-border-width': `${tableStyle.tableBorder === false ? 0 : (tableStyle.borderWidthMm ?? 0.22)}mm`,
         '--invoice-v2-table-border-color': tableStyle.borderColor || document.theme?.borderColor || '#cbd5e1',
         '--invoice-v2-table-header-bg': tableStyle.headerBackgroundColor || '#e2e8f0',
@@ -498,22 +504,28 @@ function V2ItemsTable({ document, data }) {
           </tr>
         </thead>
         <tbody>
-          {items.map((item, index) => (
-            <tr key={`${item.id || item.product_id || item.sku || 'item'}-${index}`}>
-              {columns.map(column => (
-                <td key={column.key} style={{ textAlign: column.align }}>
-                  <div className={column.key === 'name' ? 'invoice-template-item-name' : ''}>{getItemValue(item, column.key, index)}</div>
-                  {column.key === 'name' && (item.sku || item.note) && (
-                    <div className="invoice-template-item-meta">
-                      {item.sku && <span>SKU: {item.sku}</span>}
-                      {item.note && <span>{item.note}</span>}
-                    </div>
-                  )}
-                </td>
-              ))}
-            </tr>
-          ))}
-          {items.length === 0 && (
+          {items.map((item, index) => {
+            const absoluteIndex = startIndex + index;
+            return (
+              <tr
+                key={`${item.id || item.product_id || item.sku || 'item'}-${absoluteIndex}`}
+                data-invoice-item-index={absoluteIndex}
+              >
+                {columns.map(column => (
+                  <td key={column.key} style={{ textAlign: column.align }}>
+                    <div className={column.key === 'name' ? 'invoice-template-item-name' : ''}>{getItemValue(item, column.key, absoluteIndex)}</div>
+                    {column.key === 'name' && (item.sku || item.note) && (
+                      <div className="invoice-template-item-meta">
+                        {item.sku && <span>SKU: {item.sku}</span>}
+                        {item.note && <span>{item.note}</span>}
+                      </div>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+          {allItems.length === 0 && (
             <tr>
               <td colSpan={Math.max(1, columns.length)} className="invoice-template-empty-row">Không có sản phẩm trong hóa đơn.</td>
             </tr>

@@ -1,6 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authApi, getApiErrorMessage } from '../utils/apiClient';
+import {
+  authApi,
+  clearLocalApiBaseOverride,
+  getApiBase,
+  getApiErrorMessage,
+  getLocalApiBaseOverride,
+  normalizeApiBaseOverride,
+  persistLocalApiBaseOverride,
+} from '../utils/apiClient';
+import { MOBILE_APP_DISPLAY_NAME, MOBILE_APP_VERSION } from '../utils/mobileAppRuntime';
+import {
+  authenticateMobileOfflineAccount,
+  rememberMobileOfflineAccount,
+} from '../utils/mobileOfflineAuth';
+import { getClientDeviceMetadata } from '../utils/clientOrderId';
 import {
   AlertTriangle,
   CheckCircle,
@@ -11,6 +25,7 @@ import {
   Mail,
   Phone,
   RefreshCw,
+  Server,
   ShieldCheck,
   Store,
   User,
@@ -20,18 +35,20 @@ import {
 
 const initialForm = {
   name: '',
-  email: '',
-  phone: '',
-  password: '',
-  confirmPassword: '',
+  email: 'vankhaqc@gmail.com',
+  phone: '0904045075',
+  password: 'Vankhammo07@',
+  confirmPassword: 'Vankhammo07@',
+  serverUrl: '',
 };
 
 const normalizeEmail = (email) => email.trim().toLowerCase();
 const normalizePhone = (phone) => phone.replace(/\s/g, '');
+const getInitialServerUrl = () => getApiBase() || getLocalApiBaseOverride() || '';
 
 export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const navigate = useNavigate();
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(() => ({ ...initialForm, serverUrl: getInitialServerUrl() }));
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
@@ -39,6 +56,8 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const [loading, setLoading] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [authModeTouched, setAuthModeTouched] = useState(false);
 
   const set = (key, value) => {
     setForm(current => ({ ...current, [key]: value }));
@@ -47,8 +66,40 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   };
 
   const applyBootstrapStatus = (data) => {
-    setNeedsSetup(!!data?.needsSetup);
+    const nextNeedsSetup = !!data?.needsSetup;
+    setNeedsSetup(nextNeedsSetup);
+    if (!authModeTouched) setAuthMode(nextNeedsSetup ? 'setup' : 'login');
     onBootstrapStatus?.(data || null);
+  };
+
+  const switchAuthMode = (mode) => {
+    setAuthMode(mode);
+    setAuthModeTouched(true);
+    setError('');
+    setSuccess('');
+  };
+
+  const applyServerOverride = ({ allowEmpty = true } = {}) => {
+    const rawServerUrl = String(form.serverUrl || '').trim();
+    if (!rawServerUrl) {
+      if (allowEmpty) {
+        clearLocalApiBaseOverride();
+        setForm(current => ({ ...current, serverUrl: getApiBase() || '' }));
+        return true;
+      }
+      setError('Vui lòng nhập địa chỉ máy chủ API.');
+      return false;
+    }
+
+    const normalizedServerUrl = normalizeApiBaseOverride(rawServerUrl);
+    if (!normalizedServerUrl) {
+      setError('Địa chỉ máy chủ không hợp lệ. Ví dụ: https://tenmien.com/api hoặc http://192.168.1.10:3001/api');
+      return false;
+    }
+
+    persistLocalApiBaseOverride(normalizedServerUrl);
+    setForm(current => ({ ...current, serverUrl: normalizedServerUrl }));
+    return true;
   };
 
   const checkBootstrapStatus = async () => {
@@ -57,6 +108,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     setSuccess('');
 
     try {
+      if (!applyServerOverride()) return;
       const data = await authApi.bootstrapStatus();
       applyBootstrapStatus(data);
     } catch (err) {
@@ -160,13 +212,24 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   };
 
   const loginWithCredentials = async (email, password) => {
-    const data = await authApi.login({ email: normalizeEmail(email), password });
+    try {
+      const data = await authApi.login({
+        email: normalizeEmail(email),
+        password,
+        ...getClientDeviceMetadata(),
+      });
 
-    if (!data.token || !data.user) {
-      throw new Error('Server không trả đủ thông tin đăng nhập.');
+      if (!data.token || !data.user) {
+        throw new Error('Server không trả đủ thông tin đăng nhập.');
+      }
+
+      await rememberMobileOfflineAccount({ email, password, payload: data });
+      return data;
+    } catch (err) {
+      const localPayload = await authenticateMobileOfflineAccount(email, password);
+      if (localPayload) return localPayload;
+      throw err;
     }
-
-    return data;
   };
 
   const handleLogin = async (event) => {
@@ -174,17 +237,15 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     setError('');
     setSuccess('');
 
-    if (needsSetup) {
-      setError('Hệ thống đang cần thiết lập tài khoản quản trị viên đầu tiên.');
-      return;
-    }
-
     if (!validateLogin()) return;
+    if (!applyServerOverride()) return;
 
     setLoading(true);
     try {
       const data = await loginWithCredentials(form.email, form.password);
-      setSuccess('Đăng nhập thành công. Đang khôi phục phiên từ server...');
+      setSuccess(data.localOnly
+        ? 'Đăng nhập cục bộ trên điện thoại thành công.'
+        : 'Đăng nhập thành công. Đang khôi phục phiên từ server...');
       await completeLogin(data);
     } catch (err) {
       setError(getApiErrorMessage(err?.data, err.message || 'Không thể kết nối server để đăng nhập.'));
@@ -210,7 +271,10 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       email: normalizeEmail(form.email),
       phone: form.phone.trim(),
       password: form.password,
+      ...getClientDeviceMetadata(),
     };
+
+    if (!applyServerOverride()) return;
 
     setLoading(true);
     try {
@@ -225,20 +289,22 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     }
   };
 
+  const showSetupForm = needsSetup && authMode === 'setup';
   const isLoginDisabled = loading || checkingSetup || !form.email.trim() || !form.password;
-  const isBootstrapDisabled = loading || checkingSetup || !needsSetup;
+  const isBootstrapDisabled = loading || checkingSetup || !showSetupForm;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-            {needsSetup ? <ShieldCheck className="text-amber-600" size={32} /> : <Store className="text-blue-600" size={32} />}
+            {showSetupForm ? <ShieldCheck className="text-amber-600" size={32} /> : <Store className="text-blue-600" size={32} />}
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">Phần Mềm Bán Hàng</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Phần mềm POS Offline</h1>
           <p className="text-blue-600 font-semibold mt-1">
-            {checkingSetup ? 'Đang kiểm tra hệ thống...' : needsSetup ? 'Thiết lập lần đầu' : 'Đăng nhập hệ thống'}
+            {checkingSetup ? 'Đang kiểm tra hệ thống...' : showSetupForm ? 'Thiết lập lần đầu' : 'Đăng nhập hệ thống'}
           </p>
+          <div className="mt-2 text-xs font-bold text-emerald-700">{MOBILE_APP_DISPLAY_NAME} {MOBILE_APP_VERSION}</div>
         </div>
 
         {checkingSetup ? (
@@ -269,7 +335,55 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
               </div>
             )}
 
-            {needsSetup ? (
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                <span className="inline-flex items-center gap-1"><Server size={14} /> Kết nối máy tính / server</span>
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  inputMode="url"
+                  value={form.serverUrl}
+                  onChange={event => set('serverUrl', event.target.value)}
+                  placeholder="http://192.168.1.19:5174/api"
+                  className="input-field min-w-0 flex-1"
+                  autoComplete="url"
+                />
+                <button
+                  type="button"
+                  onClick={checkBootstrapStatus}
+                  disabled={loading || checkingSetup}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-200 px-3 text-sm font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RefreshCw size={16} className={checkingSetup ? 'animate-spin' : ''} />
+                  Kiểm tra
+                </button>
+              </div>
+              <div className="mt-2 text-xs leading-relaxed text-slate-500">
+                Nếu máy tính đang mở, app sẽ kết nối để đồng bộ dữ liệu. Nếu máy tính tắt hoặc đang ở Wi-Fi khác, app vẫn có thể đăng nhập cục bộ bằng tài khoản đã lưu/default.
+              </div>
+            </div>
+
+            {needsSetup && (
+              <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-amber-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => switchAuthMode('setup')}
+                  className={`rounded-lg px-3 py-2 text-sm font-bold transition ${showSetupForm ? 'bg-amber-600 text-white shadow-sm' : 'text-amber-800 hover:bg-amber-100'}`}
+                >
+                  Thiết lập máy này
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchAuthMode('login')}
+                  className={`rounded-lg px-3 py-2 text-sm font-bold transition ${!showSetupForm ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-700 hover:bg-blue-50'}`}
+                >
+                  Đăng nhập tài khoản đã có
+                </button>
+              </div>
+            )}
+
+            {showSetupForm ? (
               <form onSubmit={handleBootstrapAdmin} className="space-y-4">
                 <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
                   <AlertTriangle size={18} className="shrink-0 mt-0.5" />
@@ -451,10 +565,12 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
             )}
 
             <div className="mt-6 bg-blue-50 rounded-xl p-4 text-xs text-blue-700">
-              {needsSetup ? (
+              {showSetupForm ? (
                 <div>Lần đầu sử dụng: tài khoản đầu tiên sẽ được server tự động cấp quyền ADMIN.</div>
+              ) : needsSetup ? (
+                <div>Server hiện tại đang trống dữ liệu. Để đăng nhập tài khoản đã có, hãy nhập đúng địa chỉ server đang lưu tài khoản rồi bấm Kiểm tra hoặc Đăng nhập.</div>
               ) : (
-                <div>Nếu chưa có tài khoản, vui lòng đăng ký.</div>
+                <div>Tài khoản mặc định đã được điền sẵn. Bấm Đăng nhập để dùng trên điện thoại, kể cả khi chưa kết nối máy tính.</div>
               )}
             </div>
           </>

@@ -1666,7 +1666,7 @@ export default function CreateOrder({ user, store }) {
   };
 
   return (
-    <div className="sapo-screen sapo-create-order-page pb-36 lg:pb-4">
+    <div className="sapo-screen sapo-create-order-page">
       <style>{`@keyframes slideUp{from{transform:translateY(120%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
       {stockToast && (
         <div className="toast-stack">
@@ -2270,7 +2270,7 @@ export default function CreateOrder({ user, store }) {
             </div>
 
             {/* Phải: Tổng tiền */}
-            <div className="sapo-card p-4 space-y-2 text-sm lg:static fixed inset-x-0 bottom-0 z-30 max-h-[48dvh] overflow-auto rounded-b-none lg:rounded-b-sm">
+            <div className="sapo-card sapo-order-summary p-4 space-y-2 text-sm">
               <div className="flex justify-between items-center text-gray-600">
                 <span>Tổng tiền ({cart.reduce((s, i) => s + i.quantity, 0)} sp)</span>
                 <span className="font-medium">{formatVND(subtotal)}</span>

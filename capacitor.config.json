@@ -1,0 +1,13 @@
+{
+  "appId": "com.vankhammo.banhangwifi",
+  "appName": "Phần mềm POS Offline",
+  "webDir": "frontend/dist",
+  "server": {
+    "androidScheme": "http"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

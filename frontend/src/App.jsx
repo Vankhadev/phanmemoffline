@@ -30,9 +30,11 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  Download,
   FileClock,
   FileText,
   Home as HomeIcon,
+  LogOut,
   Menu,
   Package,
   PlusCircle,
@@ -61,6 +63,19 @@ import {
   pushPendingLocalData,
 } from './utils/apiClient';
 import { clearAuthSession, clearVolatileCache, getAuthToken, normalizePermissions } from './utils/authStorage';
+import {
+  MOBILE_APP_VERSION,
+  MOBILE_APP_DISPLAY_NAME,
+  MOBILE_UPDATE_EVENT,
+  dismissNativeAppUpdate,
+  getLatestNativeAppUpdate,
+  isNativeAppRuntime,
+  openMobileDownloadUrl,
+} from './utils/mobileAppRuntime';
+import {
+  getMobileOfflineSessionPayload,
+  isLocalMobileAuthToken,
+} from './utils/mobileOfflineAuth';
 
 
 const ROUTE_ALIASES = {
@@ -79,6 +94,7 @@ const DESKTOP_SIDEBAR_QUERY = '(min-width: 768px)';
 const COMPACT_SIDEBAR_QUERY = '(max-width: 767px)';
 const NAV_ICON_CLASS = 'h-5 w-5 shrink-0';
 const NAV_CHILD_ICON_CLASS = 'h-4 w-4 shrink-0';
+const MOBILE_PINNED_ROUTES = new Set([HOME_ROUTE, '/tao-don-hang', '/danh-sach-don-hang']);
 const SYNC_POLL_ACTIVE_INTERVAL_MS = 4000;
 const SYNC_POLL_INITIAL_DELAY_MS = 1500;
 const SYNC_POLL_IMMEDIATE_DELAY_MS = 250;
@@ -250,10 +266,234 @@ function FullScreenLoading({ message = 'Đang khởi tạo ứng dụng...' }) {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
       <div className="bg-white rounded-2xl shadow-xl px-8 py-7 text-center max-w-sm w-full">
         <div className="mx-auto mb-4 h-10 w-10 rounded-full border-4 border-blue-100 border-t-blue-600 animate-spin" />
-        <div className="text-lg font-bold text-gray-800">Phần Mềm Bán Hàng</div>
+        <div className="text-lg font-bold text-gray-800">Phần mềm POS Offline</div>
         <div className="mt-2 text-sm text-gray-500">{message}</div>
       </div>
     </div>
+  );
+}
+
+function MobileUpdateNotice() {
+  const [update, setUpdate] = useState(() => getLatestNativeAppUpdate());
+  const [visible, setVisible] = useState(() => Boolean(isNativeAppRuntime() && getLatestNativeAppUpdate()?.available));
+
+  useEffect(() => {
+    if (!isNativeAppRuntime()) return undefined;
+
+    const handleUpdate = (event) => {
+      const detail = event?.detail || {};
+      if (!detail?.available) return;
+      setUpdate(detail);
+      setVisible(true);
+    };
+
+    window.addEventListener(MOBILE_UPDATE_EVENT, handleUpdate);
+    return () => window.removeEventListener(MOBILE_UPDATE_EVENT, handleUpdate);
+  }, []);
+
+  if (!visible || !update?.available) return null;
+
+  const versionLabel = update.version ? ` ${update.version}` : '';
+
+  return (
+    <aside className="mobile-update-notice no-print" role="status" aria-live="polite">
+      <div className="mobile-update-copy">
+        <div className="mobile-update-title">Có bản {MOBILE_APP_DISPLAY_NAME}{versionLabel}</div>
+        <div className="mobile-update-text">
+          Bản hiện tại {MOBILE_APP_VERSION}. Tải APK mới qua Wi-Fi rồi cài đặt để cập nhật.
+        </div>
+      </div>
+      <button type="button" className="mobile-update-download" onClick={() => openMobileDownloadUrl(update)}>
+        <Download aria-hidden="true" className="h-4 w-4" />
+        <span>Tải</span>
+      </button>
+      <button
+        type="button"
+        className="mobile-update-dismiss"
+        aria-label="Ẩn thông báo cập nhật"
+        onClick={() => {
+          dismissNativeAppUpdate(update);
+          setVisible(false);
+        }}
+      >
+        <X aria-hidden="true" className="h-4 w-4" />
+      </button>
+    </aside>
+  );
+}
+
+function isRouteActive(currentPath, route) {
+  const path = normalizeRoutePath(currentPath);
+  const target = normalizeRoutePath(route);
+  if (target === HOME_ROUTE) return path === HOME_ROUTE;
+  return path === target || path.startsWith(`${target}/`);
+}
+
+function getUserDisplayName(user = {}) {
+  return String(
+    user.full_name ||
+    user.fullName ||
+    user.name ||
+    user.username ||
+    user.email ||
+    user.phone ||
+    'Tài khoản'
+  ).trim();
+}
+
+function getUserSubtitle(user = {}) {
+  const role = String(user.role || '').trim();
+  const email = String(user.email || '').trim();
+  if (role && email) return `${role} · ${email}`;
+  return role || email || 'Đang đăng nhập';
+}
+
+function MobileBottomNavigation({ items, currentPath, activePanel, onTogglePanel }) {
+  if (!items.length) return null;
+
+  return (
+    <nav
+      className="mobile-bottom-nav md:hidden no-print"
+      aria-label="Điều hướng mobile"
+      style={{ '--mobile-tab-count': items.length }}
+    >
+      {items.map(item => {
+        const Icon = item.icon;
+        const isPanelItem = item.type === 'panel';
+        const isActive = isPanelItem ? activePanel === item.panel : isRouteActive(currentPath, item.to);
+        const tabClass = `mobile-bottom-tab ${isActive ? 'mobile-bottom-tab-active' : ''} ${item.primary ? 'mobile-bottom-tab-primary' : ''}`;
+
+        const content = (
+          <>
+            <span className="mobile-bottom-icon-wrap">
+              {Icon && <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={2.2} />}
+            </span>
+            <span className="mobile-bottom-label">{item.label}</span>
+          </>
+        );
+
+        if (isPanelItem) {
+          return (
+            <button
+              key={item.panel}
+              type="button"
+              className={tabClass}
+              aria-label={item.label}
+              aria-expanded={isActive}
+              aria-controls={`mobile-${item.panel}-sheet`}
+              title={item.label}
+              onClick={() => onTogglePanel(item.panel)}
+            >
+              {content}
+            </button>
+          );
+        }
+
+        return (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={tabClass}
+            aria-current={isActive ? 'page' : undefined}
+            aria-label={item.label}
+            title={item.label}
+          >
+            {content}
+          </NavLink>
+        );
+      })}
+    </nav>
+  );
+}
+
+function MobileActionSheet({ activePanel, moreGroups, user, currentPath, onClose, onLogout }) {
+  if (!activePanel) return null;
+
+  const isAccountPanel = activePanel === 'account';
+  const displayName = getUserDisplayName(user);
+  const subtitle = getUserSubtitle(user);
+  const accountTools = (
+    <div className="mobile-account-panel mobile-account-panel-compact">
+      <div className="mobile-account-summary">
+        <div className="mobile-account-avatar">{getInitials(displayName)}</div>
+        <div className="min-w-0">
+          <div className="mobile-account-name">{displayName}</div>
+          <div className="mobile-account-subtitle">
+            <ShieldCheck aria-hidden="true" className="h-4 w-4 shrink-0" />
+            <span>{subtitle}</span>
+          </div>
+        </div>
+      </div>
+      <button type="button" className="mobile-logout-btn" onClick={() => { onClose(); onLogout?.(); }}>
+        <LogOut aria-hidden="true" className="h-5 w-5" />
+        <span>Đăng xuất</span>
+      </button>
+    </div>
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        className="mobile-sheet-backdrop md:hidden no-print"
+        aria-label="Đóng menu"
+        onClick={onClose}
+      />
+      <section
+        id={`mobile-${activePanel}-sheet`}
+        className="mobile-bottom-sheet md:hidden no-print"
+        role="dialog"
+        aria-modal="true"
+        aria-label={isAccountPanel ? 'Tài khoản' : 'Chức năng'}
+      >
+        <div className="mobile-sheet-header">
+          <div className="min-w-0">
+            <h2>{isAccountPanel ? 'Tài khoản' : 'Khác'}</h2>
+            <p>{isAccountPanel ? 'Thông tin đăng nhập' : 'Tài khoản và các chức năng còn lại'}</p>
+          </div>
+          <button type="button" className="mobile-sheet-close" aria-label="Đóng menu" onClick={onClose}>
+            <X aria-hidden="true" className="h-5 w-5" />
+          </button>
+        </div>
+
+        {isAccountPanel ? (
+          accountTools
+        ) : (
+          <div className="mobile-sheet-scroll">
+            {moreGroups.length === 0 ? (
+              <div className="mobile-sheet-empty">Không có chức năng khác.</div>
+            ) : (
+              moreGroups.map(group => (
+                <div key={group.key || group.label} className="mobile-sheet-group">
+                  <div className="mobile-sheet-group-title">
+                    {group.icon && <NavMenuIcon icon={group.icon} className="h-4 w-4 shrink-0" />}
+                    <span>{group.label}</span>
+                  </div>
+                  <div className="mobile-sheet-grid">
+                    {group.items.map(item => {
+                      const active = isRouteActive(currentPath, item.to);
+                      return (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          className={`mobile-sheet-route ${active ? 'mobile-sheet-route-active' : ''}`}
+                          aria-current={active ? 'page' : undefined}
+                          onClick={onClose}
+                        >
+                          {item.icon && <NavMenuIcon icon={item.icon} className="h-5 w-5 shrink-0" />}
+                          <span>{item.label}</span>
+                        </NavLink>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
+            {accountTools}
+          </div>
+        )}
+      </section>
+    </>
   );
 }
 
@@ -279,6 +519,7 @@ function AppLayout({
   const [updateToastVisible, setUpdateToastVisible] = useState(false);
   const [compactSidebarVisible, setCompactSidebarVisible] = useState(() => isCompactSidebarViewport());
   const [compactSidebarAnimating, setCompactSidebarAnimating] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState(null);
   const user = authState.user;
   const permissions = authState.permissions;
   const canAccess = useCallback((route) => canAccessRoute(route, user, permissions), [permissions, user]);
@@ -303,11 +544,29 @@ function AppLayout({
   }, []);
 
   useEffect(() => {
-    const handleResize = () => setCompactSidebarVisible(isCompactSidebarViewport());
+    const handleResize = () => {
+      const isCompact = isCompactSidebarViewport();
+      setCompactSidebarVisible(isCompact);
+      setSidebarOpen?.(!isCompact);
+      if (!isCompact) setMobilePanel(null);
+    };
     window.addEventListener('resize', handleResize);
     handleResize();
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [setSidebarOpen]);
+
+  useEffect(() => {
+    setMobilePanel(null);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobilePanel) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setMobilePanel(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobilePanel]);
 
   useEffect(() => {
     setOpenMenus(prev => {
@@ -336,6 +595,10 @@ function AppLayout({
       ...prev,
       [groupKey]: !prev[groupKey],
     }));
+  }, []);
+
+  const toggleMobilePanel = useCallback((panel) => {
+    setMobilePanel(current => current === panel ? null : panel);
   }, []);
 
   const navGroups = useMemo(() => {
@@ -392,11 +655,39 @@ function AppLayout({
     return groups.filter(group => !group.items || group.items.some(item => canAccess(item.to)) || canAccess(group.to));
   }, [canAccess]);
 
+  const mobileMoreGroups = useMemo(() => {
+    return navGroups
+      .map(group => {
+        if (group.items) {
+          const items = group.items.filter(item => canAccess(item.to) && !MOBILE_PINNED_ROUTES.has(item.to));
+          return items.length ? { ...group, items } : null;
+        }
+
+        if (!group.to || MOBILE_PINNED_ROUTES.has(group.to) || !canAccess(group.to)) return null;
+        return {
+          key: group.key || group.to,
+          label: 'Chức năng',
+          icon: group.icon,
+          items: [group],
+        };
+      })
+      .filter(Boolean);
+  }, [canAccess, navGroups]);
+
+  const mobileNavItems = useMemo(() => {
+    return [
+      { type: 'route', to: HOME_ROUTE, label: 'Trang chủ', icon: HomeIcon },
+      { type: 'route', to: '/tao-don-hang', label: 'Tạo đơn', icon: PlusCircle, primary: true },
+      { type: 'route', to: '/danh-sach-don-hang', label: 'Danh sách đơn', icon: ClipboardList },
+      { type: 'panel', panel: 'more', label: 'Khác', icon: Menu },
+    ].filter(item => item.type !== 'route' || canAccess(item.to));
+  }, [canAccess, mobileMoreGroups.length]);
+
   return (
-    <div className="h-screen overflow-hidden bg-gray-100">
+    <div className="mobile-app-shell h-screen overflow-hidden bg-gray-100">
       <div className="flex h-full min-h-0">
         <aside
-          className={`${sidebarOpen ? 'w-72' : 'w-0'} sticky top-0 z-20 h-screen shrink-0 overflow-hidden border-r border-gray-200 bg-white transition-all duration-300 ease-in-out`}
+          className={`${sidebarOpen ? 'w-72' : 'w-0'} sticky top-0 z-20 hidden h-screen shrink-0 overflow-hidden border-r border-gray-200 bg-white transition-all duration-300 ease-in-out md:block`}
         >
           <nav className="flex h-full flex-col overflow-y-auto px-4 py-5">
             {navGroups.map(group => {
@@ -494,6 +785,20 @@ function AppLayout({
           </Routes>
         </div>
       </div>
+      <MobileActionSheet
+        activePanel={mobilePanel}
+        moreGroups={mobileMoreGroups}
+        user={user}
+        currentPath={location.pathname}
+        onClose={() => setMobilePanel(null)}
+        onLogout={onLogout}
+      />
+      <MobileBottomNavigation
+        items={mobileNavItems}
+        currentPath={location.pathname}
+        activePanel={mobilePanel}
+        onTogglePanel={toggleMobilePanel}
+      />
     </div>
   );
 }
@@ -543,6 +848,7 @@ function DesktopApp() {
     if (!payload?.user) throw new Error('Server không trả thông tin tài khoản hợp lệ.');
 
     const sessionState = buildSessionState(payload);
+    const localOnly = Boolean(payload.localOnly || payload.offline || payload.session?.localOnly || payload.bootstrap?.localOnly);
     const identityChanged = persistMode === 'session'
       ? persistAuthenticatedPayload(payload).identityChanged
       : false;
@@ -556,7 +862,7 @@ function DesktopApp() {
     const payloadStore = extractStore(payload);
     if (payloadStore) setStore(payloadStore);
 
-    if (sync) {
+    if (sync && !localOnly) {
       if (!identityChanged) {
         pushPendingLocalData().catch(err => {
           console.warn('Không thể đồng bộ dữ liệu pending cục bộ:', err);
@@ -580,7 +886,7 @@ function DesktopApp() {
       ? getRestoredSessionRoute(defaultRoute, sessionState.user, sessionState.permissions)
       : defaultRoute;
     if (redirect) setRedirectPath(redirectRoute);
-    return { ...sessionState, defaultRoute, redirectRoute, identityChanged };
+    return { ...sessionState, defaultRoute, redirectRoute, identityChanged, localOnly };
   }, []);
 
   useEffect(() => {
@@ -598,6 +904,16 @@ function DesktopApp() {
         return;
       }
 
+      if (isLocalMobileAuthToken(token)) {
+        const offlinePayload = getMobileOfflineSessionPayload();
+        if (offlinePayload) {
+          await applyServerPayload(offlinePayload, { persistMode: 'snapshot', redirect: true, sync: false });
+          setBootstrapStatus({ ok: true, needsSetup: false, localOnly: true });
+          if (mounted) setInitializing(false);
+          return;
+        }
+      }
+
       try {
         let payload = await authApi.profile();
 
@@ -606,6 +922,12 @@ function DesktopApp() {
         await applyServerPayload(payload, { persistMode: 'snapshot', redirect: true, sync: true });
         setBootstrapStatus(null);
       } catch (err) {
+        const offlinePayload = getMobileOfflineSessionPayload();
+        if (offlinePayload) {
+          await applyServerPayload(offlinePayload, { persistMode: 'snapshot', redirect: true, sync: false });
+          setBootstrapStatus({ ok: true, needsSetup: false, localOnly: true });
+          return;
+        }
         clearAuthSession({ clearVolatile: true, includePending: true });
         resetAuthState();
         await loadBootstrapStatus();
@@ -631,6 +953,7 @@ function DesktopApp() {
 
   useEffect(() => {
     if (!authState.user) return undefined;
+    if (authState.session?.localOnly || authState.bootstrap?.localOnly) return undefined;
 
     let stopped = false;
     let timer = null;
@@ -790,25 +1113,28 @@ function DesktopApp() {
   }
 
   return (
-    <HashRouter>
-      {!authState.user ? (
-        <Routes>
-          <Route path={LOGIN_REGISTER_ROUTE} element={<Register onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} />} />
-          <Route path="*" element={<Login onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} onBootstrapStatus={setBootstrapStatus} />} />
-        </Routes>
-      ) : (
-        <AppLayout
-          authState={authState}
-          store={store}
-          onStoreChange={setStore}
-          sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
-          onLogout={handleLogout}
-          redirectPath={redirectPath}
-          onRedirected={() => setRedirectPath('')}
-        />
-      )}
-    </HashRouter>
+    <>
+      <HashRouter>
+        {!authState.user ? (
+          <Routes>
+            <Route path={LOGIN_REGISTER_ROUTE} element={<Register onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} />} />
+            <Route path="*" element={<Login onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} onBootstrapStatus={setBootstrapStatus} />} />
+          </Routes>
+        ) : (
+          <AppLayout
+            authState={authState}
+            store={store}
+            onStoreChange={setStore}
+            sidebarOpen={sidebarOpen}
+            setSidebarOpen={setSidebarOpen}
+            onLogout={handleLogout}
+            redirectPath={redirectPath}
+            onRedirected={() => setRedirectPath('')}
+          />
+        )}
+      </HashRouter>
+      <MobileUpdateNotice />
+    </>
   );
 }
 

@@ -3,14 +3,16 @@
  */
 const express = require('express');
 const router = express.Router();
-const { getAll, getOne, insert, update, remove, now, withAtomicDbWrite } = require('../db/database');
-const { v4: uuidv4 } = require('uuid');
+const { getAll, getOne, insert, update, remove, now, withAtomicDbWrite, getNextSeq } = require('../db/database');
 const accountingService = require('../services/accountingService');
 const { logActivity, logDataDeletion } = require('../services/accountingLogService');
 
 function genImportCode() {
-  const d = new Date();
-  return `PN${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}-${uuidv4().slice(0, 6).toUpperCase()}`;
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    const candidate = `PN${String(getNextSeq('import_seq')).padStart(6, '0')}`;
+    if (!findImportByCode(candidate)) return candidate;
+  }
+  return `PN${Date.now().toString(36).toUpperCase()}`;
 }
 
 function toNumber(value, fallback = 0) {
@@ -24,6 +26,39 @@ function createRouteError(message, status = 400, code = '') {
   error.statusCode = status;
   if (code) error.code = code;
   return error;
+}
+
+function normalizeImportCode(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeImportCodeKey(value) {
+  return normalizeImportCode(value).toLowerCase();
+}
+
+function findImportByCode(importCode, ignoredImportId = null) {
+  const lookupKey = normalizeImportCodeKey(importCode);
+  if (!lookupKey) return null;
+  return getAll('import_logs').find(row => {
+    if (!row) return false;
+    if (ignoredImportId != null && Number(row.id) === Number(ignoredImportId)) return false;
+    return normalizeImportCodeKey(row.import_code) === lookupKey;
+  }) || null;
+}
+
+function assertImportCodeAvailable(importCode, ignoredImportId = null) {
+  const normalized = normalizeImportCode(importCode);
+  if (!normalized) {
+    throw createRouteError('Mã phiếu nhập không được để trống', 400, 'IMPORT_CODE_REQUIRED');
+  }
+  if (normalized.length > 64) {
+    throw createRouteError('Mã phiếu nhập không được vượt quá 64 ký tự', 400, 'IMPORT_CODE_TOO_LONG');
+  }
+  const duplicate = findImportByCode(normalized, ignoredImportId);
+  if (duplicate) {
+    throw createRouteError(`Mã phiếu nhập ${normalized} đã tồn tại`, 409, 'IMPORT_CODE_DUPLICATE');
+  }
+  return normalized;
 }
 
 function toOptionalNumber(value) {
@@ -515,7 +550,11 @@ function serializeImport(imp) {
 }
 
 function findImport(idOrCode) {
-  return getOne('import_logs', i => String(i.id) === String(idOrCode) || String(i.import_code) === String(idOrCode));
+  const codeKey = normalizeImportCodeKey(idOrCode);
+  return getOne('import_logs', i => (
+    String(i.id) === String(idOrCode)
+    || (codeKey && normalizeImportCodeKey(i.import_code) === codeKey)
+  ));
 }
 
 router.get('/', (req, res) => {
@@ -549,7 +588,8 @@ router.post('/', (req, res) => {
     const normalizedStatus = normalizeImportStatus(status);
     const normalizedTotal = Math.max(0, toNumber(total, 0));
     const payment = unpaidPaymentAmounts(normalizedTotal);
-    const import_code = requestedCode || genImportCode();
+    const normalizedRequestedCode = normalizeImportCode(requestedCode);
+    const import_code = normalizedRequestedCode ? assertImportCodeAvailable(normalizedRequestedCode) : genImportCode();
     const createdAt = now();
 
     if (normalizedStatus === 'received') {
@@ -642,6 +682,9 @@ router.put('/:idOrCode', (req, res) => {
     const nextPayment = shouldResetPayment
       ? unpaidPaymentAmounts(nextTotal)
       : paymentAmounts(nextTotal, 'paid', nextTotal);
+    const nextImportCode = Object.prototype.hasOwnProperty.call(req.body, 'import_code')
+      ? assertImportCodeAvailable(req.body.import_code, importLog.id)
+      : importLog.import_code;
 
     let stockResult = { applied: false, items: [], mode: 'none' };
 
@@ -660,6 +703,7 @@ router.put('/:idOrCode', (req, res) => {
     }
 
     const changes = {
+      import_code: nextImportCode,
       partner_id: req.body.partner_id !== undefined ? (req.body.partner_id || null) : importLog.partner_id,
       user_id: req.body.user_id !== undefined ? (req.body.user_id || null) : importLog.user_id,
       total: nextTotal,

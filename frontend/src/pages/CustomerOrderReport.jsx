@@ -1,9 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { resolveApiUrl } from '../utils/apiClient';
+import { apiJson } from '../utils/apiClient';
 import { Calendar, Download, FileText, Loader, RefreshCw, Search, Users } from 'lucide-react';
-
-const API = resolveApiUrl('');
 
 const STATUS_LABELS = {
   pending: 'Chờ xác nhận',
@@ -61,25 +59,39 @@ function safeSheetName(name) {
   return (normalized || 'Bao cao').slice(0, 31);
 }
 
+function normalizeCustomerSearch(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase()
+    .trim();
+}
+
+function customerDisplayName(customer = {}) {
+  return [customer.name, customer.phone].filter(Boolean).join(' - ') || 'Khách hàng';
+}
+
 export default function CustomerOrderReport() {
   const defaultRange = useMemo(() => getDefaultRange(), []);
   const [customers, setCustomers] = useState([]);
   const [customerId, setCustomerId] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [showCustomerResults, setShowCustomerResults] = useState(false);
   const [from, setFrom] = useState(defaultRange.from);
   const [to, setTo] = useState(defaultRange.to);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
   const [report, setReport] = useState(null);
   const [error, setError] = useState('');
+  const customerSearchRef = useRef(null);
 
   useEffect(() => {
     const loadCustomers = async () => {
       setLoadingCustomers(true);
       setError('');
       try {
-        const res = await fetch(`${API}/customers`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Không tải được danh sách khách hàng');
+        const data = await apiJson('/customers', {}, 'Không tải được danh sách khách hàng');
         setCustomers(Array.isArray(data) ? data : []);
       } catch (err) {
         setError(err.message || 'Không tải được danh sách khách hàng');
@@ -92,11 +104,52 @@ export default function CustomerOrderReport() {
   }, []);
 
   const selectedCustomer = customers.find(customer => Number(customer.id) === Number(customerId));
+  const filteredCustomers = useMemo(() => {
+    const query = normalizeCustomerSearch(customerSearch);
+    if (!query) return customers.slice(0, 60);
+    return customers.filter(customer => {
+      const haystack = normalizeCustomerSearch([
+        customer.name,
+        customer.phone,
+        customer.email,
+        customer.customer_code,
+        customer.tax_code,
+      ].filter(Boolean).join(' '));
+      return haystack.includes(query);
+    }).slice(0, 60);
+  }, [customerSearch, customers]);
   const invoices = report?.invoices || [];
   const summary = report?.summary || { total_invoices: 0, total_amount: 0 };
 
   const canViewReport = customerId && from && to && !loadingReport;
   const canExport = invoices.length > 0 && !loadingReport;
+
+  useEffect(() => {
+    if (!selectedCustomer) return;
+    setCustomerSearch(customerDisplayName(selectedCustomer));
+  }, [selectedCustomer]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (!customerSearchRef.current || customerSearchRef.current.contains(event.target)) return;
+      setShowCustomerResults(false);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  const selectCustomer = (customer) => {
+    setCustomerId(String(customer.id || ''));
+    setCustomerSearch(customerDisplayName(customer));
+    setShowCustomerResults(false);
+    setError('');
+  };
+
+  const handleCustomerSearch = () => {
+    setError('');
+    setShowCustomerResults(true);
+  };
 
   const fetchReport = async () => {
     if (!customerId) {
@@ -116,9 +169,7 @@ export default function CustomerOrderReport() {
     setError('');
     try {
       const params = new URLSearchParams({ customer_id: customerId, from, to });
-      const res = await fetch(`${API}/invoices/reports/customer-orders?${params.toString()}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Không lập được báo cáo');
+      const data = await apiJson(`/invoices/reports/customer-orders?${params.toString()}`, {}, 'Không lập được báo cáo');
       setReport(data);
     } catch (err) {
       setReport(null);
@@ -220,21 +271,64 @@ export default function CustomerOrderReport() {
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(240px,1fr)_180px_180px_auto]">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500">Khách hàng</label>
-              <div className="relative">
-                <Users size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <select
-                  className="input-field w-full pl-9"
-                  value={customerId}
-                  onChange={e => setCustomerId(e.target.value)}
-                  disabled={loadingCustomers}
-                >
-                  <option value="">-- Chọn khách hàng --</option>
-                  {customers.map(customer => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}{customer.phone ? ` (${customer.phone})` : ''}
-                    </option>
-                  ))}
-                </select>
+              <div ref={customerSearchRef} className="relative">
+                <div className="flex min-w-0 gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Users size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      className="input-field w-full pl-9"
+                      value={customerSearch}
+                      onChange={event => {
+                        setCustomerSearch(event.target.value);
+                        setCustomerId('');
+                        setShowCustomerResults(true);
+                      }}
+                      onFocus={() => setShowCustomerResults(true)}
+                      onClick={() => setShowCustomerResults(true)}
+                      onKeyDown={event => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          handleCustomerSearch();
+                        }
+                      }}
+                      placeholder={loadingCustomers ? 'Đang tải khách hàng...' : 'Tìm tên, SĐT, mã KH'}
+                      disabled={loadingCustomers}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCustomerSearch}
+                    disabled={loadingCustomers}
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-white px-3 text-sm font-semibold text-blue-700 ring-1 ring-gray-200 transition hover:bg-blue-50 hover:ring-blue-200 disabled:cursor-not-allowed disabled:text-gray-400"
+                    title="Tìm khách hàng"
+                  >
+                    <Search size={16} />
+                    <span className="hidden sm:inline">Tìm</span>
+                  </button>
+                </div>
+
+                {showCustomerResults && !loadingCustomers && (
+                  <div className="absolute z-30 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                    <div className="border-b border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      Gợi ý tên khách hàng
+                    </div>
+                    {filteredCustomers.length > 0 ? filteredCustomers.map(customer => (
+                      <button
+                        key={customer.id}
+                        type="button"
+                        onClick={() => selectCustomer(customer)}
+                        className={`block w-full px-3 py-2 text-left transition hover:bg-blue-50 ${Number(customer.id) === Number(customerId) ? 'bg-blue-50' : 'bg-white'}`}
+                      >
+                        <div className="truncate text-sm font-semibold text-gray-800">{customer.name || 'Khách hàng'}</div>
+                        <div className="mt-0.5 truncate text-xs text-gray-500">
+                          {[customer.customer_code ? `Mã: ${customer.customer_code}` : '', customer.phone, customer.email].filter(Boolean).join(' · ') || 'Chưa có thông tin liên hệ'}
+                        </div>
+                      </button>
+                    )) : (
+                      <div className="px-3 py-3 text-sm text-gray-400">Không tìm thấy khách hàng phù hợp</div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -267,6 +361,9 @@ export default function CustomerOrderReport() {
                 onClick={() => {
                   setReport(null);
                   setError('');
+                  setCustomerId('');
+                  setCustomerSearch('');
+                  setShowCustomerResults(false);
                   setFrom(defaultRange.from);
                   setTo(defaultRange.to);
                 }}

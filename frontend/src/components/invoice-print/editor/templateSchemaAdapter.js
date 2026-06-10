@@ -490,7 +490,7 @@ function estimateItemsTableRowHeightMm(item = {}, index = 0, columns = [], table
   return roundMm(Math.max(baseRowMm, maxLines * lineMm + padding * 2 + 0.4));
 }
 
-function getEstimatedItemsTableParts(document = {}, itemCount = 0, items = []) {
+export function getEstimatedItemsTableParts(document = {}, itemCount = 0, items = []) {
   const style = getTableStyleElement(document)?.style || {};
   const columns = Array.isArray(document?.table?.columns) && document.table.columns.length ? document.table.columns : DEFAULT_TABLE_COLUMNS;
   const padding = Number(style.paddingMm ?? 1.35);
@@ -557,6 +557,94 @@ export function getItemsTablePageMetrics(document = {}, itemCount = 0, items = [
     w,
     h,
     bottom,
+  };
+}
+
+export function buildItemsTablePhysicalPages(document = {}, itemCount = 0, items = [], options = {}) {
+  const table = document.table || {};
+  const zones = Array.isArray(document.zones) ? document.zones : [];
+  const zone = zones.find(item => item.id === table.zoneId) || zones[0] || { frame: { x: 0, y: 0, w: 100, h: 30 } };
+  const frame = table.frame || { x: 0, y: 0, w: zone.frame?.w || 100, h: 'auto' };
+  const page = getEditorPaperDimensions(document);
+  const pageHeightMm = Math.max(1, Number(options.pageHeightMm) || Number(page.height) || 210);
+  const safePaddingMm = clampNumber(
+    options.safePaddingMm ?? document.canvas?.safePaddingMm,
+    0,
+    pageHeightMm / 4,
+    5,
+  );
+  const estimated = getEstimatedItemsTableParts(document, itemCount, items);
+  const measuredRows = Array.isArray(options.measuredRowHeightsMm) ? options.measuredRowHeightsMm : [];
+  const headerMm = Math.max(1, Number(options.measuredHeaderHeightMm) || estimated.headerMm);
+  const rowHeights = estimated.rowHeights.map((height, index) => Math.max(0.1, Number(measuredRows[index]) || Number(height) || 0.1));
+  const x = roundMm(Number(zone.frame?.x || 0) + Number(frame.x || 0));
+  const initialTopMm = roundMm(Number(zone.frame?.y || 0) + Number(frame.y || 0));
+  const w = roundMm(Number(frame.w || zone.frame?.w || 100));
+  const segments = [];
+  let pageIndex = Math.max(0, Math.floor(initialTopMm / pageHeightMm));
+  let itemIndex = 0;
+  let isFirstSegment = true;
+
+  while (itemIndex < rowHeights.length || (rowHeights.length === 0 && segments.length === 0)) {
+    const pageStartMm = pageIndex * pageHeightMm;
+    const localTopMm = isFirstSegment
+      ? Math.max(safePaddingMm, initialTopMm - pageStartMm)
+      : safePaddingMm;
+    const topMm = pageStartMm + localTopMm;
+    const safeBottomMm = pageStartMm + pageHeightMm - safePaddingMm;
+    let cursorMm = topMm + headerMm;
+    const startIndex = itemIndex;
+
+    while (itemIndex < rowHeights.length) {
+      const rowHeightMm = rowHeights[itemIndex];
+      const rowFits = cursorMm + rowHeightMm <= safeBottomMm + 0.01;
+      if (!rowFits && itemIndex === startIndex) {
+        if (isFirstSegment && topMm > pageStartMm + safePaddingMm + 0.01) {
+          pageIndex += 1;
+          isFirstSegment = false;
+          break;
+        }
+        cursorMm = Math.min(safeBottomMm, cursorMm + rowHeightMm);
+        itemIndex += 1;
+        break;
+      }
+      if (!rowFits) break;
+      cursorMm += rowHeightMm;
+      itemIndex += 1;
+    }
+
+    if (itemIndex === startIndex && rowHeights.length > 0) continue;
+
+    segments.push({
+      pageIndex,
+      x,
+      w,
+      topMm: roundMm(topMm),
+      localTopMm: roundMm(topMm - pageStartMm),
+      bottomMm: roundMm(cursorMm),
+      heightMm: roundMm(Math.max(headerMm, cursorMm - topMm)),
+      startIndex,
+      endIndex: itemIndex,
+      headerHeightMm: roundMm(headerMm),
+    });
+
+    if (itemIndex < rowHeights.length) {
+      pageIndex += 1;
+      isFirstSegment = false;
+    } else {
+      break;
+    }
+  }
+
+  const lastSegment = segments[segments.length - 1];
+  return {
+    x,
+    y: initialTopMm,
+    w,
+    headerHeightMm: roundMm(headerMm),
+    rowHeights: rowHeights.map(roundMm),
+    segments,
+    bottom: lastSegment?.bottomMm ?? roundMm(initialTopMm + headerMm),
   };
 }
 

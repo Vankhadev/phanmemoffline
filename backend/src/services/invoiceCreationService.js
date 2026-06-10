@@ -70,8 +70,30 @@ function createIdempotencyConflict(existing, clientOrderId, payloadHash, existin
   return err;
 }
 
+function normalizeInvoiceCodeText(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeInvoiceCodeKey(value) {
+  return normalizeInvoiceCodeText(value).toLowerCase();
+}
+
+function findInvoiceByCode(invoiceCode, ignoredInvoiceId = null) {
+  const lookupKey = normalizeInvoiceCodeKey(invoiceCode);
+  if (!lookupKey) return null;
+  return getAll('invoices', null, { skipAccountScope: true }).find(invoice => {
+    if (!invoice) return false;
+    if (ignoredInvoiceId != null && Number(invoice.id) === Number(ignoredInvoiceId)) return false;
+    return normalizeInvoiceCodeKey(invoice.invoice_code) === lookupKey;
+  }) || null;
+}
+
 function genInvoiceCode(options = {}) {
-  return `HD${String(getNextSeq('invoice_seq', options)).padStart(5, '0')}`;
+  for (let attempt = 0; attempt < 10000; attempt += 1) {
+    const candidate = `HD${String(getNextSeq('invoice_seq', options)).padStart(5, '0')}`;
+    if (!findInvoiceByCode(candidate)) return candidate;
+  }
+  return `HD${Date.now().toString(36).toUpperCase()}`;
 }
 
 function isComboDetail(detail = {}) {
@@ -246,7 +268,11 @@ function normalizeProvidedInvoiceCode(value) {
 function resolveInvoiceCode(payload = {}, options = {}) {
   if (options.allowProvidedInvoiceCode) {
     const providedCode = normalizeProvidedInvoiceCode(payload.invoice_code);
-    if (providedCode) return providedCode;
+    if (providedCode) {
+      const duplicate = findInvoiceByCode(providedCode, options.ignoredInvoiceId || options.ignoreInvoiceId);
+      if (duplicate) throw createHttpError(`Mã đơn hàng ${providedCode} đã tồn tại`, 409);
+      return providedCode;
+    }
   }
   return genInvoiceCode(options);
 }

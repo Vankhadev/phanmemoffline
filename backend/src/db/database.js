@@ -137,13 +137,13 @@ const DEFAULT_PERMISSIONS = [
 
 const DEFAULT_USER_PERMISSION_KEYS = [
   'admin_panel.read', 'features.read', 'updates.read', 'users.read', 'store.read', 'products.read',
-  'customers.read', 'partners.read', 'invoices.read', 'imports.read', 'combos.read', 'returns.read',
+  'customers.read', 'partners.read', 'invoices.read', 'invoices.manage', 'imports.read', 'combos.read', 'returns.read',
   'stats.read', 'cashbook.read', 'payrolls.read', 'sync.read', 'sync.manage',
   'settings.read',
 ];
 
 const DEFAULT_EMPLOYEE_PERMISSION_KEYS = [
-  'store.read', 'products.read', 'customers.read', 'partners.read', 'invoices.read', 'imports.read',
+  'store.read', 'products.read', 'customers.read', 'partners.read', 'invoices.read', 'invoices.manage', 'imports.read',
   'combos.read', 'returns.read', 'sync.read', 'settings.read',
 ];
 
@@ -501,6 +501,123 @@ function normalizeInvoiceCancellationSchema() {
     }
   }
 
+  return changed;
+}
+
+function normalizeInvoiceCodeText(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeInvoiceCodeLookup(value) {
+  return normalizeInvoiceCodeText(value).toLowerCase();
+}
+
+function readInvoiceSequenceNumber(code) {
+  const match = normalizeInvoiceCodeText(code).match(/^HD0*(\d+)$/i);
+  if (!match) return 0;
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function formatInvoiceSequenceCode(seq) {
+  return `HD${String(Math.max(1, Math.floor(Number(seq) || 1))).padStart(5, '0')}`;
+}
+
+function getNextAvailableInvoiceCode(usedCodes, startSeq = 1) {
+  let seq = Math.max(1, Math.floor(Number(startSeq) || 1));
+  for (let attempt = 0; attempt < 100000; attempt += 1) {
+    const code = formatInvoiceSequenceCode(seq);
+    if (!usedCodes.has(normalizeInvoiceCodeLookup(code))) return { code, seq };
+    seq += 1;
+  }
+  return { code: `HD${Date.now().toString(36).toUpperCase()}`, seq: 0 };
+}
+
+function ensureInvoiceSequenceCounterAtLeast(minValue) {
+  const current = getDb();
+  const target = Math.max(0, Math.floor(Number(minValue) || 0));
+  if (target <= 0 || !Array.isArray(current.counters)) return false;
+
+  const key = normalizeTextKey('invoice_seq');
+  let changed = false;
+  let counter = current.counters.find(row => normalizeTextKey(row?.name || row?.key) === key);
+  const timestamp = now();
+
+  if (!counter) {
+    const account = getDefaultAccount() || ensureDefaultAccount();
+    const id = current.nextId.counters || 1;
+    current.nextId.counters = id + 1;
+    current.counters.push({
+      id,
+      account_id: account?.id || null,
+      name: key,
+      key,
+      value: target,
+      seq: target,
+      created_at: timestamp,
+      updated_at: timestamp,
+    });
+    return true;
+  }
+
+  const currentValue = Math.max(
+    normalizeNumber(counter.value, 0),
+    normalizeNumber(counter.seq, 0),
+  );
+  if (currentValue < target) {
+    counter.value = target;
+    counter.seq = target;
+    counter.updated_at = timestamp;
+    changed = true;
+  }
+  if (!counter.name) {
+    counter.name = key;
+    changed = true;
+  }
+  if (!counter.key) {
+    counter.key = key;
+    changed = true;
+  }
+  return changed;
+}
+
+function normalizeInvoiceCodeUniqueness() {
+  const current = getDb();
+  let changed = false;
+  if (!Array.isArray(current.invoices)) return changed;
+
+  const invoices = current.invoices
+    .filter(invoice => invoice && typeof invoice === 'object')
+    .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+  const usedCodes = new Set();
+  let maxSeq = invoices.reduce((max, invoice) => Math.max(max, readInvoiceSequenceNumber(invoice.invoice_code)), 0);
+  let nextSeq = maxSeq + 1;
+
+  for (const invoice of invoices) {
+    const normalizedCode = normalizeInvoiceCodeText(invoice.invoice_code);
+    const lookupKey = normalizeInvoiceCodeLookup(normalizedCode);
+
+    if (lookupKey && !usedCodes.has(lookupKey)) {
+      if (invoice.invoice_code !== normalizedCode) {
+        invoice.invoice_code = normalizedCode;
+        changed = true;
+      }
+      usedCodes.add(lookupKey);
+      continue;
+    }
+
+    const next = getNextAvailableInvoiceCode(usedCodes, nextSeq);
+    invoice.invoice_code = next.code;
+    usedCodes.add(normalizeInvoiceCodeLookup(next.code));
+    if (next.seq > 0) {
+      maxSeq = Math.max(maxSeq, next.seq);
+      nextSeq = next.seq + 1;
+    }
+    changed = true;
+  }
+
+  maxSeq = invoices.reduce((max, invoice) => Math.max(max, readInvoiceSequenceNumber(invoice.invoice_code)), maxSeq);
+  if (ensureInvoiceSequenceCounterAtLeast(maxSeq)) changed = true;
   return changed;
 }
 
@@ -1221,6 +1338,7 @@ function migrateDB() {
   seedDefaultSystemSettings();
   migrateAccountingSchema();
   normalizeInvoiceCancellationSchema();
+  normalizeInvoiceCodeUniqueness();
   rebuildAllDailyStatsFromInvoices();
   recalculateNextIds();
 }

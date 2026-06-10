@@ -57,22 +57,50 @@ function stripTrailingSlash(value) {
   return String(value || '').replace(/\/+$/, '');
 }
 
+function hasUnresolvedEnvToken(value) {
+  return /(%[A-Z0-9_]+%|\$\{?[A-Z0-9_]+\}?)/i.test(String(value || ''));
+}
+
+function readEnvText(value, fallback = '') {
+  const text = String(value || '').trim();
+  if (!text || hasUnresolvedEnvToken(text)) return fallback;
+  return text;
+}
+
+function readPortValue(value, fallback = '') {
+  const text = readEnvText(value);
+  if (!/^\d+$/.test(text)) return fallback;
+  const port = Number(text);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return fallback;
+  return String(port);
+}
+
 const LOCAL_API_BASE_OVERRIDE_KEY = 'kha.localApiBaseOverride';
+const MOBILE_LAN_API_BASE = 'http://192.168.1.19:5174/api';
+const ENV_VALUES = {
+  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL || '',
+  VITE_API_BASE: import.meta.env.VITE_API_BASE || '',
+  VITE_BACKEND_HOST: import.meta.env.VITE_BACKEND_HOST || '',
+  VITE_API_HOST: import.meta.env.VITE_API_HOST || '',
+  VITE_BACKEND_PORT: import.meta.env.VITE_BACKEND_PORT || '',
+  VITE_API_PORT: import.meta.env.VITE_API_PORT || '',
+  VITE_DEBUG_AUTH: import.meta.env.VITE_DEBUG_AUTH || '',
+  DEV: import.meta.env.DEV ? 'true' : 'false',
+};
 
 function readEnvApiBase() {
-  try {
-    return import.meta?.env?.VITE_API_BASE_URL || import.meta?.env?.VITE_API_BASE || '';
-  } catch (_) {
-    return '';
+  const candidates = [ENV_VALUES.VITE_API_BASE_URL, ENV_VALUES.VITE_API_BASE];
+  for (const candidate of candidates) {
+    const value = stripTrailingSlash(readEnvText(candidate));
+    if (!value) continue;
+    if (/^https?:\/\//i.test(value) && !isHttpApiBase(value)) continue;
+    if (/^https?:\/\//i.test(value) || value.startsWith('/')) return value;
   }
+  return '';
 }
 
 function readEnvValue(name, fallback = '') {
-  try {
-    return import.meta?.env?.[name] || fallback;
-  } catch (_) {
-    return fallback;
-  }
+  return ENV_VALUES[name] || fallback;
 }
 
 function isDebugApiEnabled() {
@@ -138,9 +166,29 @@ function isLoopbackHost(hostname) {
   return value === 'localhost' || value === '127.0.0.1' || value === '::1' || value === '[::1]';
 }
 
+function isNativeWebViewRuntime() {
+  try {
+    if (typeof window === 'undefined') return false;
+    if (typeof window.Capacitor?.isNativePlatform === 'function') return window.Capacitor.isNativePlatform();
+    const protocol = String(window.location?.protocol || '').trim().toLowerCase();
+    const hostname = String(window.location?.hostname || '').trim().toLowerCase();
+    const userAgent = String(window.navigator?.userAgent || '');
+    return protocol === 'capacitor:'
+      || (protocol === 'https:' && hostname === 'localhost')
+      || /\bwv\b/i.test(userAgent);
+  } catch (_) {
+    return false;
+  }
+}
+
 function isLoopbackApiBase(value) {
   const parsed = parseUrl(value);
   return Boolean(parsed && isLoopbackHost(parsed.hostname));
+}
+
+function isHttpApiBase(value) {
+  const parsed = parseUrl(value);
+  return Boolean(parsed && (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname);
 }
 
 function extractApiBaseFromUrl(value) {
@@ -152,28 +200,62 @@ function extractApiBaseFromUrl(value) {
   return stripTrailingSlash(`${parsed.protocol}//${parsed.host}${apiMatch[1]}`);
 }
 
+export function normalizeApiBaseOverride(value) {
+  const rawValue = String(value || '').trim();
+  if (!rawValue) return '';
+
+  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(rawValue)
+    ? rawValue
+    : `http://${rawValue}`;
+  const extractedBase = extractApiBaseFromUrl(withProtocol) || withProtocol;
+  const parsed = parseUrl(extractedBase);
+  if (!parsed || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.hostname) return '';
+
+  const currentPath = stripTrailingSlash(parsed.pathname || '');
+  parsed.pathname = /\/api$/i.test(currentPath)
+    ? currentPath
+    : `${currentPath === '/' || !currentPath ? '' : currentPath}/api`;
+  parsed.search = '';
+  parsed.hash = '';
+
+  return stripTrailingSlash(parsed.toString());
+}
+
 function readLocalApiBaseOverride() {
-  const stored = stripTrailingSlash(readStorageValue(LOCAL_API_BASE_OVERRIDE_KEY));
+  const stored = normalizeApiBaseOverride(readStorageValue(LOCAL_API_BASE_OVERRIDE_KEY));
   if (!stored) return '';
-  if (isLoopbackApiBase(stored)) return stored;
+  const envApiBase = normalizeApiBaseOverride(readEnvApiBase());
+  if (isLoopbackApiBase(stored) && (isNativeWebViewRuntime() || (envApiBase && !isLoopbackApiBase(envApiBase)))) {
+    removeStorageValue(LOCAL_API_BASE_OVERRIDE_KEY);
+    return '';
+  }
+  if (isHttpApiBase(stored)) return stored;
   removeStorageValue(LOCAL_API_BASE_OVERRIDE_KEY);
   return '';
 }
 
-function persistLocalApiBaseOverride(value) {
-  const resolvedBase = stripTrailingSlash(extractApiBaseFromUrl(value) || value);
-  if (!resolvedBase || !isLoopbackApiBase(resolvedBase)) return '';
+export function persistLocalApiBaseOverride(value) {
+  const resolvedBase = normalizeApiBaseOverride(value);
+  if (!resolvedBase || !isHttpApiBase(resolvedBase)) return '';
   writeStorageValue(LOCAL_API_BASE_OVERRIDE_KEY, resolvedBase);
+  lastLoggedApiBaseSignature = '';
   return resolvedBase;
 }
 
-function clearLocalApiBaseOverride() {
+export function clearLocalApiBaseOverride() {
   removeStorageValue(LOCAL_API_BASE_OVERRIDE_KEY);
+  lastLoggedApiBaseSignature = '';
+}
+
+export function getLocalApiBaseOverride() {
+  return readLocalApiBaseOverride();
 }
 
 function getConfiguredBackendConnection() {
-  const host = String(readEnvValue('VITE_BACKEND_HOST') || readEnvValue('VITE_API_HOST') || '').trim();
-  const port = String(readEnvValue('VITE_BACKEND_PORT') || readEnvValue('VITE_API_PORT') || '3001').trim() || '3001';
+  const host = readEnvText(readEnvValue('VITE_BACKEND_HOST')) || readEnvText(readEnvValue('VITE_API_HOST'));
+  const port = readPortValue(readEnvValue('VITE_BACKEND_PORT'))
+    || readPortValue(readEnvValue('VITE_API_PORT'))
+    || '3001';
   return { host, port };
 }
 
@@ -188,8 +270,8 @@ function getLocalOverrideConnection() {
 }
 
 function buildHttpApiBase(host, port, protocol = 'http:') {
-  const normalizedHost = String(host || '').trim();
-  const normalizedPort = String(port || '').trim();
+  const normalizedHost = readEnvText(host);
+  const normalizedPort = readPortValue(port);
   if (!normalizedHost || !normalizedPort) return '';
   return `${protocol}//${normalizedHost}:${normalizedPort}/api`;
 }
@@ -222,11 +304,15 @@ function resolveApiBaseDetails() {
   const envApiBase = stripTrailingSlash(readEnvApiBase());
   if (envApiBase) return { base: envApiBase, source: 'env' };
 
-  const electronApiBase = stripTrailingSlash(readElectronApiBase());
-  if (electronApiBase) return { base: electronApiBase, source: 'electron' };
-
   const localOverrideApiBase = readLocalApiBaseOverride();
   if (localOverrideApiBase) return { base: localOverrideApiBase, source: 'local-override' };
+
+  if (isNativeWebViewRuntime()) {
+    return { base: MOBILE_LAN_API_BASE, source: 'mobile-lan-fallback' };
+  }
+
+  const electronApiBase = stripTrailingSlash(readElectronApiBase());
+  if (electronApiBase) return { base: electronApiBase, source: 'electron' };
 
   const browserApiBase = stripTrailingSlash(getBrowserLanApiBase());
   if (browserApiBase) return { base: browserApiBase, source: 'browser-fallback' };
@@ -447,6 +533,7 @@ function shouldTreatAsExpiredSession(url, requestInit = {}) {
     ? requestInit.headers.get('Authorization')
     : null;
   if (!authorizationHeader) return false;
+  if (/^Bearer\s+local-mobile-/i.test(authorizationHeader)) return false;
 
   try {
     const parsed = new URL(String(url), typeof window !== 'undefined' ? window.location.href : 'http://localhost');
@@ -924,7 +1011,10 @@ export const printTemplatesApi = {
 };
 
 export const authApi = {
-  login({ email, password }) { return apiJson('/users/login', { method: 'POST', body: { email, password } }, 'Đăng nhập thất bại.'); },
+  login(payload = {}) {
+    const { email, password, ...metadata } = payload || {};
+    return apiJson('/users/login', { method: 'POST', body: { email, password, ...metadata } }, 'Đăng nhập thất bại.');
+  },
   register(payload) { return apiJson('/users/register', { method: 'POST', body: payload }, 'Đăng ký thất bại.'); },
   bootstrapStatus() { return apiJson('/users/bootstrap-status', {}, 'Không thể tải trạng thái thiết lập tài khoản.'); },
   bootstrapAdmin(payload) { return apiJson('/users/bootstrap-admin', { method: 'POST', body: payload }, 'Thiết lập quản trị viên thất bại.'); },

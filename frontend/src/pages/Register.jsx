@@ -18,11 +18,11 @@ import {
 } from 'lucide-react';
 
 const initialForm = {
-  name: '',
-  email: '',
-  phone: '',
-  password: '',
-  confirmPassword: '',
+  name: 'Vankha',
+  email: 'vankhaqc@gmail.com',
+  phone: '0904045075',
+  password: 'Vankhammo07@',
+  confirmPassword: 'Vankhammo07@',
 };
 
 const normalizeEmail = (email) => email.trim().toLowerCase();
@@ -116,6 +116,12 @@ export default function Register({ onLogin, bootstrapStatus }) {
     }
     checkBootstrapStatus();
   }, [bootstrapStatus, checkBootstrapStatus]);
+
+  useEffect(() => {
+    if (!checkingSetup && !isFirstAccount) {
+      navigate('/', { replace: true });
+    }
+  }, [checkingSetup, isFirstAccount, navigate]);
 
   const validateForm = () => {
     if (checkingSetup) {

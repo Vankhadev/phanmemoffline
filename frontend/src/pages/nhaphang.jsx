@@ -23,6 +23,10 @@ const isSameId = (left, right) => {
 
 const firstImportValue = (...values) => values.find(hasImportValue);
 
+const normalizeImportCodeValue = (value) => String(value || '').trim().replace(/\s+/g, ' ');
+
+const normalizeImportCodeKey = (value) => normalizeImportCodeValue(value).toLowerCase();
+
 const getFirstFiniteNumber = (...values) => {
   for (const value of values) {
     if (!hasImportValue(value)) continue;
@@ -738,6 +742,7 @@ const Nhaphang = ({ store }) => {
   const [success, setSuccess] = useState(null);
   const [stockToast, setStockToast] = useState(null);
   const [currentOrder, setCurrentOrder] = useState(null);
+  const [importCodeInput, setImportCodeInput] = useState('');
   const [isEditingOrder, setIsEditingOrder] = useState(false);
   const [orderHistory, setOrderHistory] = useState([]);
   const [selectedHistoryIds, setSelectedHistoryIds] = useState([]);
@@ -768,6 +773,31 @@ const Nhaphang = ({ store }) => {
 
     return prepareImportSearchResults(localResults, trimmedQuery, scopedProductTree);
   }, [allProducts, categoriesById, orderHistory, selectedSupplier]);
+
+  const normalizedImportCodeInput = normalizeImportCodeValue(importCodeInput);
+  const importCodeInputError = useMemo(() => {
+    if (isEditingOrder && !normalizedImportCodeInput) {
+      return 'Mã phiếu hiện tại không được để trống khi cập nhật.';
+    }
+    if (normalizedImportCodeInput.length > 64) {
+      return 'Mã phiếu không được vượt quá 64 ký tự.';
+    }
+
+    const targetKey = normalizeImportCodeKey(normalizedImportCodeInput);
+    if (!targetKey) return '';
+
+    const currentId = currentOrder?.id == null ? '' : String(currentOrder.id);
+    const currentCodeKey = normalizeImportCodeKey(currentOrder?.maDonHang);
+    const duplicate = orderHistory.find(order => {
+      if (normalizeImportCodeKey(order.maDonHang) !== targetKey) return false;
+      if (currentId && String(order.id || '') === currentId) return false;
+      if (currentCodeKey && currentCodeKey === targetKey) return false;
+      return true;
+    });
+
+    return duplicate ? `Mã phiếu ${normalizedImportCodeInput} đã tồn tại.` : '';
+  }, [currentOrder?.id, currentOrder?.maDonHang, isEditingOrder, normalizedImportCodeInput, orderHistory]);
+  const hasImportCodeError = Boolean(importCodeInputError);
 
   useEffect(() => {
     if (!stockToast) return undefined;
@@ -1004,6 +1034,9 @@ const Nhaphang = ({ store }) => {
     const errors = [];
     if (!selectedSupplier) {
       errors.push('Vui lòng chọn nhà cung cấp');
+    }
+    if (importCodeInputError) {
+      errors.push(importCodeInputError);
     }
     if (products.length === 0) {
       errors.push('Vui lòng thêm ít nhất một sản phẩm');
@@ -1980,15 +2013,6 @@ const Nhaphang = ({ store }) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
 
-  // Generate order number for new frontend-created draft code; backend keeps this code on update.
-  const generateOrderNumber = () => {
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `NH-${year}${month}-${random}`;
-  };
-
   const buildImportPayload = (status, importCode) => ({
     ...(importCode ? { import_code: importCode } : {}),
     partner_id: selectedSupplier?.id || null,
@@ -2081,9 +2105,9 @@ const Nhaphang = ({ store }) => {
     }
 
     const isEditing = Boolean(isEditingOrder && editingImportKey);
-    const nextImportCode = isEditing ? currentOrder.maDonHang : generateOrderNumber();
+    const nextImportCode = normalizedImportCodeInput || (isEditing ? currentOrder.maDonHang : '');
     const confirmMessage = isEditing
-      ? `Cập nhật phiếu nhập ${nextImportCode}? Hệ thống sẽ sửa đúng phiếu hiện tại, không tạo phiếu/mã mới.`
+      ? `Cập nhật phiếu nhập ${nextImportCode || currentOrder.maDonHang || 'mã tự động'}? Hệ thống sẽ sửa đúng phiếu hiện tại, không tạo phiếu/mã mới.`
       : status === 'received'
         ? 'Tạo và nhập hàng? Hành động này sẽ cập nhật số lượng tồn kho.'
         : 'Tạo đơn hàng (chưa nhập)? Đơn hàng sẽ được lưu vào hệ thống.';
@@ -2100,6 +2124,7 @@ const Nhaphang = ({ store }) => {
       }, isEditing ? 'Không thể cập nhật phiếu nhập.' : 'Không thể tạo phiếu nhập.');
       const savedOrder = buildLocalOrderData(status, nextImportCode, result);
       setOrderHistory(prev => [savedOrder, ...prev.filter(o => o.maDonHang !== savedOrder.maDonHang && o.id !== savedOrder.id)]);
+      setImportCodeInput(savedOrder.maDonHang || nextImportCode || '');
 
       setSuccess(
         isEditing
@@ -2175,6 +2200,7 @@ const Nhaphang = ({ store }) => {
     setError(null);
     setSuccess(null);
     setCurrentOrder(null);
+    setImportCodeInput('');
     setIsEditingOrder(false);
   };
 
@@ -2188,6 +2214,7 @@ const Nhaphang = ({ store }) => {
       );
       setCurrentOrder(fullOrder);
       setIsEditingOrder(edit);
+      setImportCodeInput(fullOrder.maDonHang || '');
       setImportPickerSelections([]);
       setProducts((fullOrder.chiTiet || []).map((item) => {
         const row = {
@@ -2482,7 +2509,7 @@ const Nhaphang = ({ store }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedProduct, showImportProductPicker, showSearchResults, showSupplierResults, closeImportProductPicker]);
 
-  const isPaymentButtonDisabled = saving || !editingImportKey || paymentSummary.payment_status === 'paid' || hasUnsavedPaymentAffectingChanges;
+  const isPaymentButtonDisabled = saving || !editingImportKey || paymentSummary.payment_status === 'paid' || hasUnsavedPaymentAffectingChanges || hasImportCodeError;
 
   return (
     <div className="sapo-screen sapo-import-page min-w-0">
@@ -2512,14 +2539,14 @@ const Nhaphang = ({ store }) => {
           </button>
           <button
             onClick={handleCreateOnly}
-            disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError}
+            disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError || hasImportCodeError}
             className="sapo-btn"
           >
             {isEditingOrder ? 'Cập nhật phiếu' : 'Tạo & chưa nhập'}
           </button>
           <button
             onClick={handleCreateAndReceive}
-            disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError}
+            disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError || hasImportCodeError}
             className="sapo-btn sapo-btn-primary"
           >
             {isEditingOrder ? 'Cập nhật & nhập hàng' : 'Tạo & nhập hàng'}
@@ -2662,7 +2689,15 @@ const Nhaphang = ({ store }) => {
               <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-1">
                 <label className="block min-w-0">
                   <span className="mb-1 block text-xs font-medium text-gray-500">Mã phiếu</span>
-                  <input className="input-field w-full bg-gray-50" value={currentOrder?.maDonHang || 'Tự động'} readOnly />
+                  <input
+                    className={`input-field w-full ${hasImportCodeError ? 'border-red-400 bg-red-50 text-red-700 focus:border-red-500 focus:ring-red-500' : ''}`}
+                    value={importCodeInput}
+                    onChange={event => setImportCodeInput(event.target.value)}
+                    placeholder="Tự động"
+                    maxLength={64}
+                    disabled={saving}
+                  />
+                  {importCodeInputError && <p className="mt-1 text-xs font-medium text-red-600">{importCodeInputError}</p>}
                 </label>
                 <label className="block min-w-0">
                   <span className="mb-1 block text-xs font-medium text-gray-500">Chi nhánh</span>
@@ -3743,7 +3778,7 @@ const Nhaphang = ({ store }) => {
                   {(!isEditingOrder || currentOrder?.trangThai === 'cho_nhap') && (
                     <button
                       onClick={handleCreateAndReceive}
-                      disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError}
+                      disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError || hasImportCodeError}
                       className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2.5 px-4 rounded-md flex items-center justify-center gap-2 text-sm shadow-sm"
                     >
                       <Package className="w-4 h-4" />
@@ -3752,7 +3787,7 @@ const Nhaphang = ({ store }) => {
                   )}
                   <button
                     onClick={handleCreateOnly}
-                    disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError}
+                    disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError || hasImportCodeError}
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 px-4 rounded-md flex items-center justify-center gap-2 text-sm shadow-sm"
                   >
                     <Save className="w-4 h-4" />
