@@ -12,7 +12,6 @@ const {
   update,
   remove,
   now,
-  getNextSeq,
   normalizePaymentMethod,
   getActiveAccountId,
   withAtomicDbWrite,
@@ -37,13 +36,6 @@ const {
 } = require('../utils/negativeStock');
 const { resolveInvoicePrintTemplate } = require('../services/printTemplateService');
 const { logActivity } = require('../services/accountingLogService');
-
-// ─────────────────────────────────────────────
-// Helper: tạo mã đơn tự động HD000001
-// ─────────────────────────────────────────────
-function genInvoiceCode() {
-  return `HD${String(getNextSeq('invoice_seq')).padStart(5, '0')}`;
-}
 
 // ─────────────────────────────────────────────
 // Helper: hợp nhất chi tiết trùng product_id (chống duplicate)

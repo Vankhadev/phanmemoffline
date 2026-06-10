@@ -7,6 +7,7 @@ const {
   now,
   normalizePaymentMethod,
   withAtomicDbWrite,
+  generateNextDocumentCode,
 } = require('../db/database');
 const { normalizeSearchText, parseKeywordList } = require('../utils/productSearch');
 const {
@@ -626,6 +627,7 @@ function commitProductRows(preview) {
   const committed = [];
   const summary = createBaseSummary(preview.items.length);
   const byRowKey = new Map(preview.items.map(item => [`${item.line}:${item.rowIndex}`, item]));
+  const parentIdBySourceSku = new Map();
   const committable = preview.items.filter(item => [ACTION_CREATE, ACTION_UPDATE].includes(item.action));
   const parentItems = committable.filter(item => item.row_type === 'PARENT');
   const variantItems = committable.filter(item => item.row_type === 'VARIANT');
@@ -639,16 +641,20 @@ function commitProductRows(preview) {
     const existing = getOne('products', p => !p.parent_id && normalizeSkuKey(p.sku) === normalizeSkuKey(item.sku));
     const payload = { ...productPayloadFromRow(item, existing || null), parent_id: null, updated_at: timestamp };
     if (existing) {
+      payload.sku = existing.sku;
       const updated = update('products', existing.id, payload);
       logProductStockChangeIfNegative(updated, existing.stock, 'excel_import_products');
       item.local_id = existing.id;
+      parentIdBySourceSku.set(normalizeSkuKey(item.sku), existing.id);
       summary.updated += 1;
       summary.updatedParents += 1;
       committed.push({ ...item, action: ACTION_UPDATE, status: ACTION_UPDATE, local_id: existing.id });
     } else {
+      payload.sku = generateNextDocumentCode('product', { skipSave: true });
       const id = insert('products', { ...payload, active: payload.active === undefined ? 1 : payload.active, created_at: timestamp, updated_at: timestamp });
       logProductStockChangeIfNegative({ id, ...payload }, null, 'excel_import_products');
       item.local_id = id;
+      parentIdBySourceSku.set(normalizeSkuKey(item.sku), id);
       summary.created += 1;
       summary.createdParents += 1;
       committed.push({ ...item, action: ACTION_CREATE, status: ACTION_CREATE, local_id: id });
@@ -656,7 +662,10 @@ function commitProductRows(preview) {
   }
 
   for (const item of variantItems) {
-    const parent = getOne('products', p => !p.parent_id && normalizeSkuKey(p.sku) === normalizeSkuKey(item.parent_sku));
+    const mappedParentId = parentIdBySourceSku.get(normalizeSkuKey(item.parent_sku));
+    const parent = mappedParentId
+      ? getOne('products', p => Number(p.id) === Number(mappedParentId) && !p.parent_id)
+      : getOne('products', p => !p.parent_id && normalizeSkuKey(p.sku) === normalizeSkuKey(item.parent_sku));
     if (!parent) {
       const failed = makeErrorItem(item, 'products', [{ line: item.line, field: 'Parent SKU', message: 'Không tìm thấy sản phẩm cha tại thời điểm ghi.' }]);
       byRowKey.set(`${item.line}:${item.rowIndex}`, failed);
@@ -671,6 +680,7 @@ function commitProductRows(preview) {
     const existing = existingBySku || existingByName;
     const payload = { ...productPayloadFromRow(item, existing || null, parent), parent_id: parent.id, updated_at: timestamp };
     if (existing) {
+      payload.sku = existing.sku;
       const updated = update('products', existing.id, payload);
       logProductStockChangeIfNegative(updated, existing.stock, 'excel_import_products');
       item.local_id = existing.id;
@@ -678,6 +688,7 @@ function commitProductRows(preview) {
       summary.updatedVariants += 1;
       committed.push({ ...item, action: ACTION_UPDATE, status: ACTION_UPDATE, local_id: existing.id });
     } else {
+      payload.sku = generateNextDocumentCode('product', { skipSave: true });
       const id = insert('products', { ...payload, active: payload.active === undefined ? 1 : payload.active, created_at: timestamp, updated_at: timestamp });
       logProductStockChangeIfNegative({ id, ...payload, parent_id: parent.id }, null, 'excel_import_products');
       item.local_id = id;
@@ -994,7 +1005,9 @@ function commitInvoiceRows(preview) {
     const paymentStatus = normalizePaymentStatus(first.payment_status, total, paidAmount);
     const customerId = resolveCommittedInvoiceCustomer(first);
     const invoicePayload = {
-      invoice_code: first.invoice_code,
+      invoice_code: existing
+        ? existing.invoice_code
+        : generateNextDocumentCode('invoice', { skipSave: true }),
       customer_id: customerId,
       user_id: null,
       subtotal,

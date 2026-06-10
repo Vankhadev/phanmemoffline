@@ -776,27 +776,18 @@ const Nhaphang = ({ store }) => {
 
   const normalizedImportCodeInput = normalizeImportCodeValue(importCodeInput);
   const importCodeInputError = useMemo(() => {
-    if (isEditingOrder && !normalizedImportCodeInput) {
-      return 'Mã phiếu hiện tại không được để trống khi cập nhật.';
+    if (!normalizedImportCodeInput) return '';
+    if (normalizedImportCodeInput.length > 64) return 'Mã phiếu nhập tối đa 64 ký tự.';
+    const duplicatedOrder = orderHistory.find(order => (
+      normalizeImportCodeKey(order.maDonHang) === normalizeImportCodeKey(normalizedImportCodeInput)
+      && String(order.maDonHang || order.id) !== String(currentOrder?.maDonHang || currentOrder?.id || '')
+    ));
+    if (duplicatedOrder) {
+      const supplierName = duplicatedOrder.nhaCungCap?.tenNCC || 'nhà cung cấp khác';
+      return `Mã phiếu ${normalizedImportCodeInput} đã tồn tại ở phiếu của ${supplierName}. Không dùng chung một mã phiếu cho nhiều nhà cung cấp.`;
     }
-    if (normalizedImportCodeInput.length > 64) {
-      return 'Mã phiếu không được vượt quá 64 ký tự.';
-    }
-
-    const targetKey = normalizeImportCodeKey(normalizedImportCodeInput);
-    if (!targetKey) return '';
-
-    const currentId = currentOrder?.id == null ? '' : String(currentOrder.id);
-    const currentCodeKey = normalizeImportCodeKey(currentOrder?.maDonHang);
-    const duplicate = orderHistory.find(order => {
-      if (normalizeImportCodeKey(order.maDonHang) !== targetKey) return false;
-      if (currentId && String(order.id || '') === currentId) return false;
-      if (currentCodeKey && currentCodeKey === targetKey) return false;
-      return true;
-    });
-
-    return duplicate ? `Mã phiếu ${normalizedImportCodeInput} đã tồn tại.` : '';
-  }, [currentOrder?.id, currentOrder?.maDonHang, isEditingOrder, normalizedImportCodeInput, orderHistory]);
+    return '';
+  }, [currentOrder?.id, currentOrder?.maDonHang, normalizedImportCodeInput, orderHistory]);
   const hasImportCodeError = Boolean(importCodeInputError);
 
   useEffect(() => {
@@ -2013,17 +2004,19 @@ const Nhaphang = ({ store }) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
 
-  const buildImportPayload = (status, importCode) => ({
-    ...(importCode ? { import_code: importCode } : {}),
-    partner_id: selectedSupplier?.id || null,
-    user_id: null,
-    total: totalAmount,
-    note: note || '',
-    status,
-    payment_status: paymentSummary.payment_status,
-    paid_amount: paymentSummary.paid_amount,
-    remaining_amount: paymentSummary.remaining_amount,
-    details: products.map(p => {
+  const buildImportPayload = (status, importCode) => {
+    const normalizedCode = normalizeImportCodeValue(importCode);
+    return {
+      ...(normalizedCode ? { import_code: normalizedCode } : {}),
+      partner_id: selectedSupplier?.id || null,
+      user_id: null,
+      total: totalAmount,
+      note: note || '',
+      status,
+      payment_status: paymentSummary.payment_status,
+      paid_amount: paymentSummary.paid_amount,
+      remaining_amount: paymentSummary.remaining_amount,
+      details: products.map(p => {
       const lineAmounts = calculateImportLineAmounts(p.giaNhap ?? p.import_price, p.soLuongNhap, p.chietKhau, p.thueGTGT ?? p.tax_percent ?? p.vat_percent);
       return {
         product_id: toPayloadNumberId(p.product_id || p.id),
@@ -2044,8 +2037,9 @@ const Nhaphang = ({ store }) => {
         taxable_amount: lineAmounts.afterDiscount,
         line_total: lineAmounts.lineTotal,
       };
-    }),
-  });
+      }),
+    };
+  };
 
   const buildLocalOrderData = (status, importCode, result = {}) => ({
     id: result.import_id || currentOrder?.id || Date.now(),
@@ -2105,7 +2099,7 @@ const Nhaphang = ({ store }) => {
     }
 
     const isEditing = Boolean(isEditingOrder && editingImportKey);
-    const nextImportCode = normalizedImportCodeInput || (isEditing ? currentOrder.maDonHang : '');
+    const nextImportCode = isEditing ? (currentOrder.maDonHang || normalizedImportCodeInput || '') : normalizedImportCodeInput;
     const confirmMessage = isEditing
       ? `Cập nhật phiếu nhập ${nextImportCode || currentOrder.maDonHang || 'mã tự động'}? Hệ thống sẽ sửa đúng phiếu hiện tại, không tạo phiếu/mã mới.`
       : status === 'received'
@@ -2690,13 +2684,17 @@ const Nhaphang = ({ store }) => {
                 <label className="block min-w-0">
                   <span className="mb-1 block text-xs font-medium text-gray-500">Mã phiếu</span>
                   <input
-                    className={`input-field w-full ${hasImportCodeError ? 'border-red-400 bg-red-50 text-red-700 focus:border-red-500 focus:ring-red-500' : ''}`}
+                    className={`input-field w-full ${isEditingOrder ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} ${hasImportCodeError ? 'border-red-400 bg-red-50 text-red-700 focus:border-red-500 focus:ring-red-500' : ''}`}
                     value={importCodeInput}
-                    onChange={event => setImportCodeInput(event.target.value)}
-                    placeholder="Tự động"
+                    onChange={e => setImportCodeInput(e.target.value)}
+                    readOnly={isEditingOrder}
+                    placeholder="Để trống tự sinh PN00001"
                     maxLength={64}
                     disabled={saving}
                   />
+                  {!importCodeInputError && !isEditingOrder && (
+                    <p className="mt-1 text-xs text-gray-400">Nhập mã phiếu nhà cung cấp nếu có; để trống hệ thống tự sinh mã PN.</p>
+                  )}
                   {importCodeInputError && <p className="mt-1 text-xs font-medium text-red-600">{importCodeInputError}</p>}
                 </label>
                 <label className="block min-w-0">

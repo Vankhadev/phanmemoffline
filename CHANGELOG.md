@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.6.0 - 2026-06-10
+
+### Thay doi chinh
+
+- Chuan hoa sinh ma chung tu toan he thong: don ban hang `HD`, phieu nhap `PN`, san pham `SP`; moi loai dung bo dem rieng va chan trung ma o lop backend.
+- Cho phep nhap tay ma phieu nhap nha cung cap khi tao phieu nhap; neu de trong he thong tu sinh ma `PN`, ma da cap khong duoc doi va khong tai su dung.
+- Bo sung dong dich vu khac trong man hinh tao don, cho nhap ten dich vu, so luong, don gia, chiet khau va tinh thanh tien truc tiep trong bang.
+- Khi bam vao o tim san pham o trang tao don, hien ngay danh sach san pham de chon nhanh ke ca khi chua nhap tu khoa.
+- Dong bo hien thi ten san pham/combo/dich vu va cac luong import/export lien quan den ma san pham.
+
+### Phat hanh
+
+- Dong bo version phat hanh 1.6.0 cho ung dung desktop, frontend, backend va cac lockfile tuong ung.
+- Tao tag GitHub `v1.6.0`; GitHub Actions se build/publish installer Windows x64 va ia32 kem latest.yml/update-manifest.json.
+
 ## v1.5.9 - 2026-06-10
 
 ### Thay doi chinh

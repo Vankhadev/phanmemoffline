@@ -59,6 +59,9 @@ function getProductDisplayName(item = {}, parent = null) {
   if (type === 'combo' || item.combo_id || item.is_combo || item.isCombo) {
     return firstNonEmpty(item.product_name, item.name, item.combo_name, 'Combo');
   }
+  if (type === 'service' || type === 'custom_service' || item.is_service || item.isService) {
+    return firstNonEmpty(item.product_name, item.name, item.service_name, 'Dịch vụ');
+  }
 
   const isVariant = Boolean(
     parent
@@ -82,6 +85,17 @@ function resolveInvoiceDetailDisplayFields(detail = {}, getProductById = () => n
     const comboName = firstNonEmpty(detail.product_name, detail.name, detail.combo_name, 'Combo');
     const comboSku = firstNonEmpty(detail.product_sku, detail.sku, detail.combo_sku, '');
     return { product_name: comboName, name: comboName, product_sku: comboSku, sku: comboSku, variant_id: null };
+  }
+
+  const serviceLine = detail.type === 'service'
+    || detail.item_type === 'service'
+    || detail.type === 'custom_service'
+    || detail.item_type === 'custom_service'
+    || detail.is_service
+    || detail.isService;
+  if (serviceLine) {
+    const serviceName = firstNonEmpty(detail.product_name, detail.name, detail.service_name, 'Dịch vụ');
+    return { product_name: serviceName, name: serviceName, product_sku: '', sku: '', variant_id: null };
   }
 
   const productId = firstNonEmpty(detail.product_id, detail.productId);

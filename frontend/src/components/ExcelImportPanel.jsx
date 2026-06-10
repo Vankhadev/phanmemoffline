@@ -104,7 +104,7 @@ const TEMPLATE_ROWS = {
   products: [
     {
       'Loại dòng': 'PARENT',
-      'SKU': 'SP001',
+      'SKU': 'SP00001',
       'Parent SKU': '',
       'Tên sản phẩm': 'Áo thun cotton',
       'Mã vạch': '',
@@ -126,8 +126,8 @@ const TEMPLATE_ROWS = {
     },
     {
       'Loại dòng': 'VARIANT',
-      'SKU': 'SP001-RED-S',
-      'Parent SKU': 'SP001',
+      'SKU': 'SP00002',
+      'Parent SKU': 'SP00001',
       'Tên sản phẩm': 'Màu đỏ / Size S',
       'Mã vạch': '',
       'Danh mục text': 'Áo thun',
@@ -155,7 +155,7 @@ const TEMPLATE_ROWS = {
       'SĐT khách': '',
       'Email khách': '',
       'Nhóm khách': 'Khách lẻ',
-      'SKU': 'SP001-RED-S',
+      'SKU': 'SP00002',
       'Tên sản phẩm': 'Áo thun cotton - Màu đỏ / Size S',
       'Số lượng': 2,
       'Đơn giá': 150000,
@@ -177,7 +177,7 @@ const TEMPLATE_ROWS = {
       'SĐT khách': '',
       'Email khách': '',
       'Nhóm khách': 'Khách sỉ',
-      'SKU': 'SP001-RED-S',
+      'SKU': 'SP00002',
       'Tên sản phẩm': 'Áo thun cotton - Màu đỏ / Size S',
       'Số lượng': 1,
       'Đơn giá': 110000,

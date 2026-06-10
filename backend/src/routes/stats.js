@@ -248,7 +248,7 @@ function getDetailSku(detail = {}, productsById = new Map()) {
   if (detail.product_sku || detail.sku || product?.sku) return detail.product_sku || detail.sku || product.sku;
   if (detail.combo_id) return `COMBO-${detail.combo_id}`;
   if (detail.variant_id) return `VAR-${detail.variant_id}`;
-  if (detail.product_id) return `SP-${detail.product_id}`;
+  if (detail.product_id) return String(detail.product_id);
   return '';
 }
 
@@ -404,7 +404,7 @@ router.get('/product-report', (req, res) => {
       orders.push({
         date: dateKey,
         invoiceId,
-        invoiceCode: invoice.invoice_code || `HD-${invoiceId}`,
+        invoiceCode: invoice.invoice_code || String(invoiceId || ''),
         customerName: invoice.customer_name || 'Khách lẻ',
         createdAt: invoice.created_at,
         revenueBeforeTax: roundMoney(orderRevenueBeforeTax),

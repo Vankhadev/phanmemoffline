@@ -56,7 +56,7 @@ function isStyleEnabled(style = {}, key, fallback = true) {
 }
 
 function getInvoiceCode(payload = {}) {
-  return payload.invoice?.invoice_code || payload.invoice?.code || payload.metadata?.invoice_code || 'HD-000000';
+  return payload.invoice?.invoice_code || payload.invoice?.code || payload.metadata?.invoice_code || 'HD00001';
 }
 
 function getItemValue(item = {}, key, index = 0) {

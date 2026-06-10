@@ -504,52 +504,111 @@ function normalizeInvoiceCancellationSchema() {
   return changed;
 }
 
-function normalizeInvoiceCodeText(value) {
+const DOCUMENT_CODE_CONFIG = Object.freeze({
+  invoice: Object.freeze({
+    table: 'invoices',
+    field: 'invoice_code',
+    prefix: 'HD',
+    counterName: 'invoice_seq',
+    width: 5,
+  }),
+  import: Object.freeze({
+    table: 'import_logs',
+    field: 'import_code',
+    prefix: 'PN',
+    counterName: 'import_seq',
+    width: 5,
+  }),
+  product: Object.freeze({
+    table: 'products',
+    field: 'sku',
+    prefix: 'SP',
+    counterName: 'product_seq',
+    width: 5,
+  }),
+});
+
+function normalizeDocumentCodeText(value) {
   return String(value || '').trim().replace(/\s+/g, ' ');
 }
 
-function normalizeInvoiceCodeLookup(value) {
-  return normalizeInvoiceCodeText(value).toLowerCase();
+function normalizeDocumentCodeLookup(value) {
+  return normalizeDocumentCodeText(value).toLowerCase();
 }
 
-function readInvoiceSequenceNumber(code) {
-  const match = normalizeInvoiceCodeText(code).match(/^HD0*(\d+)$/i);
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function readDocumentSequenceNumber(code, prefix) {
+  const match = normalizeDocumentCodeText(code).match(new RegExp(`^${escapeRegExp(prefix)}0*(\\d+)$`, 'i'));
   if (!match) return 0;
   const value = Number(match[1]);
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
-function formatInvoiceSequenceCode(seq) {
-  return `HD${String(Math.max(1, Math.floor(Number(seq) || 1))).padStart(5, '0')}`;
+function formatDocumentSequenceCode(prefix, seq, width = 5) {
+  return `${String(prefix || '').toUpperCase()}${String(Math.max(1, Math.floor(Number(seq) || 1))).padStart(width, '0')}`;
 }
 
-function getNextAvailableInvoiceCode(usedCodes, startSeq = 1) {
-  let seq = Math.max(1, Math.floor(Number(startSeq) || 1));
-  for (let attempt = 0; attempt < 100000; attempt += 1) {
-    const code = formatInvoiceSequenceCode(seq);
-    if (!usedCodes.has(normalizeInvoiceCodeLookup(code))) return { code, seq };
-    seq += 1;
-  }
-  return { code: `HD${Date.now().toString(36).toUpperCase()}`, seq: 0 };
+function resolveDocumentCodeConfig(typeOrConfig) {
+  if (typeof typeOrConfig === 'string') return DOCUMENT_CODE_CONFIG[typeOrConfig] || null;
+  if (!typeOrConfig || typeof typeOrConfig !== 'object') return null;
+  return typeOrConfig;
 }
 
-function ensureInvoiceSequenceCounterAtLeast(minValue) {
+function getDocumentCodeConfigForTable(table) {
+  return Object.values(DOCUMENT_CODE_CONFIG).find(config => config.table === table) || null;
+}
+
+function getMaxDocumentSequence(typeOrConfig) {
+  const config = resolveDocumentCodeConfig(typeOrConfig);
+  if (!config) return 0;
+  const rows = Array.isArray(getDb()[config.table]) ? getDb()[config.table] : [];
+  return rows.reduce(
+    (max, row) => Math.max(max, readDocumentSequenceNumber(row?.[config.field], config.prefix)),
+    0,
+  );
+}
+
+function findDocumentByCode(typeOrConfig, code, ignoredId = null) {
+  const config = resolveDocumentCodeConfig(typeOrConfig);
+  const lookupKey = normalizeDocumentCodeLookup(code);
+  if (!config || !lookupKey) return null;
+  const rows = Array.isArray(getDb()[config.table]) ? getDb()[config.table] : [];
+  return rows.find(row => {
+    if (!row) return false;
+    if (ignoredId != null && Number(row.id) === Number(ignoredId)) return false;
+    return normalizeDocumentCodeLookup(row[config.field]) === lookupKey;
+  }) || null;
+}
+
+function ensureSequenceCounterAtLeast(name, minValue) {
   const current = getDb();
-  const target = Math.max(0, Math.floor(Number(minValue) || 0));
-  if (target <= 0 || !Array.isArray(current.counters)) return false;
+  const requestedTarget = Math.max(0, Math.floor(Number(minValue) || 0));
+  if (!Array.isArray(current.counters)) current.counters = [];
+  if (!current.nextId) current.nextId = { ...INITIAL_NEXT_ID };
 
-  const key = normalizeTextKey('invoice_seq');
+  const key = normalizeTextKey(name || 'default');
   let changed = false;
-  let counter = current.counters.find(row => normalizeTextKey(row?.name || row?.key) === key);
+  const matchingCounters = current.counters.filter(row => normalizeTextKey(row?.name || row?.key) === key);
+  const target = matchingCounters.reduce(
+    (max, row) => Math.max(max, normalizeNumber(row?.value, 0), normalizeNumber(row?.seq, 0)),
+    requestedTarget,
+  );
+  if (target <= 0) return false;
+  let counter = matchingCounters
+    .slice()
+    .sort((a, b) => Math.max(normalizeNumber(b?.value, 0), normalizeNumber(b?.seq, 0))
+      - Math.max(normalizeNumber(a?.value, 0), normalizeNumber(a?.seq, 0)))[0];
   const timestamp = now();
 
   if (!counter) {
-    const account = getDefaultAccount() || ensureDefaultAccount();
     const id = current.nextId.counters || 1;
     current.nextId.counters = id + 1;
     current.counters.push({
       id,
-      account_id: account?.id || null,
+      account_id: null,
       name: key,
       key,
       value: target,
@@ -579,6 +638,81 @@ function ensureInvoiceSequenceCounterAtLeast(minValue) {
     changed = true;
   }
   return changed;
+}
+
+function ensureDocumentSequenceCounter(typeOrConfig) {
+  const config = resolveDocumentCodeConfig(typeOrConfig);
+  if (!config) return false;
+  return ensureSequenceCounterAtLeast(config.counterName, getMaxDocumentSequence(config));
+}
+
+function ensureAllDocumentSequenceCounters() {
+  let changed = false;
+  for (const config of Object.values(DOCUMENT_CODE_CONFIG)) {
+    if (ensureDocumentSequenceCounter(config)) changed = true;
+  }
+  return changed;
+}
+
+function generateNextDocumentCode(typeOrConfig, options = {}) {
+  const config = resolveDocumentCodeConfig(typeOrConfig);
+  if (!config) {
+    const error = new Error(`Unknown document code type: ${String(typeOrConfig || '')}`);
+    error.code = 'DOCUMENT_CODE_TYPE_INVALID';
+    throw error;
+  }
+
+  ensureDocumentSequenceCounter(config);
+  for (let attempt = 0; attempt < 100000; attempt += 1) {
+    const seq = getNextSeq(config.counterName, options);
+    const code = formatDocumentSequenceCode(config.prefix, seq, config.width);
+    if (!findDocumentByCode(config, code, options.ignoredId)) return code;
+  }
+
+  const error = new Error(`Khong the cap ma ${config.prefix} moi sau nhieu lan thu.`);
+  error.code = 'DOCUMENT_CODE_EXHAUSTED';
+  throw error;
+}
+
+function ensureDocumentSequenceForRow(table, row = {}) {
+  const config = getDocumentCodeConfigForTable(table);
+  if (!config) return false;
+  const seq = readDocumentSequenceNumber(row?.[config.field], config.prefix);
+  return seq > 0 ? ensureSequenceCounterAtLeast(config.counterName, seq) : false;
+}
+
+function normalizeInvoiceCodeText(value) {
+  return normalizeDocumentCodeText(value);
+}
+
+function normalizeInvoiceCodeLookup(value) {
+  return normalizeDocumentCodeLookup(value);
+}
+
+function readInvoiceSequenceNumber(code) {
+  return readDocumentSequenceNumber(code, DOCUMENT_CODE_CONFIG.invoice.prefix);
+}
+
+function formatInvoiceSequenceCode(seq) {
+  return formatDocumentSequenceCode(
+    DOCUMENT_CODE_CONFIG.invoice.prefix,
+    seq,
+    DOCUMENT_CODE_CONFIG.invoice.width,
+  );
+}
+
+function getNextAvailableInvoiceCode(usedCodes, startSeq = 1) {
+  let seq = Math.max(1, Math.floor(Number(startSeq) || 1));
+  for (let attempt = 0; attempt < 100000; attempt += 1) {
+    const code = formatInvoiceSequenceCode(seq);
+    if (!usedCodes.has(normalizeInvoiceCodeLookup(code))) return { code, seq };
+    seq += 1;
+  }
+  return { code: `HD${Date.now().toString(36).toUpperCase()}`, seq: 0 };
+}
+
+function ensureInvoiceSequenceCounterAtLeast(minValue) {
+  return ensureSequenceCounterAtLeast(DOCUMENT_CODE_CONFIG.invoice.counterName, minValue);
 }
 
 function normalizeInvoiceCodeUniqueness() {
@@ -1339,6 +1473,7 @@ function migrateDB() {
   migrateAccountingSchema();
   normalizeInvoiceCancellationSchema();
   normalizeInvoiceCodeUniqueness();
+  ensureAllDocumentSequenceCounters();
   rebuildAllDailyStatsFromInvoices();
   recalculateNextIds();
 }
@@ -1461,6 +1596,11 @@ function touchSyncMetadata(table, accountId = getActiveAccountId()) {
 function normalizeInsertRow(table, row = {}, options = {}) {
   const timestamp = now();
   const normalized = { ...(row || {}) };
+  const documentCodeConfig = getDocumentCodeConfigForTable(table);
+  if (documentCodeConfig) {
+    const normalizedCode = normalizeDocumentCodeText(normalized[documentCodeConfig.field]);
+    normalized[documentCodeConfig.field] = normalizedCode || generateNextDocumentCode(documentCodeConfig, { skipSave: true });
+  }
   if (isAccountScoped(table) && !shouldSkipAccountScope(options) && normalized.account_id == null) {
     normalized.account_id = getActiveAccountId();
   }
@@ -1484,6 +1624,23 @@ function normalizeUpdateChanges(table, current = {}, changes = {}) {
   const timestamp = now();
   const normalized = { ...(changes || {}) };
   delete normalized.id;
+  const documentCodeConfig = getDocumentCodeConfigForTable(table);
+  if (documentCodeConfig && Object.prototype.hasOwnProperty.call(normalized, documentCodeConfig.field)) {
+    const currentCode = normalizeDocumentCodeText(current?.[documentCodeConfig.field]);
+    const requestedCode = normalizeDocumentCodeText(normalized[documentCodeConfig.field]);
+    if (
+      currentCode
+      && requestedCode
+      && normalizeDocumentCodeLookup(currentCode) !== normalizeDocumentCodeLookup(requestedCode)
+    ) {
+      const error = new Error(`Ma ${documentCodeConfig.prefix} da cap khong duoc thay doi.`);
+      error.status = 400;
+      error.statusCode = 400;
+      error.code = 'DOCUMENT_CODE_IMMUTABLE';
+      throw error;
+    }
+    normalized[documentCodeConfig.field] = currentCode || requestedCode || generateNextDocumentCode(documentCodeConfig, { skipSave: true });
+  }
   if (table === 'users' && normalized.role != null) normalized.role = normalizeRoleValue(normalized.role);
   if ((table === 'invoices' || table === 'return_logs' || table === 'cash_book' || table === 'cash_fund') && normalized.payment_method != null) {
     normalized.payment_method = normalizePaymentMethod(normalized.payment_method);
@@ -1537,8 +1694,20 @@ function insert(table, row, options = {}) {
   if (!current.nextId) current.nextId = { ...INITIAL_NEXT_ID };
   const id = row?.id != null ? Number(row.id) : (current.nextId[table] || 1);
   const normalized = normalizeInsertRow(table, { ...(row || {}), id }, options);
+  const documentCodeConfig = getDocumentCodeConfigForTable(table);
+  if (documentCodeConfig) {
+    const duplicate = findDocumentByCode(documentCodeConfig, normalized[documentCodeConfig.field]);
+    if (duplicate) {
+      const error = new Error(`Ma ${normalized[documentCodeConfig.field]} da ton tai.`);
+      error.status = 409;
+      error.statusCode = 409;
+      error.code = 'DOCUMENT_CODE_DUPLICATE';
+      throw error;
+    }
+  }
   rows.push(normalized);
   current.nextId[table] = Math.max(Number(current.nextId[table]) || 1, id + 1);
+  ensureDocumentSequenceForRow(table, normalized);
   if (!options.skipTouch) touchSyncMetadata(table, normalized.account_id || options.accountId || getActiveAccountId());
   if (shouldSaveImmediately(options)) saveDB();
   return id;
@@ -1550,7 +1719,19 @@ function update(table, id, changes, options = {}) {
   const index = rows.findIndex(row => Number(row?.id) === numericId && isRowVisibleForCurrentScope(table, row, options));
   if (index === -1) return null;
   const updated = { ...rows[index], ...normalizeUpdateChanges(table, rows[index], changes || {}) };
+  const documentCodeConfig = getDocumentCodeConfigForTable(table);
+  if (documentCodeConfig) {
+    const duplicate = findDocumentByCode(documentCodeConfig, updated[documentCodeConfig.field], id);
+    if (duplicate) {
+      const error = new Error(`Ma ${updated[documentCodeConfig.field]} da ton tai.`);
+      error.status = 409;
+      error.statusCode = 409;
+      error.code = 'DOCUMENT_CODE_DUPLICATE';
+      throw error;
+    }
+  }
   rows[index] = updated;
+  ensureDocumentSequenceForRow(table, updated);
   if (!options.skipTouch) touchSyncMetadata(table, updated.account_id || options.accountId || getActiveAccountId());
   if (shouldSaveImmediately(options)) saveDB();
   return updated;
@@ -1748,13 +1929,16 @@ function upsertDailyStats(date, _revenue = 0, options = {}) {
 function getNextSeq(name, options = {}) {
   const key = normalizeTextKey(name || 'default');
   const skipSave = options.skipSave === true;
-  let counter = getOne('counters', row => row.name === key || row.key === key);
+  let counter = getAll('counters', row => row.name === key || row.key === key, { skipAccountScope: true })
+    .slice()
+    .sort((a, b) => Math.max(normalizeNumber(b?.value, 0), normalizeNumber(b?.seq, 0))
+      - Math.max(normalizeNumber(a?.value, 0), normalizeNumber(a?.seq, 0)))[0] || null;
   if (!counter) {
-    const id = insert('counters', { name: key, key, value: 1, seq: 1 }, { skipSave });
-    return getOne('counters', { id })?.value || 1;
+    const id = insert('counters', { name: key, key, value: 1, seq: 1, account_id: null }, { skipSave, skipAccountScope: true });
+    return getOne('counters', { id }, { skipAccountScope: true })?.value || 1;
   }
   const nextValue = normalizeNumber(counter.value ?? counter.seq, 0) + 1;
-  update('counters', counter.id, { value: nextValue, seq: nextValue }, { skipSave });
+  update('counters', counter.id, { value: nextValue, seq: nextValue }, { skipSave, skipAccountScope: true });
   return nextValue;
 }
 
@@ -1813,6 +1997,14 @@ module.exports = {
   rebuildDailyStatsForDates,
   upsertDailyStats,
   getNextSeq,
+  DOCUMENT_CODE_CONFIG,
+  generateNextDocumentCode,
+  getMaxDocumentSequence,
+  findDocumentByCode,
+  normalizeDocumentCodeText,
+  normalizeDocumentCodeLookup,
+  readDocumentSequenceNumber,
+  formatDocumentSequenceCode,
   ensureBaseData,
   seedData,
   normalizePaymentMethod,

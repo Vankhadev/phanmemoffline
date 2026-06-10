@@ -3,7 +3,7 @@
  */
 const express = require('express');
 const router = express.Router();
-const { getAll, getOne, insert, update, replaceTable, now, withAtomicDbWrite } = require('../db/database');
+const { getAll, getOne, insert, update, replaceTable, now, withAtomicDbWrite, generateNextDocumentCode } = require('../db/database');
 const { normalizeSearchText, parseKeywordList, searchFlatProducts } = require('../utils/productSearch');
 const {
   getMinimumAllowedProductStock,
@@ -79,10 +79,6 @@ function activeParents() {
 
 function activeVariants(parentId) {
   return getAll('products', v => v.active !== 0 && Number(v.parent_id) === Number(parentId));
-}
-
-function hasActiveVariants(parentId) {
-  return activeVariants(parentId).length > 0;
 }
 
 function getArrayField(product, field) {
@@ -264,137 +260,7 @@ function normalizeSkuKey(value) {
 function findActiveParentBySku(sku) {
   const normalizedSku = normalizeSku(sku);
   if (!normalizedSku) return null;
-  return getOne('products', p => p.active !== 0 && !p.parent_id && normalizeSku(p.sku) === normalizedSku);
-}
-
-function findSkuConflictOutsideParentFamily(sku, parentId = null) {
-  const normalizedSku = normalizeSku(sku);
-  if (!normalizedSku) return null;
-  const numericParentId = Number(parentId);
-  const hasParentId = Number.isFinite(numericParentId) && numericParentId > 0;
-
-  return getOne('products', product => {
-    if (!product || product.active === 0 || normalizeSku(product.sku) !== normalizedSku) return false;
-    if (hasParentId && (Number(product.id) === numericParentId || Number(product.parent_id) === numericParentId)) return false;
-    return true;
-  });
-}
-
-function isPureNumericSku(value) {
-  return /^\d+$/.test(normalizeSku(value));
-}
-
-function createVariantSkuGenerationError(parentSku) {
-  const parentSkuText = normalizeSku(parentSku) || '(trống)';
-  const err = new Error(`Không thể tự sinh SKU biến thể vì SKU cha "${parentSkuText}" không phải chuỗi số thuần`);
-  err.statusCode = 400;
-  return err;
-}
-
-function buildOccupiedSkuKeys(products = getAll('products'), excludeIds = []) {
-  const excludedIds = new Set((excludeIds || [])
-    .map(id => Number(id))
-    .filter(id => Number.isFinite(id) && id > 0));
-
-  return new Set((products || [])
-    .filter(product => {
-      const id = Number(product?.id);
-      return !(Number.isFinite(id) && excludedIds.has(id));
-    })
-    .map(product => normalizeSkuKey(product?.sku))
-    .filter(Boolean));
-}
-
-function generateSequentialVariantSkus(parentSku, count = 1, options = {}) {
-  const parentSkuText = normalizeSku(parentSku);
-  if (!isPureNumericSku(parentSkuText)) throw createVariantSkuGenerationError(parentSkuText);
-
-  const total = Math.max(0, parseInt(count, 10) || 0);
-  if (total === 0) return [];
-
-  const occupiedSkuKeys = buildOccupiedSkuKeys(options.products || getAll('products'), options.excludeIds || []);
-  const generatedSkus = [];
-  const width = parentSkuText.length;
-  let nextValue = BigInt(parentSkuText) + 1n;
-
-  while (generatedSkus.length < total) {
-    const rawCandidate = nextValue.toString();
-    const candidate = rawCandidate.length < width ? rawCandidate.padStart(width, '0') : rawCandidate;
-    const candidateKey = normalizeSkuKey(candidate);
-
-    if (!occupiedSkuKeys.has(candidateKey)) {
-      occupiedSkuKeys.add(candidateKey);
-      generatedSkus.push(candidate);
-    }
-
-    nextValue += 1n;
-  }
-
-  return generatedSkus;
-}
-
-function generateNextVariantSku(parentSku, options = {}) {
-  return generateSequentialVariantSkus(parentSku, 1, options)[0];
-}
-
-function reassignVariantSkusToParentSequence(parentId, parentSku, timestamp = now()) {
-  const numericParentId = Number(parentId);
-  if (!Number.isFinite(numericParentId) || numericParentId <= 0) return 0;
-
-  const allProducts = getAll('products');
-  const variants = allProducts
-    .filter(variant => variant.active !== 0 && Number(variant.parent_id) === numericParentId)
-    .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
-  if (variants.length === 0 || !isPureNumericSku(parentSku)) return 0;
-
-  const nextSkus = generateSequentialVariantSkus(parentSku, variants.length, {
-    products: allProducts,
-    excludeIds: variants.map(variant => variant.id),
-  });
-  let reassignedCount = 0;
-
-  variants.forEach((variant, index) => {
-    const nextSku = nextSkus[index];
-    if (normalizeSku(variant.sku) === nextSku) return;
-    update('products', variant.id, { sku: nextSku, updated_at: timestamp });
-    reassignedCount++;
-  });
-
-  return reassignedCount;
-}
-
-function reassignVariantSkusInProductList(products, parentIds = null, timestamp = now()) {
-  const productList = Array.isArray(products) ? products : [];
-  const byId = new Map(productList.map(product => [Number(product.id), product]));
-  const targetParentIds = parentIds
-    ? [...parentIds].map(id => Number(id)).filter(id => Number.isFinite(id) && id > 0)
-    : [...new Set(productList.map(product => Number(product?.parent_id)).filter(id => Number.isFinite(id) && id > 0))];
-  let reassignedCount = 0;
-
-  for (const parentId of targetParentIds) {
-    const parent = byId.get(parentId);
-    if (!parent || !isPureNumericSku(parent.sku)) continue;
-
-    const variants = productList
-      .filter(variant => variant.active !== 0 && Number(variant.parent_id) === parentId)
-      .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
-    if (variants.length === 0) continue;
-
-    const nextSkus = generateSequentialVariantSkus(parent.sku, variants.length, {
-      products: productList,
-      excludeIds: variants.map(variant => variant.id),
-    });
-
-    variants.forEach((variant, index) => {
-      const nextSku = nextSkus[index];
-      if (normalizeSku(variant.sku) === nextSku) return;
-      variant.sku = nextSku;
-      variant.updated_at = timestamp;
-      reassignedCount++;
-    });
-  }
-
-  return reassignedCount;
+  return getOne('products', p => p.active !== 0 && !p.parent_id && normalizeSkuKey(p.sku) === normalizeSkuKey(normalizedSku));
 }
 
 function normalizeImportKey(value) {
@@ -927,6 +793,9 @@ router.post('/import-excel-rows', (req, res) => {
       const key = normalizeSkuKey(row.sku);
       const existing = parentBySku.get(key);
       const payload = buildExcelImportPayload(row, existing || {}, null);
+      payload.sku = existing
+        ? normalizeSku(existing.sku)
+        : generateNextDocumentCode('product', { skipSave: true });
       const rowActive = row.active === undefined ? 1 : row.active;
       if (existing) {
         Object.assign(existing, payload, { parent_id: null, active: rowActive, updated_at: timestamp });
@@ -964,6 +833,9 @@ router.post('/import-excel-rows', (req, res) => {
       const existing = existingByLegacySku || existingByName || null;
       const currentParent = existing?.parent_id ? byId.get(existing.parent_id) : null;
       const payload = buildExcelImportPayload(row, existing || {}, parent || currentParent);
+      payload.sku = existing
+        ? normalizeSku(existing.sku)
+        : generateNextDocumentCode('product', { skipSave: true });
       const rowActive = row.active === undefined ? 1 : row.active;
       if (existing) {
         Object.assign(existing, payload, { parent_id: parent.id, active: rowActive, updated_at: timestamp });
@@ -1060,39 +932,33 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   try {
     const { sku, name } = req.body;
-    if (!sku) return res.status(400).json({ error: 'Mã SKU không được để trống' });
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Tên sản phẩm không được để trống' });
 
     const result = withAtomicDbWrite(() => {
-      const trimmedSku = normalizeSku(sku);
-      const existing = findActiveParentBySku(trimmedSku);
-      const skuConflict = findSkuConflictOutsideParentFamily(trimmedSku, existing?.id || null);
-      if (skuConflict) {
-        const error = new Error(`SKU "${trimmedSku}" đã được sử dụng bởi sản phẩm khác`);
-        error.status = 400;
-        throw error;
-      }
+      const requestedSku = normalizeSku(sku);
+      const existing = requestedSku ? findActiveParentBySku(requestedSku) : null;
+      const productSku = existing
+        ? normalizeSku(existing.sku)
+        : generateNextDocumentCode('product', { skipSave: true });
 
       const nowTime = now();
       const finalData = {
-        ...productPayload({ ...req.body, sku: trimmedSku }, existing || {}),
+        ...productPayload({ ...req.body, sku: productSku }, existing || {}),
         parent_id: null,
         active: existing ? existing.active : 1,
         updated_at: nowTime,
       };
 
       if (existing) {
-        const parentSkuChanged = normalizeSku(existing.sku) !== normalizeSku(finalData.sku);
         const updated = update('products', existing.id, finalData);
         logProductStockChangeIfNegative(updated, existing.stock, 'products_api');
-        const reassignedVariantSkus = parentSkuChanged ? reassignVariantSkusToParentSequence(existing.id, finalData.sku, nowTime) : 0;
-        return { ok: true, id: existing.id, message: 'Cập nhật sản phẩm thành công', action: 'updated', syncedVariants: reassignedVariantSkus, reassignedVariantSkus };
+        return { ok: true, id: existing.id, sku: updated.sku, message: 'Cập nhật sản phẩm thành công', action: 'updated' };
       }
 
       finalData.created_at = nowTime;
       const id = insert('products', finalData);
       logProductStockChangeIfNegative({ id, ...finalData }, null, 'products_api');
-      return { ok: true, id, message: 'Tạo sản phẩm thành công', action: 'created', syncedVariants: 0, reassignedVariantSkus: 0 };
+      return { ok: true, id, sku: finalData.sku, message: 'Tạo sản phẩm thành công', action: 'created' };
     });
 
     res.json(result);
@@ -1115,19 +981,14 @@ router.put('/:id', (req, res) => {
 
     const isVariant = product.parent_id != null;
     const parent = isVariant ? getOne('products', p => p.id === product.parent_id && p.active !== 0) : null;
-    const parentHasVariants = !isVariant && hasActiveVariants(id);
-    const requestBody = isVariant
-      ? { ...req.body, sku: normalizeSku(product.sku) }
-      : (parentHasVariants ? { ...req.body, sku: normalizeSku(product.sku) } : req.body);
-
-    if (!isVariant && !parentHasVariants && req.body.sku !== undefined && req.body.sku !== null) {
-      const nextSku = normalizeSku(req.body.sku);
-      if (!nextSku) return res.status(400).json({ error: 'Mã SKU không được để trống' });
-      if (nextSku !== (product.sku || '')) {
-        const dup = findSkuConflictOutsideParentFamily(nextSku, id);
-        if (dup) return res.status(400).json({ error: `SKU "${nextSku}" đã được sử dụng bởi sản phẩm khác` });
-      }
+    if (
+      Object.prototype.hasOwnProperty.call(req.body, 'sku')
+      && normalizeSku(req.body.sku)
+      && normalizeSku(req.body.sku) !== normalizeSku(product.sku)
+    ) {
+      return res.status(400).json({ error: 'Mã sản phẩm đã cấp không được thay đổi' });
     }
+    const requestBody = { ...req.body, sku: normalizeSku(product.sku) };
 
     const result = withAtomicDbWrite(() => {
       const nowTime = now();
@@ -1136,11 +997,9 @@ router.put('/:id', (req, res) => {
         updated_at: nowTime,
       };
 
-      const parentSkuChanged = !isVariant && normalizeSku(product.sku) !== normalizeSku(changes.sku);
       const updated = update('products', id, changes);
       logProductStockChangeIfNegative(updated, product.stock, 'products_api');
-      const reassignedVariantSkus = parentSkuChanged ? reassignVariantSkusToParentSequence(id, changes.sku, nowTime) : 0;
-      return { ok: true, message: 'Cập nhật sản phẩm thành công', syncedVariants: reassignedVariantSkus, reassignedVariantSkus };
+      return { ok: true, id: updated.id, sku: updated.sku, message: 'Cập nhật sản phẩm thành công' };
     });
 
     res.json(result);
@@ -1213,7 +1072,7 @@ router.post('/:parentId/variants', (req, res) => {
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Tên biến thể không được để trống' });
 
     const result = withAtomicDbWrite(() => {
-      const generatedSku = generateNextVariantSku(parent.sku);
+      const generatedSku = generateNextDocumentCode('product', { skipSave: true });
       const payload = productPayload({ ...req.body, sku: generatedSku }, {}, parent);
       const nowTime = now();
       const id = insert('products', {
@@ -1344,19 +1203,26 @@ router.post('/import', (req, res) => {
         payload.parent_id = base.parent_id ? parseInt(base.parent_id) || null : null;
 
         if (sku) {
-          const existing = getOne('products', p => p.sku === sku && p.active !== 0);
+          const existing = getOne('products', p => normalizeSkuKey(p.sku) === normalizeSkuKey(sku) && p.active !== 0);
           if (existing) {
-            const updated = update('products', existing.id, { ...productPayload(base, existing, parent), updated_at: now() });
+            const updated = update('products', existing.id, {
+              ...productPayload({ ...base, sku: existing.sku }, existing, parent),
+              updated_at: now(),
+            });
             logProductStockChangeIfNegative(updated, existing.stock, 'products_import_csv');
             results.updated++;
           } else {
-            const id = insert('products', { ...payload, active: 1, created_at: now(), updated_at: now() });
-            logProductStockChangeIfNegative({ id, ...payload }, null, 'products_import_csv');
+            const generatedSku = generateNextDocumentCode('product', { skipSave: true });
+            const createdPayload = { ...payload, sku: generatedSku };
+            const id = insert('products', { ...createdPayload, active: 1, created_at: now(), updated_at: now() });
+            logProductStockChangeIfNegative({ id, ...createdPayload }, null, 'products_import_csv');
             results.created++;
           }
         } else {
-          const id = insert('products', { ...payload, sku: '', active: 1, created_at: now(), updated_at: now() });
-          logProductStockChangeIfNegative({ id, ...payload, sku: '' }, null, 'products_import_csv');
+          const generatedSku = generateNextDocumentCode('product', { skipSave: true });
+          const createdPayload = { ...payload, sku: generatedSku };
+          const id = insert('products', { ...createdPayload, active: 1, created_at: now(), updated_at: now() });
+          logProductStockChangeIfNegative({ id, ...createdPayload }, null, 'products_import_csv');
           results.created++;
         }
       } catch (e) {

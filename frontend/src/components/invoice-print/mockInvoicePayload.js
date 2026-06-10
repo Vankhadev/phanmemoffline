@@ -17,7 +17,7 @@ export const mockInvoicePayload = Object.freeze({
   },
   invoice: {
     id: 1001,
-    invoice_code: 'HD-20260601-0001',
+    invoice_code: 'HD00001',
     created_at: now,
     delivery_date: '01/06/2026',
     status: 'Đã thanh toán',
@@ -27,7 +27,7 @@ export const mockInvoicePayload = Object.freeze({
   items: [
     {
       id: 1,
-      sku: 'SP001',
+      sku: 'SP00001',
       name: 'Cà phê rang xay đặc biệt túi 500g tên dài để kiểm tra tự xuống dòng khi in hóa đơn',
       unit: 'Túi',
       quantity: 2,
@@ -37,7 +37,7 @@ export const mockInvoicePayload = Object.freeze({
     },
     {
       id: 2,
-      sku: 'SP002',
+      sku: 'SP00002',
       name: 'Trà sen vàng cao cấp',
       unit: 'Hộp',
       quantity: 1,
@@ -47,7 +47,7 @@ export const mockInvoicePayload = Object.freeze({
     },
     {
       id: 3,
-      sku: 'SP003',
+      sku: 'SP00003',
       name: 'Bánh quy bơ nhập khẩu',
       unit: 'Gói',
       quantity: 3,
@@ -57,7 +57,7 @@ export const mockInvoicePayload = Object.freeze({
     },
     {
       id: 4,
-      sku: 'SP004',
+      sku: 'SP00004',
       name: 'Combo quà tặng doanh nghiệp',
       unit: 'Bộ',
       quantity: 1,

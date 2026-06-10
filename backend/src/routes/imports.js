@@ -3,16 +3,12 @@
  */
 const express = require('express');
 const router = express.Router();
-const { getAll, getOne, insert, update, remove, now, withAtomicDbWrite, getNextSeq } = require('../db/database');
+const { getAll, getOne, insert, update, remove, now, withAtomicDbWrite, generateNextDocumentCode } = require('../db/database');
 const accountingService = require('../services/accountingService');
 const { logActivity, logDataDeletion } = require('../services/accountingLogService');
 
 function genImportCode() {
-  for (let attempt = 0; attempt < 1000; attempt += 1) {
-    const candidate = `PN${String(getNextSeq('import_seq')).padStart(6, '0')}`;
-    if (!findImportByCode(candidate)) return candidate;
-  }
-  return `PN${Date.now().toString(36).toUpperCase()}`;
+  return generateNextDocumentCode('import', { skipSave: true });
 }
 
 function toNumber(value, fallback = 0) {
@@ -36,31 +32,6 @@ function normalizeImportCodeKey(value) {
   return normalizeImportCode(value).toLowerCase();
 }
 
-function findImportByCode(importCode, ignoredImportId = null) {
-  const lookupKey = normalizeImportCodeKey(importCode);
-  if (!lookupKey) return null;
-  return getAll('import_logs').find(row => {
-    if (!row) return false;
-    if (ignoredImportId != null && Number(row.id) === Number(ignoredImportId)) return false;
-    return normalizeImportCodeKey(row.import_code) === lookupKey;
-  }) || null;
-}
-
-function assertImportCodeAvailable(importCode, ignoredImportId = null) {
-  const normalized = normalizeImportCode(importCode);
-  if (!normalized) {
-    throw createRouteError('Mã phiếu nhập không được để trống', 400, 'IMPORT_CODE_REQUIRED');
-  }
-  if (normalized.length > 64) {
-    throw createRouteError('Mã phiếu nhập không được vượt quá 64 ký tự', 400, 'IMPORT_CODE_TOO_LONG');
-  }
-  const duplicate = findImportByCode(normalized, ignoredImportId);
-  if (duplicate) {
-    throw createRouteError(`Mã phiếu nhập ${normalized} đã tồn tại`, 409, 'IMPORT_CODE_DUPLICATE');
-  }
-  return normalized;
-}
-
 function toOptionalNumber(value) {
   if (value === undefined || value === null || value === '') return null;
   const n = Number(value);
@@ -79,6 +50,13 @@ function toPercent(value, fallback = 0) {
 }
 
 function sendImportError(res, err, fallback = 'Lỗi xử lý phiếu nhập') {
+  if (err.code === 'DOCUMENT_CODE_DUPLICATE') {
+    return res.status(409).json({
+      error: 'Mã phiếu nhập đã tồn tại',
+      detail: err.message || 'Mã phiếu nhập đã tồn tại, vui lòng nhập mã khác.',
+      code: 'IMPORT_CODE_DUPLICATE',
+    });
+  }
   const status = err.status || err.statusCode || 500;
   res.status(status).json({
     error: fallback,
@@ -581,15 +559,17 @@ router.post('/', (req, res) => {
         total,
         note,
         details,
-        import_code: requestedCode,
         status,
+        import_code: requestedImportCode,
       } = req.body;
 
     const normalizedStatus = normalizeImportStatus(status);
     const normalizedTotal = Math.max(0, toNumber(total, 0));
     const payment = unpaidPaymentAmounts(normalizedTotal);
-    const normalizedRequestedCode = normalizeImportCode(requestedCode);
-    const import_code = normalizedRequestedCode ? assertImportCodeAvailable(normalizedRequestedCode) : genImportCode();
+    const import_code = normalizeImportCode(requestedImportCode) || genImportCode();
+    if (import_code.length > 64) {
+      throw createRouteError('Mã phiếu nhập tối đa 64 ký tự', 400, 'IMPORT_CODE_TOO_LONG');
+    }
     const createdAt = now();
 
     if (normalizedStatus === 'received') {
@@ -682,9 +662,13 @@ router.put('/:idOrCode', (req, res) => {
     const nextPayment = shouldResetPayment
       ? unpaidPaymentAmounts(nextTotal)
       : paymentAmounts(nextTotal, 'paid', nextTotal);
-    const nextImportCode = Object.prototype.hasOwnProperty.call(req.body, 'import_code')
-      ? assertImportCodeAvailable(req.body.import_code, importLog.id)
-      : importLog.import_code;
+    if (
+      Object.prototype.hasOwnProperty.call(req.body, 'import_code')
+      && normalizeImportCodeKey(req.body.import_code) !== normalizeImportCodeKey(importLog.import_code)
+    ) {
+      throw createRouteError('Mã phiếu nhập đã cấp không được thay đổi', 400, 'IMPORT_CODE_IMMUTABLE');
+    }
+    const nextImportCode = importLog.import_code;
 
     let stockResult = { applied: false, items: [], mode: 'none' };
 

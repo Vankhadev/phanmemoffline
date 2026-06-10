@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getAll, getOne, insert, update, remove, now, getSyncVersions, withAtomicDbWrite } = require('../db/database');
+const { getAll, getOne, insert, update, remove, now, getSyncVersions, withAtomicDbWrite, generateNextDocumentCode } = require('../db/database');
 const { requireAuth, requirePermission, requireAnyPermission, publicSession } = require('../middleware/auth');
 const { createInvoiceFromPayload } = require('../services/invoiceCreationService');
 const {
@@ -171,12 +171,6 @@ function isProductVariantPayload(payload = {}) {
   return Boolean(toOptionalNumber(payload.parent_id) || payload.is_variant || payload.item_type === 'variant' || payload.type === 'variant');
 }
 
-function hasProductVariants(parentId) {
-  const id = Number(parentId);
-  if (!Number.isFinite(id) || id <= 0) return false;
-  return Boolean(getOne('products', row => row && row.active !== 0 && Number(row.parent_id) === id));
-}
-
 function findProductByNaturalKey(payload = {}) {
   const variantPayload = isProductVariantPayload(payload);
   if (payload.id !== undefined && payload.id !== null) {
@@ -291,7 +285,6 @@ function upsertProductFromSync(payload, req) {
   const row = pickAllowedFields(payload, SIMPLE_PUSH_FIELDS.products);
   const existing = findProductByNaturalKey(payload);
   const variantPayload = isProductVariantPayload(payload);
-  const nextSku = String(row.sku || '').trim();
   row.updated_at = row.updated_at || now();
 
   if (Object.prototype.hasOwnProperty.call(row, 'stock')) {
@@ -307,13 +300,9 @@ function upsertProductFromSync(payload, req) {
   }
 
   if (existing) {
-    if (existing.parent_id) {
-      row.parent_id = toOptionalNumber(row.parent_id) || existing.parent_id;
-      if (!nextSku) row.sku = existing.sku || '';
-    } else {
-      row.parent_id = null;
-      if (!nextSku || hasProductVariants(existing.id)) row.sku = existing.sku || '';
-    }
+    if (existing.parent_id) row.parent_id = toOptionalNumber(row.parent_id) || existing.parent_id;
+    else row.parent_id = null;
+    row.sku = existing.sku || '';
     const updated = update('products', existing.id, row);
     if ((Number(updated?.stock) || 0) < 0) {
       logNegativeStockTransition({
@@ -326,14 +315,9 @@ function upsertProductFromSync(payload, req) {
         source: 'sync_products',
       });
     }
-    return { id: existing.id, action: 'updated' };
+    return { id: existing.id, sku: updated.sku, action: 'updated' };
   }
 
-  if (!nextSku) return { id: null, action: 'skipped', message: 'Bỏ qua đồng bộ sản phẩm thiếu SKU để không ghi SKU rỗng.' };
-  if (!variantPayload) {
-    const skuAsVariant = getOne('products', product => product && product.active !== 0 && product.parent_id != null && String(product.sku || '').trim() === nextSku);
-    if (skuAsVariant) return { id: null, action: 'skipped', message: 'Bỏ qua tạo sản phẩm cha từ SKU đang thuộc biến thể.' };
-  }
   if (variantPayload) {
     const parentId = toOptionalNumber(row.parent_id || payload.parent_id);
     const parent = parentId ? getOne('products', product => Number(product.id) === parentId && !product.parent_id && product.active !== 0) : null;
@@ -342,6 +326,7 @@ function upsertProductFromSync(payload, req) {
   } else {
     row.parent_id = null;
   }
+  row.sku = generateNextDocumentCode('product', { skipSave: true });
 
   const id = insert('products', {
     ...row,
@@ -359,7 +344,7 @@ function upsertProductFromSync(payload, req) {
       source: 'sync_products',
     });
   }
-  return { id, action: 'created' };
+  return { id, sku: row.sku, action: 'created' };
 }
 
 function upsertSimpleRowFromSync(table, payload, req) {
@@ -373,8 +358,12 @@ function upsertSimpleRowFromSync(table, payload, req) {
   row.updated_at = row.updated_at || now();
 
   if (existing) {
+    if (table === 'import_logs') row.import_code = existing.import_code;
     update(table, existing.id, row);
-    return { id: existing.id, action: 'updated' };
+    return { id: existing.id, ...(table === 'import_logs' ? { import_code: existing.import_code } : {}), action: 'updated' };
+  }
+  if (table === 'import_logs') {
+    row.import_code = generateNextDocumentCode('import', { skipSave: true });
   }
 
   const id = insert(table, {
@@ -383,14 +372,19 @@ function upsertSimpleRowFromSync(table, payload, req) {
     active: row.active === undefined ? 1 : row.active,
     created_at: row.created_at || now(),
   });
-  return { id, action: 'created' };
+  return { id, ...(table === 'import_logs' ? { import_code: row.import_code } : {}), action: 'created' };
 }
 
 function upsertImportFromSync(payload, req) {
   if (!payload || typeof payload !== 'object') return null;
   const details = Array.isArray(payload.details) ? payload.details : [];
-  const importCode = String(payload.import_code || '').trim() || `SYNC-PN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  const existing = getOne('import_logs', row => String(row.import_code || '') === importCode);
+  const requestedImportCode = String(payload.import_code || '').trim();
+  const existing = requestedImportCode
+    ? getOne('import_logs', row => String(row.import_code || '').trim() === requestedImportCode)
+    : null;
+  const importCode = existing
+    ? existing.import_code
+    : generateNextDocumentCode('import', { skipSave: true });
   const logPayload = pickAllowedFields({ ...payload, import_code: importCode }, SIMPLE_PUSH_FIELDS.import_logs);
   logPayload.updated_at = logPayload.updated_at || now();
 
@@ -398,6 +392,7 @@ function upsertImportFromSync(payload, req) {
   let action;
   if (existing) {
     importId = existing.id;
+    logPayload.import_code = existing.import_code;
     update('import_logs', importId, logPayload);
     action = 'updated';
     if (details.length > 0) {

@@ -23,15 +23,6 @@ const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
 const COMBO_REFRESH_STALE_MS = 30 * 1000;
 const PRICE_TYPE_KEYS = new Set(['retail', 'wholesale', 'vip']);
 
-// Tạo 5 số ngẫu nhiên từ 1-9
-const random5Digits = () => {
-  let result = '';
-  for (let i = 0; i < 5; i++) {
-    result += Math.floor(Math.random() * 9) + 1;
-  }
-  return result;
-};
-
 // Map customer_type → priceType key
 const customerTypeToPriceType = (ct) => {
   const t = normalizeSearchText(ct || '');
@@ -154,6 +145,15 @@ function isComboOrderItem(item) {
   return Boolean(type === 'combo' || item?.combo_id);
 }
 
+function isServiceOrderItem(item) {
+  const type = String(item?.type || item?.item_type || '').trim().toLowerCase();
+  return Boolean(type === 'service' || type === 'custom_service' || item?.is_service || item?.isService);
+}
+
+function getServiceLineName(item = {}) {
+  return String(item.product_name || item.name || item.service_name || '').trim();
+}
+
 function comboMatchesSearch(combo, query) {
   const normalizedQuery = normalizeSearchText(query);
   if (!normalizedQuery) return true;
@@ -216,6 +216,7 @@ export default function CreateOrder({ user, store }) {
   const [loadError, setLoadError] = useState({ products: false, customers: false, combos: false });
   const [loading, setLoading] = useState({ products: true, customers: true, combos: true });
   const [productResultFilter, setProductResultFilter] = useState('all');
+  const [showProductSearchResults, setShowProductSearchResults] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', tax_code: '', customer_type: 'Khách lẻ' });
@@ -233,9 +234,11 @@ export default function CreateOrder({ user, store }) {
   const customerDropdownRef = useRef();
   const productSearchInputRef = useRef(null);
   const productPickerSearchInputRef = useRef(null);
+  const serviceNameInputRefs = useRef({});
   const comboLastFetchedAtRef = useRef(0);
   const comboFetchInFlightRef = useRef(null);
   const lastStockLimitToastRef = useRef('');
+  const lastServiceLineAddedAtRef = useRef(0);
 
   const { settings: negativeStockSettings, error: negativeStockSettingsError } = useNegativeStockSettings();
   const negativeStockLimitMessage = useMemo(() => getNegativeStockLimitMessage(negativeStockSettings), [negativeStockSettings]);
@@ -541,7 +544,15 @@ export default function CreateOrder({ user, store }) {
     if (filter === 'combo') fetchCombos();
   };
   const handleProductSearchFocus = () => {
+    setShowProductSearchResults(true);
     if (productResultFilter === 'combo') fetchCombos();
+  };
+  const handleProductSearchChange = (event) => {
+    setProductSearch(event.target.value);
+    setShowProductSearchResults(true);
+  };
+  const handleProductSearchKeyDown = (event) => {
+    if (event.key === 'Escape' && !productSearch) setShowProductSearchResults(false);
   };
   const filteredCustomers = customers.filter(c =>
     !customerSearch ||
@@ -588,6 +599,7 @@ export default function CreateOrder({ user, store }) {
   };
 
   const repriceCartLineForType = (item, nextPriceType = 'retail') => {
+    if (isServiceOrderItem(item)) return item;
     if (isComboOrderItem(item)) {
       const combo = getComboById(item.combo_id);
       if (!combo) return item;
@@ -803,8 +815,53 @@ export default function CreateOrder({ user, store }) {
     };
   };
 
+  const buildServiceCartLine = () => ({
+    id: `service_${Date.now()}_${Math.random()}`,
+    type: 'service',
+    item_type: 'service',
+    is_service: true,
+    combo_id: null,
+    product_id: null,
+    variant_id: null,
+    product_name: '',
+    product_sku: '',
+    name: '',
+    sku: '',
+    quantity: 1,
+    unit_price: 0,
+    discount_amount: 0,
+    discount_percent: 0,
+    line_total: 0,
+    max_stock: null,
+  });
+
+  const addServiceLine = () => {
+    const timestamp = Date.now();
+    if (timestamp - lastServiceLineAddedAtRef.current < 200) return;
+    lastServiceLineAddedAtRef.current = timestamp;
+    const line = buildServiceCartLine();
+    setCart(prev => [...prev, line]);
+    window.setTimeout(() => {
+      serviceNameInputRefs.current[line.id]?.focus?.();
+    }, 0);
+  };
+
+  const handleAddServicePointerDown = (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    event.preventDefault();
+    addServiceLine();
+  };
+
+  const handleAddServiceClick = (event) => {
+    if (event.detail === 0) addServiceLine();
+  };
+
   const mergeCartLineQuantity = (currentCart, lineToMerge, quantityDelta) => {
     if (!Number.isFinite(quantityDelta) || quantityDelta === 0) return currentCart;
+    if (isServiceOrderItem(lineToMerge)) {
+      if (quantityDelta <= 0) return currentCart;
+      return [...currentCart, recalculateCartLine({ ...lineToMerge, quantity: quantityDelta })];
+    }
     const isCombo = isComboOrderItem(lineToMerge);
     const existing = currentCart.find(line => (
       isCombo
@@ -839,6 +896,7 @@ export default function CreateOrder({ user, store }) {
     if (kind === 'combo') addCombo(item, 1);
     else addProduct(item, 1);
     setProductSearch('');
+    setShowProductSearchResults(true);
     window.setTimeout(() => {
       productSearchInputRef.current?.focus();
       productSearchInputRef.current?.select?.();
@@ -849,6 +907,16 @@ export default function CreateOrder({ user, store }) {
     setShowProductPanel(true);
     if (productResultFilter === 'combo') fetchCombos();
   };
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key !== 'F9') return;
+      event.preventDefault();
+      addServiceLine();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const closeOrderProductPicker = () => {
     setShowProductPanel(false);
@@ -1311,6 +1379,11 @@ export default function CreateOrder({ user, store }) {
       if (field === 'quantity') updated.quantity = normalizeDecimalQuantity(value, 1);
       else if (field === 'unit_price') updated.unit_price = Math.max(0, Number(value) || 0);
       else if (field === 'discount_percent') updated.discount_percent = Math.min(100, Math.max(0, Number(value) || 0));
+      else if (field === 'service_name') {
+        updated.product_name = value;
+        updated.name = value;
+        updated.service_name = value;
+      }
       else updated[field] = value;
       return recalculateCartLine(updated);
     }));
@@ -1324,6 +1397,38 @@ export default function CreateOrder({ user, store }) {
       return next;
     });
   };
+
+  const findBlankServiceLine = () => cart.find(item => isServiceOrderItem(item) && !getServiceLineName(item));
+
+  const guardServiceLinesBeforeSubmit = () => {
+    const invalid = findBlankServiceLine();
+    if (!invalid) return true;
+    alert('Vui lòng nhập tên dịch vụ trước khi tạo đơn.');
+    window.setTimeout(() => serviceNameInputRefs.current[invalid.id]?.focus?.(), 0);
+    return false;
+  };
+
+  const buildOrderDetailsPayload = () => cart.map((item) => {
+    const serviceLine = isServiceOrderItem(item);
+    const type = serviceLine ? 'service' : (item.type || item.item_type || 'product');
+    const serviceName = getServiceLineName(item);
+    return {
+      type,
+      item_type: type,
+      combo_id: serviceLine ? null : (item.combo_id || null),
+      product_id: serviceLine ? null : (item.product_id || null),
+      variant_id: serviceLine ? null : (item.variant_id || null),
+      product_name: serviceLine ? serviceName : (item.product_name || item.name || ''),
+      product_sku: serviceLine ? '' : (item.product_sku || item.sku || ''),
+      name: serviceLine ? serviceName : (item.name || item.product_name || ''),
+      sku: serviceLine ? '' : (item.sku || item.product_sku || ''),
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      discount_amount: item.discount_amount,
+      discount_percent: item.discount_percent,
+      line_total: item.line_total,
+    };
+  });
 
   // Thêm sản phẩm mới (chưa có trong hệ thống) vào giỏ hàng
   const handleAddNewProduct = async () => {
@@ -1345,7 +1450,6 @@ export default function CreateOrder({ user, store }) {
         method: 'POST',
         body: {
           name: newProduct.name.trim(),
-          sku: newProduct.sku?.trim() || '',
           import_price: parseFloat(newProduct.import_price) || 0,
           wholesale_price: parseFloat(newProduct.wholesale_price) || 0,
           retail_price: parseFloat(newProduct.retail_price) || 0,
@@ -1363,7 +1467,7 @@ export default function CreateOrder({ user, store }) {
       const productToAdd = {
         id: data.id,
         name: newProduct.name.trim(),
-        sku: newProduct.sku?.trim() || '',
+        sku: data.sku || '',
         import_price: parseFloat(newProduct.import_price) || 0,
         wholesale_price: parseFloat(newProduct.wholesale_price) || 0,
         retail_price: parseFloat(newProduct.retail_price) || 0,
@@ -1405,7 +1509,8 @@ export default function CreateOrder({ user, store }) {
   };
 
   const handleCreateOrder = async () => {
-    if (cart.length === 0) { alert('Chưa có sản phẩm nào!'); return; }
+    if (cart.length === 0) { alert('Chưa có sản phẩm hoặc dịch vụ nào!'); return; }
+    if (!guardServiceLinesBeforeSubmit()) return;
     if (!guardCartStockBeforeSubmit()) return;
     setCreating(true);
     const clientOrderId = generateClientOrderId();
@@ -1422,8 +1527,7 @@ export default function CreateOrder({ user, store }) {
       delivery_fee: deliveryFee,
       invoice_writer: invoiceWriter, receiver_name: receiverName,
       delivery_date: deliveryDate || null,
-      details: cart.map(({ type, item_type, combo_id, product_id, variant_id, product_name, product_sku, name, sku, quantity, unit_price, discount_amount, discount_percent, line_total }) =>
-        ({ type: type || item_type || 'product', item_type: item_type || type || 'product', combo_id: combo_id || null, product_id: product_id || null, variant_id: variant_id || null, product_name: product_name || name || '', product_sku: product_sku || sku || '', name: name || product_name || '', sku: sku || product_sku || '', quantity, unit_price, discount_amount, discount_percent, line_total })),
+      details: buildOrderDetailsPayload(),
     }, { client_order_id: clientOrderId });
     const showSuccess = (invoice_code, invoice_id = null, saveToPending = true) => {
       const payloadForStorage = saveToPending
@@ -1539,7 +1643,8 @@ export default function CreateOrder({ user, store }) {
 
   const handleSaveEdit = async () => {
     if (!editingInvoiceId) { alert('Không tìm thấy đơn hàng để cập nhật!'); return; }
-    if (cart.length === 0) { alert('Chưa có sản phẩm nào!'); return; }
+    if (cart.length === 0) { alert('Chưa có sản phẩm hoặc dịch vụ nào!'); return; }
+    if (!guardServiceLinesBeforeSubmit()) return;
     if (!guardCartStockBeforeSubmit()) return;
     setCreating(true);
     const payload = {
@@ -1557,22 +1662,7 @@ export default function CreateOrder({ user, store }) {
       remaining_amount: remainingAmount,
       delivery_fee: deliveryFee,
       delivery_date: deliveryDate || null,
-      details: cart.map(({ type, item_type, combo_id, product_id, variant_id, product_name, product_sku, name, sku, quantity, unit_price, discount_amount, discount_percent, line_total }) => ({
-        type: type || item_type || 'product',
-        item_type: item_type || type || 'product',
-        combo_id: combo_id || null,
-        product_id: product_id || null,
-        variant_id: variant_id || null,
-        product_name: product_name || name || '',
-        product_sku: product_sku || sku || '',
-        name: name || product_name || '',
-        sku: sku || product_sku || '',
-        quantity,
-        unit_price,
-        discount_amount,
-        discount_percent,
-        line_total,
-      })),
+      details: buildOrderDetailsPayload(),
     };
 
     try {
@@ -1587,7 +1677,7 @@ export default function CreateOrder({ user, store }) {
 
       const updatedInvoice = {
         id: editingInvoiceId,
-        invoice_code: lastInvoice?.invoice_code || `HD-${editingInvoiceId}`,
+        invoice_code: lastInvoice?.invoice_code || '',
         customer_name: selectedCustomer?.name || 'Khách lẻ',
         total: grandTotal,
         subtotal,
@@ -1844,12 +1934,14 @@ export default function CreateOrder({ user, store }) {
             {/* Search row */}
             <div className="p-3 border-b flex flex-col gap-2 bg-white 2xl:flex-row 2xl:items-center">
               <div className="flex-1 relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input ref={productSearchInputRef} className="input-field pl-9 w-full text-sm"
                   placeholder="Tìm sản phẩm/variant theo tên/SKU... Chọn tab Combo để tìm combo (F3)"
                   value={productSearch}
                   onFocus={handleProductSearchFocus}
-                  onChange={e => setProductSearch(e.target.value)} />
+                  onClick={handleProductSearchFocus}
+                  onKeyDown={handleProductSearchKeyDown}
+                  onChange={handleProductSearchChange} />
               </div>
               <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 2xl:w-auto 2xl:flex 2xl:flex-wrap 2xl:items-center 2xl:justify-end">
                 {selectedCustomer ? (
@@ -1881,7 +1973,7 @@ export default function CreateOrder({ user, store }) {
             </div>
 
             {/* Product grid when searching */}
-            {productSearch && (
+            {(showProductSearchResults || productSearch) && (
               <div className="p-3 border-b bg-blue-50">
                 <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
                   {[
@@ -1975,9 +2067,9 @@ export default function CreateOrder({ user, store }) {
             {/* Product table */}
             <div className="border-b bg-white px-3 py-2">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs font-bold text-gray-700">Danh sách đơn hàng vừa chọn</div>
+                <div className="text-xs font-bold text-gray-700">Danh sách sản phẩm / dịch vụ vừa chọn</div>
                 <div className="text-[11px] font-semibold text-gray-500">
-                  {cart.length.toLocaleString('vi-VN')} dòng · {cart.reduce((s, i) => s + (Number(i.quantity) || 0), 0).toLocaleString('vi-VN')} sản phẩm · sửa số lượng, giá và chiết khấu trực tiếp trong bảng
+                  {cart.length.toLocaleString('vi-VN')} dòng · {cart.reduce((s, i) => s + (Number(i.quantity) || 0), 0).toLocaleString('vi-VN')} số lượng · sửa số lượng, giá và chiết khấu trực tiếp trong bảng
                 </div>
               </div>
             </div>
@@ -1995,7 +2087,7 @@ export default function CreateOrder({ user, store }) {
                 <thead>
                   <tr>
                     <th className="text-center">STT</th>
-                    <th className="text-left">Tên sản phẩm</th>
+                    <th className="text-left">Tên sản phẩm / dịch vụ</th>
                     <th className="text-center">Số lượng</th>
                     <th className="text-right">Đơn giá</th>
                     <th className="text-center">Chiết khấu</th>
@@ -2007,6 +2099,7 @@ export default function CreateOrder({ user, store }) {
                   {cart.map((item, idx) => {
                     const rowKey = getCartRowKey(item, idx);
                     const isCombo = isComboOrderItem(item);
+                    const isService = isServiceOrderItem(item);
                     const comboItems = getComboLineItems(item);
                     const isExpanded = Boolean(expandedComboRows[rowKey]);
                     const stockState = getSaleStockStateForLine(cartStockValidation, item);
@@ -2017,7 +2110,7 @@ export default function CreateOrder({ user, store }) {
 
                     return (
                       <Fragment key={rowKey}>
-                        <tr className={`align-middle ${rowStockInvalid ? 'bg-red-50 ring-1 ring-red-200' : rowNearLimit ? 'bg-orange-50' : rowProjectedStockNegative ? 'bg-red-50/60' : ''}`}>
+                        <tr className={`align-middle ${isService ? 'bg-sky-50/40 ring-1 ring-sky-400' : rowStockInvalid ? 'bg-red-50 ring-1 ring-red-200' : rowNearLimit ? 'bg-orange-50' : rowProjectedStockNegative ? 'bg-red-50/60' : ''}`}>
                           <td className="text-center text-gray-500 font-medium">{idx + 1}</td>
                           <td>
                             <div className="font-medium flex items-center gap-1 min-w-0">
@@ -2036,13 +2129,28 @@ export default function CreateOrder({ user, store }) {
                                 </button>
                               )}
                               {isCombo && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-bold shrink-0">Combo</span>}
-                              <span className="pos-product-name-wrap">{getProductDisplayName(item)}</span>
+                              {isService && <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 font-bold shrink-0">Dịch vụ</span>}
+                              {isService ? (
+                                <input
+                                  type="text"
+                                  value={getServiceLineName(item)}
+                                  ref={(node) => {
+                                    if (node) serviceNameInputRefs.current[item.id] = node;
+                                    else delete serviceNameInputRefs.current[item.id];
+                                  }}
+                                  onChange={e => updateCartItem(item.id, 'service_name', e.target.value)}
+                                  className="min-w-[220px] max-w-full flex-1 rounded border border-sky-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                  placeholder="Tên dịch vụ"
+                                />
+                              ) : (
+                                <span className="pos-product-name-wrap">{getProductDisplayName(item)}</span>
+                              )}
                             </div>
-                            <div className="text-[10px] text-gray-400">{item.product_sku}</div>
+                            <div className="text-[10px] text-gray-400">{isService ? 'Dịch vụ khác' : item.product_sku}</div>
                             {isCombo && (
                               <div className="text-[10px] text-purple-500 mt-0.5 truncate max-w-xs">{getComboItemSummary(item)}</div>
                             )}
-                            {!isCombo && Number.isFinite(Number(rowProjectedStockValue)) && (
+                            {!isCombo && !isService && Number.isFinite(Number(rowProjectedStockValue)) && (
                               <div className={`text-xs font-semibold mt-0.5 ${rowStockInvalid ? 'text-red-600' : rowNearLimit ? 'text-orange-700' : rowProjectedStockNegative ? 'text-red-500' : 'text-gray-500'}`}>
                                 Dự kiến {formatStockValue(rowProjectedStockValue)}{rowStockInvalid ? ` · ${stockState?.message || negativeStockLimitMessage}` : rowNearLimit ? ` · ${negativeStockNearLimitLabel || `gần ngưỡng ${negativeStockRuntimeLimitLabel}`}` : rowProjectedStockNegative ? ' · âm kho theo cài đặt backend' : ''}
                               </div>
@@ -2070,7 +2178,7 @@ export default function CreateOrder({ user, store }) {
                             {formatVND(item.line_total)}
                           </td>
                           <td>
-                            <button onClick={() => removeCartItem(item.id)} className="action-icon-btn text-red-500 hover:text-red-700 hover:bg-red-50" title="Xóa sản phẩm">
+                            <button onClick={() => removeCartItem(item.id)} className="action-icon-btn text-red-500 hover:text-red-700 hover:bg-red-50" title={isService ? 'Xóa dịch vụ' : 'Xóa sản phẩm'}>
                               <Trash2 size={13} />
                             </button>
                           </td>
@@ -2109,7 +2217,7 @@ export default function CreateOrder({ user, store }) {
                     <tr>
                       <td colSpan={7} className="text-center text-gray-400 py-12">
                         <Package size={46} className="mx-auto mb-3 text-gray-200" />
-                        <div className="mb-3">Chưa có thông tin sản phẩm</div>
+                        <div className="mb-3">Chưa có thông tin sản phẩm / dịch vụ</div>
                         <button onClick={openOrderProductPicker}
                           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1">
                           <Plus size={13} /> Thêm sản phẩm
@@ -2119,6 +2227,16 @@ export default function CreateOrder({ user, store }) {
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="border-t border-gray-100 bg-white px-3 py-2">
+              <button
+                type="button"
+                onPointerDown={handleAddServicePointerDown}
+                onClick={handleAddServiceClick}
+                className="inline-flex items-center gap-1.5 rounded px-2 py-1.5 text-sm font-semibold text-sky-700 hover:bg-sky-50"
+              >
+                <Plus size={16} /> Thêm dịch vụ khác (F9)
+              </button>
             </div>
             {/* Full product panel */}
             {false && showProductPanel && (
@@ -2272,7 +2390,7 @@ export default function CreateOrder({ user, store }) {
             {/* Phải: Tổng tiền */}
             <div className="sapo-card sapo-order-summary p-4 space-y-2 text-sm">
               <div className="flex justify-between items-center text-gray-600">
-                <span>Tổng tiền ({cart.reduce((s, i) => s + i.quantity, 0)} sp)</span>
+                <span>Tổng tiền ({cart.reduce((s, i) => s + (Number(i.quantity) || 0), 0).toLocaleString('vi-VN')} số lượng)</span>
                 <span className="font-medium">{formatVND(subtotal)}</span>
               </div>
               <div className="flex justify-between items-center text-gray-600">
@@ -2550,8 +2668,8 @@ export default function CreateOrder({ user, store }) {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Mã SKU</label>
-                    <input className="input-field w-full" value={newProduct.sku} onChange={e => setNewProduct(p => ({ ...p, sku: e.target.value }))} placeholder="SP001" />
+                    <label className="text-xs text-gray-500 block mb-1">Mã sản phẩm</label>
+                    <input className="input-field w-full bg-gray-100 text-gray-500 cursor-not-allowed" value={newProduct.sku} readOnly disabled placeholder="Tự sinh SP00001" />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

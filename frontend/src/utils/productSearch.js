@@ -69,6 +69,9 @@ export function getProductDisplayName(item = {}, parent = null) {
   if (type === 'combo' || item?.combo_id || item?.is_combo || item?.isCombo) {
     return firstNonEmpty(item?.product_name, item?.name, item?.combo_name, 'Combo');
   }
+  if (type === 'service' || type === 'custom_service' || item?.is_service || item?.isService) {
+    return firstNonEmpty(item?.product_name, item?.name, item?.service_name, 'Dịch vụ');
+  }
 
   const isVariant = Boolean(
     parent
