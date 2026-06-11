@@ -121,14 +121,15 @@ function createProductNotFoundError(detail = {}, index = 0) {
   const sku = getDetailSku(detail);
   const productId = detail.variant_id || detail.product_id || null;
   const line = index + 1;
-  const message = sku
+  const hasRequestedProductId = Number.isFinite(Number(productId)) && Number(productId) > 0;
+  const message = sku && !hasRequestedProductId
     ? `SKU không tồn tại trong hệ thống: ${sku}`
     : `Sản phẩm ở dòng ${line} không tồn tại trong hệ thống`;
   const err = createHttpError(message, 400);
-  err.code = 'PRODUCT_SKU_NOT_FOUND';
+  err.code = sku && !hasRequestedProductId ? 'PRODUCT_SKU_NOT_FOUND' : 'PRODUCT_NOT_FOUND';
   err.details = {
     line,
-    sku,
+    sku: hasRequestedProductId ? '' : sku,
     product_id: detail.product_id || null,
     variant_id: detail.variant_id || null,
     requested_product_id: productId,
@@ -142,10 +143,9 @@ function resolveInvoiceSaleDetailProduct(detail = {}, index = 0) {
 
   const sku = getDetailSku(detail);
   const requestedProductId = detail.variant_id || detail.product_id || null;
-  const productBySku = getActiveProductBySku(sku);
+  const hasRequestedProductId = Number.isFinite(Number(requestedProductId)) && Number(requestedProductId) > 0;
   const productById = getActiveProductById(requestedProductId);
-  if (sku && !productBySku) throw createProductNotFoundError(detail, index);
-  const product = productBySku || productById;
+  const product = productById || (!hasRequestedProductId ? getActiveProductBySku(sku) : null);
   if (!product) throw createProductNotFoundError(detail, index);
 
   const parent = product.parent_id ? getActiveProductById(product.parent_id) : null;

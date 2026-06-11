@@ -130,10 +130,6 @@ function getComboChildName(item) {
   return productName;
 }
 
-function getComboChildSku(item) {
-  return item?.sku || item?.product_sku || item?.variant_sku || item?.product?.sku || item?.variant?.sku || '';
-}
-
 function getComboItemSummary(combo) {
   const items = getComboLineItems(combo);
   if (items.length === 0) return 'Chưa có thành phần';
@@ -600,20 +596,9 @@ export default function CreateOrder({ user, store }) {
     return null;
   };
 
-  const getProductBySku = (sku) => {
-    const target = String(sku || '').trim().toLowerCase();
-    if (!target) return null;
-    for (const p of products) {
-      if (String(p.sku || '').trim().toLowerCase() === target) return p;
-      const v = (p.variants || []).find(va => String(va.sku || '').trim().toLowerCase() === target);
-      if (v) return v;
-    }
-    return null;
-  };
-
   const resolveOrderProductRecord = (item) => {
     if (!item || isComboOrderItem(item) || isServiceOrderItem(item)) return null;
-    return getProductById(item.variant_id || item.product_id) || getProductBySku(item.product_sku || item.sku);
+    return getProductById(item.variant_id || item.product_id);
   };
 
   const findMissingOrderProductLine = (lines = cart) => (
@@ -679,9 +664,7 @@ export default function CreateOrder({ user, store }) {
         parent_name: showVariantPicker?.name || v.parent_name || v.parent?.name || '',
         variant_name: v.name,
         product_name: displayName,
-        product_sku: v.sku,
         name: displayName,
-        sku: v.sku,
         quantity: qty,
         unit_price,
         discount_amount: 0,
@@ -797,9 +780,7 @@ export default function CreateOrder({ user, store }) {
       product_id: null,
       variant_id: null,
       product_name: combo.name || 'Combo',
-      product_sku: combo.sku || '',
       name: combo.name || 'Combo',
-      sku: combo.sku || '',
       quantity: normalizedQuantity,
       unit_price,
       discount_amount: 0,
@@ -825,9 +806,7 @@ export default function CreateOrder({ user, store }) {
       parent_name: isVariant ? (product.parent_name || product.parent?.name || '') : '',
       variant_name: isVariant ? product.name : '',
       product_name: displayName,
-      product_sku: product.sku,
       name: displayName,
-      sku: product.sku,
       quantity: normalizedQuantity,
       unit_price,
       discount_amount: 0,
@@ -846,9 +825,7 @@ export default function CreateOrder({ user, store }) {
     product_id: null,
     variant_id: null,
     product_name: '',
-    product_sku: '',
     name: '',
-    sku: '',
     quantity: 1,
     unit_price: 0,
     discount_amount: 0,
@@ -1015,7 +992,6 @@ export default function CreateOrder({ user, store }) {
         item,
         line,
         name: line.product_name,
-        sku: line.product_sku,
         quantity: 1,
         appliedQuantity: 0,
       }];
@@ -1133,7 +1109,6 @@ export default function CreateOrder({ user, store }) {
     const displayName = kind === 'combo'
       ? (item.name || 'Combo')
       : (isVariant ? getProductDisplayName(item, parent) : getProductDisplayName(item));
-    const sku = kind === 'combo' ? item.sku : item.sku;
     const imageUrl = kind === 'product' ? getProductImageUrl(item) : '';
     const price = kind === 'combo' ? getComboPrice(item) : getPrice(item);
     const metaText = getPickerMetaText(item, kind);
@@ -1159,7 +1134,6 @@ export default function CreateOrder({ user, store }) {
             {displayName}
           </div>
           <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] leading-4">
-            <span className="text-slate-400">{sku || '—'}</span>
             <span className="max-w-full truncate font-medium text-sky-700">{metaText}</span>
           </div>
           {isVariant && parent?.name && (
@@ -1357,7 +1331,7 @@ export default function CreateOrder({ user, store }) {
                     </span>
                     <span className="truncate text-xs font-semibold text-gray-800" title={selection.name}>{selection.name}</span>
                   </div>
-                  <div className="mt-0.5 text-[10px] text-gray-400">SKU: {selection.sku || '—'} · {formatVND(selection.line.unit_price)}</div>
+                  <div className="mt-0.5 text-[10px] text-gray-400">Giá bán: {formatVND(selection.line.unit_price)}</div>
                 </div>
                 <button
                   type="button"
@@ -1436,7 +1410,6 @@ export default function CreateOrder({ user, store }) {
     const serviceName = getServiceLineName(item);
     const productRecord = serviceLine ? null : resolveOrderProductRecord(item);
     const parentProduct = productRecord?.parent_id ? getProductById(productRecord.parent_id) : null;
-    const canonicalProductSku = serviceLine ? '' : (productRecord?.sku || item.product_sku || item.sku || '');
     const canonicalProductName = serviceLine
       ? serviceName
       : getProductDisplayName(productRecord || item, parentProduct);
@@ -1450,9 +1423,7 @@ export default function CreateOrder({ user, store }) {
       parent_name: serviceLine ? '' : (productRecord?.parent_id ? (parentProduct?.name || item.parent_name || '') : (item.parent_name || '')),
       variant_name: serviceLine ? '' : (productRecord?.parent_id ? (productRecord?.name || item.variant_name || '') : (item.variant_name || '')),
       product_name: serviceLine ? serviceName : canonicalProductName,
-      product_sku: canonicalProductSku,
       name: serviceLine ? serviceName : (item.name || canonicalProductName || ''),
-      sku: canonicalProductSku,
       quantity: item.quantity,
       unit_price: item.unit_price,
       discount_amount: item.discount_amount,
@@ -1515,7 +1486,6 @@ export default function CreateOrder({ user, store }) {
         id: Date.now() + Math.random(),
         product_id: data.id,
         product_name: productToAdd.name,
-        product_sku: productToAdd.sku,
         quantity: 1,
         unit_price,
         discount_amount: 0,
@@ -1544,7 +1514,7 @@ export default function CreateOrder({ user, store }) {
     if (!guardServiceLinesBeforeSubmit()) return;
     const missingProductLine = findMissingOrderProductLine();
     if (missingProductLine) {
-      alert(`SKU không tồn tại trong hệ thống: ${missingProductLine.product_sku || missingProductLine.sku || '—'}.`);
+      alert(`Sản phẩm "${missingProductLine.product_name || missingProductLine.name || 'đã chọn'}" không tồn tại trong hệ thống. Vui lòng chọn lại sản phẩm từ danh sách.`);
       return;
     }
     if (!guardCartStockBeforeSubmit()) return;
@@ -1683,7 +1653,7 @@ export default function CreateOrder({ user, store }) {
     if (!guardServiceLinesBeforeSubmit()) return;
     const missingProductLine = findMissingOrderProductLine();
     if (missingProductLine) {
-      alert(`SKU không tồn tại trong hệ thống: ${missingProductLine.product_sku || missingProductLine.sku || '—'}.`);
+      alert(`Sản phẩm "${missingProductLine.product_name || missingProductLine.name || 'đã chọn'}" không tồn tại trong hệ thống. Vui lòng chọn lại sản phẩm từ danh sách.`);
       return;
     }
     if (!guardCartStockBeforeSubmit()) return;
@@ -1977,7 +1947,7 @@ export default function CreateOrder({ user, store }) {
               <div className="flex-1 relative">
                 <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input ref={productSearchInputRef} className="input-field pl-9 w-full text-sm"
-                  placeholder="Tìm sản phẩm/variant theo tên/SKU... Chọn tab Combo để tìm combo (F3)"
+                  placeholder="Tìm sản phẩm/variant theo tên... Chọn tab Combo để tìm combo (F3)"
                   value={productSearch}
                   onFocus={handleProductSearchFocus}
                   onClick={handleProductSearchFocus}
@@ -2050,7 +2020,7 @@ export default function CreateOrder({ user, store }) {
                           <div className="text-[10px] text-purple-500 truncate mt-0.5">{getComboItemSummary(combo)}</div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
-                          <div className="text-[10px] text-gray-500">{combo.sku || '—'}</div>
+                          <div className="text-[10px] text-gray-500">Combo</div>
                           <div className="text-xs font-bold text-purple-700 whitespace-nowrap">{formatVND(getComboPrice(combo))}</div>
                         </div>
                       </div>
@@ -2083,7 +2053,6 @@ export default function CreateOrder({ user, store }) {
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
-                            <div className="text-[10px] text-gray-400">SKU: {item.sku || '—'}</div>
                             <div className={`text-[10px] ${stockMeta.textClass}`}>{stockMeta.display}</div>
                             {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>Âm kho</div>}
                             {stockMeta.isNearLimit && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.extraBadgeClass || 'bg-orange-100 text-orange-800 border border-orange-200'}`}>{stockMeta.extraLabel || negativeStockNearLimitLabel}</div>}
@@ -2187,7 +2156,7 @@ export default function CreateOrder({ user, store }) {
                                 <span className="pos-product-name-wrap">{getProductDisplayName(item)}</span>
                               )}
                             </div>
-                            <div className="text-[10px] text-gray-400">{isService ? 'Dịch vụ khác' : item.product_sku}</div>
+                            <div className="text-[10px] text-gray-400">{isService ? 'Dịch vụ khác' : 'Sản phẩm đã chọn'}</div>
                             {isCombo && (
                               <div className="text-[10px] text-purple-500 mt-0.5 truncate max-w-xs">{getComboItemSummary(item)}</div>
                             )}
@@ -2228,21 +2197,17 @@ export default function CreateOrder({ user, store }) {
                           <tr className="bg-purple-50/60 border-b border-purple-100 text-xs">
                             <td colSpan={7}>
                               <div className="border-l-2 border-purple-200 pl-3 space-y-1">
-                                {comboItems.length > 0 ? comboItems.map((comboItem, childIdx) => {
-                                  const childSku = getComboChildSku(comboItem);
-                                  return (
-                                    <div key={`${rowKey}_child_${comboItem.id || comboItem.product_id || comboItem.variant_id || childIdx}`} className="flex items-center justify-between gap-3 rounded border border-purple-100 bg-white px-3 py-2">
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-[10px] font-bold shrink-0">{childIdx + 1}</span>
-                                        <div className="min-w-0">
-                                          <div className="font-medium text-gray-700 truncate">{getComboChildName(comboItem)}</div>
-                                          <div className="text-[10px] text-gray-400">{childSku ? `SKU: ${childSku}` : 'SKU: —'}</div>
-                                        </div>
+                                {comboItems.length > 0 ? comboItems.map((comboItem, childIdx) => (
+                                  <div key={`${rowKey}_child_${comboItem.id || comboItem.product_id || comboItem.variant_id || childIdx}`} className="flex items-center justify-between gap-3 rounded border border-purple-100 bg-white px-3 py-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-[10px] font-bold shrink-0">{childIdx + 1}</span>
+                                      <div className="min-w-0">
+                                        <div className="font-medium text-gray-700 truncate">{getComboChildName(comboItem)}</div>
                                       </div>
-                                      <div className="text-purple-700 font-semibold whitespace-nowrap">SL combo: {getComboChildQuantity(comboItem)}</div>
                                     </div>
-                                  );
-                                }) : (
+                                    <div className="text-purple-700 font-semibold whitespace-nowrap">SL combo: {getComboChildQuantity(comboItem)}</div>
+                                  </div>
+                                )) : (
                                   <div className="rounded border border-dashed border-purple-200 bg-white px-3 py-2 text-purple-500">
                                     Chưa có dữ liệu thành phần combo để hiển thị.
                                   </div>
@@ -2286,7 +2251,7 @@ export default function CreateOrder({ user, store }) {
                   <div className="flex-1 relative">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input ref={productSearchInputRef} className="input-field pl-9 w-full text-sm"
-                      placeholder="Tìm sản phẩm/variant theo tên/SKU... Chọn tab Combo để tìm combo theo tên/SKU"
+                      placeholder="Tìm sản phẩm/variant theo tên... Chọn tab Combo để tìm combo theo tên"
                       value={productSearch}
                       onFocus={handleProductSearchFocus}
                       onChange={e => setProductSearch(e.target.value)} />
@@ -2343,7 +2308,7 @@ export default function CreateOrder({ user, store }) {
                           <div className="text-[10px] text-purple-500 truncate mt-0.5">{getComboItemSummary(combo)}</div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
-                          <div className="text-[10px] text-gray-500">{combo.sku || '—'}</div>
+                          <div className="text-[10px] text-gray-500">Combo</div>
                           <div className="text-xs font-bold text-purple-700 whitespace-nowrap">{formatVND(getComboPrice(combo))}</div>
                         </div>
                       </div>
@@ -2387,7 +2352,6 @@ export default function CreateOrder({ user, store }) {
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
-                            <div className="text-[10px] text-gray-400">SKU: {item.sku || '—'}</div>
                             <div className={`text-[10px] ${stockMeta.textClass}`}>{stockMeta.display}</div>
                             {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>Âm kho</div>}
                             {stockMeta.isNearLimit && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.extraBadgeClass || 'bg-orange-100 text-orange-800 border border-orange-200'}`}>{stockMeta.extraLabel || negativeStockNearLimitLabel}</div>}
@@ -2598,11 +2562,10 @@ export default function CreateOrder({ user, store }) {
                   </thead>
                   <tbody>
                     {(lastInvoice.cart || []).map((item, idx) => (
-                      <tr key={`${item.id || item.product_id || item.product_sku || 'review'}-${idx}`} className="border-b last:border-b-0">
+                      <tr key={`${item.id || item.product_id || 'review'}-${idx}`} className="border-b last:border-b-0">
                         <td className="py-2 px-3 text-center text-gray-500">{idx + 1}</td>
                         <td className="py-2 px-3">
                           <div className="font-medium text-gray-800">{getProductDisplayName(item)}</div>
-                          <div className="text-xs text-gray-400">{item.product_sku || '—'}</div>
                         </td>
                         <td className="py-2 px-3 text-center">{item.quantity}</td>
                         <td className="py-2 px-3 text-right">{formatVND(item.unit_price)}</td>
@@ -2656,7 +2619,7 @@ export default function CreateOrder({ user, store }) {
                   <div key={v.id} className={`flex flex-col gap-3 border rounded-lg p-3 hover:border-blue-400 sm:flex-row sm:items-center ${stockMeta.cardClass}`}>
                     <div className="flex-1 min-w-0">
                       <div className={`font-medium text-sm truncate ${stockMeta.isNegative || stockMeta.isNearLimit ? stockMeta.nameClass : 'text-gray-800'}`}>{getProductDisplayName(v, showVariantPicker)}</div>
-                      <div className={`text-xs ${stockMeta.textClass}`}>SKU: {v.sku || '—'} · {stockMeta.display}</div>
+                      <div className={`text-xs ${stockMeta.textClass}`}>{stockMeta.display}</div>
                       <div className="text-sm font-bold text-blue-600 mt-0.5">{formatVND(getPrice(v))}</div>
                     </div>
                     <div className="flex items-center gap-2 sm:shrink-0">

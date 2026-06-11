@@ -42,7 +42,7 @@ const {
 } = require('../src/db/database');
 const { createInvoiceFromPayload } = require('../src/services/invoiceCreationService');
 
-function createOrder(product, index) {
+function createOrder(product, index, detailOverrides = {}) {
   return createInvoiceFromPayload({
     customer_id: null,
     payment_method: 'cash',
@@ -52,13 +52,12 @@ function createOrder(product, index) {
     client_order_id: `repeat-sku-${Date.now()}-${index}`,
     details: [{
       product_id: product.id,
-      product_sku: product.sku,
-      sku: product.sku,
       product_name: product.name,
       name: product.name,
       quantity: 1,
       unit_price: 100,
       line_total: 100,
+      ...detailOverrides,
     }],
   }, { accountId: 1, user: { id: 1, name: 'Repeat SKU Test' } });
 }
@@ -93,7 +92,7 @@ assert.strictEqual(duplicateProductError?.code, 'PRODUCT_SKU_DUPLICATE');
 
 const first = createOrder(product, 1);
 assert.strictEqual(first.created, true, 'First order with SKU A must succeed');
-const second = createOrder(product, 2);
+const second = createOrder(product, 2, { product_sku: 'STALE-ORDER-SKU', sku: 'STALE-ORDER-SKU' });
 assert.strictEqual(second.created, true, 'Second order with SKU A must succeed');
 
 for (let index = 3; index <= count; index += 1) {
@@ -101,26 +100,30 @@ for (let index = 3; index <= count; index += 1) {
   assert.strictEqual(result.created, true, `Order ${index} with repeated SKU must succeed`);
 }
 
-let missingSkuError = null;
+let missingProductError = null;
 try {
   createInvoiceFromPayload({
-    client_order_id: `missing-sku-${Date.now()}`,
+    client_order_id: `missing-product-${Date.now()}`,
     subtotal: 100,
     total: 100,
     details: [{
-      product_sku: 'SKU-NOT-FOUND',
-      sku: 'SKU-NOT-FOUND',
+      product_id: 999999999,
+      product_name: 'Missing Product',
       quantity: 1,
       unit_price: 100,
       line_total: 100,
     }],
   }, { accountId: 1, user: { id: 1, name: 'Repeat SKU Test' } });
 } catch (error) {
-  missingSkuError = error;
+  missingProductError = error;
 }
 
-assert.strictEqual(missingSkuError?.code, 'PRODUCT_SKU_NOT_FOUND');
-assert.match(missingSkuError.message, /SKU không tồn tại trong hệ thống/);
+assert.strictEqual(missingProductError?.code, 'PRODUCT_NOT_FOUND');
+assert(
+  String(missingProductError.message || '').includes('Sản phẩm')
+    && String(missingProductError.message || '').includes('không tồn tại trong hệ thống'),
+  `Unexpected missing product message: ${missingProductError?.message || ''}`,
+);
 
 const invoices = getAll('invoices');
 const details = getAll('invoice_details');
@@ -145,9 +148,9 @@ console.log(JSON.stringify({
     status: duplicateProductError.status,
     message: duplicateProductError.message,
   },
-  missingSkuError: {
-    code: missingSkuError.code,
-    status: missingSkuError.status,
-    message: missingSkuError.message,
+  missingProductError: {
+    code: missingProductError.code,
+    status: missingProductError.status,
+    message: missingProductError.message,
   },
 }, null, 2));
