@@ -39,6 +39,7 @@ const {
   getAll,
   getOne,
   insert,
+  replaceTable,
 } = require('../src/db/database');
 const { createInvoiceFromPayload } = require('../src/services/invoiceCreationService');
 
@@ -89,6 +90,19 @@ try {
   duplicateProductError = error;
 }
 assert.strictEqual(duplicateProductError?.code, 'PRODUCT_SKU_DUPLICATE');
+
+const legacyDuplicateProductId = Math.max(...getAll('products').map(row => Number(row.id) || 0)) + 1;
+replaceTable('products', [
+  ...getAll('products'),
+  {
+    ...product,
+    id: legacyDuplicateProductId,
+    name: 'Legacy Duplicate SKU Fixture',
+    stock: 0,
+  },
+]);
+const productsWithRepeatedSku = getAll('products', row => String(row.sku || '').trim() === sku);
+assert.strictEqual(productsWithRepeatedSku.length, 2, 'Fixture must contain a legacy duplicate product SKU');
 
 const first = createOrder(product, 1);
 assert.strictEqual(first.created, true, 'First order with SKU A must succeed');
@@ -143,6 +157,7 @@ console.log(JSON.stringify({
   createdOrders: invoices.length,
   repeatedSkuOrderItems: repeatedSkuDetails.length,
   uniqueOrderCodes: invoiceCodes.size,
+  legacyDuplicateSkuProducts: productsWithRepeatedSku.length,
   duplicateProductError: {
     code: duplicateProductError.code,
     status: duplicateProductError.status,

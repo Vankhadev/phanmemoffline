@@ -611,6 +611,17 @@ function createDocumentCodeImmutableError(config) {
   return error;
 }
 
+function shouldValidateDocumentCodeUpdate(config, current = {}, changes = {}, updated = {}) {
+  if (!config || !Object.prototype.hasOwnProperty.call(changes || {}, config.field)) return false;
+
+  const currentCode = normalizeDocumentCodeLookup(current?.[config.field]);
+  const requestedCode = normalizeDocumentCodeLookup(changes?.[config.field]);
+  const updatedCode = normalizeDocumentCodeLookup(updated?.[config.field]);
+  if (!updatedCode) return false;
+  if (!currentCode) return true;
+  return updatedCode !== currentCode || (requestedCode && requestedCode !== currentCode);
+}
+
 function ensureSequenceCounterAtLeast(name, minValue) {
   const current = getDb();
   const requestedTarget = Math.max(0, Math.floor(Number(minValue) || 0));
@@ -1738,9 +1749,11 @@ function update(table, id, changes, options = {}) {
   const numericId = Number(id);
   const index = rows.findIndex(row => Number(row?.id) === numericId && isRowVisibleForCurrentScope(table, row, options));
   if (index === -1) return null;
-  const updated = { ...rows[index], ...normalizeUpdateChanges(table, rows[index], changes || {}) };
+  const current = rows[index];
+  const requestedChanges = changes || {};
+  const updated = { ...current, ...normalizeUpdateChanges(table, current, requestedChanges) };
   const documentCodeConfig = getDocumentCodeConfigForTable(table);
-  if (documentCodeConfig) {
+  if (shouldValidateDocumentCodeUpdate(documentCodeConfig, current, requestedChanges, updated)) {
     const duplicate = findDocumentByCode(documentCodeConfig, updated[documentCodeConfig.field], id);
     if (duplicate) {
       throw createDocumentCodeDuplicateError(documentCodeConfig, updated[documentCodeConfig.field]);
