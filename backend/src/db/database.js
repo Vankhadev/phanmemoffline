@@ -525,6 +525,10 @@ const DOCUMENT_CODE_CONFIG = Object.freeze({
     prefix: 'SP',
     counterName: 'product_seq',
     width: 5,
+    duplicateCode: 'PRODUCT_SKU_DUPLICATE',
+    duplicateMessage: code => `SKU đã tồn tại trong danh mục sản phẩm: ${code}`,
+    immutableCode: 'PRODUCT_SKU_IMMUTABLE',
+    immutableMessage: 'Mã SKU sản phẩm đã cấp không được thay đổi.',
   }),
 });
 
@@ -581,6 +585,30 @@ function findDocumentByCode(typeOrConfig, code, ignoredId = null) {
     if (ignoredId != null && Number(row.id) === Number(ignoredId)) return false;
     return normalizeDocumentCodeLookup(row[config.field]) === lookupKey;
   }) || null;
+}
+
+function createDocumentCodeDuplicateError(config, code) {
+  const normalizedCode = normalizeDocumentCodeText(code);
+  const message = typeof config.duplicateMessage === 'function'
+    ? config.duplicateMessage(normalizedCode)
+    : `Ma ${normalizedCode} da ton tai.`;
+  const error = new Error(message);
+  error.status = 409;
+  error.statusCode = 409;
+  error.code = config.duplicateCode || 'DOCUMENT_CODE_DUPLICATE';
+  if (config.table === 'products') {
+    error.details = { sku: normalizedCode };
+  }
+  return error;
+}
+
+function createDocumentCodeImmutableError(config) {
+  const message = config.immutableMessage || `Ma ${config.prefix} da cap khong duoc thay doi.`;
+  const error = new Error(message);
+  error.status = 400;
+  error.statusCode = 400;
+  error.code = config.immutableCode || 'DOCUMENT_CODE_IMMUTABLE';
+  return error;
 }
 
 function ensureSequenceCounterAtLeast(name, minValue) {
@@ -1633,11 +1661,7 @@ function normalizeUpdateChanges(table, current = {}, changes = {}) {
       && requestedCode
       && normalizeDocumentCodeLookup(currentCode) !== normalizeDocumentCodeLookup(requestedCode)
     ) {
-      const error = new Error(`Ma ${documentCodeConfig.prefix} da cap khong duoc thay doi.`);
-      error.status = 400;
-      error.statusCode = 400;
-      error.code = 'DOCUMENT_CODE_IMMUTABLE';
-      throw error;
+      throw createDocumentCodeImmutableError(documentCodeConfig);
     }
     normalized[documentCodeConfig.field] = currentCode || requestedCode || generateNextDocumentCode(documentCodeConfig, { skipSave: true });
   }
@@ -1698,11 +1722,7 @@ function insert(table, row, options = {}) {
   if (documentCodeConfig) {
     const duplicate = findDocumentByCode(documentCodeConfig, normalized[documentCodeConfig.field]);
     if (duplicate) {
-      const error = new Error(`Ma ${normalized[documentCodeConfig.field]} da ton tai.`);
-      error.status = 409;
-      error.statusCode = 409;
-      error.code = 'DOCUMENT_CODE_DUPLICATE';
-      throw error;
+      throw createDocumentCodeDuplicateError(documentCodeConfig, normalized[documentCodeConfig.field]);
     }
   }
   rows.push(normalized);
@@ -1723,11 +1743,7 @@ function update(table, id, changes, options = {}) {
   if (documentCodeConfig) {
     const duplicate = findDocumentByCode(documentCodeConfig, updated[documentCodeConfig.field], id);
     if (duplicate) {
-      const error = new Error(`Ma ${updated[documentCodeConfig.field]} da ton tai.`);
-      error.status = 409;
-      error.statusCode = 409;
-      error.code = 'DOCUMENT_CODE_DUPLICATE';
-      throw error;
+      throw createDocumentCodeDuplicateError(documentCodeConfig, updated[documentCodeConfig.field]);
     }
   }
   rows[index] = updated;
