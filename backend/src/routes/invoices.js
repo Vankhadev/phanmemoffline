@@ -25,8 +25,8 @@ const {
   syncInvoiceAccounting,
   deductStock: deductInvoiceStock,
   restoreStock: restoreInvoiceStock,
-  mergeDuplicateDetails: mergeInvoiceDetails,
   normalizeInvoiceDetail: normalizeInvoiceDetailService,
+  prepareInvoiceDetailsForPersistence,
 } = require('../services/invoiceCreationService');
 const {
   getInvoiceDetailProductId,
@@ -77,10 +77,6 @@ function buildDetailKey(detail = {}, index = 0) {
 
 function normalizeInvoiceDetail(detail = {}, invoice_id) {
   return normalizeInvoiceDetailService(detail, invoice_id);
-}
-
-function mergeDuplicateDetails(details) {
-  return mergeInvoiceDetails(details);
 }
 
 function cleanupExpiredCancelledInvoicesForList() {
@@ -662,7 +658,7 @@ router.put('/:id', async (req, res) => {
       }, { skipSave: true });
 
       if (details !== undefined) {
-        const safeDetails = mergeDuplicateDetails(details);
+        const safeDetails = prepareInvoiceDetailsForPersistence(details);
         const oldDetails = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id));
         validateStockForInvoiceEditDetails(safeDetails, oldDetails);
         for (const d of oldDetails) {

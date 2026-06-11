@@ -26,6 +26,7 @@ const { logActivity } = require('./accountingLogService');
 function createHttpError(message, status = 400) {
   const err = new Error(message);
   err.status = status;
+  err.statusCode = status;
   return err;
 }
 
@@ -76,6 +77,93 @@ function genInvoiceCode(options = {}) {
 
 function isComboDetail(detail = {}) {
   return detail.type === 'combo' || detail.item_type === 'combo' || !!detail.combo_id;
+}
+
+function isServiceDetail(detail = {}) {
+  return detail.type === 'service'
+    || detail.item_type === 'service'
+    || detail.type === 'custom_service'
+    || detail.item_type === 'custom_service'
+    || detail.is_service
+    || detail.isService;
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function normalizeSkuKey(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getDetailSku(detail = {}) {
+  return firstNonEmpty(detail.product_sku, detail.sku, detail.variant_sku, detail.productSku);
+}
+
+function getActiveProductById(productId) {
+  const id = Number(productId);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  return getOne('products', product => Number(product.id) === id && product.active !== 0);
+}
+
+function getActiveProductBySku(sku) {
+  const skuKey = normalizeSkuKey(sku);
+  if (!skuKey) return null;
+  return getOne('products', product => product.active !== 0 && normalizeSkuKey(product.sku) === skuKey);
+}
+
+function createProductNotFoundError(detail = {}, index = 0) {
+  const sku = getDetailSku(detail);
+  const productId = detail.variant_id || detail.product_id || null;
+  const line = index + 1;
+  const message = sku
+    ? `SKU không tồn tại trong danh mục sản phẩm: ${sku}`
+    : `Sản phẩm ở dòng ${line} không tồn tại trong danh mục sản phẩm`;
+  const err = createHttpError(message, 400);
+  err.code = 'PRODUCT_SKU_NOT_FOUND';
+  err.details = {
+    line,
+    sku,
+    product_id: detail.product_id || null,
+    variant_id: detail.variant_id || null,
+    requested_product_id: productId,
+    product_name: detail.product_name || detail.name || '',
+  };
+  return err;
+}
+
+function resolveInvoiceSaleDetailProduct(detail = {}, index = 0) {
+  if (isComboDetail(detail) || isServiceDetail(detail)) return { ...(detail || {}) };
+
+  const sku = getDetailSku(detail);
+  const requestedProductId = detail.variant_id || detail.product_id || null;
+  const productBySku = getActiveProductBySku(sku);
+  const productById = getActiveProductById(requestedProductId);
+  if (sku && !productBySku) throw createProductNotFoundError(detail, index);
+  const product = productBySku || productById;
+  if (!product) throw createProductNotFoundError(detail, index);
+
+  const parent = product.parent_id ? getActiveProductById(product.parent_id) : null;
+  const isVariant = Boolean(product.parent_id);
+  const productName = firstNonEmpty(detail.product_name, detail.name, product.name, sku, 'Sản phẩm');
+
+  return {
+    ...(detail || {}),
+    product_id: product.id,
+    variant_id: isVariant ? product.id : null,
+    parent_id: isVariant ? (product.parent_id || null) : null,
+    parent_name: isVariant ? firstNonEmpty(detail.parent_name, parent && parent.name) : '',
+    variant_name: isVariant ? firstNonEmpty(detail.variant_name, product.name) : '',
+    product_name: productName,
+    name: firstNonEmpty(detail.name, productName),
+    product_sku: product.sku || sku,
+    sku: product.sku || sku,
+  };
 }
 
 function buildDetailKey(detail = {}, index = 0) {
@@ -139,6 +227,11 @@ function mergeDuplicateDetails(details) {
     }
   }
   return Array.from(map.values());
+}
+
+function prepareInvoiceDetailsForPersistence(details = []) {
+  if (!Array.isArray(details)) return [];
+  return mergeDuplicateDetails(details.map((detail, index) => resolveInvoiceSaleDetailProduct(detail, index)));
 }
 
 function deductStock(productOrVariantId, quantity, options = {}) {
@@ -400,7 +493,7 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
   const details = Array.isArray(payload.details) ? payload.details : [];
   if (details.length === 0) throw createHttpError('Đơn hàng chưa có sản phẩm', 400);
 
-  const safeDetails = mergeDuplicateDetails(details);
+  const safeDetails = prepareInvoiceDetailsForPersistence(details);
   if (safeDetails.length === 0) throw createHttpError('Đơn hàng chưa có sản phẩm', 400);
 
   const accountId = req?.accountId || req?.account?.id || payload.account_id || getActiveAccountId();
@@ -502,8 +595,10 @@ module.exports = {
   deductStock,
   restoreStock,
   isComboDetail,
+  isServiceDetail,
   normalizeInvoiceDetail,
   mergeDuplicateDetails,
+  prepareInvoiceDetailsForPersistence,
   normalizeClientOrderId,
   normalizePayloadHash,
 };

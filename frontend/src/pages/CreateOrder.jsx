@@ -589,14 +589,36 @@ export default function CreateOrder({ user, store }) {
 
   // Tìm sản phẩm theo id (để cập nhật giỏ khi đổi loại giá)
   const getProductById = (id) => {
+    const numericId = Number(id);
+    if (!Number.isFinite(numericId) || numericId <= 0) return null;
     // Ưu tiên tìm trong biến thể
     for (const p of products) {
-      const v = (p.variants || []).find(va => va.id === id);
+      const v = (p.variants || []).find(va => Number(va.id) === numericId);
       if (v) return v;
-      if (p.id === id) return p;
+      if (Number(p.id) === numericId) return p;
     }
     return null;
   };
+
+  const getProductBySku = (sku) => {
+    const target = String(sku || '').trim().toLowerCase();
+    if (!target) return null;
+    for (const p of products) {
+      if (String(p.sku || '').trim().toLowerCase() === target) return p;
+      const v = (p.variants || []).find(va => String(va.sku || '').trim().toLowerCase() === target);
+      if (v) return v;
+    }
+    return null;
+  };
+
+  const resolveOrderProductRecord = (item) => {
+    if (!item || isComboOrderItem(item) || isServiceOrderItem(item)) return null;
+    return getProductById(item.variant_id || item.product_id) || getProductBySku(item.product_sku || item.sku);
+  };
+
+  const findMissingOrderProductLine = (lines = cart) => (
+    (Array.isArray(lines) ? lines : []).find(line => !isComboOrderItem(line) && !isServiceOrderItem(line) && !resolveOrderProductRecord(line))
+  );
 
   const repriceCartLineForType = (item, nextPriceType = 'retail') => {
     if (isServiceOrderItem(item)) return item;
@@ -1412,16 +1434,25 @@ export default function CreateOrder({ user, store }) {
     const serviceLine = isServiceOrderItem(item);
     const type = serviceLine ? 'service' : (item.type || item.item_type || 'product');
     const serviceName = getServiceLineName(item);
+    const productRecord = serviceLine ? null : resolveOrderProductRecord(item);
+    const parentProduct = productRecord?.parent_id ? getProductById(productRecord.parent_id) : null;
+    const canonicalProductSku = serviceLine ? '' : (productRecord?.sku || item.product_sku || item.sku || '');
+    const canonicalProductName = serviceLine
+      ? serviceName
+      : getProductDisplayName(productRecord || item, parentProduct);
     return {
       type,
       item_type: type,
       combo_id: serviceLine ? null : (item.combo_id || null),
-      product_id: serviceLine ? null : (item.product_id || null),
-      variant_id: serviceLine ? null : (item.variant_id || null),
-      product_name: serviceLine ? serviceName : (item.product_name || item.name || ''),
-      product_sku: serviceLine ? '' : (item.product_sku || item.sku || ''),
-      name: serviceLine ? serviceName : (item.name || item.product_name || ''),
-      sku: serviceLine ? '' : (item.sku || item.product_sku || ''),
+      product_id: serviceLine ? null : (productRecord?.id || item.product_id || null),
+      variant_id: serviceLine ? null : (productRecord?.parent_id ? productRecord.id : (item.variant_id || null)),
+      parent_id: serviceLine ? null : (productRecord?.parent_id || item.parent_id || null),
+      parent_name: serviceLine ? '' : (productRecord?.parent_id ? (parentProduct?.name || item.parent_name || '') : (item.parent_name || '')),
+      variant_name: serviceLine ? '' : (productRecord?.parent_id ? (productRecord?.name || item.variant_name || '') : (item.variant_name || '')),
+      product_name: serviceLine ? serviceName : canonicalProductName,
+      product_sku: canonicalProductSku,
+      name: serviceLine ? serviceName : (item.name || canonicalProductName || ''),
+      sku: canonicalProductSku,
       quantity: item.quantity,
       unit_price: item.unit_price,
       discount_amount: item.discount_amount,
@@ -1511,6 +1542,11 @@ export default function CreateOrder({ user, store }) {
   const handleCreateOrder = async () => {
     if (cart.length === 0) { alert('Chưa có sản phẩm hoặc dịch vụ nào!'); return; }
     if (!guardServiceLinesBeforeSubmit()) return;
+    const missingProductLine = findMissingOrderProductLine();
+    if (missingProductLine) {
+      alert(`Không tìm thấy sản phẩm trong danh mục sản phẩm cho SKU "${missingProductLine.product_sku || missingProductLine.sku || '—'}".`);
+      return;
+    }
     if (!guardCartStockBeforeSubmit()) return;
     setCreating(true);
     const clientOrderId = generateClientOrderId();
@@ -1645,6 +1681,11 @@ export default function CreateOrder({ user, store }) {
     if (!editingInvoiceId) { alert('Không tìm thấy đơn hàng để cập nhật!'); return; }
     if (cart.length === 0) { alert('Chưa có sản phẩm hoặc dịch vụ nào!'); return; }
     if (!guardServiceLinesBeforeSubmit()) return;
+    const missingProductLine = findMissingOrderProductLine();
+    if (missingProductLine) {
+      alert(`Không tìm thấy sản phẩm trong danh mục sản phẩm cho SKU "${missingProductLine.product_sku || missingProductLine.sku || '—'}".`);
+      return;
+    }
     if (!guardCartStockBeforeSubmit()) return;
     setCreating(true);
     const payload = {
