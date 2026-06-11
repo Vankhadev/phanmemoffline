@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-electron",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "Bán hàng offline ",
   "repository": {
     "type": "git",
@@ -39,7 +39,8 @@
     "build": "npm run build:installer",
     "build:all": "npm run build:frontend && npm run package:portable && npm run package:installer && npm run generate:latest-yml && npm run generate:update-manifest",
     "generate:latest-yml": "node scripts/generate-latest-yml.js",
-    "generate:update-manifest": "node scripts/generate-update-manifest.js"
+    "generate:update-manifest": "node scripts/generate-update-manifest.js",
+    "test:repeat-sku-orders": "npm --prefix backend run test:repeat-sku-orders"
   },
   "build": {
     "appId": "com.vankhammo.phanmienoffline",

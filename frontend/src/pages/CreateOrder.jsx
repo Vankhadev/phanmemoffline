@@ -1544,7 +1544,7 @@ export default function CreateOrder({ user, store }) {
     if (!guardServiceLinesBeforeSubmit()) return;
     const missingProductLine = findMissingOrderProductLine();
     if (missingProductLine) {
-      alert(`Không tìm thấy sản phẩm trong danh mục sản phẩm cho SKU "${missingProductLine.product_sku || missingProductLine.sku || '—'}".`);
+      alert(`SKU không tồn tại trong hệ thống: ${missingProductLine.product_sku || missingProductLine.sku || '—'}.`);
       return;
     }
     if (!guardCartStockBeforeSubmit()) return;
@@ -1683,7 +1683,7 @@ export default function CreateOrder({ user, store }) {
     if (!guardServiceLinesBeforeSubmit()) return;
     const missingProductLine = findMissingOrderProductLine();
     if (missingProductLine) {
-      alert(`Không tìm thấy sản phẩm trong danh mục sản phẩm cho SKU "${missingProductLine.product_sku || missingProductLine.sku || '—'}".`);
+      alert(`SKU không tồn tại trong hệ thống: ${missingProductLine.product_sku || missingProductLine.sku || '—'}.`);
       return;
     }
     if (!guardCartStockBeforeSubmit()) return;

@@ -122,8 +122,8 @@ function createProductNotFoundError(detail = {}, index = 0) {
   const productId = detail.variant_id || detail.product_id || null;
   const line = index + 1;
   const message = sku
-    ? `SKU không tồn tại trong danh mục sản phẩm: ${sku}`
-    : `Sản phẩm ở dòng ${line} không tồn tại trong danh mục sản phẩm`;
+    ? `SKU không tồn tại trong hệ thống: ${sku}`
+    : `Sản phẩm ở dòng ${line} không tồn tại trong hệ thống`;
   const err = createHttpError(message, 400);
   err.code = 'PRODUCT_SKU_NOT_FOUND';
   err.details = {

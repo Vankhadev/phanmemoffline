@@ -1,0 +1,153 @@
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+
+const repoRoot = path.resolve(__dirname, '..', '..');
+const count = Math.max(1, Number(process.env.REPEAT_SKU_ORDER_COUNT || 1000) || 1000);
+const sku = String(process.env.REPEAT_SKU || 'TEST-SKU-REPEAT-A').trim();
+const tmpDir = path.join(repoRoot, '.tmp');
+fs.mkdirSync(tmpDir, { recursive: true });
+
+const tmpDbPath = path.join(tmpDir, `repeat-sku-orders-${Date.now()}.db.json`);
+process.env.KHA_DB_PATH = tmpDbPath;
+
+const sourceDbPath = path.join(repoRoot, 'backend', 'data', 'phanmienoffline.db.json');
+const sourceDb = JSON.parse(fs.readFileSync(sourceDbPath, 'utf8'));
+
+sourceDb.products = [];
+sourceDb.invoices = [];
+sourceDb.invoice_details = [];
+sourceDb.cash_book = [];
+sourceDb.accounting_transactions = [];
+sourceDb.daily_stats = [];
+sourceDb.counters = [];
+sourceDb.nextId = {
+  ...(sourceDb.nextId || {}),
+  products: 1,
+  invoices: 1,
+  invoice_details: 1,
+  cash_book: 1,
+  accounting_transactions: 1,
+  daily_stats: 1,
+  counters: 1,
+};
+
+fs.writeFileSync(tmpDbPath, JSON.stringify(sourceDb, null, 2));
+
+const {
+  DB_PATH,
+  getAll,
+  getOne,
+  insert,
+} = require('../src/db/database');
+const { createInvoiceFromPayload } = require('../src/services/invoiceCreationService');
+
+function createOrder(product, index) {
+  return createInvoiceFromPayload({
+    customer_id: null,
+    payment_method: 'cash',
+    subtotal: 100,
+    total: 100,
+    paid_amount: 0,
+    client_order_id: `repeat-sku-${Date.now()}-${index}`,
+    details: [{
+      product_id: product.id,
+      product_sku: product.sku,
+      sku: product.sku,
+      product_name: product.name,
+      name: product.name,
+      quantity: 1,
+      unit_price: 100,
+      line_total: 100,
+    }],
+  }, { accountId: 1, user: { id: 1, name: 'Repeat SKU Test' } });
+}
+
+const productId = insert('products', {
+  name: 'Repeat SKU Regression Product',
+  sku,
+  stock: count + 10,
+  retail_price: 100,
+  wholesale_price: 100,
+  vip_price: 100,
+  import_price: 0,
+  unit: 'pcs',
+  active: 1,
+});
+const product = getOne('products', row => Number(row.id) === Number(productId));
+assert(product, 'Fixture product was not created');
+
+let duplicateProductError = null;
+try {
+  insert('products', {
+    name: 'Duplicate Repeat SKU Product',
+    sku,
+    stock: 0,
+    retail_price: 100,
+    active: 1,
+  });
+} catch (error) {
+  duplicateProductError = error;
+}
+assert.strictEqual(duplicateProductError?.code, 'PRODUCT_SKU_DUPLICATE');
+
+const first = createOrder(product, 1);
+assert.strictEqual(first.created, true, 'First order with SKU A must succeed');
+const second = createOrder(product, 2);
+assert.strictEqual(second.created, true, 'Second order with SKU A must succeed');
+
+for (let index = 3; index <= count; index += 1) {
+  const result = createOrder(product, index);
+  assert.strictEqual(result.created, true, `Order ${index} with repeated SKU must succeed`);
+}
+
+let missingSkuError = null;
+try {
+  createInvoiceFromPayload({
+    client_order_id: `missing-sku-${Date.now()}`,
+    subtotal: 100,
+    total: 100,
+    details: [{
+      product_sku: 'SKU-NOT-FOUND',
+      sku: 'SKU-NOT-FOUND',
+      quantity: 1,
+      unit_price: 100,
+      line_total: 100,
+    }],
+  }, { accountId: 1, user: { id: 1, name: 'Repeat SKU Test' } });
+} catch (error) {
+  missingSkuError = error;
+}
+
+assert.strictEqual(missingSkuError?.code, 'PRODUCT_SKU_NOT_FOUND');
+assert.match(missingSkuError.message, /SKU không tồn tại trong hệ thống/);
+
+const invoices = getAll('invoices');
+const details = getAll('invoice_details');
+const invoiceCodes = new Set(invoices.map(invoice => invoice.invoice_code));
+const repeatedSkuDetails = details.filter(detail => String(detail.product_sku || detail.sku || '').trim() === sku);
+
+assert.strictEqual(invoices.length, count, 'Invoice count must match requested repeat count');
+assert.strictEqual(details.length, count, 'Invoice detail count must match requested repeat count');
+assert.strictEqual(repeatedSkuDetails.length, count, 'Repeated SKU must be stored once per order line');
+assert.strictEqual(invoiceCodes.size, count, 'Each order must have a unique invoice/order code');
+
+console.log(JSON.stringify({
+  ok: true,
+  dbPath: DB_PATH,
+  sku,
+  requestedOrders: count,
+  createdOrders: invoices.length,
+  repeatedSkuOrderItems: repeatedSkuDetails.length,
+  uniqueOrderCodes: invoiceCodes.size,
+  duplicateProductError: {
+    code: duplicateProductError.code,
+    status: duplicateProductError.status,
+    message: duplicateProductError.message,
+  },
+  missingSkuError: {
+    code: missingSkuError.code,
+    status: missingSkuError.status,
+    message: missingSkuError.message,
+  },
+}, null, 2));

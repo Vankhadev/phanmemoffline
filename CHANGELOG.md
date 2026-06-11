@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.6.3 - 2026-06-11
+
+### Thay doi chinh
+
+- Sua luong tao don de SKU chi duoc kiem tra trong danh muc san pham, khong chan SKU da tung xuat hien trong hoa don hoac dong hoa don.
+- Cho phep mot SKU xuat hien trong nhieu don hang; giu `invoice_code` la ma duy nhat cua tung don.
+- Chuan hoa thong bao SKU khong ton tai va bo sung migration SQL xoa UNIQUE INDEX sai tren SKU cua bang don hang, thay bang INDEX thuong.
+- Bo sung test hoi quy tao 1000 don hang cung mot SKU va xac nhan tat ca don deu tao thanh cong.
+
+### Phat hanh
+
+- Dong bo version 1.6.3 cho ung dung desktop, frontend, backend va cac lockfile.
+- Tao tag GitHub `v1.6.3`; GitHub Actions se build/publish cac goi phat hanh theo workflow hien tai.
+
 ## v1.6.0 - 2026-06-10
 
 ### Thay doi chinh
