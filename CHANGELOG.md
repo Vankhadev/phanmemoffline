@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.6.4 - 2026-06-11
+
+### Thay doi chinh
+
+- Xac nhan luong tao don khong con bao loi "Ma SKU da ton tai".
+- SKU san pham tiep tuc duoc phep lap lai tren nhieu don hang; chi kiem tra ton tai trong danh muc san pham.
+- Bo sung kiem tra lai bang 1000 don cung mot SKU de dam bao khong phat sinh duplicate SKU.
+
+### Phat hanh
+
+- Dong bo version 1.6.4 cho ung dung desktop, frontend, backend va lockfile.
+- Tao tag GitHub `v1.6.4` va release GitHub theo workflow hien tai.
+
 ## v1.6.3 - 2026-06-11
 
 ### Thay doi chinh
