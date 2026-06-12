@@ -589,10 +589,41 @@ function formatBytes(value) {
   return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+function formatTimestampForFolder() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const min = String(now.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}-${hh}-${min}`;
+}
+
+async function copyDirRecursive(src, dest) {
+  await fsp.mkdir(dest, { recursive: true });
+  const entries = await fsp.readdir(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      await copyDirRecursive(srcPath, destPath);
+    } else {
+      await fsp.copyFile(srcPath, destPath);
+    }
+  }
+}
+
+function getBackendDataDir(app) {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'app.asar.unpacked', 'backend', 'data');
+  }
+  return path.resolve(app.getAppPath(), 'backend', 'data');
+}
+
 async function backupDatabase(app, targetVersion) {
+  const timestamp = formatTimestampForFolder();
   const userData = app.getPath('userData');
   const dbPath = path.join(userData, DB_FILE_NAME);
-  if (!(await pathExists(dbPath))) return { dbPath, backupPath: '', skipped: true };
 
   const backupDir = path.join(userData, 'backups');
   await fsp.mkdir(backupDir, { recursive: true });
@@ -600,8 +631,66 @@ async function backupDatabase(app, targetVersion) {
     backupDir,
     `${DB_FILE_NAME}.backup.${formatTimestampForFile()}.pre-update-${sanitizeFileName(targetVersion)}.json`,
   );
-  await fsp.copyFile(dbPath, backupPath);
-  return { dbPath, backupPath, skipped: false };
+
+  if (await pathExists(dbPath)) {
+    await fsp.copyFile(dbPath, backupPath);
+  }
+
+  // Create comprehensive pre-upgrade backups in requested folders:
+  // 1. AppData/backup/YYYY-MM-DD-HH-mm/
+  // 2. C:\backup\YYYY-MM-DD-HH-mm/
+  // 3. Current drive /backup/YYYY-MM-DD-HH-mm/
+  const targetBackupDirs = [];
+  targetBackupDirs.push(path.join(userData, 'backup', timestamp));
+  targetBackupDirs.push(path.join('C:\\backup', timestamp));
+
+  try {
+    const currentDrive = path.parse(process.cwd()).root;
+    if (currentDrive && currentDrive.toLowerCase() !== 'c:\\') {
+      targetBackupDirs.push(path.join(currentDrive, 'backup', timestamp));
+    }
+  } catch (_) {}
+
+  for (const bDir of targetBackupDirs) {
+    try {
+      await fsp.mkdir(bDir, { recursive: true });
+
+      // Copy Database
+      if (await pathExists(dbPath)) {
+        await fsp.copyFile(dbPath, path.join(bDir, 'phanmienoffline.db.json'));
+      }
+
+      // Copy config files (.json) from userData
+      try {
+        const files = await fsp.readdir(userData);
+        for (const file of files) {
+          if (file.endsWith('.json') && file !== 'phanmienoffline.db.json') {
+            await fsp.copyFile(path.join(userData, file), path.join(bDir, file));
+          }
+        }
+      } catch (_) {}
+
+      // Copy backend secrets & uploads
+      const backendDataDir = getBackendDataDir(app);
+      if (await pathExists(backendDataDir)) {
+        // Copy .kha-session-secret
+        const secretPath = path.join(backendDataDir, '.kha-session-secret');
+        if (await pathExists(secretPath)) {
+          await fsp.copyFile(secretPath, path.join(bDir, '.kha-session-secret'));
+        }
+
+        // Copy uploads folder recursively
+        const uploadsDir = path.join(backendDataDir, 'uploads');
+        if (await pathExists(uploadsDir)) {
+          await copyDirRecursive(uploadsDir, path.join(bDir, 'uploads'));
+        }
+      }
+    } catch (_) {
+      // Ignore failures writing to specific backup paths (e.g. read-only drives)
+    }
+  }
+
+  return { dbPath, backupPath, skipped: !(await pathExists(dbPath)) };
 }
 
 function isCancellationError(err) {

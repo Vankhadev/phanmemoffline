@@ -8,21 +8,210 @@ const fs = require('fs');
 const path = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
 
-function resolveDBPath() {
-  const custom = process.env.KHA_DB_PATH || process.env.DB_PATH || process.env.DATABASE_PATH;
-  if (custom) return path.resolve(custom);
-  return path.resolve(__dirname, '..', '..', 'data', 'phanmienoffline.db.json');
-}
-
-const DB_PATH = resolveDBPath();
 const DATA_PRESERVATION_BACKUP_FOLDER = 'backup_du_lieu_phan_mem_no_del';
-const DB_BACKUP_DIR = path.resolve(process.env.KHA_DB_BACKUP_DIR || path.join(path.dirname(DB_PATH), DATA_PRESERVATION_BACKUP_FOLDER));
-const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.KHA_DB_BACKUP_RETENTION_COUNT) || 14);
-const DB_BACKUP_MIN_INTERVAL_MS = Math.max(0, Number(process.env.KHA_DB_BACKUP_MIN_INTERVAL_MS) || 20 * 60 * 60 * 1000);
 const DATA_PRESERVATION_BACKUP_ROOTS = (process.env.KHA_DATA_PRESERVATION_BACKUP_ROOTS || 'C:\\,D:\\,E:\\,F:\\')
   .split(',')
   .map(root => root.trim())
   .filter(Boolean);
+
+function getDbFileStats(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const stats = fs.statSync(filePath);
+    if (stats.isDirectory()) return null;
+    const content = fs.readFileSync(filePath, 'utf8').trim();
+    if (!content) {
+      return {
+        path: filePath,
+        productsCount: 0,
+        customersCount: 0,
+        invoicesCount: 0,
+        importsCount: 0,
+        transactionsCount: 0,
+        isEmpty: true,
+        mtimeMs: stats.mtimeMs,
+      };
+    }
+    const data = JSON.parse(content);
+    const productsCount = Array.isArray(data.products) ? data.products.length : 0;
+    const customersCount = Array.isArray(data.customers) ? data.customers.length : 0;
+    const invoicesCount = Array.isArray(data.invoices) ? data.invoices.length : 0;
+    const importsCount = Array.isArray(data.import_logs) ? data.import_logs.length : 0;
+    const transactionsCount = Array.isArray(data.cash_book) ? data.cash_book.length : 0;
+    const isEmpty = (productsCount === 0 && customersCount === 0 && invoicesCount === 0 && importsCount === 0);
+    return {
+      path: filePath,
+      productsCount,
+      customersCount,
+      invoicesCount,
+      importsCount,
+      transactionsCount,
+      isEmpty,
+      mtimeMs: stats.mtimeMs,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function getStatsDescription(stats) {
+  if (stats.invoicesCount > 0) return `${stats.invoicesCount} đơn hàng`;
+  if (stats.customersCount > 0) return `${stats.customersCount} khách hàng`;
+  if (stats.productsCount > 0) return `${stats.productsCount} sản phẩm`;
+  if (stats.transactionsCount > 0) return `${stats.transactionsCount} giao dịch`;
+  return `0 sản phẩm`;
+}
+
+function compareDbStats(a, b) {
+  if (a.invoicesCount !== b.invoicesCount) {
+    return b.invoicesCount - a.invoicesCount;
+  }
+  if (a.customersCount !== b.customersCount) {
+    return b.customersCount - a.customersCount;
+  }
+  if (a.productsCount !== b.productsCount) {
+    return b.productsCount - a.productsCount;
+  }
+  if (a.transactionsCount !== b.transactionsCount) {
+    return b.transactionsCount - a.transactionsCount;
+  }
+  return b.mtimeMs - a.mtimeMs;
+}
+
+function resolveDBPath() {
+  const envPath = process.env.KHA_DB_PATH || process.env.DB_PATH || process.env.DATABASE_PATH;
+  const defaultPath = envPath ? path.resolve(envPath) : path.resolve(__dirname, '..', '..', 'data', 'phanmienoffline.db.json');
+
+  const appDataRoots = [];
+  const roaming = process.env.APPDATA || '';
+  if (roaming) {
+    appDataRoots.push(path.join(roaming, 'phanmienoffline-electron'));
+    appDataRoots.push(path.join(roaming, 'Ban hang offline - Van kha mmo'));
+    appDataRoots.push(path.join(roaming, 'Electron'));
+  }
+  if (process.env.ELECTRON_USER_DATA) {
+    appDataRoots.push(process.env.ELECTRON_USER_DATA);
+  }
+
+  const uniqueRoots = [...new Set(appDataRoots.map(p => path.resolve(p)))];
+  
+  // 1. Primary Candidates (Main database files)
+  const primaryCandidates = [];
+  for (const root of uniqueRoots) {
+    primaryCandidates.push(path.join(root, 'phanmienoffline.db.json'));
+  }
+  const rootDir = path.resolve(__dirname, '..', '..', '..');
+  primaryCandidates.push(path.join(rootDir, 'phanmienoffline.db.json'));
+  primaryCandidates.push(path.join(rootDir, 'backend', 'data', 'phanmienoffline.db.json'));
+
+  const uniquePrimary = [...new Set(primaryCandidates.map(p => path.resolve(p)))];
+  const primaryStats = [];
+  for (const p of uniquePrimary) {
+    const stats = getDbFileStats(p);
+    if (stats) primaryStats.push(stats);
+  }
+
+  const hasDataPrimary = primaryStats.some(s => !s.isEmpty);
+  let statsList = [];
+
+  if (hasDataPrimary) {
+    // If a primary database already has data, only rank/select primary candidates (avoids massive backups scans)
+    statsList = primaryStats;
+  } else {
+    // Collect backup files as fallback
+    const fallbackCandidates = [];
+
+    // AppData backups (limit to top 3 newest per root)
+    for (const root of uniqueRoots) {
+      const backupDir = path.join(root, 'backups');
+      if (fs.existsSync(backupDir)) {
+        try {
+          const files = fs.readdirSync(backupDir);
+          const backups = files
+            .filter(f => f.startsWith('phanmienoffline.db.json.backup') && f.endsWith('.json'))
+            .map(f => path.join(backupDir, f))
+            .sort((a, b) => {
+              try {
+                return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+              } catch (_) { return 0; }
+            })
+            .slice(0, 3);
+          fallbackCandidates.push(...backups);
+        } catch (_) {}
+      }
+    }
+
+    // Drive mirror backups (limit to top 3 newest per drive)
+    for (const root of DATA_PRESERVATION_BACKUP_ROOTS) {
+      const mirrorDir = path.join(root, DATA_PRESERVATION_BACKUP_FOLDER, 'database');
+      if (fs.existsSync(mirrorDir)) {
+        try {
+          const files = fs.readdirSync(mirrorDir);
+          const backups = files
+            .filter(f => f.startsWith('phanmienoffline-db-') && f.endsWith('.json'))
+            .map(f => path.join(mirrorDir, f))
+            .sort((a, b) => {
+              try {
+                return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+              } catch (_) { return 0; }
+            })
+            .slice(0, 3);
+          fallbackCandidates.push(...backups);
+        } catch (_) {}
+      }
+    }
+
+    const uniqueFallback = [...new Set(fallbackCandidates.map(p => path.resolve(p)))];
+    const fallbackStats = [];
+    for (const p of uniqueFallback) {
+      const stats = getDbFileStats(p);
+      if (stats) fallbackStats.push(stats);
+    }
+
+    statsList = [...primaryStats, ...fallbackStats];
+  }
+
+  if (statsList.length === 0) {
+    console.log('[INFO] Tìm thấy 0 Database');
+    console.log('[INFO] Chọn Database A làm Database chính');
+    return defaultPath;
+  }
+
+  statsList.sort(compareDbStats);
+
+  const best = statsList[0];
+  let chosenPath = defaultPath;
+  if (best && !best.isEmpty) {
+    chosenPath = best.path;
+  }
+
+  console.log(`[INFO] Tìm thấy ${statsList.length} Database`);
+  statsList.forEach((item, index) => {
+    const label = String.fromCharCode(65 + index);
+    console.log(`[INFO] Database ${label}: ${getStatsDescription(item)}`);
+    console.log(`[INFO] Database ${label} path: ${item.path}`);
+  });
+
+  const chosenIndex = statsList.findIndex(item => item.path === chosenPath);
+  const chosenLabel = chosenIndex !== -1 ? String.fromCharCode(65 + chosenIndex) : 'A';
+  console.log(`[INFO] Chọn Database ${chosenLabel} làm Database chính`);
+
+  statsList.forEach((item) => {
+    if (item.isEmpty && item.path !== chosenPath) {
+      try {
+        fs.unlinkSync(item.path);
+        console.log(`[INFO] Xóa Database rỗng: ${item.path}`);
+      } catch (_) {}
+    }
+  });
+
+  return chosenPath;
+}
+
+const DB_PATH = resolveDBPath();
+const DB_BACKUP_DIR = path.resolve(process.env.KHA_DB_BACKUP_DIR || path.join(path.dirname(DB_PATH), DATA_PRESERVATION_BACKUP_FOLDER));
+const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.KHA_DB_BACKUP_RETENTION_COUNT) || 14);
+const DB_BACKUP_MIN_INTERVAL_MS = Math.max(0, Number(process.env.KHA_DB_BACKUP_MIN_INTERVAL_MS) || 20 * 60 * 60 * 1000);
 const DEFAULT_ACCOUNT_SLUG = 'default';
 const requestContext = new AsyncLocalStorage();
 
@@ -1795,6 +1984,8 @@ function loadDB(options = {}) {
       saveDB();
     }
     hasLoadedDb = true;
+    console.log('[INFO] Migration thành công');
+    console.log('[INFO] Đăng nhập bằng dữ liệu cũ thành công');
     return getDb();
   } catch (error) {
     hasLoadedDb = false;
