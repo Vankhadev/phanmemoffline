@@ -1520,44 +1520,76 @@ function rebuildAllDailyStatsFromInvoices() {
 function importOldCustomerDatabase() {
   const current = getDb();
   const targetEmail = 'dongphuongqc@gmail.com';
-  const appDataDir = process.env.ELECTRON_USER_DATA || path.join(process.env.APPDATA || '', 'phanmienoffline-electron');
   
-  const pathsToSearch = [];
-  
-  // 1. AppData main path
-  pathsToSearch.push(path.join(appDataDir, 'phanmienoffline.db.json'));
-  
-  // 2. AppData backups directory
-  const backupDir = path.join(appDataDir, 'backups');
-  if (fs.existsSync(backupDir)) {
-    try {
-      const files = fs.readdirSync(backupDir);
-      const sortedBackups = files
-        .filter(f => f.startsWith('phanmienoffline.db.json.backup') && f.endsWith('.json'))
-        .map(f => path.join(backupDir, f))
-        .sort((a, b) => {
-          try {
-            return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
-          } catch (_) {
-            return 0;
-          }
-        });
-      pathsToSearch.push(...sortedBackups);
-    } catch (_) {}
+  const appDataRoots = [];
+  const roaming = process.env.APPDATA || '';
+  if (roaming) {
+    appDataRoots.push(path.join(roaming, 'phanmienoffline-electron'));
+    appDataRoots.push(path.join(roaming, 'Ban hang offline - Van kha mmo'));
+    appDataRoots.push(path.join(roaming, 'Electron'));
   }
-  
-  // 3. Sibling/root paths
+  if (process.env.ELECTRON_USER_DATA && !appDataRoots.includes(process.env.ELECTRON_USER_DATA)) {
+    appDataRoots.push(process.env.ELECTRON_USER_DATA);
+  }
+
+  const uniqueRoots = [...new Set(appDataRoots.map(p => path.resolve(p)))];
+  const pathsToSearch = [];
+
+  for (const root of uniqueRoots) {
+    pathsToSearch.push(path.join(root, 'phanmienoffline.db.json'));
+
+    const backupDir = path.join(root, 'backups');
+    if (fs.existsSync(backupDir)) {
+      try {
+        const files = fs.readdirSync(backupDir);
+        const sortedBackups = files
+          .filter(f => f.startsWith('phanmienoffline.db.json.backup') && f.endsWith('.json'))
+          .map(f => path.join(backupDir, f))
+          .sort((a, b) => {
+            try {
+              return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+            } catch (_) {
+              return 0;
+            }
+          });
+        pathsToSearch.push(...sortedBackups);
+      } catch (_) {}
+    }
+  }
+
+  // Sibling/root paths
   const rootDir = path.resolve(__dirname, '..', '..', '..');
   pathsToSearch.push(path.join(rootDir, 'phanmienoffline.db.json'));
   pathsToSearch.push(path.join(rootDir, 'backend', 'data', 'phanmienoffline.db.json'));
-  
+
+  // Drive mirror backups
+  for (const root of DATA_PRESERVATION_BACKUP_ROOTS) {
+    const mirrorDir = path.join(root, DATA_PRESERVATION_BACKUP_FOLDER, 'database');
+    if (fs.existsSync(mirrorDir)) {
+      try {
+        const files = fs.readdirSync(mirrorDir);
+        const sortedBackups = files
+          .filter(f => f.startsWith('phanmienoffline-db-') && f.endsWith('.json'))
+          .map(f => path.join(mirrorDir, f))
+          .sort((a, b) => {
+            try {
+              return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+            } catch (_) {
+              return 0;
+            }
+          });
+        pathsToSearch.push(...sortedBackups);
+      } catch (_) {}
+    }
+  }
+
   let oldDbFile = null;
   let oldDbData = null;
-  
+
   for (const p of pathsToSearch) {
     if (!fs.existsSync(p)) continue;
     if (path.resolve(p) === path.resolve(DB_PATH)) continue;
-    
+
     try {
       const content = fs.readFileSync(p, 'utf8');
       if (content.includes(targetEmail)) {
