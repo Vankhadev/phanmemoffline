@@ -37,6 +37,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
+  const [registeredData, setRegisteredData] = useState(null);
   const [currentBootstrapStatus, setCurrentBootstrapStatus] = useState({
     totalUsers: 0,
     hasAdmin: false,
@@ -56,6 +57,13 @@ export default function Register({ onLogin, bootstrapStatus }) {
       };
     }
 
+    if (registeredData) {
+      return {
+        title: 'Tạo tài khoản thành công',
+        description: 'Tài khoản của bạn đã sẵn sàng sử dụng',
+      };
+    }
+
     if (isFirstAccount) {
       return {
         title: 'Đăng ký tài khoản ',
@@ -67,7 +75,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
       title: 'Đăng ký tài khoản',
       description: 'Chào Mừng Bạn Đến Hệ Thống Đăng Ký Tài Khoản Của Phần Mềm',
     };
-  }, [checkingSetup, isFirstAccount]);
+  }, [checkingSetup, isFirstAccount, registeredData]);
 
   const set = (key, value) => {
     setForm(current => ({ ...current, [key]: value }));
@@ -117,12 +125,6 @@ export default function Register({ onLogin, bootstrapStatus }) {
     checkBootstrapStatus();
   }, [bootstrapStatus, checkBootstrapStatus]);
 
-  useEffect(() => {
-    if (!checkingSetup && !isFirstAccount) {
-      navigate('/', { replace: true });
-    }
-  }, [checkingSetup, isFirstAccount, navigate]);
-
   const validateForm = () => {
     if (checkingSetup) {
       setError('Đang kiểm tra trạng thái hệ thống, vui lòng đợi trong giây lát.');
@@ -164,8 +166,8 @@ export default function Register({ onLogin, bootstrapStatus }) {
       return false;
     }
 
-    if (form.password.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự.');
+    if (form.password.length < 8) {
+      setError('Mật khẩu phải có ít nhất 8 ký tự.');
       return false;
     }
 
@@ -199,14 +201,10 @@ export default function Register({ onLogin, bootstrapStatus }) {
     setLoading(true);
     try {
       const data = await authApi.register(payload);
-      const apiMessage = data.message || (String(data.user?.role || data.role).toLowerCase() === 'admin'
-        ? 'Tài khoản đầu tiên đã được cấp quyền ADMIN'
-        : 'Đăng ký thành công với quyền USER');
-      setSuccess(`${apiMessage}. Đang khôi phục phiên từ server...`);
-      await completeLogin(data);
+      setSuccess('Tạo tài khoản thành công');
+      setRegisteredData(data);
     } catch (err) {
       setError(getApiErrorMessage(err?.data, err.message || 'Không thể kết nối server để đăng ký tài khoản.'));
-      await checkBootstrapStatus();
     } finally {
       setLoading(false);
     }
@@ -216,8 +214,14 @@ export default function Register({ onLogin, bootstrapStatus }) {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
         <div className="text-center mb-6">
-          <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-            {isFirstAccount ? <ShieldCheck className="text-amber-600" size={28} /> : <UserPlus className="text-blue-600" size={28} />}
+          <div className={`w-14 h-14 ${registeredData ? 'bg-green-100' : 'bg-blue-100'} rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg`}>
+            {registeredData ? (
+              <CheckCircle className="text-green-600" size={28} />
+            ) : isFirstAccount ? (
+              <ShieldCheck className="text-amber-600" size={28} />
+            ) : (
+              <UserPlus className="text-blue-600" size={28} />
+            )}
           </div>
           <h1 className="text-xl font-bold text-gray-800">{pageContent.title}</h1>
           <p className="text-gray-500 text-sm mt-1">{pageContent.description}</p>
@@ -252,10 +256,45 @@ export default function Register({ onLogin, bootstrapStatus }) {
           </div>
         )}
 
-        {!checkingSetup && (
-          <form onSubmit={handleSubmit} className="space-y-4">
+        {registeredData ? (
+          <div className="space-y-6 text-center py-4">
+            <div className="text-gray-600 text-base font-medium">
+              Bạn có muốn đăng nhập tự động bằng tài khoản vừa tạo hay quay về trang đăng nhập?
+            </div>
             
-
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    await completeLogin(registeredData);
+                  } catch (err) {
+                    setError(err.message || 'Không thể tự động đăng nhập.');
+                    setRegisteredData(null);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2"
+              >
+                {loading ? <RefreshCw size={20} className="animate-spin" /> : null}
+                Tự động đăng nhập
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                disabled={loading}
+                className="w-full border border-gray-300 hover:bg-gray-50 text-gray-700 py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2"
+              >
+                Chuyển tới Đăng Nhập
+              </button>
+            </div>
+          </div>
+        ) : !checkingSetup && (
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 <span className="inline-flex items-center gap-1"><User size={14} /> Họ và tên <span className="text-red-500">*</span></span>
@@ -368,17 +407,19 @@ export default function Register({ onLogin, bootstrapStatus }) {
               ) : isFirstAccount ? (
                 <><ShieldCheck size={20} /> Đăng ký</>
               ) : (
-                <><UserPlus size={20} /> Đăng ký </>
+                <><UserPlus size={20} /> Đăng ký</>
               )}
             </button>
           </form>
         )}
 
-        <div className="mt-4 text-center">
-          <Link to="/" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium">
-            <ArrowLeft size={14} /> Quay lại đăng nhập
-          </Link>
-        </div>
+        {!registeredData && (
+          <div className="mt-4 text-center">
+            <Link to="/" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium">
+              <ArrowLeft size={14} /> Đã có tài khoản? Đăng nhập
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

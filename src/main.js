@@ -6,6 +6,7 @@ const https = require('https');
 const { spawn } = require('child_process');
 const { randomUUID } = require('crypto');
 const { createUpdateManager } = require('./updater');
+const { upgradeShortcuts } = require('./shortcutManager');
 
 const DEFAULT_BACKEND_PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || process.env.PHANMEM_PORT || 3001);
 const BACKEND_HOST = String(process.env.KHA_BACKEND_HOST || process.env.PHANMEM_HOST || process.env.HOST || '127.0.0.1').trim() || '127.0.0.1';
@@ -16,6 +17,8 @@ const PRINT_LIST_PRINTERS_CHANNEL = 'kha:print:list-printers';
 const PRINT_HTML_CHANNEL = 'kha:print:html';
 const OPEN_EXTERNAL_CHANNEL = 'kha:shell:open-external';
 const VERIFY_DOWNLOAD_URL_CHANNEL = 'kha:shell:verify-download-url';
+const GUARDIAN_ALERT_CHANNEL = 'kha:guardian:alert';
+const GUARDIAN_STATUS_CHANNEL = 'kha:guardian:status';
 const APP_USER_MODEL_ID = 'com.vankhammo.phanmienoffline';
 const MIN_INSTALLER_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 const BACKEND_HEALTH_TIMEOUT_MS = Math.max(15000, Number(process.env.KHA_BACKEND_HEALTH_TIMEOUT_MS) || 60000);
@@ -602,6 +605,59 @@ function registerShellIpc() {
   });
 }
 
+function registerGuardianIpc() {
+  if (ipcMain.listenerCount(GUARDIAN_ALERT_CHANNEL) > 0) return;
+
+  // Handle guardian alerts from renderer or backend
+  ipcMain.handle(GUARDIAN_ALERT_CHANNEL, (_event, alert) => {
+    if (!alert || !mainWindow || mainWindow.isDestroyed()) return { ok: false };
+    try {
+      const { Notification } = require('electron');
+      if (Notification.isSupported()) {
+        const notification = new Notification({
+          title: `⚠️ KHA Guardian - ${String(alert.severity || 'alert').toUpperCase()}`,
+          body: String(alert.message || 'Có cảnh báo từ hệ thống bảo vệ dữ liệu').slice(0, 256),
+          icon: getAppIconPath(),
+          urgency: alert.severity === 'emergency' ? 'critical' : 'normal',
+        });
+        notification.show();
+      }
+
+      // Show dialog for emergency alerts
+      if (alert.severity === 'emergency' || alert.severity === 'critical') {
+        dialog.showMessageBox(mainWindow, {
+          type: 'warning',
+          title: 'KHA Data Guardian - Cảnh báo',
+          message: String(alert.message || 'Cảnh báo hệ thống').slice(0, 500),
+          detail: [
+            `Mức độ: ${alert.severity}`,
+            `Module: ${alert.module || 'unknown'}`,
+            `Thời gian: ${alert.timestamp || new Date().toISOString()}`,
+            `Admin: Văn Kha - 0904045075`,
+          ].join('\n'),
+          buttons: ['Đã hiểu'],
+        }).catch(() => {});
+      }
+
+      return { ok: true };
+    } catch (err) {
+      console.error('[KHA Electron] Guardian alert error:', err.message);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // Handle guardian status queries
+  ipcMain.handle(GUARDIAN_STATUS_CHANNEL, async () => {
+    if (!backendApiBase) return { ok: false, reason: 'backend-not-ready' };
+    try {
+      const status = await requestJson(`${backendApiBase}/data-guardian/status`, 5000);
+      return { ok: true, ...status };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+}
+
 function getAppIconPath() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'icons', 'app-icon.png');
@@ -645,6 +701,7 @@ app.whenReady().then(async () => {
   registerWindowFocusIpc();
   registerPrintIpc();
   registerShellIpc();
+  registerGuardianIpc();
   updateManager = createUpdateManager({ app, getMainWindow: () => mainWindow });
   updateManager.registerIpc(ipcMain);
 
@@ -655,6 +712,7 @@ app.whenReady().then(async () => {
     return;
   }
   createWindow();
+  void upgradeShortcuts(mainWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

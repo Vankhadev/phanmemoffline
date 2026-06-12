@@ -1,13 +1,20 @@
-import { SYNC_BROADCAST_REQUEST_EVENT, SYNC_UPDATED_EVENT } from './apiClient';
+import { SYNC_BROADCAST_REQUEST_EVENT, SYNC_UPDATED_EVENT, resolveApiUrl } from './apiClient';
 
 const CROSS_TAB_SYNC_CHANNEL = 'vankha-cross-tab-sync';
 const CROSS_TAB_SYNC_STORAGE_KEY = 'vankha.cross-tab-sync.payload';
 const TAB_ID = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
+if (typeof window !== 'undefined') {
+  window.__vankhaTabId = TAB_ID;
+}
+
 let bridgeInstalled = false;
 let broadcastChannel = null;
 let lastPostedSignature = '';
 let lastPostedAt = 0;
+let sseConnection = null;
+let reconnectTimer = null;
+let reconnectDelay = 1000;
 
 function isBrowserRuntime() {
   return typeof window !== 'undefined';
@@ -97,6 +104,67 @@ function handleIncomingPayload(payload) {
   });
 }
 
+function connectRealtimeSyncSSE() {
+  if (!isBrowserRuntime() || typeof EventSource === 'undefined') return;
+  if (sseConnection) return;
+
+  const lastSyncTime = window.localStorage.getItem('kha_last_sync_time') || Date.now();
+  const sseUrl = resolveApiUrl(`/realtime/sync?lastSyncTime=${lastSyncTime}`);
+  const source = new EventSource(sseUrl);
+
+  source.onopen = () => {
+    reconnectDelay = 1000;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+  };
+
+  source.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.type === 'ping') return;
+
+      if (payload.type === 'connected') {
+        window.localStorage.setItem('kha_last_sync_time', String(payload.ts));
+        return;
+      }
+
+      if (payload.type === 'sync-update') {
+        window.localStorage.setItem('kha_last_sync_time', String(payload.ts));
+
+        if (payload.sourceTabId === TAB_ID) return;
+
+        dispatchSyncUpdated({
+          changedTables: payload.changedTables,
+          reason: payload.reason || 'sse-sync',
+          ts: payload.ts,
+          sourceTabId: payload.sourceTabId,
+        }, {
+          remote: true,
+          skipBroadcast: true,
+        });
+      }
+    } catch (err) {
+      console.warn('[KHA SSE] Message handle error:', err);
+    }
+  };
+
+  source.onerror = () => {
+    source.close();
+    sseConnection = null;
+    if (!reconnectTimer) {
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+        connectRealtimeSyncSSE();
+      }, reconnectDelay);
+    }
+  };
+
+  sseConnection = source;
+}
+
 export function broadcastSyncUpdate(detail = {}) {
   dispatchSyncUpdated(detail, { skipBroadcast: true });
   postCrossTabPayload(detail);
@@ -132,4 +200,6 @@ export function installCrossTabSyncBridge() {
   window.addEventListener(SYNC_BROADCAST_REQUEST_EVENT, (event) => {
     postCrossTabPayload(event.detail || {});
   });
+
+  connectRealtimeSyncSSE();
 }

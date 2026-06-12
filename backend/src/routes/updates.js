@@ -226,6 +226,20 @@ router.post('/', canManageUpdates, (req, res) => {
   const parsed = buildReleasePayload(req.body || {});
   if (parsed.error) return res.status(400).json({ ok: false, error: parsed.error });
 
+  const publishFlag = parsed.value.published === undefined ? 1 : parsed.value.published;
+  if (publishFlag === 1) {
+    const { verifyWholeSystem, rollbackDatabase } = require('../utils/systemVerification');
+    const testResult = verifyWholeSystem();
+    if (!testResult.ok) {
+      const adminAlertService = require('../services/adminAlertService');
+      adminAlertService.sendEmergencyAlert('updates', 'PHÁT HÀNH THẤT BẠI: Lỗi kiểm tra tự động trước khi tạo bản cập nhật mới.', {
+        errorDetail: testResult.errors.join('\n')
+      });
+      rollbackDatabase();
+      return res.status(400).json({ ok: false, error: 'Không thể tạo bản phát hành: Lỗi hệ thống tự động kiểm tra trước khi publish.', details: testResult.errors });
+    }
+  }
+
   const platform = parsed.value.platform || 'all';
   const channel = parsed.value.channel || 'stable';
   const duplicate = getOne(TABLE, row => !row.deleted_at
@@ -234,7 +248,6 @@ router.post('/', canManageUpdates, (req, res) => {
     && normalizeChannel(row.channel) === channel, { skipAccountScope: true });
   if (duplicate) return res.status(409).json({ ok: false, error: 'Phiên bản cập nhật đã tồn tại cho nền tảng/kênh này.' });
 
-  const publishFlag = parsed.value.published === undefined ? 1 : parsed.value.published;
   const id = insert(TABLE, {
     version: parsed.value.version,
     title: parsed.value.title,
@@ -277,6 +290,19 @@ router.patch('/:id', canManageUpdates, (req, res) => {
   const parsed = buildReleasePayload(req.body || {}, { partial: true });
   if (parsed.error) return res.status(400).json({ ok: false, error: parsed.error });
 
+  if (parsed.value.published === 1 || parsed.value.active === 1) {
+    const { verifyWholeSystem, rollbackDatabase } = require('../utils/systemVerification');
+    const testResult = verifyWholeSystem();
+    if (!testResult.ok) {
+      const adminAlertService = require('../services/adminAlertService');
+      adminAlertService.sendEmergencyAlert('updates', 'PHÁT HÀNH THẤT BẠI: Lỗi kiểm tra tự động trước khi cập nhật bản cập nhật.', {
+        errorDetail: testResult.errors.join('\n')
+      });
+      rollbackDatabase();
+      return res.status(400).json({ ok: false, error: 'Không thể cập nhật bản phát hành: Lỗi hệ thống tự động kiểm tra trước khi publish.', details: testResult.errors });
+    }
+  }
+
   const nextVersion = parsed.value.version || row.version;
   const nextPlatform = parsed.value.platform || normalizePlatform(row.platform);
   const nextChannel = parsed.value.channel || normalizeChannel(row.channel);
@@ -297,6 +323,17 @@ router.patch('/:id/publish', canManageUpdates, (req, res) => {
   const id = parseId(req.params.id);
   const row = id ? getOne(TABLE, item => Number(item.id) === id && !item.deleted_at, { skipAccountScope: true }) : null;
   if (!row) return res.status(404).json({ ok: false, error: 'Không tìm thấy bản cập nhật.' });
+
+  const { verifyWholeSystem, rollbackDatabase } = require('../utils/systemVerification');
+  const testResult = verifyWholeSystem();
+  if (!testResult.ok) {
+    const adminAlertService = require('../services/adminAlertService');
+    adminAlertService.sendEmergencyAlert('updates', 'PHÁT HÀNH THẤT BẠI: Lỗi kiểm tra tự động trước khi xuất bản cập nhật.', {
+      errorDetail: testResult.errors.join('\n')
+    });
+    rollbackDatabase();
+    return res.status(400).json({ ok: false, error: 'Không thể xuất bản: Lỗi hệ thống tự động kiểm tra trước khi publish.', details: testResult.errors });
+  }
 
   update(TABLE, row.id, { published: 1, active: 1, published_at: row.published_at || now(), updated_at: now() });
   auditLog('update_release_published', { userId: req.user?.id || null, releaseId: row.id });

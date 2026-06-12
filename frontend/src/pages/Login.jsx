@@ -186,13 +186,17 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   };
 
   const validateLogin = () => {
-    if (!form.email.trim()) {
-      setError('Vui lòng nhập email.');
+    const input = form.email.trim();
+    if (!input) {
+      setError('Vui lòng nhập email hoặc số điện thoại.');
       return false;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      setError('Email không hợp lệ.');
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
+    const isPhone = /^0\d{9,10}$/.test(normalizePhone(input));
+
+    if (!isEmail && !isPhone) {
+      setError('Email hoặc Số điện thoại không hợp lệ.');
       return false;
     }
 
@@ -225,8 +229,8 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       return false;
     }
 
-    if (form.password.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự.');
+    if (form.password.length < 8) {
+      setError('Mật khẩu phải có ít nhất 8 ký tự.');
       return false;
     }
 
@@ -310,7 +314,6 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       await completeLogin(data);
     } catch (err) {
       setError(getApiErrorMessage(err?.data, err.message || 'Không thể kết nối server để tạo quản trị viên đầu tiên.'));
-      await checkBootstrapStatus();
     } finally {
       setLoading(false);
     }
@@ -324,10 +327,10 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-            {showSetupForm ? <ShieldCheck className="text-amber-600" size={32} /> : <Store className="text-blue-600" size={32} />}
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden bg-slate-50 border border-slate-100">
+            <img src="./icons/app-icon-192.png" alt="POS Logo" className="w-full h-full object-cover" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">Phần mềm POS Offline</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Bán Hàng Pos</h1>
           <p className="text-blue-600 font-semibold mt-1">
             {checkingSetup ? 'Đang kiểm tra hệ thống...' : showSetupForm ? 'Thiết lập lần đầu' : 'Đăng nhập hệ thống'}
           </p>
@@ -537,15 +540,15 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><Mail size={14} /> Email</span>
+                    <span className="inline-flex items-center gap-1"><Mail size={14} /> Email hoặc Số điện thoại</span>
                   </label>
                   <input
-                    type="email"
+                    type="text"
                     value={form.email}
                     onChange={event => set('email', event.target.value)}
-                    placeholder="nguyenvana@gmail.com"
+                    placeholder="nguyenvana@gmail.com hoặc 0904045075"
                     className="input-field w-full pl-4"
-                    autoComplete="email"
+                    autoComplete="username"
                     required
                   />
                 </div>
@@ -588,7 +591,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 </button>
 
                 <Link to="/dang-ky" className="w-full border border-blue-200 text-blue-700 hover:bg-blue-50 py-2.5 rounded-xl font-semibold transition flex items-center justify-center gap-2 text-sm">
-                  <UserPlus size={16} /> Đăng ký
+                  <UserPlus size={16} /> Đăng ký tài khoản mới
                 </Link>
               </form>
             )}

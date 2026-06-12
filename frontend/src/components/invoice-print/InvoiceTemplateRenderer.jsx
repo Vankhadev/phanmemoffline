@@ -142,7 +142,7 @@ function mergeStore(payloadStore = {}, template = {}, settings = {}, logoPreview
     phone: firstNonEmpty(store.phone, store.hotline, store.tel, settings.storePhone, template.shop_phone),
     email: firstNonEmpty(store.email),
     tax_code: firstNonEmpty(store.tax_code, store.mst),
-    logo_url: resolveAssetUrl(logoPreviewUrl || store.logo_url || store.logo || store.logo_base64 || template.logo?.url || template.logo_url || template.logo_url_resolved || template.header_logo || ''),
+    logo_url: resolveAssetUrl(logoPreviewUrl || store.logo_url || store.logo || store.logo_base64 || template.logo?.url || template.logo_url || template.logo_url_resolved || template.header_logo || './icons/app-icon.svg'),
   };
 }
 

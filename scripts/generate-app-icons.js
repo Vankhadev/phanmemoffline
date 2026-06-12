@@ -121,9 +121,9 @@ function fillPolygon(buffer, size, points, color) {
 
 function makePng(size) {
   const buffer = Buffer.alloc(size * size * 4);
-  const bg1 = hexToRgb('#7c3aed');
-  const bg2 = hexToRgb('#60a5fa');
-  const bg3 = hexToRgb('#f0abfc');
+  const bg1 = hexToRgb('#4f46e5');
+  const bg2 = hexToRgb('#06b6d4');
+  const bg3 = hexToRgb('#10b981');
 
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
@@ -278,9 +278,9 @@ function makeIcns(chunks) {
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ban Hang Offline">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#7c3aed"/>
-      <stop offset="0.62" stop-color="#60a5fa"/>
-      <stop offset="1" stop-color="#f0abfc"/>
+      <stop offset="0" stop-color="#4f46e5"/>
+      <stop offset="0.62" stop-color="#06b6d4"/>
+      <stop offset="1" stop-color="#10b981"/>
     </linearGradient>
     <filter id="shadow" x="-15%" y="-15%" width="130%" height="130%">
       <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#312e81" flood-opacity=".28"/>
@@ -363,7 +363,7 @@ for (const [density, size] of Object.entries(androidSizes)) {
 
 writeFile(
   path.join(rootDir, 'android/app/src/main/res/values/ic_launcher_background.xml'),
-  '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#7C3AED</color>\n</resources>\n'
+  '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#4F46E5</color>\n</resources>\n'
 );
 writeFile(path.join(rootDir, 'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png'), png(1024));
 

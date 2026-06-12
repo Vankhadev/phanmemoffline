@@ -52,6 +52,16 @@ router.post('/restore-scan', (req, res) => {
     // Force reload memory cache
     loadDB({ forceReload: true });
 
+    // Run auth repair & self-healing on the newly loaded database
+    try {
+      const { ensureAuthSchema, repairUserAuthSystem } = require('../services/authRepairService');
+      ensureAuthSchema();
+      repairUserAuthSystem();
+      console.log('[API DATABASE] Đã chạy tự sửa lỗi phân quyền/mật khẩu sau khi khôi phục.');
+    } catch (repairErr) {
+      console.error('[API DATABASE] Lỗi chạy auth repair sau restore:', repairErr.message);
+    }
+
     res.json({
       ok: true,
       message: 'Khôi phục dữ liệu thành công!',

@@ -391,6 +391,7 @@ const requestContext = new AsyncLocalStorage();
 const SCHEMA = {
   accounts: [],
   sessions: [],
+  roles: [],
   permissions: [],
   role_permissions: [],
   sync_metadata: [],
@@ -2115,6 +2116,12 @@ function migrateDB() {
   seedDefaultProductCategories();
   seedDefaultFeatureCatalog();
   ensureAuthAndSyncSchema();
+  try {
+    const authRepairService = require('../services/authRepairService');
+    authRepairService.ensureAuthSchema();
+  } catch (err) {
+    console.error('[KHA DB] Failed to run auth schema repair:', err.message);
+  }
   seedDefaultSystemSettings();
   migrateAccountingSchema();
   normalizeInvoiceCancellationSchema();
@@ -2591,7 +2598,7 @@ function seedData() {
   ensureBaseData();
 }
 
-loadDB();
+
 
 const exportsObject = {
   now,
@@ -2671,6 +2678,8 @@ const exportsObject = {
   performDeepScan,
   readDatabaseConfig,
   writeDatabaseConfig,
+  seedDefaultPermissions,
+  seedDefaultRolePermissions,
 };
 
 Object.defineProperty(exportsObject, 'DB_PATH', {
@@ -2689,4 +2698,6 @@ Object.defineProperty(exportsObject, 'DB_BACKUP_DIR', {
 });
 
 module.exports = exportsObject;
+
+loadDB();
 

@@ -57,6 +57,12 @@ const desktopApi = {
       return () => ipcRenderer.removeListener(UPDATE_STATUS_CHANNEL, listener);
     },
   },
+  onShortcutUpdated: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('kha-shortcut-updated-toast', listener);
+    return () => ipcRenderer.removeListener('kha-shortcut-updated-toast', listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('khaDesktop', desktopApi);

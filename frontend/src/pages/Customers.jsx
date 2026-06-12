@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resolveApiUrl } from '../utils/apiClient';
-import { Users, FileDown, Plus, X, Edit2, Trash2, Loader, Tag, HelpCircle, UploadCloud } from 'lucide-react';
+import { Users, FileDown, Plus, X, Edit2, Trash2, Loader, Tag, HelpCircle, UploadCloud, History } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
 import { customerTypesApi, customersApi, getApiErrorMessage, SYNC_UPDATED_EVENT } from '../utils/apiClient';
@@ -11,6 +11,11 @@ const API = resolveApiUrl('');
 export default function Customers() {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
+  const [historyTarget, setHistoryTarget] = useState(null);
+
+  const handleShowHistory = (id) => {
+    setHistoryTarget({ id });
+  };
   const [customerTypes, setCustomerTypes] = useState([]);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -112,7 +117,7 @@ export default function Customers() {
     if (!form.name) return;
     try {
       const data = editing
-        ? await customersApi.update(editing.id, form)
+        ? await customersApi.update(editing.id, { ...form, updated_at: editing.updated_at })
         : await customersApi.create(form);
       if (data.ok) {
         setShowForm(false);
@@ -443,7 +448,10 @@ export default function Customers() {
                   </div>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-gray-100 pt-3">
+              <div className="mt-3 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
+                <button onClick={() => handleShowHistory(c.id)} disabled={isBulkDeleting} className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-700 disabled:opacity-50">
+                  <History size={12} /> Lịch sử
+                </button>
                 <button onClick={() => openEdit(c)} disabled={isBulkDeleting} className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 disabled:opacity-50">
                   <Edit2 size={12} /> Sửa
                 </button>
@@ -507,6 +515,9 @@ export default function Customers() {
                     </span>
                   </td>
                   <td className="p-2 text-center">
+                    <button onClick={() => handleShowHistory(c.id)} disabled={isBulkDeleting} className="text-gray-600 hover:text-gray-800 text-xs mr-2 flex items-center gap-1 inline-flex disabled:opacity-50">
+                      <History size={12} /> Lịch sử
+                    </button>
                     <button onClick={() => openEdit(c)} disabled={isBulkDeleting} className="text-blue-600 hover:text-blue-800 text-xs mr-2 flex items-center gap-1 inline-flex disabled:opacity-50">
                       <Edit2 size={12} /> Sửa
                     </button>
@@ -736,6 +747,16 @@ export default function Customers() {
               </div>
             </div>
           }
+        />
+      )}
+
+      {historyTarget && (
+        <ChangeHistoryModal
+          isOpen={Boolean(historyTarget)}
+          onClose={() => setHistoryTarget(null)}
+          tableName="customers"
+          recordId={historyTarget.id}
+          onRestoreSuccess={fetchCustomers}
         />
       )}
     </div>

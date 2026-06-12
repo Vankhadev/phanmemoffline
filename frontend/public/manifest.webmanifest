@@ -1,7 +1,7 @@
 {
-  "name": "Phần mềm POS Offline",
-  "short_name": "POS Offline",
-  "description": "Phần mềm POS Offline cho điện thoại và máy tính.",
+  "name": "Bán Hàng Pos",
+  "short_name": "Bán Hàng Pos",
+  "description": "Bán Hàng Pos cho điện thoại và máy tính.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

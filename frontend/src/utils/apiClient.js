@@ -520,10 +520,29 @@ function buildInterceptedRequest(input, init = {}) {
     skipAuth: Boolean(init.skipAuth) || isPublicAuthEndpoint(url),
     jsonBody: init.body && !(init.body instanceof FormData) && !(init.body instanceof Blob) && !(init.body instanceof ArrayBuffer),
   });
+
+  // Trích xuất client updated_at từ body object trước khi chuyển sang dạng JSON string
+  let clientUpdatedAt = null;
+  if (init.body && typeof init.body === 'object' && !(init.body instanceof FormData) && !(init.body instanceof Blob) && !(init.body instanceof ArrayBuffer)) {
+    if (init.body.updated_at) {
+      clientUpdatedAt = init.body.updated_at;
+    }
+  }
+
   const requestInit = { ...fetchInit, headers };
   if (requestInit.body && headers.get('Content-Type') === 'application/json' && typeof requestInit.body !== 'string') {
     requestInit.body = JSON.stringify(requestInit.body);
   }
+
+  // Thêm các headers đặc tả tab hiện tại và thời gian bản ghi gốc để phục vụ đồng bộ & phát hiện xung đột
+  const clientTabId = (typeof window !== 'undefined' && window.__vankhaTabId) || '';
+  if (clientTabId) {
+    headers.set('X-Client-Tab-Id', clientTabId);
+  }
+  if (clientUpdatedAt) {
+    headers.set('X-Client-Updated-At', String(clientUpdatedAt));
+  }
+
   return [typeof input === 'string' ? url : input, requestInit];
 }
 

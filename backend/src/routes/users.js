@@ -80,6 +80,10 @@ function normalizeEmail(email) {
   return String(email || '').toLowerCase().trim();
 }
 
+function normalizePhone(phone) {
+  return String(phone || '').replace(/\s/g, '');
+}
+
 function getDefaultRouteForUser(user) {
   return user?.role === ROLE_ADMIN ? ADMIN_DEFAULT_ROUTE : '/';
 }
@@ -114,7 +118,8 @@ function publicUser(user) {
   return {
     id: user.id,
     account_id: user.account_id,
-    name: user.name,
+    name: user.fullname || user.name,
+    fullname: user.fullname || user.name,
     email: user.email,
     phone: user.phone,
     role: user.role,
@@ -139,8 +144,9 @@ function publicAccount(account) {
   };
 }
 
-function validateUserPayload({ name, email, phone, password }, { requirePassword = true } = {}) {
-  if (!name || !email || !phone || (requirePassword && !password)) {
+function validateUserPayload({ name, fullname, email, phone, password }, { requirePassword = true } = {}) {
+  const finalName = name || fullname;
+  if (!finalName || !email || !phone || (requirePassword && !password)) {
     return 'Vui lòng điền đầy đủ thông tin';
   }
 
@@ -149,7 +155,7 @@ function validateUserPayload({ name, email, phone, password }, { requirePassword
     return 'Email không hợp lệ';
   }
 
-  if (!String(name).trim()) {
+  if (!String(finalName).trim()) {
     return 'Vui lòng nhập họ và tên';
   }
 
@@ -157,8 +163,8 @@ function validateUserPayload({ name, email, phone, password }, { requirePassword
     return 'Vui lòng nhập số điện thoại';
   }
 
-  if (requirePassword && String(password).length < 6) {
-    return 'Mật khẩu phải có ít nhất 6 ký tự';
+  if (requirePassword && String(password).length < 8) {
+    return 'Mật khẩu phải có ít nhất 8 ký tự';
   }
 
   return '';
@@ -196,10 +202,12 @@ function assertUniqueActiveEmail(email, ignoredUserId = null) {
   , { skipAccountScope: true });
 }
 
-function insertUser({ name, email, phone, password, role, account_id }) {
+function insertUser({ name, fullname, email, phone, password, role, account_id }) {
+  const finalName = String(fullname || name || '').trim();
   return insert('users', {
     account_id,
-    name: String(name).trim(),
+    name: finalName,
+    fullname: finalName,
     email: normalizeEmail(email),
     phone: String(phone).trim(),
     password: hashPassword(password),
@@ -214,8 +222,9 @@ function insertUser({ name, email, phone, password, role, account_id }) {
 
 function createAccountWithAutomaticRole(req, res) {
   // Server tự quyết định role theo tổng số user hiện có, không tin role từ client.
-  const { name, email, phone, password } = req.body || {};
-  const validationError = validateUserPayload({ name, email, phone, password });
+  const { name, fullname, email, phone, password } = req.body || {};
+  const displayName = name || fullname;
+  const validationError = validateUserPayload({ name: displayName, fullname: displayName, email, phone, password });
   if (validationError) {
     return res.status(400).json({ ok: false, message: validationError });
   }
@@ -233,7 +242,7 @@ function createAccountWithAutomaticRole(req, res) {
   }
 
   const account = getDefaultAccount();
-  const id = insertUser({ name, email: normalizedEmail, phone, password, role: assignedRole, account_id: account.id });
+  const id = insertUser({ name: displayName, fullname: displayName, email: normalizedEmail, phone, password, role: assignedRole, account_id: account.id });
   const user = getOne('users', row => row.id === id, { skipAccountScope: true });
   const { token, session } = createSession(user, req);
   update('users', user.id, { last_login: now() });
@@ -297,21 +306,93 @@ router.post('/bootstrap-admin', authSensitiveLimiter, (req, res) => {
 router.post('/register', authSensitiveLimiter, (req, res) => createAccountWithAutomaticRole(req, res));
 
 // ===== Đăng nhập =====
+// ===== Đăng nhập =====
 router.post('/login', authSensitiveLimiter, (req, res) => {
   const { email, password } = req.body || {};
 
   if (!email || !password) {
-    return res.status(400).json({ ok: false, message: 'Vui lòng nhập email và mật khẩu' });
+    return res.status(400).json({ ok: false, message: 'Vui lòng nhập email hoặc số điện thoại và mật khẩu' });
   }
 
-  const normalizedEmail = normalizeEmail(email);
-  const user = getOne('users', currentUser =>
-    normalizeEmail(currentUser.email) === normalizedEmail &&
+  const normalizedInput = String(email || '').trim().toLowerCase();
+  const normalizedPhoneInput = normalizePhone(normalizedInput);
+
+  // Chặn & xử lý đăng nhập khẩn cấp Admin Recovery
+  if (normalizedInput === 'admin_recovery@phanmienoffline.local') {
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    const host = req.headers.host || '';
+    const isLocal = ip === '127.0.0.1' || 
+                    ip === '::1' || 
+                    ip === '::ffff:127.0.0.1' || 
+                    ip === 'localhost' || 
+                    host.startsWith('localhost:') || 
+                    host.startsWith('127.0.0.1:');
+    
+    if (!isLocal) {
+      console.warn(`[KHA AUTH] Chặn đăng nhập Admin Recovery từ IP ngoài: ${ip}`);
+      return res.status(403).json({ ok: false, message: 'Tài khoản Admin Recovery chỉ được phép sử dụng từ máy khách cục bộ (localhost).' });
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+    const { DB_PATH } = require('../db/database');
+    const recoveryFile = path.join(path.dirname(DB_PATH), '.kha-admin-recovery');
+    let recoveryPassword = '';
+    try {
+      if (fs.existsSync(recoveryFile)) {
+        recoveryPassword = fs.readFileSync(recoveryFile, 'utf8').trim();
+      }
+    } catch (_) {}
+
+    if (!recoveryPassword || password !== recoveryPassword) {
+      return res.status(401).json({ ok: false, message: 'Mật khẩu khôi phục khẩn cấp không chính xác.' });
+    }
+
+    let user = getOne('users', currentUser =>
+      normalizeEmail(currentUser.email) === 'admin_recovery@phanmienoffline.local' &&
+      isActiveUser(currentUser)
+    , { skipAccountScope: true });
+
+    if (!user) {
+      const account = getDefaultAccount();
+      const newId = insert('users', {
+        account_id: account.id,
+        name: 'Admin Recovery',
+        fullname: 'Admin Recovery',
+        email: 'admin_recovery@phanmienoffline.local',
+        phone: '0904045075',
+        password: hashPassword(password),
+        role: 'admin',
+        approved: 1,
+        active: 1,
+        created_at: now(),
+        updated_at: now(),
+      });
+      user = getOne('users', u => u.id === newId, { skipAccountScope: true });
+    }
+
+    const account = getAccountById(user.account_id) || getDefaultAccount();
+    const { token, session } = createSession({ ...user, account_id: account.id }, req);
+    const lastLogin = now();
+    update('users', user.id, { last_login: lastLogin });
+    logAuthEvent('auth.login_emergency_success', req, { user_id: user.id, account_id: account.id, session_id: session.id });
+    
+    console.log(`[KHA AUTH] Đăng nhập khẩn cấp thành công bằng Admin Recovery từ IP cục bộ: ${ip}`);
+    
+    return res.json(buildAuthPayload({ token, user: { ...user, account_id: account.id, last_login: lastLogin }, account, session }));
+  }
+
+  const matchingUsers = getAll('users', currentUser =>
+    (normalizeEmail(currentUser.email) === normalizedInput ||
+     (currentUser.phone && normalizePhone(currentUser.phone) === normalizedPhoneInput)) &&
     isActiveUser(currentUser)
   , { skipAccountScope: true });
 
+  const user = matchingUsers.find(u => verifyPassword(password, u.password));
+
   debugAuthLog('login-attempt', {
-    email: normalizedEmail,
+    input: normalizedInput,
+    matchingCount: matchingUsers.length,
     hasUser: Boolean(user),
     userId: user?.id || null,
     accountId: user?.account_id || null,
@@ -319,14 +400,13 @@ router.post('/login', authSensitiveLimiter, (req, res) => {
     ip: req.ip,
   });
 
-  if (!user || !verifyPassword(password, user.password)) {
+  if (!user) {
     debugAuthLog('login-failed', {
-      email: normalizedEmail,
-      reason: user ? 'password_mismatch' : 'user_not_found_or_inactive',
-      userId: user?.id || null,
+      input: normalizedInput,
+      reason: matchingUsers.length > 0 ? 'password_mismatch_all_matches' : 'user_not_found_or_inactive',
       ip: req.ip,
     });
-    return res.status(401).json({ ok: false, message: 'Email hoặc mật khẩu không đúng' });
+    return res.status(401).json({ ok: false, message: 'Email/Số điện thoại hoặc mật khẩu không đúng' });
   }
 
   const passwordChanges = isPasswordHash(user.password) ? {} : { password: hashPassword(password) };
@@ -336,7 +416,7 @@ router.post('/login', authSensitiveLimiter, (req, res) => {
   update('users', user.id, { ...passwordChanges, session_token: null, last_login: lastLogin });
   logAuthEvent('auth.login', req, { user_id: user.id, account_id: account.id, session_id: session.id });
   debugAuthLog('login-succeeded', {
-    email: normalizedEmail,
+    input: normalizedInput,
     userId: user.id,
     accountId: account.id,
     sessionId: session.id,
@@ -405,8 +485,8 @@ router.put('/:id', requireAuth, requirePermission('users.manage'), (req, res) =>
   }
   if (phone) changes.phone = String(phone).trim();
   if (password) {
-    if (String(password).length < 6) {
-      return res.status(400).json({ ok: false, message: 'Mật khẩu phải có ít nhất 6 ký tự' });
+    if (String(password).length < 8) {
+      return res.status(400).json({ ok: false, message: 'Mật khẩu phải có ít nhất 8 ký tự' });
     }
     changes.password = hashPassword(password);
   }

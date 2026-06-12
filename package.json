@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-electron",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Bán hàng offline ",
   "repository": {
     "type": "git",
@@ -38,7 +38,7 @@
   },
   "build": {
     "appId": "com.vankhammo.phanmienoffline",
-    "productName": "Ban hang offline - Van kha mmo",
+    "productName": "Bán Hàng Pos",
     "directories": {
       "output": "release"
     },
@@ -88,7 +88,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Ban hang offline - Van kha mmo"
+      "shortcutName": "Bán Hàng Pos"
     },
     "publish": [
       {

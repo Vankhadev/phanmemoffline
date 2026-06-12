@@ -912,8 +912,8 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
       setEmpNotice({ tone: 'error', message: 'Vui lòng nhập mật khẩu cho nhân viên mới.' });
       return;
     }
-    if (payload.password && String(payload.password).length < 6) {
-      setEmpNotice({ tone: 'error', message: 'Mật khẩu phải có ít nhất 6 ký tự.' });
+    if (payload.password && String(payload.password).length < 8) {
+      setEmpNotice({ tone: 'error', message: 'Mật khẩu phải có ít nhất 8 ký tự.' });
       return;
     }
 

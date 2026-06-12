@@ -155,8 +155,8 @@ function resetLocalAdmin(options = {}) {
   const requestedName = String(options.name || 'Local Admin').trim() || 'Local Admin';
   const requestedPhone = String(options.phone || '0900000000').trim() || '0900000000';
 
-  if (requestedPassword.length < 6) {
-    throw new Error('Mật khẩu phải có ít nhất 6 ký tự.');
+  if (requestedPassword.length < 8) {
+    throw new Error('Mật khẩu phải có ít nhất 8 ký tự.');
   }
 
   const adminCandidates = db.users.filter(user => user && normalizeRole(user.role) === 'admin');
@@ -176,6 +176,7 @@ function resetLocalAdmin(options = {}) {
       id: userId,
       account_id: account.id,
       name: requestedName,
+      fullname: requestedName,
       email: requestedEmail,
       phone: requestedPhone,
       password: hashPassword(requestedPassword),
@@ -191,6 +192,7 @@ function resetLocalAdmin(options = {}) {
   } else {
     user.account_id = user.account_id == null ? account.id : user.account_id;
     user.name = requestedName;
+    user.fullname = requestedName;
     user.email = requestedEmail;
     user.phone = requestedPhone;
     user.password = hashPassword(requestedPassword);

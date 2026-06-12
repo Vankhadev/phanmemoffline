@@ -2,6 +2,8 @@
  *  Bán hàng offline - by Van kha mmo
  *  Backend: Node.js + Express + JSON file database
  */
+const { AsyncLocalStorage } = require('async_hooks');
+const requestContext = new AsyncLocalStorage();
 const express = require('express');
 const cors    = require('cors');
 const helmet  = require('helmet');
@@ -13,6 +15,7 @@ const { loadEnv, getLoadedEnvFiles } = require('./utils/loadEnv');
 loadEnv({ logErrors: true });
 
 // --- Load DB & helpers ---
+const dbModule = require('./db/database');
 const {
   upsertDailyStats,
   today,
@@ -21,13 +24,29 @@ const {
   isCompletedInvoiceStatus,
   deleteExpiredCancelledInvoices,
   runScheduledDbBackup,
-} = require('./db/database');
+} = dbModule;
 const { requireAuth, requireAnyPermission, requirePermission } = require('./middleware/auth');
 const { ensurePrintTemplatesSchema } = require('./db/printTemplatesSchema');
 const { testPrintTemplatesMySqlConnection, getPrintTemplatesMySqlStatus } = require('./db/printTemplatesMySql');
 const { ensureSettingsSchema, getSettingsMySqlStatus } = require('./db/settingsMySql');
 const { getNegativeStockSettingsAsync } = require('./services/settingsService');
 const { PRINT_TEMPLATE_UPLOAD_DIR, PUBLIC_PRINT_TEMPLATE_UPLOAD_PATH, ensureUploadDir } = require('./middleware/printTemplateUpload');
+
+// --- KHA Data Guardian Services ---
+const adminAlertService = require('./services/adminAlertService');
+const realtimeSyncService = require('./services/realtimeSyncService');
+const historyService = require('./services/historyService');
+const transactionJournal = require('./services/transactionJournal');
+const realtimeBackup = require('./services/realtimeBackup');
+const backupScheduler = require('./services/backupScheduler');
+const diskHealthMonitor = require('./services/diskHealthMonitor');
+const powerLossRecovery = require('./services/powerLossRecovery');
+const databaseAutoRecovery = require('./services/databaseAutoRecovery');
+const maintenanceService = require('./services/maintenanceService');
+const selfHealing = require('./services/selfHealing');
+const integrityChecker = require('./services/integrityChecker');
+const safetyRules = require('./services/safetyRules');
+const authRepairService = require('./services/authRepairService');
 
 // --- Routes ---
 const storeRoutes     = require('./routes/store');
@@ -54,6 +73,8 @@ const settingsRoutes = require('./routes/settings');
 const printTemplatesRoutes = require('./routes/printTemplates');
 const marketplacesRoutes = require('./routes/marketplaces');
 const databaseRoutes = require('./routes/database');
+const dataGuardianRoutes = require('./routes/dataGuardian');
+const historyRoutes = require('./routes/history');
 
 // ============================================================
 //  EXPRESS APP
@@ -157,6 +178,12 @@ app.use('/api/products/import-excel-rows', express.json({ limit: '25mb' }));
 app.use('/api/excel-imports', express.json({ limit: '25mb' }));
 app.use('/api/print-templates', express.json({ limit: '10mb' }));
 app.use(express.json());
+// Global request context middleware for database hooks
+app.use((req, res, next) => {
+  requestContext.run(req, () => {
+    next();
+  });
+});
 try {
   ensureUploadDir();
 } catch (error) {
@@ -238,6 +265,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/users',          usersRoutes);
 app.use('/api',                syncRoutes);
 app.use('/api/database',       databaseRoutes);
+app.use('/api/data-guardian',  dataGuardianRoutes);
 app.use('/api/store',          requireAuth, requireAnyPermission(['store.read', 'store.manage']), storeRoutes);
 app.use('/api/customers',      requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customersRoutes);
 app.use('/api/products',       requireAuth, requireAnyPermission(['products.read', 'products.manage']), productsRoutes);
@@ -259,6 +287,10 @@ app.use('/api/settings', requireAuth, requireAnyPermission(['settings.read', 'se
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);
 app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
 app.use('/api/marketplaces', requireAuth, requireAnyPermission(['settings.read', 'settings.manage', 'invoices.read', 'invoices.manage']), marketplacesRoutes);
+app.use('/api/history', historyRoutes);
+app.get('/api/realtime/sync', (req, res) => {
+  realtimeSyncService.registerClient(req, res);
+});
 
 // ----- Dashboard -----
 function buildDashboardPayload() {
@@ -406,22 +438,306 @@ async function bootstrapSettingsSchema() {
   }
 }
 
+// ============================================================
+//  KHA DATA GUARDIAN - Bootstrap
+// ============================================================
+function bootstrapDataGuardian() {
+  const dataDir = process.env.ELECTRON_USER_DATA || path.resolve(__dirname, '..', 'data');
+
+  // 1. Admin Alert Service (must be first - other services depend on it)
+  adminAlertService.initialize({ dataDir, appVersion: APP_VERSION });
+
+  // 2. Transaction Journal (WAL)
+  transactionJournal.initialize({ dataDir });
+
+  // 3. Disk Health Monitor
+  diskHealthMonitor.initialize({ alertService: adminAlertService });
+
+  // 4. Integrity Checker
+  integrityChecker.initialize({ alertService: adminAlertService });
+
+  // 5. Safety Rules
+  safetyRules.initialize({ alertService: adminAlertService });
+
+  // 6. Database Auto Recovery
+  databaseAutoRecovery.initialize({ alertService: adminAlertService });
+
+  // 7. Power Loss Recovery
+  powerLossRecovery.initialize({
+    dataDir,
+    alertService: adminAlertService,
+    transactionJournal,
+    backupScheduler,
+  });
+
+  // 8. Realtime Backup
+  realtimeBackup.initialize({
+    dataDir,
+    dbModule,
+    alertService: adminAlertService,
+  });
+
+  // 9. Backup Scheduler
+  backupScheduler.initialize({
+    dataDir,
+    dbModule,
+    alertService: adminAlertService,
+    diskHealthMonitor,
+  });
+
+  // 10. Maintenance Service
+  maintenanceService.initialize({
+    dataDir,
+    dbModule,
+    alertService: adminAlertService,
+    backupScheduler,
+    integrityChecker,
+    diskHealthMonitor,
+  });
+
+  // 11. Self-Healing
+  selfHealing.initialize({
+    dbModule,
+    alertService: adminAlertService,
+  });
+
+  // 12. Realtime Sync & History Services
+  realtimeSyncService.initialize();
+  historyService.initialize({ dbModule });
+
+  // 13. Auth Repair & Self-Healing Setup
+  try {
+    authRepairService.repairUserAuthSystem();
+    authRepairService.initializeEmergencyAdmin();
+  } catch (err) {
+    console.error('[KHA DATA GUARDIAN] Failed to bootstrap auth repair/emergency recovery admin:', err.message);
+  }
+
+  // Set guardian services reference for API routes
+  dataGuardianRoutes.setGuardianServices({
+    transactionJournal,
+    realtimeBackup,
+    backupScheduler,
+    diskHealthMonitor,
+    powerLossRecovery,
+    databaseAutoRecovery,
+    maintenanceService,
+    selfHealing,
+    integrityChecker,
+    adminAlertService,
+    safetyRules,
+    dbModule,
+  });
+
+  // Hook transaction journal into database module
+  hookGuardianIntoDatabase();
+
+  console.log('[KHA DATA GUARDIAN] All 11 modules initialized');
+}
+
+function getRequestContext() {
+  const req = requestContext.getStore();
+  return {
+    sourceTabId: req?.headers?.['x-client-tab-id'] || '',
+    clientUpdatedAt: req?.headers?.['x-client-updated-at'] || null,
+    userId: req?.user?.id || null,
+    userName: req?.user?.name || 'Hệ thống',
+  };
+}
+
+function hookGuardianIntoDatabase() {
+  // Store original functions
+  const originalInsert = dbModule.insert;
+  const originalUpdate = dbModule.update;
+  const originalRemove = dbModule.remove;
+  const originalReplaceTable = dbModule.replaceTable;
+  const originalSaveDB = dbModule.saveDB;
+
+  // Hook insert
+  dbModule.insert = function guardianInsert(table, row, options = {}) {
+    const result = originalInsert.call(this, table, row, options);
+    transactionJournal.writeEntry('insert', table, result?.id || row?.id, { after: result || row });
+    realtimeBackup.onDataChange(table, 'insert', result?.id || row?.id);
+
+    // Ghi nhận lịch sử và phát realtime
+    const ctx = getRequestContext();
+    if (!options.skipHistory && table !== 'edit_history') {
+      historyService.recordChange(table, result?.id || row?.id, 'insert', null, result || row, ctx);
+    }
+    realtimeSyncService.broadcastChangeEvent([table], {
+      sourceTabId: ctx.sourceTabId,
+      op: 'insert',
+      id: result?.id || row?.id,
+    });
+
+    return result;
+  };
+
+  // Hook update
+  dbModule.update = function guardianUpdate(table, id, changes, options = {}) {
+    const before = dbModule.getOne(table, r => r.id === id);
+    const result = originalUpdate.call(this, table, id, changes, options);
+    transactionJournal.writeEntry('update', table, id, { before, after: changes });
+    realtimeBackup.onDataChange(table, 'update', id);
+
+    // Ghi nhận lịch sử và phát realtime
+    const ctx = getRequestContext();
+    if (!options.skipHistory && table !== 'edit_history') {
+      historyService.recordChange(table, id, 'update', before, result || changes, ctx);
+    }
+    realtimeSyncService.broadcastChangeEvent([table], {
+      sourceTabId: ctx.sourceTabId,
+      op: 'update',
+      id: id,
+    });
+
+    return result;
+  };
+
+  // Hook remove with safety rules
+  dbModule.remove = function guardianRemove(table, id, options = {}) {
+    const existingRow = dbModule.getOne(table, r => r.id === id);
+    const safetyResult = safetyRules.applySafetyOnRemove(table, id, existingRow);
+
+    if (safetyResult.action === 'block') {
+      console.warn(`[KHA SAFETY] Blocked delete on ${table} id=${id}: ${safetyResult.reason}`);
+      return null;
+    }
+
+    const ctx = getRequestContext();
+    let result;
+    if (safetyResult.action === 'soft_delete') {
+      // Convert to update with soft-delete fields
+      transactionJournal.writeEntry('update', table, id, { before: existingRow, after: safetyResult.data });
+      realtimeBackup.onDataChange(table, 'update', id);
+      result = originalUpdate.call(this, table, id, safetyResult.data, options);
+
+      // Ghi nhận lịch sử và phát realtime
+      if (!options.skipHistory && table !== 'edit_history') {
+        historyService.recordChange(table, id, 'delete', existingRow, safetyResult.data, ctx);
+      }
+      realtimeSyncService.broadcastChangeEvent([table], {
+        sourceTabId: ctx.sourceTabId,
+        op: 'delete',
+        id: id,
+      });
+      return result;
+    }
+
+    // Allow delete for non-protected tables
+    transactionJournal.writeEntry('delete', table, id, { before: existingRow });
+    realtimeBackup.onDataChange(table, 'delete', id);
+    result = originalRemove.call(this, table, id, options);
+
+    // Ghi nhận lịch sử và phát realtime
+    if (!options.skipHistory && table !== 'edit_history') {
+      historyService.recordChange(table, id, 'delete', existingRow, null, ctx);
+    }
+    realtimeSyncService.broadcastChangeEvent([table], {
+      sourceTabId: ctx.sourceTabId,
+      op: 'delete',
+      id: id,
+    });
+
+    return result;
+  };
+
+  // Hook replaceTable
+  dbModule.replaceTable = function guardianReplaceTable(table, rows, options = {}) {
+    const result = originalReplaceTable.call(this, table, rows, options);
+    const ctx = getRequestContext();
+    realtimeSyncService.broadcastChangeEvent([table], {
+      sourceTabId: ctx.sourceTabId,
+      op: 'replace',
+    });
+    return result;
+  };
+
+  // Hook saveDB to mark journal committed
+  dbModule.saveDB = function guardianSaveDB() {
+    const result = originalSaveDB.call(this);
+    transactionJournal.markCommitted();
+    return result;
+  };
+}
+
+function startGuardianServices() {
+  // Detect previous crash
+  const crashInfo = powerLossRecovery.detectCrash();
+  if (crashInfo.crashed) {
+    console.log('[KHA DATA GUARDIAN] Previous crash detected, performing recovery...');
+    powerLossRecovery.performRecovery(dbModule);
+  }
+
+  // Database auto recovery check
+  databaseAutoRecovery.runStartupCheck(dbModule);
+
+  // Create lock file
+  powerLossRecovery.createLock();
+
+  // Start all scheduled services
+  backupScheduler.startSchedules();
+  diskHealthMonitor.startMonitoring();
+  maintenanceService.startSchedule();
+  selfHealing.startMonitoring();
+
+  // Log startup alert
+  adminAlertService.sendInfoAlert('system', `KHA Data Guardian khởi động thành công. Version: ${APP_VERSION}`);
+
+  console.log('[KHA DATA GUARDIAN] All services started');
+}
+
+function shutdownGuardian() {
+  console.log('[KHA DATA GUARDIAN] Shutting down...');
+  try { realtimeSyncService.shutdown(); } catch (_) {}
+  try { selfHealing.shutdown(); } catch (_) {}
+  try { maintenanceService.shutdown(); } catch (_) {}
+  try { diskHealthMonitor.shutdown(); } catch (_) {}
+  try { backupScheduler.shutdown(); } catch (_) {}
+  try { realtimeBackup.shutdown(); } catch (_) {}
+  try { transactionJournal.shutdown(); } catch (_) {}
+  try { powerLossRecovery.shutdown(); } catch (_) {}
+  console.log('[KHA DATA GUARDIAN] Shutdown complete');
+}
+
 async function startServer() {
   await bootstrapSettingsSchema();
   await bootstrapPrintTemplateSchema();
+
+  // Initialize Data Guardian
+  bootstrapDataGuardian();
+
   runDbBackup('startup');
   runExpiredCancelledInvoiceCleanup('startup');
+
+  // Start Data Guardian services
+  startGuardianServices();
+
   app.listen(PORT, HOST, () => {
     console.log(`
 ----------------------------------------------
 📡 KHA Backend listening at http://${HOST}:${PORT}
+🛡️  KHA Data Guardian: ACTIVE
 ----------------------------------------------
-DB path: ${require('./db/database').DB_PATH}
+DB path: ${dbModule.DB_PATH}
 Started: ${SERVER_STARTED_AT}
 ----------------------------------------------
 `);
   });
 }
+
+// Clean shutdown handlers
+process.on('SIGINT', () => {
+  shutdownGuardian();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  shutdownGuardian();
+  process.exit(0);
+});
+process.on('exit', () => {
+  try { shutdownGuardian(); } catch (_) {}
+});
 
 startServer().catch(error => {
   console.error('[KHA SERVER] Lỗi khởi động không mong muốn:', error);

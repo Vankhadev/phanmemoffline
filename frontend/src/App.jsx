@@ -258,7 +258,7 @@ function FullScreenLoading({ message = 'Đang khởi tạo ứng dụng...' }) {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
       <div className="bg-white rounded-2xl shadow-xl px-8 py-7 text-center max-w-sm w-full">
         <div className="mx-auto mb-4 h-10 w-10 rounded-full border-4 border-blue-100 border-t-blue-600 animate-spin" />
-        <div className="text-lg font-bold text-gray-800">Phần mềm POS Offline</div>
+        <div className="text-lg font-bold text-gray-800">Bán Hàng Pos</div>
         <div className="mt-2 text-sm text-gray-500">{message}</div>
       </div>
     </div>
@@ -462,6 +462,7 @@ function AppLayout({
   }));
   const [updateToast, setUpdateToast] = useState(null);
   const [updateToastVisible, setUpdateToastVisible] = useState(false);
+  const [upgradeToast, setUpgradeToast] = useState(null);
   const [compactSidebarVisible, setCompactSidebarVisible] = useState(() => isCompactSidebarViewport());
   const [compactSidebarAnimating, setCompactSidebarAnimating] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null);
@@ -486,6 +487,18 @@ function AppLayout({
     };
     window.addEventListener('kha-update-available', handleUpdateToast);
     return () => window.removeEventListener('kha-update-available', handleUpdateToast);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.khaDesktop?.onShortcutUpdated) {
+      const unsubscribe = window.khaDesktop.onShortcutUpdated((payload) => {
+        if (payload?.success) {
+          setUpgradeToast(payload.message);
+        }
+      });
+      return unsubscribe;
+    }
+    return undefined;
   }, []);
 
   useEffect(() => {
@@ -635,6 +648,10 @@ function AppLayout({
           className={`${sidebarOpen ? 'w-72' : 'w-0'} sticky top-0 z-20 hidden h-screen shrink-0 overflow-hidden border-r border-gray-200 bg-white transition-all duration-300 ease-in-out md:block`}
         >
           <nav className="flex h-full flex-col overflow-y-auto px-4 py-5">
+            <div className="flex items-center gap-3 mb-6 px-3">
+              <img src="./icons/app-icon.svg" alt="POS Logo" className="h-9 w-9 rounded-xl object-cover shadow-sm" />
+              <div className="font-bold text-gray-800 text-lg leading-tight">Bán Hàng Pos</div>
+            </div>
             {navGroups.map(group => {
               const accessibleItems = group.items?.filter(item => canAccess(item.to)) || [];
 
@@ -744,6 +761,21 @@ function AppLayout({
         activePanel={mobilePanel}
         onTogglePanel={toggleMobilePanel}
       />
+      {upgradeToast && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">Thông báo cập nhật</h3>
+            <div className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap mb-5">{upgradeToast}</div>
+            <button
+              type="button"
+              onClick={() => setUpgradeToast(null)}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors"
+            >
+              Đồng ý
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

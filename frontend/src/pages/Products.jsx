@@ -1,6 +1,7 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown } from 'lucide-react';
+import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown, History } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import ChangeHistoryModal from '../components/ChangeHistoryModal';
 import ExcelImportPanel from '../components/ExcelImportPanel';
 import NegativeStockInput from '../components/NegativeStockInput';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, searchFlatProducts } from '../utils/productSearch';
@@ -390,6 +391,7 @@ const ProductRow = memo(function ProductRow({
   onEditVariant,
   onToggleExpand,
   onToggleSelect,
+  onShowHistory,
   negativeStockSettings,
 }) {
   const p = product;
@@ -461,6 +463,9 @@ const ProductRow = memo(function ProductRow({
           <button onClick={() => onAddVariant(p)} className="text-green-600 hover:text-green-800 p-1.5 rounded border border-green-300 hover:bg-green-50" title="Thêm biến thể">
             <Plus size={14} />
           </button>
+          <button onClick={() => onShowHistory(p.id)} className="text-gray-500 hover:text-gray-700 p-1.5 rounded border border-gray-300 hover:bg-gray-50" title="Lịch sử thay đổi">
+            <History size={14} />
+          </button>
           <button onClick={() => onEditProduct(p)} className="text-blue-600 hover:text-blue-800 p-1.5 rounded border border-blue-300 hover:bg-blue-50" title="Sửa">
             <Edit2 size={14} />
           </button>
@@ -491,6 +496,9 @@ const ProductRow = memo(function ProductRow({
           <div className="hidden text-right text-xs text-blue-600 font-medium w-24 md:block">{formatVND(v.vip_price)}</div>
 
           <div className="flex items-center gap-1 w-full justify-end border-t border-gray-200 pt-2 md:w-40 md:border-t-0 md:pt-0">
+            <button onClick={() => onShowHistory(v.id)} className="text-gray-500 hover:text-gray-700 p-1.5 rounded border border-gray-300 hover:bg-gray-50" title="Lịch sử thay đổi">
+              <History size={13} />
+            </button>
             <button onClick={() => onEditVariant(v, p)} className="text-blue-600 hover:text-blue-800 p-1.5 rounded border border-blue-300 hover:bg-blue-50" title="Sửa">
               <Edit2 size={13} />
             </button>
@@ -508,6 +516,11 @@ const ProductRow = memo(function ProductRow({
 export default function Products({ store }) {
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [historyTarget, setHistoryTarget] = useState(null);
+
+  const handleShowHistory = useCallback((id) => {
+    setHistoryTarget({ id });
+  }, []);
   const excelInputRef = useRef(null);
   const [showExcelImport, setShowExcelImport] = useState(false);
   const productsFetchAbortRef = useRef(null);
@@ -1489,6 +1502,7 @@ export default function Products({ store }) {
         ...stripInventoryFields(nextForm),
         category: String(nextForm.category || '').trim(),
         stock: parseStockInputNumber(nextForm.stock, 0),
+        updated_at: currentEditing?.updated_at || undefined,
       };
       delete payload.sku;
       const controller = new AbortController();
@@ -1579,6 +1593,7 @@ export default function Products({ store }) {
       const variantPayload = {
         ...stripInventoryFields(nextVariantForm),
         stock: parseStockInputNumber(nextVariantForm.stock, 0),
+        updated_at: currentEditingVariant?.updated_at || undefined,
       };
       delete variantPayload.sku;
       const controller = new AbortController();
@@ -2026,6 +2041,7 @@ export default function Products({ store }) {
             onEditVariant={openEditVariant}
             onToggleExpand={toggleExpand}
             onToggleSelect={toggleSelectProduct}
+            onShowHistory={handleShowHistory}
             negativeStockSettings={negativeStockSettings}
           />
         ))}
@@ -2315,6 +2331,16 @@ export default function Products({ store }) {
             </div>
           </div>
         </div>
+      )}
+
+      {historyTarget && (
+        <ChangeHistoryModal
+          isOpen={Boolean(historyTarget)}
+          onClose={() => setHistoryTarget(null)}
+          tableName="products"
+          recordId={historyTarget.id}
+          onRestoreSuccess={fetchProducts}
+        />
       )}
     </div>
   );
