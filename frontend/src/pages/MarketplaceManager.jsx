@@ -65,7 +65,7 @@ const ORDER_STATUS_OPTIONS = [
 ];
 
 const STATUS_META = {
-  new: { label: 'Mới lấy đơn', className: 'bg-blue-50 text-blue-700' },
+  new: { label: ' đơn mới lên', className: 'bg-blue-50 text-blue-700' },
   picked: { label: 'Đã lấy hàng', className: 'bg-cyan-50 text-cyan-700' },
   in_transit: { label: 'Đang trung chuyển', className: 'bg-violet-50 text-violet-700' },
   delivered: { label: 'Đã giao', className: 'bg-emerald-50 text-emerald-700' },

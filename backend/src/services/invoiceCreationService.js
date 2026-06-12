@@ -138,6 +138,24 @@ function createProductNotFoundError(detail = {}, index = 0) {
   return err;
 }
 
+function createUnlinkedInvoiceSaleDetail(detail = {}) {
+  const sku = getDetailSku(detail);
+  const productName = firstNonEmpty(detail.product_name, detail.name, sku, 'Sản phẩm');
+  return {
+    ...(detail || {}),
+    product_id: null,
+    variant_id: null,
+    parent_id: null,
+    parent_name: '',
+    variant_name: '',
+    product_name: productName,
+    name: firstNonEmpty(detail.name, productName),
+    product_sku: sku,
+    sku,
+    stock_effect_status: 'not_linked',
+  };
+}
+
 function resolveInvoiceSaleDetailProduct(detail = {}, index = 0) {
   if (isComboDetail(detail) || isServiceDetail(detail)) return { ...(detail || {}) };
 
@@ -146,7 +164,10 @@ function resolveInvoiceSaleDetailProduct(detail = {}, index = 0) {
   const hasRequestedProductId = Number.isFinite(Number(requestedProductId)) && Number(requestedProductId) > 0;
   const productById = getActiveProductById(requestedProductId);
   const product = productById || (!hasRequestedProductId ? getActiveProductBySku(sku) : null);
-  if (!product) throw createProductNotFoundError(detail, index);
+  if (!product) {
+    if (!hasRequestedProductId && sku) return createUnlinkedInvoiceSaleDetail(detail);
+    throw createProductNotFoundError(detail, index);
+  }
 
   const parent = product.parent_id ? getActiveProductById(product.parent_id) : null;
   const isVariant = Boolean(product.parent_id);

@@ -39,13 +39,14 @@ function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
 }
 
-// Chuyển mã đơn hàng thành định dạng "DH 00001"
+// Chuyển mã đơn hàng thành định dạng "DH000001"
 function displayOrderCode(code) {
   if (!code) return '—';
-  // Bỏ prefix "HD" hoặc "LOCAL_" rồi pad 5 chữ số
-  const numStr = code.replace(/^(HD|LOCAL_)/i, '').replace(/[^0-9]/g, '');
+  const raw = String(code).trim();
+  if (/^DH\d{6,}$/i.test(raw)) return raw.toUpperCase();
+  const numStr = raw.replace(/^(HD|DH|LOCAL_)/i, '').replace(/[^0-9]/g, '');
   const num = parseInt(numStr || '0', 10);
-  return `DH ${String(num).padStart(5, '0')}`;
+  return `DH${String(num).padStart(6, '0')}`;
 }
 function formatDate(d) {
   if (!d) return '—';

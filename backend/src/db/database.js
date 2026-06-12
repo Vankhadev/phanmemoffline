@@ -15,9 +15,14 @@ function resolveDBPath() {
 }
 
 const DB_PATH = resolveDBPath();
-const DB_BACKUP_DIR = path.resolve(process.env.KHA_DB_BACKUP_DIR || path.join(path.dirname(DB_PATH), 'backups'));
+const DATA_PRESERVATION_BACKUP_FOLDER = 'backup_du_lieu_phan_mem_no_del';
+const DB_BACKUP_DIR = path.resolve(process.env.KHA_DB_BACKUP_DIR || path.join(path.dirname(DB_PATH), DATA_PRESERVATION_BACKUP_FOLDER));
 const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.KHA_DB_BACKUP_RETENTION_COUNT) || 14);
 const DB_BACKUP_MIN_INTERVAL_MS = Math.max(0, Number(process.env.KHA_DB_BACKUP_MIN_INTERVAL_MS) || 20 * 60 * 60 * 1000);
+const DATA_PRESERVATION_BACKUP_ROOTS = (process.env.KHA_DATA_PRESERVATION_BACKUP_ROOTS || 'C:\\,D:\\,E:\\,F:\\')
+  .split(',')
+  .map(root => root.trim())
+  .filter(Boolean);
 const DEFAULT_ACCOUNT_SLUG = 'default';
 const requestContext = new AsyncLocalStorage();
 
@@ -508,9 +513,9 @@ const DOCUMENT_CODE_CONFIG = Object.freeze({
   invoice: Object.freeze({
     table: 'invoices',
     field: 'invoice_code',
-    prefix: 'HD',
+    prefix: 'DH',
     counterName: 'invoice_seq',
-    width: 5,
+    width: 6,
   }),
   import: Object.freeze({
     table: 'import_logs',
@@ -890,8 +895,18 @@ function createDbBackup(reason = 'manual', options = {}) {
   ensureDbBackupDirectoryExists();
   const safeReason = sanitizeBackupReason(reason);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = path.join(DB_BACKUP_DIR, `phanmienoffline-db-${stamp}-${safeReason}.json`);
+  const fileName = `phanmienoffline-db-${stamp}-${safeReason}.json`;
+  const backupPath = path.join(DB_BACKUP_DIR, fileName);
   fs.copyFileSync(DB_PATH, backupPath);
+  for (const root of DATA_PRESERVATION_BACKUP_ROOTS) {
+    try {
+      const mirrorDir = path.join(root, DATA_PRESERVATION_BACKUP_FOLDER, 'database');
+      fs.mkdirSync(mirrorDir, { recursive: true });
+      fs.copyFileSync(DB_PATH, path.join(mirrorDir, fileName));
+    } catch (_error) {
+      // Best-effort mirror backup: unavailable drives must not block the local recovery point.
+    }
+  }
   const stat = fs.statSync(backupPath);
   if (options.skipRetention !== true) pruneDbBackups(options.retentionCount || DB_BACKUP_RETENTION_COUNT);
   return {
@@ -1557,6 +1572,7 @@ function loadDB(options = {}) {
 }
 
 function saveDB() {
+  createDbBackup('before-write-recovery-point', { skipRetention: true });
   atomicWriteJSON(DB_PATH, getDb());
 }
 
