@@ -1024,6 +1024,7 @@ export const authApi = {
   syncVersions() { return apiJson('/sync/versions', {}, 'Không thể lấy phiên bản đồng bộ.'); },
   syncPull(payload = {}) { return apiJson('/sync/pull', { method: 'POST', body: payload }, 'Không thể kéo dữ liệu đồng bộ.'); },
   syncPush(payload = {}) { return apiJson('/sync/push', { method: 'POST', body: payload }, 'Không thể đẩy dữ liệu đồng bộ.'); },
+  restoreScan() { return apiJson('/database/restore-scan', { method: 'POST' }, 'Không thể khôi phục dữ liệu.'); },
 };
 
 export const usersApi = {

@@ -11,7 +11,6 @@ const {
   getUserPermissions,
   runWithRequestContext,
   auditLog,
-  DB_PATH,
 } = require('../db/database');
 
 const DEFAULT_SESSION_TTL_DAYS = Number(process.env.KHA_SESSION_TTL_DAYS || 30);
@@ -30,8 +29,9 @@ function resolveConfiguredSessionSecret() {
 function resolveSessionSecretFilePath() {
   const configuredPath = String(process.env.KHA_SESSION_SECRET_FILE || '').trim();
   if (configuredPath) return path.resolve(configuredPath);
-  return path.join(path.dirname(DB_PATH), '.kha-session-secret');
+  return path.join(path.dirname(require('../db/database').DB_PATH), '.kha-session-secret');
 }
+
 
 function readPersistedSessionSecret(secretFile) {
   try {

@@ -14,6 +14,72 @@ const DATA_PRESERVATION_BACKUP_ROOTS = (process.env.KHA_DATA_PRESERVATION_BACKUP
   .map(root => root.trim())
   .filter(Boolean);
 
+function readDatabaseConfig() {
+  const paths = [];
+  const appDataRoots = [];
+  const roaming = process.env.APPDATA || '';
+  if (roaming) {
+    appDataRoots.push(path.join(roaming, 'phanmienoffline-electron'));
+    appDataRoots.push(path.join(roaming, 'Ban hang offline - Van kha mmo'));
+    appDataRoots.push(path.join(roaming, 'Electron'));
+  }
+  if (process.env.ELECTRON_USER_DATA) {
+    appDataRoots.push(process.env.ELECTRON_USER_DATA);
+  }
+  const uniqueRoots = [...new Set(appDataRoots.map(p => path.resolve(p)))];
+  for (const root of uniqueRoots) {
+    paths.push(path.join(root, 'config.json'));
+  }
+  paths.push(path.resolve(__dirname, '..', '..', 'data', 'config.json'));
+
+  for (const p of paths) {
+    if (fs.existsSync(p)) {
+      try {
+        const content = fs.readFileSync(p, 'utf8');
+        const config = JSON.parse(content);
+        if (config && config.database_path) {
+          return { database_path: config.database_path, source: p };
+        }
+      } catch (_) {}
+    }
+  }
+  return null;
+}
+
+function writeDatabaseConfig(dbPath) {
+  const paths = [];
+  const appDataRoots = [];
+  const roaming = process.env.APPDATA || '';
+  if (roaming) {
+    appDataRoots.push(path.join(roaming, 'phanmienoffline-electron'));
+    appDataRoots.push(path.join(roaming, 'Ban hang offline - Van kha mmo'));
+    appDataRoots.push(path.join(roaming, 'Electron'));
+  }
+  if (process.env.ELECTRON_USER_DATA) {
+    appDataRoots.push(process.env.ELECTRON_USER_DATA);
+  }
+  const uniqueRoots = [...new Set(appDataRoots.map(p => path.resolve(p)))];
+  for (const root of uniqueRoots) {
+    paths.push(path.join(root, 'config.json'));
+  }
+  paths.push(path.resolve(__dirname, '..', '..', 'data', 'config.json'));
+
+  for (const p of paths) {
+    try {
+      const dir = path.dirname(p);
+      fs.mkdirSync(dir, { recursive: true });
+      let existingConfig = {};
+      if (fs.existsSync(p)) {
+        try {
+          existingConfig = JSON.parse(fs.readFileSync(p, 'utf8'));
+        } catch (_) {}
+      }
+      existingConfig.database_path = dbPath;
+      fs.writeFileSync(p, JSON.stringify(existingConfig, null, 2), 'utf8');
+    } catch (_) {}
+  }
+}
+
 function getDbFileStats(filePath) {
   try {
     if (!fs.existsSync(filePath)) return null;
@@ -33,12 +99,19 @@ function getDbFileStats(filePath) {
       };
     }
     const data = JSON.parse(content);
+    if (!data || typeof data !== 'object') return null;
+
+    // Check if it is a JSON database by looking for products/customers/invoices arrays.
     const productsCount = Array.isArray(data.products) ? data.products.length : 0;
     const customersCount = Array.isArray(data.customers) ? data.customers.length : 0;
     const invoicesCount = Array.isArray(data.invoices) ? data.invoices.length : 0;
     const importsCount = Array.isArray(data.import_logs) ? data.import_logs.length : 0;
     const transactionsCount = Array.isArray(data.cash_book) ? data.cash_book.length : 0;
     const isEmpty = (productsCount === 0 && customersCount === 0 && invoicesCount === 0 && importsCount === 0);
+
+    const hasDbKeys = data.nextId || data.accounts || data.users || data.products || data.customers || data.invoices;
+    if (!hasDbKeys) return null;
+
     return {
       path: filePath,
       productsCount,
@@ -78,10 +151,51 @@ function compareDbStats(a, b) {
   return b.mtimeMs - a.mtimeMs;
 }
 
-function resolveDBPath() {
-  const envPath = process.env.KHA_DB_PATH || process.env.DB_PATH || process.env.DATABASE_PATH;
-  const defaultPath = envPath ? path.resolve(envPath) : path.resolve(__dirname, '..', '..', 'data', 'phanmienoffline.db.json');
+function scanDirForDatabases(dir, depth = 0, maxDepth = 3) {
+  const filesFound = [];
+  if (depth > maxDepth) return filesFound;
+  try {
+    if (!fs.existsSync(dir)) return filesFound;
+    const stat = fs.statSync(dir);
+    if (!stat.isDirectory()) return filesFound;
 
+    const name = path.basename(dir).toLowerCase();
+    if (['node_modules', '.git', 'cache', 'code cache', 'gpucache', 'blob_storage', 'session storage', 'local storage', 'shared dictionary', 'webstorage', 'logs', 'network', 'service worker'].includes(name)) {
+      return filesFound;
+    }
+
+    const items = fs.readdirSync(dir);
+    for (const item of items) {
+      const fullPath = path.join(dir, item);
+      try {
+        const itemStat = fs.statSync(fullPath);
+        if (itemStat.isDirectory()) {
+          filesFound.push(...scanDirForDatabases(fullPath, depth + 1, maxDepth));
+        } else {
+          const ext = path.extname(item).toLowerCase();
+          if (['.db', '.sqlite', '.sqlite3', '.mdb', '.json'].includes(ext)) {
+            filesFound.push(fullPath);
+          }
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+  return filesFound;
+}
+
+function performDeepScan() {
+  const searchDirs = [];
+
+  // Add drive-level folders
+  const drives = DATA_PRESERVATION_BACKUP_ROOTS;
+  const targetFolderNames = ['data', 'database', 'appdata', 'storage', 'backup', 'backups', 'backup_du_lieu_phan_mem_no_del'];
+  for (const drive of drives) {
+    for (const folder of targetFolderNames) {
+      searchDirs.push(path.join(drive, folder));
+    }
+  }
+
+  // Add AppData folders
   const appDataRoots = [];
   const roaming = process.env.APPDATA || '';
   if (roaming) {
@@ -92,97 +206,150 @@ function resolveDBPath() {
   if (process.env.ELECTRON_USER_DATA) {
     appDataRoots.push(process.env.ELECTRON_USER_DATA);
   }
-
   const uniqueRoots = [...new Set(appDataRoots.map(p => path.resolve(p)))];
-  
-  // 1. Primary Candidates (Main database files)
-  const primaryCandidates = [];
   for (const root of uniqueRoots) {
-    primaryCandidates.push(path.join(root, 'phanmienoffline.db.json'));
-  }
-  const rootDir = path.resolve(__dirname, '..', '..', '..');
-  primaryCandidates.push(path.join(rootDir, 'phanmienoffline.db.json'));
-  primaryCandidates.push(path.join(rootDir, 'backend', 'data', 'phanmienoffline.db.json'));
-
-  const uniquePrimary = [...new Set(primaryCandidates.map(p => path.resolve(p)))];
-  const primaryStats = [];
-  for (const p of uniquePrimary) {
-    const stats = getDbFileStats(p);
-    if (stats) primaryStats.push(stats);
+    searchDirs.push(root);
+    searchDirs.push(path.join(root, 'backups'));
+    searchDirs.push(path.join(root, 'backup_du_lieu_phan_mem_no_del'));
+    searchDirs.push(path.join(root, 'databases'));
   }
 
-  const hasDataPrimary = primaryStats.some(s => !s.isEmpty);
-  let statsList = [];
+  // Add project backend data directories
+  searchDirs.push(path.resolve(__dirname, '..', '..', 'data'));
+  searchDirs.push(path.resolve(__dirname, '..', '..', 'data', 'backups'));
+  searchDirs.push(path.resolve(__dirname, '..', '..', 'data', 'backup_du_lieu_phan_mem_no_del'));
 
-  if (hasDataPrimary) {
-    // If a primary database already has data, only rank/select primary candidates (avoids massive backups scans)
-    statsList = primaryStats;
-  } else {
-    // Collect backup files as fallback
-    const fallbackCandidates = [];
-
-    // AppData backups (limit to top 3 newest per root)
-    for (const root of uniqueRoots) {
-      const backupDir = path.join(root, 'backups');
-      if (fs.existsSync(backupDir)) {
-        try {
-          const files = fs.readdirSync(backupDir);
-          const backups = files
-            .filter(f => f.startsWith('phanmienoffline.db.json.backup') && f.endsWith('.json'))
-            .map(f => path.join(backupDir, f))
-            .sort((a, b) => {
-              try {
-                return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
-              } catch (_) { return 0; }
-            })
-            .slice(0, 3);
-          fallbackCandidates.push(...backups);
-        } catch (_) {}
-      }
-    }
-
-    // Drive mirror backups (limit to top 3 newest per drive)
-    for (const root of DATA_PRESERVATION_BACKUP_ROOTS) {
-      const mirrorDir = path.join(root, DATA_PRESERVATION_BACKUP_FOLDER, 'database');
-      if (fs.existsSync(mirrorDir)) {
-        try {
-          const files = fs.readdirSync(mirrorDir);
-          const backups = files
-            .filter(f => f.startsWith('phanmienoffline-db-') && f.endsWith('.json'))
-            .map(f => path.join(mirrorDir, f))
-            .sort((a, b) => {
-              try {
-                return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
-              } catch (_) { return 0; }
-            })
-            .slice(0, 3);
-          fallbackCandidates.push(...backups);
-        } catch (_) {}
-      }
-    }
-
-    const uniqueFallback = [...new Set(fallbackCandidates.map(p => path.resolve(p)))];
-    const fallbackStats = [];
-    for (const p of uniqueFallback) {
-      const stats = getDbFileStats(p);
-      if (stats) fallbackStats.push(stats);
-    }
-
-    statsList = [...primaryStats, ...fallbackStats];
+  const uniqueSearchDirs = [...new Set(searchDirs.map(p => path.resolve(p)))];
+  
+  const allFiles = [];
+  for (const dir of uniqueSearchDirs) {
+    allFiles.push(...scanDirForDatabases(dir, 0, 3));
   }
+
+  const uniqueFiles = [...new Set(allFiles.map(p => path.resolve(p)))];
+  
+  // 1. First, stat all files to get size and mtimeMs (very fast, no content reading)
+  const fileCandidates = [];
+  for (const f of uniqueFiles) {
+    try {
+      const stats = fs.statSync(f);
+      if (stats.isDirectory()) continue;
+      
+      const name = path.basename(f).toLowerCase();
+      // Skip files that are not database candidates
+      const isDbName = name.includes('phanmienoffline') || name.includes('data') || name.includes('new') || name.includes('backup') || name.includes('pos');
+      if (!isDbName) continue;
+      
+      // Skip very small files (empty database is ~1KB-5KB, populated one is much larger)
+      if (stats.size < 500) continue; 
+
+      fileCandidates.push({
+        path: f,
+        size: stats.size,
+        mtimeMs: stats.mtimeMs
+      });
+    } catch (_) {}
+  }
+
+  // Also include the current defaultPath and configPath in the candidates
+  const envPath = process.env.KHA_DB_PATH || process.env.DB_PATH || process.env.DATABASE_PATH;
+  const defaultPath = envPath ? path.resolve(envPath) : path.resolve(__dirname, '..', '..', 'data', 'phanmienoffline.db.json');
+  
+  const config = readDatabaseConfig();
+  let configPath = null;
+  if (config && config.database_path) {
+    configPath = path.resolve(config.database_path);
+  }
+
+  const activePath = configPath || defaultPath;
+  const ensurePathInCandidates = (p) => {
+    if (p && !fileCandidates.some(c => path.resolve(c.path) === path.resolve(p))) {
+      try {
+        if (fs.existsSync(p)) {
+          const stats = fs.statSync(p);
+          fileCandidates.push({
+            path: p,
+            size: stats.size,
+            mtimeMs: stats.mtimeMs
+          });
+        }
+      } catch (_) {}
+    }
+  };
+  ensurePathInCandidates(activePath);
+  ensurePathInCandidates(defaultPath);
+
+  // 2. Sort candidates by size (largest first) and mtimeMs (newest first) to prioritize parsing the most promising ones
+  fileCandidates.sort((a, b) => {
+    if (b.size !== a.size) return b.size - a.size;
+    return b.mtimeMs - a.mtimeMs;
+  });
+
+  // 3. Only read and parse the content of the top 15 largest files to get record counts (avoids parsing thousands of old backups)
+  const topCandidates = fileCandidates.slice(0, 15);
+  const statsList = [];
+  for (const c of topCandidates) {
+    const stats = getDbFileStats(c.path);
+    if (stats) statsList.push(stats);
+  }
+
+  // Deduplicate statsList by path
+  const seenPaths = new Set();
+  const deduplicatedStats = [];
+  for (const stats of statsList) {
+    const resolvedP = path.resolve(stats.path);
+    if (!seenPaths.has(resolvedP)) {
+      seenPaths.add(resolvedP);
+      deduplicatedStats.push(stats);
+    }
+  }
+
+  deduplicatedStats.sort(compareDbStats);
+  return deduplicatedStats;
+}
+
+function resolveDBPath() {
+  const envPath = process.env.KHA_DB_PATH || process.env.DB_PATH || process.env.DATABASE_PATH;
+  const defaultPath = envPath ? path.resolve(envPath) : path.resolve(__dirname, '..', '..', 'data', 'phanmienoffline.db.json');
+
+  const config = readDatabaseConfig();
+  let currentConfigPath = null;
+  if (config && config.database_path) {
+    currentConfigPath = path.resolve(config.database_path);
+  }
+
+  const activePath = currentConfigPath || defaultPath;
+  const activeStats = getDbFileStats(activePath);
+
+  // High-performance optimization: if current database already has data, skip startup scan
+  if (activeStats && !activeStats.isEmpty) {
+    console.log(`[INFO] Database hiện tại đã có dữ liệu. Sử dụng: ${activePath}`);
+    return activePath;
+  }
+
+  // Perform the scan on startup ONLY if active database is empty
+  const statsList = performDeepScan();
 
   if (statsList.length === 0) {
     console.log('[INFO] Tìm thấy 0 Database');
     console.log('[INFO] Chọn Database A làm Database chính');
-    return defaultPath;
+    return activePath;
   }
 
-  statsList.sort(compareDbStats);
-
   const best = statsList[0];
-  let chosenPath = defaultPath;
+  let chosenPath = activePath;
+
   if (best && !best.isEmpty) {
-    chosenPath = best.path;
+    // If the currently resolved database is empty, OR the best database has MORE/BETTER data than the current database, we switch!
+    if (!activeStats || activeStats.isEmpty || compareDbStats(activeStats, best) > 0) {
+      chosenPath = best.path;
+      
+      // Auto restore: write configuration to config.json
+      if (chosenPath !== activePath) {
+        console.log(`[INFO] Tự động chọn Database tốt nhất: ${chosenPath}`);
+        writeDatabaseConfig(chosenPath);
+      }
+    }
   }
 
   console.log(`[INFO] Tìm thấy ${statsList.length} Database`);
@@ -196,6 +363,7 @@ function resolveDBPath() {
   const chosenLabel = chosenIndex !== -1 ? String.fromCharCode(65 + chosenIndex) : 'A';
   console.log(`[INFO] Chọn Database ${chosenLabel} làm Database chính`);
 
+  // Clean empty databases (except the chosen one)
   statsList.forEach((item) => {
     if (item.isEmpty && item.path !== chosenPath) {
       try {
@@ -208,7 +376,12 @@ function resolveDBPath() {
   return chosenPath;
 }
 
-const DB_PATH = resolveDBPath();
+function setDBPath(newPath) {
+  DB_PATH = path.resolve(newPath);
+}
+
+let DB_PATH = resolveDBPath();
+
 const DB_BACKUP_DIR = path.resolve(process.env.KHA_DB_BACKUP_DIR || path.join(path.dirname(DB_PATH), DATA_PRESERVATION_BACKUP_FOLDER));
 const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.KHA_DB_BACKUP_RETENTION_COUNT) || 14);
 const DB_BACKUP_MIN_INTERVAL_MS = Math.max(0, Number(process.env.KHA_DB_BACKUP_MIN_INTERVAL_MS) || 20 * 60 * 60 * 1000);
@@ -2420,14 +2593,12 @@ function seedData() {
 
 loadDB();
 
-module.exports = {
+const exportsObject = {
   now,
   today,
   db,
   runWithRequestContext,
   getDefaultAccount,
-  DB_PATH,
-  DB_BACKUP_DIR,
   SCHEMA,
   INITIAL_NEXT_ID,
   DEFAULT_ACCOUNT_SLUG,
@@ -2496,4 +2667,26 @@ module.exports = {
   INVOICE_STATUS_CANCELLED_AT_INDEX_FIELDS,
   cleanupDatabaseTempFiles,
   withAtomicDbWrite,
+  setDBPath,
+  performDeepScan,
+  readDatabaseConfig,
+  writeDatabaseConfig,
 };
+
+Object.defineProperty(exportsObject, 'DB_PATH', {
+  get() { return DB_PATH; },
+  set(val) { DB_PATH = val; },
+  enumerable: true,
+  configurable: true,
+});
+
+Object.defineProperty(exportsObject, 'DB_BACKUP_DIR', {
+  get() {
+    return path.resolve(process.env.KHA_DB_BACKUP_DIR || path.join(path.dirname(DB_PATH), DATA_PRESERVATION_BACKUP_FOLDER));
+  },
+  enumerable: true,
+  configurable: true,
+});
+
+module.exports = exportsObject;
+

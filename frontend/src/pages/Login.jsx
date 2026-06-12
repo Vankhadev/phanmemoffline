@@ -58,6 +58,33 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [authMode, setAuthMode] = useState('login');
   const [authModeTouched, setAuthModeTouched] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [restoreStats, setRestoreStats] = useState(null);
+  const [restoreError, setRestoreError] = useState('');
+
+  const handleRestoreScan = async () => {
+    setRestoreLoading(true);
+    setRestoreStats(null);
+    setRestoreError('');
+    setError('');
+    setSuccess('');
+    try {
+      if (!applyServerOverride()) return;
+      const data = await authApi.restoreScan();
+      if (data.ok) {
+        setRestoreStats(data);
+        setSuccess('Đã khôi phục dữ liệu database tốt nhất thành công!');
+        const status = await authApi.bootstrapStatus();
+        applyBootstrapStatus(status);
+      } else {
+        setRestoreError(data.message || 'Không tìm thấy file database chứa dữ liệu hoặc backup.');
+      }
+    } catch (err) {
+      setRestoreError(getApiErrorMessage(err?.data, err.message || 'Lỗi khôi phục dữ liệu.'));
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
 
   const set = (key, value) => {
     setForm(current => ({ ...current, [key]: value }));
@@ -565,6 +592,48 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 </Link>
               </form>
             )}
+
+            {/* Khôi phục dữ liệu section */}
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleRestoreScan}
+                disabled={restoreLoading || loading || checkingSetup}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm"
+              >
+                {restoreLoading ? (
+                  <><RefreshCw size={16} className="animate-spin" /> Đang khôi phục dữ liệu...</>
+                ) : (
+                  <>Khôi phục dữ liệu</>
+                )}
+              </button>
+              {restoreStats && (
+                <div className="mt-3 bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-xs text-emerald-800 space-y-1">
+                  <div className="font-semibold text-emerald-950">Khôi phục thành công database:</div>
+                  <div className="font-mono text-[10px] break-all text-emerald-900">{restoreStats.path}</div>
+                  <div className="grid grid-cols-3 gap-1 pt-1.5 text-center font-semibold">
+                    <div className="bg-white/80 rounded px-1.5 py-1 border border-emerald-100">
+                      <div>Sản phẩm</div>
+                      <div className="text-sm font-bold text-emerald-700">{restoreStats.productsCount}</div>
+                    </div>
+                    <div className="bg-white/80 rounded px-1.5 py-1 border border-emerald-100">
+                      <div>Khách hàng</div>
+                      <div className="text-sm font-bold text-emerald-700">{restoreStats.customersCount}</div>
+                    </div>
+                    <div className="bg-white/80 rounded px-1.5 py-1 border border-emerald-100">
+                      <div>Đơn hàng</div>
+                      <div className="text-sm font-bold text-emerald-700">{restoreStats.invoicesCount}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {restoreError && (
+                <div className="mt-2 text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-lg p-2 flex items-center gap-1.5">
+                  <XCircle size={14} className="shrink-0" />
+                  <span>{restoreError}</span>
+                </div>
+              )}
+            </div>
 
             <div className="mt-6 bg-blue-50 rounded-xl p-4 text-xs text-blue-700">
               {showSetupForm ? (

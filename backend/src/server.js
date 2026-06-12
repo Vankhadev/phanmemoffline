@@ -17,7 +17,6 @@ const {
   upsertDailyStats,
   today,
   now,
-  DB_PATH,
   isCancelledInvoiceStatus,
   isCompletedInvoiceStatus,
   deleteExpiredCancelledInvoices,
@@ -54,6 +53,7 @@ const accountingRoutes = require('./routes/accounting');
 const settingsRoutes = require('./routes/settings');
 const printTemplatesRoutes = require('./routes/printTemplates');
 const marketplacesRoutes = require('./routes/marketplaces');
+const databaseRoutes = require('./routes/database');
 
 // ============================================================
 //  EXPRESS APP
@@ -88,8 +88,8 @@ function buildHealthPayload() {
     startedAt: SERVER_STARTED_AT,
     host: HOST,
     port: PORT,
-    dbPath: maskDbPath(DB_PATH),
-    dbFile: path.basename(DB_PATH || ''),
+    dbPath: maskDbPath(require('./db/database').DB_PATH),
+    dbFile: path.basename(require('./db/database').DB_PATH || ''),
     envFiles: getLoadedEnvFiles().map(maskDbPath),
     printTemplatesMySql: getPrintTemplatesMySqlStatus(),
     settingsMySql: getSettingsMySqlStatus(),
@@ -237,6 +237,7 @@ app.get('/api/health', (_req, res) => {
 // Public auth/setup endpoints remain inside usersRoutes and syncRoutes; business routes require a valid server session.
 app.use('/api/users',          usersRoutes);
 app.use('/api',                syncRoutes);
+app.use('/api/database',       databaseRoutes);
 app.use('/api/store',          requireAuth, requireAnyPermission(['store.read', 'store.manage']), storeRoutes);
 app.use('/api/customers',      requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customersRoutes);
 app.use('/api/products',       requireAuth, requireAnyPermission(['products.read', 'products.manage']), productsRoutes);
@@ -415,7 +416,7 @@ async function startServer() {
 ----------------------------------------------
 📡 KHA Backend listening at http://${HOST}:${PORT}
 ----------------------------------------------
-DB path: ${DB_PATH}
+DB path: ${require('./db/database').DB_PATH}
 Started: ${SERVER_STARTED_AT}
 ----------------------------------------------
 `);
