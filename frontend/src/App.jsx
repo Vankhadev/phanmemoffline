@@ -63,15 +63,7 @@ import {
   pushPendingLocalData,
 } from './utils/apiClient';
 import { clearAuthSession, clearVolatileCache, getAuthToken, normalizePermissions } from './utils/authStorage';
-import {
-  MOBILE_APP_VERSION,
-  MOBILE_APP_DISPLAY_NAME,
-  MOBILE_UPDATE_EVENT,
-  dismissNativeAppUpdate,
-  getLatestNativeAppUpdate,
-  isNativeAppRuntime,
-  openMobileDownloadUrl,
-} from './utils/mobileAppRuntime';
+
 import {
   getMobileOfflineSessionPayload,
   isLocalMobileAuthToken,
@@ -273,54 +265,7 @@ function FullScreenLoading({ message = 'Đang khởi tạo ứng dụng...' }) {
   );
 }
 
-function MobileUpdateNotice() {
-  const [update, setUpdate] = useState(() => getLatestNativeAppUpdate());
-  const [visible, setVisible] = useState(() => Boolean(isNativeAppRuntime() && getLatestNativeAppUpdate()?.available));
 
-  useEffect(() => {
-    if (!isNativeAppRuntime()) return undefined;
-
-    const handleUpdate = (event) => {
-      const detail = event?.detail || {};
-      if (!detail?.available) return;
-      setUpdate(detail);
-      setVisible(true);
-    };
-
-    window.addEventListener(MOBILE_UPDATE_EVENT, handleUpdate);
-    return () => window.removeEventListener(MOBILE_UPDATE_EVENT, handleUpdate);
-  }, []);
-
-  if (!visible || !update?.available) return null;
-
-  const versionLabel = update.version ? ` ${update.version}` : '';
-
-  return (
-    <aside className="mobile-update-notice no-print" role="status" aria-live="polite">
-      <div className="mobile-update-copy">
-        <div className="mobile-update-title">Có bản {MOBILE_APP_DISPLAY_NAME}{versionLabel}</div>
-        <div className="mobile-update-text">
-          Bản hiện tại {MOBILE_APP_VERSION}. Tải APK mới qua Wi-Fi rồi cài đặt để cập nhật.
-        </div>
-      </div>
-      <button type="button" className="mobile-update-download" onClick={() => openMobileDownloadUrl(update)}>
-        <Download aria-hidden="true" className="h-4 w-4" />
-        <span>Tải</span>
-      </button>
-      <button
-        type="button"
-        className="mobile-update-dismiss"
-        aria-label="Ẩn thông báo cập nhật"
-        onClick={() => {
-          dismissNativeAppUpdate(update);
-          setVisible(false);
-        }}
-      >
-        <X aria-hidden="true" className="h-4 w-4" />
-      </button>
-    </aside>
-  );
-}
 
 function isRouteActive(currentPath, route) {
   const path = normalizeRoutePath(currentPath);
@@ -1133,7 +1078,6 @@ function DesktopApp() {
           />
         )}
       </HashRouter>
-      <MobileUpdateNotice />
     </>
   );
 }

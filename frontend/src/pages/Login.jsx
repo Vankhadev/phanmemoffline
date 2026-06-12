@@ -9,7 +9,7 @@ import {
   normalizeApiBaseOverride,
   persistLocalApiBaseOverride,
 } from '../utils/apiClient';
-import { MOBILE_APP_DISPLAY_NAME, MOBILE_APP_VERSION } from '../utils/mobileAppRuntime';
+import { MOBILE_APP_DISPLAY_NAME, MOBILE_APP_VERSION, isNativeAppRuntime } from '../utils/mobileAppRuntime';
 import {
   authenticateMobileOfflineAccount,
   rememberMobileOfflineAccount,
@@ -35,10 +35,10 @@ import {
 
 const initialForm = {
   name: '',
-  email: 'vankhaqc@gmail.com',
+  email: 'dongphuongqc@gmail.com',
   phone: '0904045075',
-  password: 'Vankhammo07@',
-  confirmPassword: 'Vankhammo07@',
+  password: 'khongnoiduoc',
+  confirmPassword: 'khongnoiduoc',
   serverUrl: '',
 };
 
@@ -304,7 +304,9 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
           <p className="text-blue-600 font-semibold mt-1">
             {checkingSetup ? 'Đang kiểm tra hệ thống...' : showSetupForm ? 'Thiết lập lần đầu' : 'Đăng nhập hệ thống'}
           </p>
-          <div className="mt-2 text-xs font-bold text-emerald-700">{MOBILE_APP_DISPLAY_NAME} {MOBILE_APP_VERSION}</div>
+          {isNativeAppRuntime() && (
+            <div className="mt-2 text-xs font-bold text-emerald-700">{MOBILE_APP_DISPLAY_NAME} {MOBILE_APP_VERSION}</div>
+          )}
         </div>
 
         {checkingSetup ? (

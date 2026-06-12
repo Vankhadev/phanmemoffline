@@ -10,10 +10,10 @@ const DEFAULT_MOBILE_ACCOUNT = {
   id: 'mobile-default-user',
   account_id: 'mobile-default-account',
   name: 'POS Offline',
-  email: 'vankhaqc@gmail.com',
+  email: 'dongphuongqc@gmail.com',
   phone: '0904045075',
   role: 'user',
-  password: 'Vankhammo07@',
+  password: 'khongnoiduoc',
 };
 
 const DEFAULT_MOBILE_PERMISSIONS = [

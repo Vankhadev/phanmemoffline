@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Phần mềm POS Offline</string>
-    <string name="title_activity_main">Phần mềm POS Offline</string>
-    <string name="package_name">com.vankhammo.banhangwifi</string>
-    <string name="custom_url_scheme">com.vankhammo.banhangwifi</string>
-</resources>

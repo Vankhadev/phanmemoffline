@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-electron",
-  "version": "1.6.7",
+  "version": "1.6.8",
   "description": "Bán hàng offline ",
   "repository": {
     "type": "git",
@@ -21,12 +21,6 @@
     "sync:desktop-icon": "node scripts/sync-desktop-icon.js",
     "prepare:build-cache": "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path .tmp,.npm-cache,.electron-cache,.electron-builder-cache | Out-Null\"",
     "build:frontend": "cd frontend && npm run build",
-    "build:mobile-web": "node scripts/build-mobile.js",
-    "mobile:sync": "npm run build:mobile-web && cap sync",
-    "mobile:android": "npm run mobile:sync && cap open android",
-    "mobile:ios": "npm run mobile:sync && cap open ios",
-    "mobile:android:apk": "npm run mobile:sync && cd android && gradlew.bat assembleDebug",
-    "mobile:android:aab": "npm run mobile:sync && cd android && gradlew.bat bundleRelease",
     "package:portable": "npm run package:portable:x64 && npm run package:portable:ia32",
     "package:portable:x64": "npm run prepare:build-cache && npm run sync:desktop-icon && set TMP=%CD%\\.tmp&& set TEMP=%CD%\\.tmp&& set npm_config_cache=%CD%\\.npm-cache&& set ELECTRON_CACHE=%CD%\\.electron-cache&& set ELECTRON_BUILDER_CACHE=%CD%\\.electron-builder-cache&& electron-builder --win portable --x64 --publish never",
     "package:portable:ia32": "npm run prepare:build-cache && npm run sync:desktop-icon && set TMP=%CD%\\.tmp&& set TEMP=%CD%\\.tmp&& set npm_config_cache=%CD%\\.npm-cache&& set ELECTRON_CACHE=%CD%\\.electron-cache&& set ELECTRON_BUILDER_CACHE=%CD%\\.electron-builder-cache&& electron-builder --win portable --ia32 --publish never",

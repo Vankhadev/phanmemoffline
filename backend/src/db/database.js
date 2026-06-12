@@ -1517,6 +1517,204 @@ function rebuildAllDailyStatsFromInvoices() {
   current.daily_stats = rebuiltRows;
 }
 
+function importOldCustomerDatabase() {
+  const current = getDb();
+  const targetEmail = 'dongphuongqc@gmail.com';
+  const appDataDir = process.env.ELECTRON_USER_DATA || path.join(process.env.APPDATA || '', 'phanmienoffline-electron');
+  
+  const pathsToSearch = [];
+  
+  // 1. AppData main path
+  pathsToSearch.push(path.join(appDataDir, 'phanmienoffline.db.json'));
+  
+  // 2. AppData backups directory
+  const backupDir = path.join(appDataDir, 'backups');
+  if (fs.existsSync(backupDir)) {
+    try {
+      const files = fs.readdirSync(backupDir);
+      const sortedBackups = files
+        .filter(f => f.startsWith('phanmienoffline.db.json.backup') && f.endsWith('.json'))
+        .map(f => path.join(backupDir, f))
+        .sort((a, b) => {
+          try {
+            return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+          } catch (_) {
+            return 0;
+          }
+        });
+      pathsToSearch.push(...sortedBackups);
+    } catch (_) {}
+  }
+  
+  // 3. Sibling/root paths
+  const rootDir = path.resolve(__dirname, '..', '..', '..');
+  pathsToSearch.push(path.join(rootDir, 'phanmienoffline.db.json'));
+  pathsToSearch.push(path.join(rootDir, 'backend', 'data', 'phanmienoffline.db.json'));
+  
+  let oldDbFile = null;
+  let oldDbData = null;
+  
+  for (const p of pathsToSearch) {
+    if (!fs.existsSync(p)) continue;
+    if (path.resolve(p) === path.resolve(DB_PATH)) continue;
+    
+    try {
+      const content = fs.readFileSync(p, 'utf8');
+      if (content.includes(targetEmail)) {
+        const parsed = JSON.parse(content);
+        if (parsed.users && parsed.users.some(u => String(u.email || '').trim().toLowerCase() === targetEmail)) {
+          oldDbFile = p;
+          oldDbData = parsed;
+          break;
+        }
+      }
+    } catch (_) {}
+  }
+  
+  if (oldDbFile && oldDbData) {
+    console.log(`[MIGRATION 1.6.8] Found old database containing ${targetEmail} at: ${oldDbFile}`);
+    let importedAny = false;
+    
+    // Import users
+    if (Array.isArray(oldDbData.users)) {
+      for (const u of oldDbData.users) {
+        const email = String(u.email || '').trim().toLowerCase();
+        if (!email) continue;
+        const exists = (current.users || []).some(currU => String(currU.email || '').trim().toLowerCase() === email);
+        if (!exists) {
+          const newId = current.nextId.users || 1;
+          current.nextId.users = newId + 1;
+          current.users.push({
+            ...u,
+            id: newId,
+            created_at: u.created_at || now(),
+            updated_at: u.updated_at || now()
+          });
+          importedAny = true;
+        }
+      }
+    }
+    
+    // Import products
+    if (Array.isArray(oldDbData.products)) {
+      for (const p of oldDbData.products) {
+        const sku = String(p.sku || '').trim().toLowerCase();
+        const name = String(p.name || '').trim().toLowerCase();
+        if (!sku && !name) continue;
+        const exists = (current.products || []).some(currP => {
+          const currSku = String(currP.sku || '').trim().toLowerCase();
+          const currName = String(currP.name || '').trim().toLowerCase();
+          return (sku && currSku === sku) || (name && currName === name);
+        });
+        if (!exists) {
+          const newId = current.nextId.products || 1;
+          current.nextId.products = newId + 1;
+          current.products.push({
+            ...p,
+            id: newId,
+            created_at: p.created_at || now(),
+            updated_at: p.updated_at || now()
+          });
+          importedAny = true;
+        }
+      }
+    }
+    
+    // Import customers
+    if (Array.isArray(oldDbData.customers)) {
+      for (const c of oldDbData.customers) {
+        const phone = String(c.phone || '').trim().toLowerCase();
+        const name = String(c.name || '').trim().toLowerCase();
+        if (!phone && !name) continue;
+        const exists = (current.customers || []).some(currC => {
+          const currPhone = String(currC.phone || '').trim().toLowerCase();
+          const currName = String(currC.name || '').trim().toLowerCase();
+          return (phone && currPhone === phone) || (name && currName === name);
+        });
+        if (!exists) {
+          const newId = current.nextId.customers || 1;
+          current.nextId.customers = newId + 1;
+          current.customers.push({
+            ...c,
+            id: newId,
+            created_at: c.created_at || now(),
+            updated_at: c.updated_at || now()
+          });
+          importedAny = true;
+        }
+      }
+    }
+    
+    // Import invoices and invoice details
+    if (Array.isArray(oldDbData.invoices)) {
+      const invoiceIdMap = {};
+      for (const inv of oldDbData.invoices) {
+        const code = String(inv.invoice_code || '').trim().toLowerCase();
+        if (!code) continue;
+        const exists = (current.invoices || []).some(currInv => String(currInv.invoice_code || '').trim().toLowerCase() === code);
+        if (!exists) {
+          const newId = current.nextId.invoices || 1;
+          current.nextId.invoices = newId + 1;
+          invoiceIdMap[inv.id] = newId;
+          current.invoices.push({
+            ...inv,
+            id: newId,
+            created_at: inv.created_at || now(),
+            updated_at: inv.updated_at || now()
+          });
+          importedAny = true;
+        }
+      }
+      
+      if (Array.isArray(oldDbData.invoice_details)) {
+        for (const det of oldDbData.invoice_details) {
+          const newInvId = invoiceIdMap[det.invoice_id];
+          if (newInvId) {
+            const newId = current.nextId.invoice_details || 1;
+            current.nextId.invoice_details = newId + 1;
+            current.invoice_details.push({
+              ...det,
+              id: newId,
+              invoice_id: newInvId,
+              created_at: det.created_at || now(),
+              updated_at: det.updated_at || now()
+            });
+            importedAny = true;
+          }
+        }
+      }
+    }
+    
+    if (importedAny) {
+      console.log(`[MIGRATION 1.6.8] Successfully imported products/customers/invoices/users from old database.`);
+    }
+  }
+  
+  const finalHasUser = (current.users || []).some(u => String(u.email || '').trim().toLowerCase() === 'dongphuongqc@gmail.com');
+  if (!finalHasUser) {
+    const newId = current.nextId.users || 1;
+    current.nextId.users = newId + 1;
+    
+    const { hashPassword } = require('../utils/password');
+    const defaultAccount = ensureDefaultAccount();
+    current.users.push({
+      id: newId,
+      account_id: defaultAccount.id,
+      name: 'Đông Phương QC',
+      email: 'dongphuongqc@gmail.com',
+      phone: '0904045075',
+      password: hashPassword('khongnoiduoc'),
+      role: 'admin',
+      approved: 1,
+      active: 1,
+      created_at: now(),
+      updated_at: now(),
+      session_token: null,
+    });
+    console.log(`[MIGRATION 1.6.8] Seeded default user: dongphuongqc@gmail.com`);
+  }
+}
+
 function migrateDB() {
   normalizeDBData();
   cleanupRemovedLegacyArtifacts();
@@ -1529,6 +1727,7 @@ function migrateDB() {
   normalizeInvoiceCodeUniqueness();
   ensureAllDocumentSequenceCounters();
   rebuildAllDailyStatsFromInvoices();
+  importOldCustomerDatabase();
   recalculateNextIds();
 }
 
