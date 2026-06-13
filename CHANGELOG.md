@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.7.7 - 2026-06-13
+
+### Fixed
+
+- Báo cáo đơn hàng theo khách hàng: Định dạng lại tệp xuất Excel theo bố cục tinh giản chỉ gồm 3 cột (STT, hóa đơn, tiền), bổ sung tiêu đề tên khách hàng và tổng kết tổng tiền.
+
 ## v1.7.6 - 2026-06-13
 
 ### Fixed
