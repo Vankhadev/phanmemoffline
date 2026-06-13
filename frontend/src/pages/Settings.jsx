@@ -612,6 +612,33 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     }
   }, []);
 
+  const applyNegativeStockSettings = useCallback((payload = {}) => {
+    const normalized = cacheNegativeStockSettings(payload);
+    negativeStockLastSavedRef.current = buildNegativeStockSaveSignature(normalized.enabled, normalized.limit);
+    if (mountedRef.current) {
+      setNegativeStockSettings(normalized);
+      setNegativeStockLimitInput(String(normalized.limit));
+    }
+    return normalized;
+  }, []);
+
+  const loadNegativeStockSettings = useCallback(async () => {
+    try {
+      const data = await settingsApi.get();
+      if (mountedRef.current) setNegativeStockNotice(null);
+      return applyNegativeStockSettings(data);
+    } catch (error) {
+      const message = getErrorMessage(error, 'Không thể tải cấu hình xuất âm tồn kho từ API /api/settings/negative-stock.');
+      const fallbackSettings = normalizeNegativeStockSettings();
+      if (mountedRef.current) {
+        setNegativeStockSettings(fallbackSettings);
+        setNegativeStockLimitInput(String(fallbackSettings.limit));
+        setTimedNotice('negative-stock', setNegativeStockNotice, { tone: 'error', message });
+      }
+      return fallbackSettings;
+    }
+  }, [applyNegativeStockSettings, getErrorMessage, setTimedNotice]);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -669,33 +696,6 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       if (mountedRef.current) setCustomerTypesLoading(false);
     }
   }, []);
-
-  const applyNegativeStockSettings = useCallback((payload = {}) => {
-    const normalized = cacheNegativeStockSettings(payload);
-    negativeStockLastSavedRef.current = buildNegativeStockSaveSignature(normalized.enabled, normalized.limit);
-    if (mountedRef.current) {
-      setNegativeStockSettings(normalized);
-      setNegativeStockLimitInput(String(normalized.limit));
-    }
-    return normalized;
-  }, []);
-
-  const loadNegativeStockSettings = useCallback(async () => {
-    try {
-      const data = await settingsApi.get();
-      if (mountedRef.current) setNegativeStockNotice(null);
-      return applyNegativeStockSettings(data);
-    } catch (error) {
-      const message = getErrorMessage(error, 'Không thể tải cấu hình xuất âm tồn kho từ API /api/settings/negative-stock.');
-      const fallbackSettings = normalizeNegativeStockSettings();
-      if (mountedRef.current) {
-        setNegativeStockSettings(fallbackSettings);
-        setNegativeStockLimitInput(String(fallbackSettings.limit));
-        setTimedNotice('negative-stock', setNegativeStockNotice, { tone: 'error', message });
-      }
-      return fallbackSettings;
-    }
-  }, [applyNegativeStockSettings, getErrorMessage, setTimedNotice]);
 
   const loadPrintTemplates = useCallback(async () => {
     if (mountedRef.current) setPrintTemplatesLoading(true);

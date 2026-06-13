@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.7.3 - 2026-06-13
+
+### Fixed
+
+- Sửa lỗi trắng màn hình và `ReferenceError: Cannot access variable before initialization` trong `Settings` và `ProductReport` do Temporal Dead Zone (TDZ).
+
+## v1.7.2 - 2026-06-13
+
+### Thay doi chinh
+
+- Đồng bộ dữ liệu realtime giữa các tab (Realtime Multi Tab Sync).
+- Hệ thống backup đa tầng và tự khôi phục sau mất điện.
+- Nâng cấp hệ thống báo cáo và bảo trì tự động 15h.
+
 ## v1.6.7 - 2026-06-12
 
 ### Thay doi chinh

@@ -53,12 +53,12 @@ async function upgradeShortcuts(win) {
     } catch (_) {}
   }
 
-  if (status.version_1_7_2_updated) {
-    console.log('[Shortcut Manager] Shortcuts already upgraded to v1.7.2.');
+  if (status.version_1_7_3_updated) {
+    console.log('[Shortcut Manager] Shortcuts already upgraded to v1.7.3.');
     return;
   }
 
-  console.log('[Shortcut Manager] Starting v1.7.2 shortcut and icon upgrade...');
+  console.log('[Shortcut Manager] Starting v1.7.3 shortcut and icon upgrade...');
 
   const backupDir = path.join(userData, 'backups', 'v1.7.0_backup');
   const shortcutsBackupDir = path.join(backupDir, 'shortcuts');
@@ -149,7 +149,7 @@ async function upgradeShortcuts(win) {
     }
 
     // Save update status
-    status.version_1_7_2_updated = true;
+    status.version_1_7_3_updated = true;
     await fsp.writeFile(statusPath, JSON.stringify(status, null, 2), 'utf8');
     console.log('[Shortcut Manager] Shortcuts and icons upgraded successfully.');
 
@@ -162,7 +162,7 @@ async function upgradeShortcuts(win) {
         setTimeout(() => {
           win.webContents.send('kha-shortcut-updated-toast', {
             success: true,
-            message: 'Cập nhật phiên bản 1.7.2 thành công.\n\n✓ Logo mới đã được áp dụng.\n✓ Icon Desktop đã được cập nhật.\n✓ Dữ liệu khách hàng được bảo toàn.\n✓ Hệ thống hoạt động bình thường.'
+            message: 'Cập nhật phiên bản 1.7.3 thành công.\n\n✓ Logo mới đã được áp dụng.\n✓ Icon Desktop đã được cập nhật.\n✓ Dữ liệu khách hàng được bảo toàn.\n✓ Hệ thống hoạt động bình thường.'
           });
         }, 3000);
       });

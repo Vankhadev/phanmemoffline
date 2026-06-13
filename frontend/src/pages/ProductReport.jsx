@@ -735,21 +735,6 @@ export default function ProductReport() {
   const canFetch = selectedRange.valid && !loading;
   const canExport = rows.length > 0 && !loading;
 
-  useEffect(() => {
-    fetchReport();
-  }, [fetchReport]);
-
-  useEffect(() => {
-    const onSyncUpdated = (event) => {
-      const changedTables = event.detail?.changedTables || [];
-      if (changedTables.some(table => ['invoices', 'invoice_details', 'products'].includes(table))) {
-        fetchReport();
-      }
-    };
-    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
-    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
-  }, [fetchReport]);
-
   const fetchReport = useCallback(async (filtersOverride = null) => {
     const filters = filtersOverride || { period, selectedDate, selectedMonth, selectedYear, from, to, status };
     const request = buildProductReportRequest(filters);
@@ -782,6 +767,21 @@ export default function ProductReport() {
       setLoading(false);
     }
   }, [period, selectedDate, selectedMonth, selectedYear, from, to, status]);
+
+  useEffect(() => {
+    fetchReport();
+  }, [fetchReport]);
+
+  useEffect(() => {
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      if (changedTables.some(table => ['invoices', 'invoice_details', 'products'].includes(table))) {
+        fetchReport();
+      }
+    };
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+  }, [fetchReport]);
 
   function getActiveFilters() {
     return { period, selectedDate, selectedMonth, selectedYear, from, to, status };
