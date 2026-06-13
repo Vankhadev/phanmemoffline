@@ -406,58 +406,33 @@ export default function CustomerOrderReport() {
   const exportExcel = () => {
     if (!canExport) return;
 
-    const customerName = report?.customer?.name || selectedCustomer?.name || 'Khach hang';
-    const rows = invoices.map((invoice, index) => ({
-      STT: index + 1,
-      'Mã hóa đơn': invoice.invoice_code || '',
-      'Ngày bán': formatDateTime(invoice.created_at),
-      'Tên khách hàng': invoice.customer_name || customerName,
-      'Tóm tắt sản phẩm': invoice.items_summary || '',
-      'Tổng tiền': Number(invoice.total) || 0,
-      'Trạng thái': statusLabel(invoice.status),
-      'Thanh toán': invoice.payment_method || '',
-      'Ghi chú': invoice.note || '',
-    }));
-
-    rows.push({
-      STT: '',
-      'Mã hóa đơn': 'TỔNG CỘNG',
-      'Ngày bán': '',
-      'Tên khách hàng': `Tổng số đơn: ${summary.total_invoices || invoices.length}`,
-      'Tóm tắt sản phẩm': '',
-      'Tổng tiền': Number(summary.total_amount) || 0,
-      'Trạng thái': '',
-      'Thanh toán': '',
-      'Ghi chú': '',
-    });
-
-    const summaryRows = [
-      { 'Chỉ tiêu': 'Khách hàng', 'Giá trị': customerName },
-      { 'Chỉ tiêu': 'Từ ngày', 'Giá trị': formatDateOnly(report?.filters?.from || from) },
-      { 'Chỉ tiêu': 'Đến ngày', 'Giá trị': formatDateOnly(report?.filters?.to || to) },
-      { 'Chỉ tiêu': 'Tổng số hóa đơn', 'Giá trị': summary.total_invoices || invoices.length },
-      { 'Chỉ tiêu': 'Tổng tiền', 'Giá trị': Number(summary.total_amount) || 0 },
-      { 'Chỉ tiêu': 'Xuất lúc', 'Giá trị': new Date().toLocaleString('vi-VN') },
+    const customerName = report?.customer?.name || selectedCustomer?.name || 'Khách hàng';
+    
+    // Construct the Array of Arrays matching the visual sheet requested
+    const aoa = [
+      ['Tên khách hàng'],
+      [customerName],
+      [],
+      ['STT', 'hóa đơn', 'tiền'],
+      ...invoices.map((invoice, index) => [
+        index + 1,
+        invoice.invoice_code || '',
+        Number(invoice.total) || 0
+      ]),
+      ['', 'tổng', Number(summary.total_amount) || invoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0)]
     ];
 
     const workbook = XLSX.utils.book_new();
-    const orderSheet = XLSX.utils.json_to_sheet(rows);
-    const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
-    orderSheet['!cols'] = [
-      { wch: 6 },
-      { wch: 16 },
-      { wch: 20 },
-      { wch: 28 },
-      { wch: 50 },
-      { wch: 16 },
-      { wch: 16 },
-      { wch: 14 },
-      { wch: 24 },
-    ];
-    summarySheet['!cols'] = [{ wch: 24 }, { wch: 32 }];
+    const orderSheet = XLSX.utils.aoa_to_sheet(aoa);
 
-    XLSX.utils.book_append_sheet(workbook, orderSheet, safeSheetName('Danh sach don hang'));
-    XLSX.utils.book_append_sheet(workbook, summarySheet, safeSheetName('Tong hop'));
+    // Set column widths to look clean
+    orderSheet['!cols'] = [
+      { wch: 15 }, // STT column
+      { wch: 20 }, // hóa đơn column
+      { wch: 20 }, // tiền column
+    ];
+
+    XLSX.utils.book_append_sheet(workbook, orderSheet, safeSheetName(customerName));
     XLSX.writeFile(workbook, `BaoCaoDonHang_${customerName}_${from}_den_${to}.xlsx`);
   };
 
