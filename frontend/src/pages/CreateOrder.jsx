@@ -2150,7 +2150,7 @@ export default function CreateOrder({ user, store }) {
                               {isService ? (
                                 <input
                                   type="text"
-                                  value={getServiceLineName(item)}
+                                  value={item.product_name || item.name || item.service_name || ''}
                                   ref={(node) => {
                                     if (node) serviceNameInputRefs.current[item.id] = node;
                                     else delete serviceNameInputRefs.current[item.id];

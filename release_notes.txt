@@ -1,19 +1,5 @@
-Version 1.7.3
-
-### New Features
-
-* Đồng bộ dữ liệu realtime giữa các tab.
-* Backup đa tầng.
-* Khôi phục sau mất điện.
-* Tự khởi động lại service khi lỗi.
-* Nâng cấp hệ thống báo cáo.
-* Cải thiện hiệu năng.
-* Tối ưu quản lý tồn kho.
+Version 1.7.4
 
 ### Fixed
 
-* Sửa lỗi đăng nhập.
-* Sửa lỗi đồng bộ sản phẩm.
-* Sửa lỗi báo cáo khách hàng.
-* Sửa lỗi cập nhật dữ liệu giữa các tab.
-* Sửa lỗi trắng màn hình / ReferenceError: Cannot access variable before initialization trong Settings và ProductReport.
+* Sửa lỗi không gõ được dấu cách (phím Space) tại ô nhập dịch vụ khác ở màn hình tạo đơn hàng.

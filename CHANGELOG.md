@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.7.4 - 2026-06-13
+
+### Fixed
+
+- Sửa lỗi không gõ được dấu cách (phím Space) tại ô nhập dịch vụ khác ở màn hình tạo đơn hàng.
+
 ## v1.7.3 - 2026-06-13
 
 ### Fixed
