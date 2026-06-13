@@ -1,7 +1,7 @@
-Version 1.7.5
+Version 1.7.6
 
 ### Fixed
 
-* Báo cáo đơn hàng theo khách hàng: Cải thiện tìm kiếm gợi ý tên khách hàng, hiển thị danh sách tất cả khách hàng.
-* Sửa đơn hàng: Cập nhật giá sản phẩm thêm mới và sản phẩm trong giỏ hàng theo đúng nhóm/loại giá của khách hàng (Sỉ, VIP, Lẻ).
+* Báo cáo đơn hàng theo khách hàng: Sửa lỗi danh sách gợi ý khách hàng bị che khuất/không hiển thị khi phóng to hoặc thu nhỏ màn hình.
+
 

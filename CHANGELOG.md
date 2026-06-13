@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.7.6 - 2026-06-13
+
+### Fixed
+
+- Báo cáo đơn hàng theo khách hàng: Sửa lỗi danh sách gợi ý khách hàng bị che khuất/không hiển thị khi phóng to hoặc thu nhỏ màn hình.
+
 ## v1.7.5 - 2026-06-13
 
 ### Fixed
