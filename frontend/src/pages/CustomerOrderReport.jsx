@@ -540,8 +540,8 @@ export default function CustomerOrderReport() {
 
   return (
     <div className="space-y-6 min-w-0">
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-900 via-slate-900 to-purple-900 px-5 py-5 text-white">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="bg-gradient-to-r from-blue-900 via-slate-900 to-purple-900 px-5 py-5 text-white rounded-t-2xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -568,7 +568,7 @@ export default function CustomerOrderReport() {
           </div>
         </div>
 
-        <div className="p-5 bg-gray-50 border-t border-white/10">
+        <div className="p-5 bg-gray-50 border-t border-white/10 rounded-b-2xl">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(240px,1fr)_180px_180px_auto]">
             <div>
               <label className="mb-1 block text-xs font-semibold text-gray-500">Khách hàng</label>
