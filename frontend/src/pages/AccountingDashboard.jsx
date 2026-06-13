@@ -15,7 +15,7 @@ import {
   UsersRound,
   Warehouse,
 } from 'lucide-react';
-import { accountingApi, getApiErrorMessage } from '../utils/apiClient';
+import { accountingApi, getApiErrorMessage, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 
 function pad2(value) {
   return String(value).padStart(2, '0');
@@ -72,7 +72,7 @@ export default function AccountingDashboard({ user }) {
   const role = String(user?.role || '').trim().toLowerCase();
   const isCashier = role === 'cashier';
 
-  async function loadSummary() {
+  const loadSummary = useCallback(async () => {
     if (!filters.from || !filters.to || filters.from > filters.to) {
       setError('Khoảng ngày không hợp lệ.');
       return;
@@ -88,13 +88,22 @@ export default function AccountingDashboard({ user }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [filters]);
 
   useEffect(() => {
     loadSummary();
-    // Tải kỳ mặc định khi mở dashboard.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadSummary]);
+
+  useEffect(() => {
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      if (changedTables.some(table => ['invoices', 'invoice_details', 'products', 'import_logs', 'import_details'].includes(table))) {
+        loadSummary();
+      }
+    };
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+  }, [loadSummary]);
 
   return (
     <div className="min-w-0 space-y-4">

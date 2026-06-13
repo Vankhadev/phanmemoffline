@@ -459,13 +459,20 @@ export default function CreateOrder({ user, store }) {
         .then(d => setCategories(Array.isArray(d) ? d : []))
         .catch(() => { });
     };
+    const refreshSuppliers = () => {
+      fetch(resolveApiUrl('/partners'))
+        .then(r => r.json())
+        .then(d => setSuppliers(Array.isArray(d) ? d : []))
+        .catch(() => { });
+    };
     const onSyncUpdated = (event) => {
       const changedTables = event.detail?.changedTables || [];
-      if (changedTables.some(table => ['products', 'invoices', 'invoice_details', 'imports', 'import_details'].includes(table))) {
+      if (changedTables.some(table => ['products', 'invoices', 'invoice_details', 'imports', 'import_logs', 'import_details'].includes(table))) {
         refreshProducts();
       }
       if (changedTables.includes('customers')) refreshCustomers();
       if (changedTables.includes('product_categories')) refreshCategories();
+      if (changedTables.includes('partners')) refreshSuppliers();
       if (changedTables.includes('combos')) fetchCombos({ force: true });
     };
 

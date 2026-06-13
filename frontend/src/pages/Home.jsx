@@ -20,7 +20,7 @@ const EMPTY_STATS = {
   negativeStockProducts: [],
 };
 
-const SUMMARY_SYNC_TABLES = ['invoices', 'invoice_details', 'products', 'daily_stats'];
+const SUMMARY_SYNC_TABLES = ['invoices', 'invoice_details', 'products', 'daily_stats', 'import_logs', 'import_details'];
 
 function normalizeNegativeStockProduct(product = {}) {
   const stock = Number(product.stock ?? product.current_stock ?? product.currentStock ?? 0);

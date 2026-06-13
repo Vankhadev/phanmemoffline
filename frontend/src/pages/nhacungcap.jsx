@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
+import { apiJson, apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 import { Plus, Edit2, Trash2, Search, Loader, FileDown, Upload, X, HelpCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
@@ -94,6 +94,20 @@ export default function NhaCungCap() {
   useEffect(() => {
     fetchSuppliers();
     fetchSupplierPaymentSummaries();
+  }, []);
+
+  useEffect(() => {
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      if (changedTables.includes('partners')) {
+        fetchSuppliers();
+      }
+      if (changedTables.includes('imports') || changedTables.includes('import_logs')) {
+        fetchSupplierPaymentSummaries();
+      }
+    };
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
   }, []);
 
   useEffect(() => {

@@ -607,7 +607,7 @@ function inferChangedTablesFromRequest(url, init = {}) {
   if (path.startsWith('/products/variants') || /^\/products(\/|$)/.test(path)) add('products');
   if (path.startsWith('/product-categories')) add('product_categories', 'products');
   if (path.startsWith('/combos')) add('combos', 'products');
-  if (path.startsWith('/imports')) add('imports', 'import_details', 'products');
+  if (path.startsWith('/imports')) add('import_logs', 'import_details', 'products');
   if (path.startsWith('/invoices')) add('invoices', 'invoice_details', 'products');
   if (path.startsWith('/customers')) add('customers');
   if (path.startsWith('/customer-types')) add('customer_types', 'customers');
@@ -618,7 +618,7 @@ function inferChangedTablesFromRequest(url, init = {}) {
   if (path.startsWith('/print-templates')) add('print_templates');
   if (path.startsWith('/marketplaces')) add('marketplace_shops', 'marketplace_orders');
   if (path.startsWith('/users')) add('users');
-  if (path.startsWith('/cashbook')) add('cashbook');
+  if (path.startsWith('/cash-book') || path.startsWith('/cashbook')) add('cash_book');
   if (path.startsWith('/accounting')) add('accounting');
 
   return Array.from(tables);

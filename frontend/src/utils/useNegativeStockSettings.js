@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getApiErrorMessage, settingsApi } from './apiClient';
+import { getApiErrorMessage, settingsApi, SYNC_UPDATED_EVENT } from './apiClient';
 import {
   NEGATIVE_STOCK_SETTINGS_UPDATED_EVENT,
   cacheNegativeStockSettings,
@@ -52,6 +52,20 @@ export default function useNegativeStockSettings(options = {}) {
     window.addEventListener(NEGATIVE_STOCK_SETTINGS_UPDATED_EVENT, handleUpdated);
     return () => window.removeEventListener(NEGATIVE_STOCK_SETTINGS_UPDATED_EVENT, handleUpdated);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleSyncUpdated = (event) => {
+      const detail = event?.detail || {};
+      if (detail.sourceTabId === window.__vankhaTabId) return;
+      const changedTables = detail.changedTables || detail.tables || [];
+      if (changedTables.includes('settings')) {
+        refresh();
+      }
+    };
+    window.addEventListener(SYNC_UPDATED_EVENT, handleSyncUpdated);
+    return () => window.removeEventListener(SYNC_UPDATED_EVENT, handleSyncUpdated);
+  }, [refresh]);
 
   return { settings, loading, error, refresh };
 }

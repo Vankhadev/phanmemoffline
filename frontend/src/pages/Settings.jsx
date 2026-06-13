@@ -19,7 +19,7 @@ import {
 import HelpModal from '../components/HelpModal';
 import PrintTemplateEditorModal from '../components/invoice-print/PrintTemplateEditorModal';
 import { buildTemplateJsonFromSettings, DEFAULT_INVOICE_TEMPLATE_SETTINGS, normalizePrintTemplate } from '../components/invoice-print/templateDefaults';
-import { apiJson, customerTypesApi, getApiErrorMessage, printTemplatesApi, settingsApi, usersApi } from '../utils/apiClient';
+import { SYNC_UPDATED_EVENT, apiJson, customerTypesApi, getApiErrorMessage, printTemplatesApi, settingsApi, usersApi } from '../utils/apiClient';
 import {
   cacheNegativeStockSettings,
   getNegativeStockAdminLimitLabel,
@@ -505,7 +505,7 @@ function hasAnyPermission(permissionSet, required = []) {
   return required.some(permission => permissionSet.has(permission));
 }
 
-export default function Settings({ store, onStoreChange, permissions = [] }) {
+export default function Settings({ store, onStoreChange, permissions = [], user = null }) {
   const mountedRef = useRef(true);
   const noticeTimersRef = useRef({});
   const negativeStockAutosaveTimerRef = useRef(null);
@@ -523,8 +523,11 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
     [hasExplicitPermissions, permissions],
   );
   const canAccessSection = useCallback(
-    (required = []) => !hasExplicitPermissions || hasAnyPermission(permissionSet, required),
-    [hasExplicitPermissions, permissionSet],
+    (required = []) => {
+      if (user?.role === 'admin') return true;
+      return !hasExplicitPermissions || hasAnyPermission(permissionSet, required);
+    },
+    [hasExplicitPermissions, permissionSet, user],
   );
   const canViewStore = canAccessSection(['store.read', 'store.manage']);
   const canManageStore = canAccessSection(['store.manage']);
@@ -621,6 +624,19 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
       noticeTimersRef.current = {};
     };
   }, []);
+
+  useEffect(() => {
+    const handleSyncUpdated = (event) => {
+      const detail = event?.detail || {};
+      if (detail.sourceTabId === window.__vankhaTabId) return;
+      const changedTables = detail.changedTables || detail.tables || [];
+      if (changedTables.includes('settings')) {
+        loadNegativeStockSettings();
+      }
+    };
+    window.addEventListener(SYNC_UPDATED_EVENT, handleSyncUpdated);
+    return () => window.removeEventListener(SYNC_UPDATED_EVENT, handleSyncUpdated);
+  }, [loadNegativeStockSettings]);
 
   const loadStore = useCallback(async () => {
     const data = await apiJson('/store', {}, 'Không thể tải thông tin cửa hàng.');
@@ -1208,19 +1224,27 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   );
 
   const saveNegativeStockSettings = async ({ enabled = negativeStockSettings.enabled, limitInput = negativeStockLimitInput, successMessage = 'Lưu cài đặt thành công' } = {}) => {
-    const inputError = getNegativeStockLimitInputError(limitInput);
-    if (inputError) {
-      setTimedNotice('negative-stock', setNegativeStockNotice, {
-        tone: 'error',
-        message: inputError,
-      }, 5000);
-      return null;
+    let limit = 0;
+    if (enabled) {
+      const inputError = getNegativeStockLimitInputError(limitInput);
+      if (inputError) {
+        setTimedNotice('negative-stock', setNegativeStockNotice, {
+          tone: 'error',
+          message: inputError,
+        }, 5000);
+        return null;
+      }
+      limit = Number(String(limitInput).trim());
+    } else {
+      const parsed = Number(String(limitInput).trim());
+      limit = Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
     }
 
-    const limit = Number(String(limitInput).trim());
     const nextSignature = buildNegativeStockSaveSignature(Boolean(enabled), limit);
     if (nextSignature === negativeStockLastSavedRef.current) {
-      setNegativeStockLimitInput(String(limit));
+      if (enabled) {
+        setNegativeStockLimitInput(String(limit));
+      }
       const normalized = normalizeNegativeStockSettings({
         ...negativeStockSettings,
         negative_stock_enabled: Boolean(enabled),
@@ -1260,8 +1284,14 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
 
   const handleToggleNegativeStock = () => {
     const nextEnabled = !negativeStockSettings.enabled;
+    let nextLimitInput = negativeStockLimitInput;
+    if (nextEnabled && getNegativeStockLimitInputError(nextLimitInput)) {
+      nextLimitInput = '10';
+      setNegativeStockLimitInput('10');
+    }
     return saveNegativeStockSettings({
       enabled: nextEnabled,
+      limitInput: nextLimitInput,
       successMessage: nextEnabled ? 'Đã bật chế độ xuất âm' : 'Đã tắt chế độ xuất âm',
     });
   };
@@ -1278,7 +1308,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
   const handleSaveNegativeStockSettings = () => saveNegativeStockSettings();
 
   useEffect(() => {
-    if (!canManageNegativeStock || initialLoading || negativeStockSaving) return undefined;
+    if (!canManageNegativeStock || initialLoading || negativeStockSaving || !negativeStockSettings.enabled) return undefined;
 
     const inputError = getNegativeStockLimitInputError(negativeStockLimitInput);
     if (inputError) return undefined;
@@ -1730,7 +1760,7 @@ export default function Settings({ store, onStoreChange, permissions = [] }) {
                 aria-label={negativeStockSettings.enabled ? 'Tắt cho phép xuất âm tồn kho' : 'Bật cho phép xuất âm tồn kho'}
                 aria-busy={negativeStockSaving}
                 onClick={handleToggleNegativeStock}
-                disabled={negativeStockSaving || !canManageNegativeStock || Boolean(negativeStockLimitInputError)}
+                disabled={negativeStockSaving || !canManageNegativeStock || (negativeStockSettings.enabled && Boolean(negativeStockLimitInputError))}
                 className={`inline-flex min-h-14 w-full items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left shadow-sm transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${negativeStockSettings.enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'} disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 <span className="min-w-0 flex-1">

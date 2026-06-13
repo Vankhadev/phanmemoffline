@@ -812,14 +812,7 @@ const Nhaphang = ({ store }) => {
   }, []);
 
   // Fetch suppliers/products/categories from API
-  useEffect(() => {
-    fetchSuppliers();
-    fetchAllProducts();
-    fetchCategories();
-    fetchImportHistory();
-  }, []);
-
-  const fetchSuppliers = async () => {
+  const fetchSuppliers = useCallback(async () => {
     try {
       const res = await fetch(`${API}/partners`);
       if (res.ok) {
@@ -833,9 +826,9 @@ const Nhaphang = ({ store }) => {
       console.error('Lỗi tải nhà cung cấp:', err);
       setSuppliers([]);
     }
-  };
+  }, []);
 
-  const fetchAllProducts = async () => {
+  const fetchAllProducts = useCallback(async () => {
     try {
       const res = await fetch(`${API}/products/all/with-variants`);
       if (res.ok) {
@@ -848,9 +841,9 @@ const Nhaphang = ({ store }) => {
       console.error('Lỗi tải danh sách sản phẩm:', err);
       setAllProducts([]);
     }
-  };
+  }, []);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const res = await fetch(`${API}/product-categories`);
       if (res.ok) {
@@ -863,9 +856,9 @@ const Nhaphang = ({ store }) => {
       console.error('Lỗi tải danh mục sản phẩm:', err);
       setCategories([]);
     }
-  };
+  }, []);
 
-  const fetchImportHistory = async () => {
+  const fetchImportHistory = useCallback(async () => {
     try {
       const res = await fetch(`${API}/imports`);
       if (res.ok) {
@@ -875,7 +868,14 @@ const Nhaphang = ({ store }) => {
     } catch (err) {
       console.error('Lỗi tải lịch sử nhập hàng:', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchSuppliers();
+    fetchAllProducts();
+    fetchCategories();
+    fetchImportHistory();
+  }, [fetchSuppliers, fetchAllProducts, fetchCategories, fetchImportHistory]);
 
   // Debounced search for products
   const debounceTimeoutRef = useRef(null);
@@ -883,16 +883,17 @@ const Nhaphang = ({ store }) => {
   useEffect(() => {
     const onSyncUpdated = (event) => {
       const changedTables = event.detail?.changedTables || [];
-      if (changedTables.some(table => ['products', 'imports', 'import_details', 'invoice_details', 'invoices'].includes(table))) {
+      if (changedTables.some(table => ['products', 'imports', 'import_logs', 'import_details', 'invoice_details', 'invoices'].includes(table))) {
         fetchAllProducts();
         fetchImportHistory();
       }
       if (changedTables.includes('product_categories')) fetchCategories();
+      if (changedTables.includes('partners')) fetchSuppliers();
     };
 
     window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
     return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
-  }, []);
+  }, [fetchAllProducts, fetchImportHistory, fetchCategories, fetchSuppliers]);
 
   useEffect(() => {
     if (debounceTimeoutRef.current) {

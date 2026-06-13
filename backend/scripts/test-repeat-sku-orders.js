@@ -139,24 +139,25 @@ assert(
   `Unexpected missing product message: ${missingProductError?.message || ''}`,
 );
 
-const invoices = getAll('invoices');
-const details = getAll('invoice_details');
-const invoiceCodes = new Set(invoices.map(invoice => invoice.invoice_code));
-const repeatedSkuDetails = details.filter(detail => String(detail.product_sku || detail.sku || '').trim() === sku);
+const testInvoices = getAll('invoices', row => String(row.client_order_id || '').startsWith('repeat-sku-'));
+const testInvoiceIds = new Set(testInvoices.map(row => row.id));
+const testDetails = getAll('invoice_details', row => testInvoiceIds.has(row.invoice_id));
+const testInvoiceCodes = new Set(testInvoices.map(invoice => invoice.invoice_code));
+const repeatedSkuDetails = testDetails.filter(detail => String(detail.product_sku || detail.sku || '').trim() === sku);
 
-assert.strictEqual(invoices.length, count, 'Invoice count must match requested repeat count');
-assert.strictEqual(details.length, count, 'Invoice detail count must match requested repeat count');
+assert.strictEqual(testInvoices.length, count, 'Invoice count must match requested repeat count');
+assert.strictEqual(testDetails.length, count, 'Invoice detail count must match requested repeat count');
 assert.strictEqual(repeatedSkuDetails.length, count, 'Repeated SKU must be stored once per order line');
-assert.strictEqual(invoiceCodes.size, count, 'Each order must have a unique invoice/order code');
+assert.strictEqual(testInvoiceCodes.size, count, 'Each order must have a unique invoice/order code');
 
 console.log(JSON.stringify({
   ok: true,
   dbPath: DB_PATH,
   sku,
   requestedOrders: count,
-  createdOrders: invoices.length,
+  createdOrders: testInvoices.length,
   repeatedSkuOrderItems: repeatedSkuDetails.length,
-  uniqueOrderCodes: invoiceCodes.size,
+  uniqueOrderCodes: testInvoiceCodes.size,
   legacyDuplicateSkuProducts: productsWithRepeatedSku.length,
   duplicateProductError: {
     code: duplicateProductError.code,

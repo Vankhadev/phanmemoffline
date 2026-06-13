@@ -6,14 +6,61 @@ const router = express.Router();
 const { getAll, getOne, insert, update, now } = require('../db/database');
 
 router.get('/', (req, res) => {
-  // Join customer_type name, chỉ lấy khách hàng active
-  const customers = getAll('customers', c => c.active !== 0).sort((a, b) => a.name.localeCompare(b.name));
-  const types = getAll('customer_types', t => t.active !== 0);
-  const result = customers.map(c => {
-    const ct = types.find(t => String(t.id) === String(c.customer_type) || t.name?.toLowerCase() === String(c.customer_type || '').toLowerCase());
-    return { ...c, customer_type_name: ct ? ct.name : c.customer_type || 'Khách lẻ' };
-  });
-  res.json(result);
+  try {
+    const q = String(req.query.q || req.query.search || '').trim().toLowerCase();
+    let customers = getAll('customers', c => c.active !== 0);
+
+    if (q) {
+      customers = customers.filter(c => {
+        if (!c._searchableText) {
+          c._searchableText = [
+            c.name,
+            c.phone,
+            c.email,
+            c.customer_code,
+            c.tax_code
+          ].filter(Boolean).join(' ').toLowerCase();
+        }
+        return c._searchableText.includes(q);
+      });
+    }
+
+    // Sort A-Z by name
+    customers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'vi'));
+
+    // Apply limit to prevent huge payloads and frontend lag
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 1000);
+    const pagedCustomers = customers.slice(0, limit);
+
+    const types = getAll('customer_types', t => t.active !== 0);
+    const invoices = getAll('invoices');
+    
+    // Efficiently calculate overall stats in O(invoices) time
+    const invoiceCountMap = new Map();
+    const invoiceRevenueMap = new Map();
+    for (const inv of invoices) {
+      if (inv.status === 'cancelled') continue;
+      const cid = Number(inv.customer_id);
+      if (cid) {
+        invoiceCountMap.set(cid, (invoiceCountMap.get(cid) || 0) + 1);
+        invoiceRevenueMap.set(cid, (invoiceRevenueMap.get(cid) || 0) + (Number(inv.total) || 0));
+      }
+    }
+
+    const result = pagedCustomers.map(c => {
+      const ct = types.find(t => String(t.id) === String(c.customer_type) || t.name?.toLowerCase() === String(c.customer_type || '').toLowerCase());
+      return {
+        ...c,
+        customer_type_name: ct ? ct.name : c.customer_type || 'Khách lẻ',
+        invoice_count: invoiceCountMap.get(Number(c.id)) || 0,
+        total_revenue: invoiceRevenueMap.get(Number(c.id)) || 0,
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Lỗi tải danh sách khách hàng: ' + err.message });
+  }
 });
 
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   AlertOctagon,
   AlertTriangle,
@@ -12,7 +12,7 @@ import {
   Search,
   WalletCards,
 } from 'lucide-react';
-import { getApiErrorMessage, inventoryApi } from '../utils/apiClient';
+import { getApiErrorMessage, inventoryApi, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 
 const PAGE_SIZE = 20;
 
@@ -112,7 +112,7 @@ export default function InventoryReport() {
     [appliedSearch, order, page, sort, status, threshold],
   );
 
-  async function loadReport({ silent = false } = {}) {
+  const loadReport = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     setError('');
     try {
@@ -132,15 +132,15 @@ export default function InventoryReport() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [appliedSearch, status, page, sort, order, threshold]);
 
-  function applySearch(event) {
+  const applySearch = (event) => {
     event?.preventDefault();
     setPage(1);
     setAppliedSearch(searchText.trim());
-  }
+  };
 
-  function resetFilters() {
+  const resetFilters = () => {
     setSearchText('');
     setAppliedSearch('');
     setStatus('all');
@@ -148,13 +148,29 @@ export default function InventoryReport() {
     setOrder('asc');
     setThreshold(5);
     setPage(1);
-  }
+  };
 
   useEffect(() => {
     loadReport();
-    // querySignature gom toàn bộ bộ lọc server-side.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [querySignature]);
+  }, [loadReport]);
+
+  useEffect(() => {
+    const handleSync = (event) => {
+      const { changedTables } = event.detail || {};
+      if (
+        Array.isArray(changedTables) &&
+        changedTables.some(t =>
+          ['products', 'import_logs', 'import_details', 'invoices', 'invoice_details'].includes(t)
+        )
+      ) {
+        loadReport({ silent: true });
+      }
+    };
+    window.addEventListener(SYNC_UPDATED_EVENT, handleSync);
+    return () => {
+      window.removeEventListener(SYNC_UPDATED_EVENT, handleSync);
+    };
+  }, [loadReport]);
 
   return (
     <div className="min-w-0 space-y-4">

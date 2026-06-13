@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   CalendarDays,
   ChevronLeft,
@@ -11,7 +11,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { accountingApi, getApiErrorMessage } from '../utils/apiClient';
+import { accountingApi, getApiErrorMessage, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 
 const PAGE_SIZE = 30;
 
@@ -124,7 +124,7 @@ export default function AccountingLogs() {
   const actionOptions = useMemo(() => Array.from(new Set(data.items.map(row => row.action).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'vi')), [data.items]);
   const querySignature = useMemo(() => JSON.stringify({ ...filters, page }), [filters, page]);
 
-  async function loadLogs() {
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -136,7 +136,7 @@ export default function AccountingLogs() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [filters, page]);
 
   function applyFilters(event) {
     event?.preventDefault();
@@ -170,9 +170,17 @@ export default function AccountingLogs() {
 
   useEffect(() => {
     loadLogs();
-    // querySignature gom bộ lọc + phân trang server-side.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [querySignature]);
+  }, [loadLogs]);
+
+  useEffect(() => {
+    const handleSync = () => {
+      loadLogs();
+    };
+    window.addEventListener(SYNC_UPDATED_EVENT, handleSync);
+    return () => {
+      window.removeEventListener(SYNC_UPDATED_EVENT, handleSync);
+    };
+  }, [loadLogs]);
 
   return (
     <div className="min-w-0 space-y-4">

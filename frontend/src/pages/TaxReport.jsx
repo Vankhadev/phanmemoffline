@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   CalendarDays,
   FileCheck2,
@@ -9,7 +9,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
-import { accountingApi, getApiErrorMessage } from '../utils/apiClient';
+import { accountingApi, getApiErrorMessage, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 
 function pad2(value) {
   return String(value).padStart(2, '0');
@@ -149,7 +149,7 @@ export default function TaxReport() {
   const outputRows = Array.isArray(report?.output_sources) ? report.output_sources : [];
   const payable = Number(report?.vat_payable) || 0;
 
-  async function loadReport(nextFilters = filters) {
+  const loadReport = useCallback(async (nextFilters = filters) => {
     const range = resolveRange(nextFilters);
     if (!range.valid) {
       setError(range.message);
@@ -170,7 +170,7 @@ export default function TaxReport() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [filters]);
 
   async function generateSnapshot() {
     if (!activeRange.valid) {
@@ -193,9 +193,25 @@ export default function TaxReport() {
 
   useEffect(() => {
     loadReport(defaults);
-    // Chỉ tải kỳ mặc định khi mở màn hình.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadReport, defaults]);
+
+  useEffect(() => {
+    const handleSync = (event) => {
+      const { changedTables } = event.detail || {};
+      if (
+        Array.isArray(changedTables) &&
+        changedTables.some(t =>
+          ['invoices', 'invoice_details', 'import_logs', 'import_details'].includes(t)
+        )
+      ) {
+        loadReport();
+      }
+    };
+    window.addEventListener(SYNC_UPDATED_EVENT, handleSync);
+    return () => {
+      window.removeEventListener(SYNC_UPDATED_EVENT, handleSync);
+    };
+  }, [loadReport]);
 
   return (
     <div className="min-w-0 space-y-4">

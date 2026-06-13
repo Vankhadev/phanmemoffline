@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { apiJson, apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 import { Plus, Edit2, Trash2, TrendingUp, TrendingDown, Calendar, Filter, Upload, Download, X, DollarSign } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
@@ -27,9 +27,7 @@ export default function CashBook() {
     reference_type: '',
   });
 
-  useEffect(() => { fetchTransactions(); }, []);
-
-  const fetchTransactions = async (nextFilter = filter) => {
+  const fetchTransactions = useCallback(async (nextFilter = filter) => {
     const activeFilter = nextFilter && typeof nextFilter === 'object' ? nextFilter : filter;
     setLoading(true);
     try {
@@ -47,7 +45,20 @@ export default function CashBook() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
+
+  useEffect(() => {
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      if (changedTables.includes('cash_book')) {
+        fetchTransactions();
+      }
+    };
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+  }, [fetchTransactions]);
 
   const fetchSummary = async () => {
     try {

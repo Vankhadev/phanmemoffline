@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import * as XLSX from 'xlsx';
-import { resolveApiUrl } from '../utils/apiClient';
+import { resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 import {
   BarChart3,
   Calendar,
@@ -737,11 +737,21 @@ export default function ProductReport() {
 
   useEffect(() => {
     fetchReport();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchReport]);
 
-  async function fetchReport(filtersOverride = null) {
-    const filters = filtersOverride || getActiveFilters();
+  useEffect(() => {
+    const onSyncUpdated = (event) => {
+      const changedTables = event.detail?.changedTables || [];
+      if (changedTables.some(table => ['invoices', 'invoice_details', 'products'].includes(table))) {
+        fetchReport();
+      }
+    };
+    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+  }, [fetchReport]);
+
+  const fetchReport = useCallback(async (filtersOverride = null) => {
+    const filters = filtersOverride || { period, selectedDate, selectedMonth, selectedYear, from, to, status };
     const request = buildProductReportRequest(filters);
     if (!request.valid) {
       setError(request.message);
@@ -771,7 +781,7 @@ export default function ProductReport() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [period, selectedDate, selectedMonth, selectedYear, from, to, status]);
 
   function getActiveFilters() {
     return { period, selectedDate, selectedMonth, selectedYear, from, to, status };
