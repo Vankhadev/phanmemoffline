@@ -1,5 +1,7 @@
-Version 1.7.4
+Version 1.7.5
 
 ### Fixed
 
-* Sửa lỗi không gõ được dấu cách (phím Space) tại ô nhập dịch vụ khác ở màn hình tạo đơn hàng.
+* Báo cáo đơn hàng theo khách hàng: Cải thiện tìm kiếm gợi ý tên khách hàng, hiển thị danh sách tất cả khách hàng.
+* Sửa đơn hàng: Cập nhật giá sản phẩm thêm mới và sản phẩm trong giỏ hàng theo đúng nhóm/loại giá của khách hàng (Sỉ, VIP, Lẻ).
+

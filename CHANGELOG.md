@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.7.5 - 2026-06-13
+
+### Fixed
+
+- Báo cáo đơn hàng theo khách hàng: Cải thiện tìm kiếm gợi ý tên khách hàng, hiển thị danh sách tất cả khách hàng.
+- Sửa đơn hàng: Cập nhật giá sản phẩm thêm mới và sản phẩm trong giỏ hàng theo đúng nhóm/loại giá của khách hàng (Sỉ, VIP, Lẻ).
+
 ## v1.7.4 - 2026-06-13
 
 ### Fixed

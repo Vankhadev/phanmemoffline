@@ -263,7 +263,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
 export default function CustomerOrderReport() {
   const defaultRange = useMemo(() => getDefaultRange(), []);
   const [customers, setCustomers] = useState([]);
-  const [customerId, setCustomerId] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerSearch, setCustomerSearch] = useState('');
   const [showCustomerResults, setShowCustomerResults] = useState(false);
   const [from, setFrom] = useState(defaultRange.from);
@@ -274,6 +274,8 @@ export default function CustomerOrderReport() {
   const [error, setError] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const customerSearchRef = useRef(null);
+
+  const customerId = selectedCustomer ? String(selectedCustomer.id || '') : '';
 
   const loadCustomers = useCallback(async (searchQuery = '') => {
     setLoadingCustomers(true);
@@ -290,20 +292,15 @@ export default function CustomerOrderReport() {
 
   // Debounced typing effect
   useEffect(() => {
-    const selectedCustomer = customers.find(c => Number(c.id) === Number(customerId));
     const selectedName = selectedCustomer ? customerDisplayName(selectedCustomer) : '';
-    if (customerSearch === selectedName) return;
+    if (selectedCustomer && customerSearch === selectedName) return;
 
     const timer = setTimeout(() => {
       loadCustomers(customerSearch);
     }, 200);
 
     return () => clearTimeout(timer);
-  }, [customerSearch, customerId, customers, loadCustomers]);
-
-  const selectedCustomer = useMemo(() => {
-    return customers.find(customer => Number(customer.id) === Number(customerId));
-  }, [customerId, customers]);
+  }, [customerSearch, selectedCustomer, loadCustomers]);
 
   const invoices = report?.invoices || [];
   const summary = report?.summary || { total_invoices: 0, total_amount: 0 };
@@ -346,7 +343,7 @@ export default function CustomerOrderReport() {
   }, []);
 
   const selectCustomer = (customer) => {
-    setCustomerId(String(customer.id || ''));
+    setSelectedCustomer(customer);
     setCustomerSearch(customerDisplayName(customer));
     setShowCustomerResults(false);
     setError('');
@@ -354,9 +351,7 @@ export default function CustomerOrderReport() {
 
   const handleInputFocus = () => {
     setShowCustomerResults(true);
-    if (!customerSearch.trim()) {
-      loadCustomers('');
-    }
+    loadCustomers('');
   };
 
   const fetchReport = useCallback(async () => {
@@ -585,21 +580,28 @@ export default function CustomerOrderReport() {
                       className="input-field w-full pl-9 pr-8"
                       value={customerSearch}
                       onChange={event => {
-                        setCustomerSearch(event.target.value);
-                        if (!event.target.value) setCustomerId('');
+                        const val = event.target.value;
+                        setCustomerSearch(val);
+                        if (!val) {
+                          setSelectedCustomer(null);
+                        } else {
+                          const selectedName = selectedCustomer ? customerDisplayName(selectedCustomer) : '';
+                          if (val !== selectedName) {
+                            setSelectedCustomer(null);
+                          }
+                        }
                         setShowCustomerResults(true);
                       }}
                       onFocus={handleInputFocus}
                       onClick={handleInputFocus}
                       placeholder={loadingCustomers ? 'Đang tải khách hàng...' : 'Tìm tên, SĐT, email, mã KH...'}
-                      disabled={loadingCustomers}
                     />
                     {customerSearch && (
                       <button
                         type="button"
                         onClick={() => {
                           setCustomerSearch('');
-                          setCustomerId('');
+                          setSelectedCustomer(null);
                           setReport(null);
                           setError('');
                         }}
@@ -676,7 +678,7 @@ export default function CustomerOrderReport() {
                 onClick={() => {
                   setReport(null);
                   setError('');
-                  setCustomerId('');
+                  setSelectedCustomer(null);
                   setCustomerSearch('');
                   setShowCustomerResults(false);
                   setFrom(defaultRange.from);

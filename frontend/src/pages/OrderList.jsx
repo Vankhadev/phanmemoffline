@@ -48,6 +48,38 @@ function displayOrderCode(code) {
   const num = parseInt(numStr || '0', 10);
   return `DH${String(num).padStart(6, '0')}`;
 }
+
+const customerTypeToPriceType = (ct) => {
+  const t = String(ct || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').trim();
+  if (t.includes(' si') || t.endsWith('si') || t.includes('wholesale') || t.includes('buon')) return 'wholesale';
+  if (t.includes('vip')) return 'vip';
+  return 'retail';
+};
+
+function readPriceField(source, key) {
+  if (!source || !Object.prototype.hasOwnProperty.call(source, key)) return null;
+  const raw = source[key];
+  if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+  const number = Number(raw);
+  return Number.isFinite(number) ? Math.max(0, number) : null;
+}
+
+function getPriceValueByType(source, currentPriceType = 'retail') {
+  const activeType = ['retail', 'wholesale', 'vip'].includes(String(currentPriceType).trim().toLowerCase()) ? String(currentPriceType).trim().toLowerCase() : 'retail';
+  const exact = readPriceField(source, `${activeType}_price`);
+  if (exact !== null) return exact;
+
+  const retail = readPriceField(source, 'retail_price');
+  if (retail !== null) return retail;
+
+  for (const key of ['price', 'unit_price', 'sale_price', 'selling_price', 'wholesale_price', 'vip_price']) {
+    const value = readPriceField(source, key);
+    if (value !== null) return value;
+  }
+
+  return 0;
+}
+
 function formatDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -684,6 +716,9 @@ export default function OrderList() {
   const addDetailFromPicker = (p) => {
     const isVariant = Boolean(p.is_variant || p.parent_id || p.parent_name || p.parent?.name);
     const displayName = getProductDisplayName(p);
+    const customer = editForm.customer_id ? customers.find(c => Number(c.id) === Number(editForm.customer_id)) : null;
+    const activePriceType = customer ? customerTypeToPriceType(customer.customer_type) : 'retail';
+    const price = getPriceValueByType(p, activePriceType);
     const newDetail = {
       id: Date.now(),
       product_id: p.id,
@@ -696,10 +731,10 @@ export default function OrderList() {
       name: displayName,
       sku: p.sku || '',
       quantity: 1,
-      unit_price: p.retail_price || 0,
+      unit_price: price,
       discount_amount: 0,
       discount_percent: 0,
-      line_total: p.retail_price || 0,
+      line_total: price,
       max_stock: p.stock,
       current_stock: p.stock,
       stock: p.stock,
@@ -1734,6 +1769,10 @@ export default function OrderList() {
               <div className="space-y-1">
                 {(() => {
                   const searchLower = editProductSearch.toLowerCase();
+                  const customer = editForm.customer_id ? customers.find(c => Number(c.id) === Number(editForm.customer_id)) : null;
+                  const activePriceType = customer ? customerTypeToPriceType(customer.customer_type) : 'retail';
+                  const getDisplayPrice = (prod) => getPriceValueByType(prod, activePriceType);
+
                   const filteredParents = editProducts.filter(p =>
                     !editProductSearch ||
                     p.name.toLowerCase().includes(searchLower) ||
@@ -1775,7 +1814,7 @@ export default function OrderList() {
                               <div className={`text-[10px] ${getStockDisplayMeta(parent.stock, negativeStockSettings).textClass}`}>{getStockDisplayMeta(parent.stock, negativeStockSettings).display}</div>
                               {getStockDisplayMeta(parent.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(parent.stock, negativeStockSettings).badgeClass}`}>Âm kho</div>}
                               {getStockDisplayMeta(parent.stock, negativeStockSettings).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">{getStockDisplayMeta(parent.stock, negativeStockSettings).extraLabel || negativeStockNearLimitLabel || `Gần ${negativeStockLimitLabel}`}</div>}
-                              <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(parent.retail_price)}</div>
+                              <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getDisplayPrice(parent))}</div>
                             </div>
                           </div>
                         </div>
@@ -1802,7 +1841,7 @@ export default function OrderList() {
                                     <div className={`text-[10px] ${getStockDisplayMeta(variant.stock, negativeStockSettings).textClass}`}>{getStockDisplayMeta(variant.stock, negativeStockSettings).display}</div>
                                     {getStockDisplayMeta(variant.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(variant.stock, negativeStockSettings).badgeClass}`}>Âm kho</div>}
                                     {getStockDisplayMeta(variant.stock, negativeStockSettings).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">{getStockDisplayMeta(variant.stock, negativeStockSettings).extraLabel || negativeStockNearLimitLabel || `Gần ${negativeStockLimitLabel}`}</div>}
-                                    <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(variant.retail_price)}</div>
+                                    <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getDisplayPrice(variant))}</div>
                                   </div>
                                 </div>
                               </div>
