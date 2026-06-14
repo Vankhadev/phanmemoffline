@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertCircle, BarChart3, Calendar, FileText, HelpCircle, Layers, Package, PackageSearch, ShoppingCart, Store, TrendingUp } from 'lucide-react';
-import { ApiError, SYNC_UPDATED_EVENT, apiJsonChecked } from '../utils/apiClient';
+import { ApiError, apiJsonChecked } from '../utils/apiClient';
+import { globalSyncEmitter } from '../utils/eventEmitter';
 import HelpModal from '../components/HelpModal';
 import { formatStockValue, getNegativeStockLimitLabel, getNegativeStockNearLimitLabel, getStockDisplayMeta } from '../utils/negativeStock';
 import useNegativeStockSettings from '../utils/useNegativeStockSettings';
@@ -183,21 +184,17 @@ export default function Home({ user, store = {} }) {
   useEffect(() => {
     fetchStats();
 
-    const onOrderCreated = () => {
+    const handleSyncRefresh = () => {
       fetchStats(false);
+      console.log('[SYNC] Dashboard refreshed');
     };
 
-    const onSyncUpdated = (event) => {
-      const changedTables = event.detail?.changedTables || [];
-      if (changedTables.some(table => SUMMARY_SYNC_TABLES.includes(table))) fetchStats(false);
-    };
-
-    window.addEventListener('kha-order-created', onOrderCreated);
-    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    const unsubscribeCreated = globalSyncEmitter.on('ORDER_CREATED', handleSyncRefresh);
+    const unsubscribeDeleted = globalSyncEmitter.on('ORDER_DELETED', handleSyncRefresh);
 
     return () => {
-      window.removeEventListener('kha-order-created', onOrderCreated);
-      window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+      unsubscribeCreated();
+      unsubscribeDeleted();
     };
   }, [fetchStats]);
 

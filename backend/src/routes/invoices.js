@@ -36,6 +36,7 @@ const {
 } = require('../utils/negativeStock');
 const { resolveInvoicePrintTemplate } = require('../services/printTemplateService');
 const { logActivity } = require('../services/accountingLogService');
+const { exportCustomerDebtReport } = require('../services/customerDebtReportService');
 
 // ─────────────────────────────────────────────
 // Helper: hợp nhất chi tiết trùng product_id (chống duplicate)
@@ -509,6 +510,56 @@ router.get('/reports/customer-orders', (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+// GET /api/invoices/reports/customer-orders/export
+// Xuất báo cáo đơn hàng Excel dạng stream
+// ─────────────────────────────────────────────
+router.get('/reports/customer-orders/export', async (req, res) => {
+  try {
+    const { customer_id, from, to } = req.query;
+    const customerId = Number(customer_id);
+
+    if (!Number.isFinite(customerId) || customerId <= 0) {
+      return res.status(400).json({ error: 'Thiếu hoặc sai customer_id' });
+    }
+
+    const fromDate = parseLocalDateBoundary(from, false);
+    const toDate = parseLocalDateBoundary(to, true);
+    if (!fromDate || !toDate) {
+      return res.status(400).json({ error: 'Khoảng ngày không hợp lệ. Vui lòng dùng định dạng YYYY-MM-DD.' });
+    }
+    if (fromDate > toDate) {
+      return res.status(400).json({ error: 'Ngày bắt đầu không được lớn hơn ngày kết thúc' });
+    }
+
+    const customer = getOne('customers', c => Number(c.id) === customerId && c.active !== 0);
+    if (!customer) return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
+
+    const customerName = customer.name || 'KhachHang';
+    const nowTime = new Date();
+    const yyyymmdd = nowTime.getFullYear() + String(nowTime.getMonth() + 1).padStart(2, '0') + String(nowTime.getDate()).padStart(2, '0');
+    const safeCustomerName = customerName.replace(/[/\\?%*:|"<>. ]/g, '_');
+    const fileName = `BaoCaoCongNo_${safeCustomerName}_${yyyymmdd}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+
+    const excelStream = exportCustomerDebtReport(customerId, from, to);
+    excelStream.on('error', (err) => {
+      console.error('Lỗi khi stream Excel:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Lỗi ghi file Excel: ' + err.message });
+      }
+    });
+    excelStream.pipe(res);
+  } catch (err) {
+    console.error('Lỗi xuất báo cáo Excel:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Lỗi xuất báo cáo Excel: ' + err.message });
+    }
+  }
+});
+
+// ─────────────────────────────────────────────
 // GET /api/invoices
 // ─────────────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -803,4 +854,4 @@ router.patch('/:id/confirm', async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = Object.assign(router, { exportCustomerDebtReport });

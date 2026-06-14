@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiJson, apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
+import { globalSyncEmitter } from '../utils/eventEmitter';
 import { Plus, Edit2, Trash2, TrendingUp, TrendingDown, Calendar, Filter, Upload, Download, X, DollarSign } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
@@ -50,14 +51,16 @@ export default function CashBook() {
   useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
 
   useEffect(() => {
-    const onSyncUpdated = (event) => {
-      const changedTables = event.detail?.changedTables || [];
-      if (changedTables.includes('cash_book')) {
-        fetchTransactions();
-      }
+    const handleSyncRefresh = () => {
+      fetchTransactions();
+      console.log('[SYNC] CashBook refreshed');
     };
-    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
-    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+
+    const unsubscribeDebt = globalSyncEmitter.on('DEBT_UPDATED', handleSyncRefresh);
+
+    return () => {
+      unsubscribeDebt();
+    };
   }, [fetchTransactions]);
 
   const fetchSummary = async () => {

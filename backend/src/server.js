@@ -552,6 +552,49 @@ function hookGuardianIntoDatabase() {
   const originalRemove = dbModule.remove;
   const originalReplaceTable = dbModule.replaceTable;
   const originalSaveDB = dbModule.saveDB;
+  const originalWithAtomicDbWrite = dbModule.withAtomicDbWrite;
+
+  let transactionDepth = 0;
+  let pendingBroadcasts = [];
+
+  function queueOrBroadcast(tables, detail) {
+    if (transactionDepth > 0) {
+      pendingBroadcasts.push({ tables, detail });
+    } else {
+      realtimeSyncService.broadcastChangeEvent(tables, detail);
+    }
+  }
+
+  // Hook withAtomicDbWrite to buffer events during transactions
+  if (typeof originalWithAtomicDbWrite === 'function') {
+    dbModule.withAtomicDbWrite = function guardianWithAtomicDbWrite(callback) {
+      transactionDepth++;
+      try {
+        const result = originalWithAtomicDbWrite.call(this, callback);
+        transactionDepth--;
+        if (transactionDepth === 0) {
+          const uniqueTables = Array.from(new Set(pendingBroadcasts.flatMap(b => b.tables)));
+          const broadcastsToProcess = [...pendingBroadcasts];
+          pendingBroadcasts = [];
+          if (uniqueTables.length > 0) {
+            const ctx = getRequestContext();
+            realtimeSyncService.broadcastChangeEvent(uniqueTables, {
+              sourceTabId: ctx?.sourceTabId,
+              reason: 'transaction-committed',
+              broadcasts: broadcastsToProcess,
+            });
+          }
+        }
+        return result;
+      } catch (error) {
+        transactionDepth--;
+        if (transactionDepth === 0) {
+          pendingBroadcasts = [];
+        }
+        throw error;
+      }
+    };
+  }
 
   // Hook insert
   dbModule.insert = function guardianInsert(table, row, options = {}) {
@@ -564,7 +607,7 @@ function hookGuardianIntoDatabase() {
     if (!options.skipHistory && table !== 'edit_history') {
       historyService.recordChange(table, result?.id || row?.id, 'insert', null, result || row, ctx);
     }
-    realtimeSyncService.broadcastChangeEvent([table], {
+    queueOrBroadcast([table], {
       sourceTabId: ctx.sourceTabId,
       op: 'insert',
       id: result?.id || row?.id,
@@ -585,7 +628,7 @@ function hookGuardianIntoDatabase() {
     if (!options.skipHistory && table !== 'edit_history') {
       historyService.recordChange(table, id, 'update', before, result || changes, ctx);
     }
-    realtimeSyncService.broadcastChangeEvent([table], {
+    queueOrBroadcast([table], {
       sourceTabId: ctx.sourceTabId,
       op: 'update',
       id: id,
@@ -616,7 +659,7 @@ function hookGuardianIntoDatabase() {
       if (!options.skipHistory && table !== 'edit_history') {
         historyService.recordChange(table, id, 'delete', existingRow, safetyResult.data, ctx);
       }
-      realtimeSyncService.broadcastChangeEvent([table], {
+      queueOrBroadcast([table], {
         sourceTabId: ctx.sourceTabId,
         op: 'delete',
         id: id,
@@ -633,7 +676,7 @@ function hookGuardianIntoDatabase() {
     if (!options.skipHistory && table !== 'edit_history') {
       historyService.recordChange(table, id, 'delete', existingRow, null, ctx);
     }
-    realtimeSyncService.broadcastChangeEvent([table], {
+    queueOrBroadcast([table], {
       sourceTabId: ctx.sourceTabId,
       op: 'delete',
       id: id,
@@ -646,7 +689,7 @@ function hookGuardianIntoDatabase() {
   dbModule.replaceTable = function guardianReplaceTable(table, rows, options = {}) {
     const result = originalReplaceTable.call(this, table, rows, options);
     const ctx = getRequestContext();
-    realtimeSyncService.broadcastChangeEvent([table], {
+    queueOrBroadcast([table], {
       sourceTabId: ctx.sourceTabId,
       op: 'replace',
     });

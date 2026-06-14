@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.7.8 - 2026-06-14
+
+### Fixed
+
+- Đồng bộ dữ liệu đa tab: Xây dựng hệ thống sự kiện toàn cục (Global Event System), cơ chế cache GET API thông minh ở client giúp đồng bộ tức thì (<500ms) các hành động tạo/sửa/xóa đơn hàng, nhập hàng, khách hàng, công nợ trên toàn bộ các tab mà không cần reload ứng dụng.
+
 ## v1.7.7 - 2026-06-13
 
 ### Fixed

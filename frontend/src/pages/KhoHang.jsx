@@ -12,7 +12,8 @@ import {
   normalizeProductTree,
   normalizeSearchText,
 } from '../utils/productSearch';
-import { SYNC_UPDATED_EVENT, apiJsonChecked } from '../utils/apiClient';
+import { apiJsonChecked } from '../utils/apiClient';
+import { globalSyncEmitter } from '../utils/eventEmitter';
 import { getNegativeStockLimitLabel, getNegativeStockNearLimitLabel, getStockDisplayMeta } from '../utils/negativeStock';
 import useNegativeStockSettings from '../utils/useNegativeStockSettings';
 
@@ -800,32 +801,25 @@ export default function KhoHang() {
     const refreshNegativeStockIfNeeded = () => {
       if (isNegativeStockTabKey(activeStockTab)) setNegativeStockRefreshTick(tick => tick + 1);
     };
-    const onOrderCreated = () => {
-      lastLocalStockEventAtRef.current = Date.now();
+
+    const handleSyncRefresh = () => {
       fetchProducts(true);
       refreshNegativeStockIfNeeded();
+      console.log('[SYNC] Inventory refreshed');
     };
-    const onSyncUpdated = (event) => {
-      const changedTables = event.detail?.changedTables || [];
-      const syncData = event.detail?.data || {};
-      if (changedTables.some(table => STOCK_CHANGE_TABLES.includes(table))) {
-        const handledByRecentLocalEvent = Date.now() - lastLocalStockEventAtRef.current < 1000;
-        if (!handledByRecentLocalEvent) {
-          fetchProducts(true);
-          refreshNegativeStockIfNeeded();
-        }
-      }
-      if (Array.isArray(syncData.product_categories) && changedTables.includes('product_categories')) {
-        setCategories(syncData.product_categories);
-      } else if (changedTables.includes('product_categories')) {
-        fetchCategories();
-      }
-    };
-    window.addEventListener('kha-order-created', onOrderCreated);
-    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+
+    const unsubUpdated = globalSyncEmitter.on('PRODUCT_UPDATED', handleSyncRefresh);
+    const unsubImported = globalSyncEmitter.on('PRODUCT_IMPORTED', handleSyncRefresh);
+    const unsubCreated = globalSyncEmitter.on('ORDER_CREATED', handleSyncRefresh);
+    const unsubOrderUpdated = globalSyncEmitter.on('ORDER_UPDATED', handleSyncRefresh);
+    const unsubOrderDeleted = globalSyncEmitter.on('ORDER_DELETED', handleSyncRefresh);
+
     return () => {
-      window.removeEventListener('kha-order-created', onOrderCreated);
-      window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+      unsubUpdated();
+      unsubImported();
+      unsubCreated();
+      unsubOrderUpdated();
+      unsubOrderDeleted();
     };
   }, [activeStockTab]);
 

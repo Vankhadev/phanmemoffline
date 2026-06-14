@@ -15,6 +15,81 @@ export const SYNC_BROADCAST_REQUEST_EVENT = 'vankha-sync:broadcast-request';
 export const SYNC_CHECK_REQUEST_EVENT = 'vankha-sync:check-now';
 export const PRINT_TEMPLATE_UPDATED_EVENT = 'vankha-print-template:updated';
 
+let localSyncVersions = {};
+
+// Try to initialize from localStorage snapshot
+try {
+  if (typeof window !== 'undefined') {
+    const snapshot = JSON.parse(window.localStorage.getItem('kha_auth_snapshot') || 'null');
+    if (snapshot && snapshot.syncVersions) {
+      localSyncVersions = snapshot.syncVersions;
+    }
+  }
+} catch (_) {}
+
+export function setLocalSyncVersions(versions) {
+  localSyncVersions = { ...localSyncVersions, ...versions };
+}
+
+// Add the SYNC_UPDATED_EVENT listener to sync localSyncVersions
+if (typeof window !== 'undefined') {
+  window.addEventListener(SYNC_UPDATED_EVENT, (event) => {
+    const detail = event.detail || {};
+    if (detail.syncVersions) {
+      setLocalSyncVersions(detail.syncVersions);
+    } else if (detail.changedTables) {
+      const nextVersions = { ...localSyncVersions };
+      detail.changedTables.forEach(table => {
+        nextVersions[table] = (nextVersions[table] || 0) + 1;
+      });
+      setLocalSyncVersions(nextVersions);
+    }
+  });
+}
+
+// Cache implementation
+const apiCache = new Map();
+
+export function clearApiCache() {
+  apiCache.clear();
+}
+
+function getUrlPathname(input) {
+  try {
+    const rawUrl = typeof input === 'string' ? input : String(input?.url || '');
+    const urlObj = new URL(rawUrl, 'http://dummy-base');
+    return urlObj.pathname;
+  } catch (_) {
+    return '';
+  }
+}
+
+function getDependentTables(pathname) {
+  const tables = [];
+  if (pathname.startsWith('/invoices')) {
+    tables.push('invoices', 'invoice_details', 'products', 'customers');
+  } else if (pathname.startsWith('/customers')) {
+    tables.push('customers');
+  } else if (pathname.startsWith('/products')) {
+    tables.push('products', 'product_categories');
+  } else if (pathname.startsWith('/imports')) {
+    tables.push('import_logs', 'import_details', 'products');
+  } else if (pathname.startsWith('/partners')) {
+    tables.push('partners');
+  } else if (pathname.startsWith('/cash-book') || pathname.startsWith('/cashbook')) {
+    tables.push('cash_book');
+  } else if (pathname.startsWith('/dashboard') || pathname.startsWith('/stats') || pathname.startsWith('/accounting')) {
+    tables.push('invoices', 'invoice_details', 'products', 'customers', 'import_logs', 'daily_stats', 'cash_book');
+  } else if (pathname.startsWith('/settings')) {
+    tables.push('settings');
+  } else if (pathname.startsWith('/print-templates')) {
+    tables.push('print_templates');
+  } else {
+    tables.push('invoices', 'products', 'customers', 'cash_book');
+  }
+  return tables;
+}
+
 function normalizeChangedTables(value = []) {
   const list = Array.isArray(value) ? value : [value];
   return Array.from(new Set(list.map(item => String(item || '').trim()).filter(Boolean)));
@@ -424,6 +499,7 @@ function dispatchAuthExpired(detail = {}) {
 }
 
 export function handleUnauthorizedResponse(detail = {}) {
+  clearApiCache();
   clearAuthSession({ clearVolatile: true, includePending: true });
   dispatchAuthExpired(detail);
 }
@@ -630,12 +706,18 @@ function notifyApiMutation(input, init = {}, data = null) {
   const changedTables = inferChangedTablesFromRequest(input, init);
   if (changedTables.length === 0) return;
   if (data && typeof data === 'object' && !Array.isArray(data) && data.ok === false) return;
+
+  let op = 'update';
+  if (method === 'POST') op = 'insert';
+  else if (method === 'DELETE') op = 'delete';
+
   requestCrossTabSyncUpdate({
     reason: `api-${method.toLowerCase()}:${normalizeApiPathForSync(input)}`,
     changedTables,
     method,
     path: normalizeApiPathForSync(input),
     source: 'api-client',
+    op,
   });
 }
 
@@ -779,6 +861,33 @@ export async function apiFetch(input, init = {}) {
 }
 
 export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu API thất bại.') {
+  const method = String(init?.method || 'GET').trim().toUpperCase();
+  const rawUrl = typeof input === 'string' ? input : String(input?.url || '');
+
+  if (method === 'GET') {
+    const pathname = getUrlPathname(rawUrl);
+    const bypassCache = pathname.includes('/users/') || pathname.includes('/bootstrap-status');
+    if (!bypassCache) {
+      const cacheKey = rawUrl;
+      const cached = apiCache.get(cacheKey);
+      if (cached) {
+        const dependentTables = getDependentTables(pathname);
+        let isCacheValid = true;
+        for (const table of dependentTables) {
+          const currentVer = localSyncVersions[table] || 0;
+          const cachedVer = cached.versions[table] || 0;
+          if (currentVer !== cachedVer) {
+            isCacheValid = false;
+            break;
+          }
+        }
+        if (isCacheValid) {
+          return cached.data;
+        }
+      }
+    }
+  }
+
   const response = await apiFetch(input, init);
   let data;
 
@@ -803,6 +912,23 @@ export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu AP
       response,
     });
   }
+
+  if (method === 'GET') {
+    const pathname = getUrlPathname(rawUrl);
+    const bypassCache = pathname.includes('/users/') || pathname.includes('/bootstrap-status');
+    if (!bypassCache) {
+      const dependentTables = getDependentTables(pathname);
+      const versions = {};
+      dependentTables.forEach(table => {
+        versions[table] = localSyncVersions[table] || 0;
+      });
+      apiCache.set(rawUrl, {
+        data,
+        versions,
+      });
+    }
+  }
+
   notifyApiMutation(input, init, data);
   return data;
 }

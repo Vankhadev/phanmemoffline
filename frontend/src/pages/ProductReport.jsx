@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import * as XLSX from 'xlsx';
-import { resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { resolveApiUrl } from '../utils/apiClient';
+import { globalSyncEmitter } from '../utils/eventEmitter';
 import {
   BarChart3,
   Calendar,
@@ -773,14 +774,24 @@ export default function ProductReport() {
   }, [fetchReport]);
 
   useEffect(() => {
-    const onSyncUpdated = (event) => {
-      const changedTables = event.detail?.changedTables || [];
-      if (changedTables.some(table => ['invoices', 'invoice_details', 'products'].includes(table))) {
-        fetchReport();
-      }
+    const handleSyncRefresh = () => {
+      fetchReport();
+      console.log('[SYNC] ProductReport refreshed');
     };
-    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
-    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+
+    const unsubProductUpdated = globalSyncEmitter.on('PRODUCT_UPDATED', handleSyncRefresh);
+    const unsubProductImported = globalSyncEmitter.on('PRODUCT_IMPORTED', handleSyncRefresh);
+    const unsubOrderCreated = globalSyncEmitter.on('ORDER_CREATED', handleSyncRefresh);
+    const unsubOrderUpdated = globalSyncEmitter.on('ORDER_UPDATED', handleSyncRefresh);
+    const unsubOrderDeleted = globalSyncEmitter.on('ORDER_DELETED', handleSyncRefresh);
+
+    return () => {
+      unsubProductUpdated();
+      unsubProductImported();
+      unsubOrderCreated();
+      unsubOrderUpdated();
+      unsubOrderDeleted();
+    };
   }, [fetchReport]);
 
   function getActiveFilters() {

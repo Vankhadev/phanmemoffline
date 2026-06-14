@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Calendar, ChevronDown, ChevronRight, DollarSign, FileDown, Package, TrendingUp } from 'lucide-react';
-import { resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { resolveApiUrl } from '../utils/apiClient';
+import { globalSyncEmitter } from '../utils/eventEmitter';
 
 const API = resolveApiUrl('');
 
@@ -208,14 +209,24 @@ export default function Stats() {
   }, [refreshAll]);
 
   useEffect(() => {
-    const onSyncUpdated = (event) => {
-      const changedTables = event.detail?.changedTables || [];
-      if (changedTables.some(table => ['invoices', 'invoice_details', 'products', 'daily_stats'].includes(table))) {
-        refreshAll();
-      }
+    const handleSyncRefresh = () => {
+      refreshAll();
+      console.log('[SYNC] Stats refreshed');
     };
-    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
-    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+
+    const unsubCreated = globalSyncEmitter.on('ORDER_CREATED', handleSyncRefresh);
+    const unsubUpdated = globalSyncEmitter.on('ORDER_UPDATED', handleSyncRefresh);
+    const unsubDeleted = globalSyncEmitter.on('ORDER_DELETED', handleSyncRefresh);
+    const unsubDebt = globalSyncEmitter.on('DEBT_UPDATED', handleSyncRefresh);
+    const unsubProduct = globalSyncEmitter.on('PRODUCT_UPDATED', handleSyncRefresh);
+
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+      unsubDeleted();
+      unsubDebt();
+      unsubProduct();
+    };
   }, [refreshAll]);
 
   const toggleDate = (date) => {

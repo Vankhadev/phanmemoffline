@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { apiJson, apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
+import { globalSyncEmitter } from '../utils/eventEmitter';
 import { Plus, Edit2, Trash2, Search, Loader, FileDown, Upload, X, HelpCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
@@ -97,17 +98,21 @@ export default function NhaCungCap() {
   }, []);
 
   useEffect(() => {
-    const onSyncUpdated = (event) => {
-      const changedTables = event.detail?.changedTables || [];
-      if (changedTables.includes('partners')) {
-        fetchSuppliers();
-      }
-      if (changedTables.includes('imports') || changedTables.includes('import_logs')) {
-        fetchSupplierPaymentSummaries();
-      }
+    const handleSyncRefresh = () => {
+      fetchSuppliers();
+      fetchSupplierPaymentSummaries();
+      console.log('[SYNC] Partners refreshed');
     };
-    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
-    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+
+    const unsubscribeCreated = globalSyncEmitter.on('CUSTOMER_CREATED', handleSyncRefresh);
+    const unsubscribeUpdated = globalSyncEmitter.on('CUSTOMER_UPDATED', handleSyncRefresh);
+    const unsubscribeImported = globalSyncEmitter.on('PRODUCT_IMPORTED', handleSyncRefresh);
+
+    return () => {
+      unsubscribeCreated();
+      unsubscribeUpdated();
+      unsubscribeImported();
+    };
   }, []);
 
   useEffect(() => {

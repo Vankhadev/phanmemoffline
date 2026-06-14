@@ -1,4 +1,5 @@
 import { SYNC_BROADCAST_REQUEST_EVENT, SYNC_UPDATED_EVENT, resolveApiUrl } from './apiClient';
+import { emitGlobalSyncEvents } from './eventEmitter';
 
 const CROSS_TAB_SYNC_CHANNEL = 'vankha-cross-tab-sync';
 const CROSS_TAB_SYNC_STORAGE_KEY = 'vankha.cross-tab-sync.payload';
@@ -39,13 +40,23 @@ function normalizeSyncDetail(detail = {}) {
 function dispatchSyncUpdated(detail, { remote = false, skipBroadcast = false } = {}) {
   if (!isBrowserRuntime()) return;
   const normalizedDetail = normalizeSyncDetail(detail);
+  const op = detail.op || normalizedDetail.op || null;
+  const id = detail.id || normalizedDetail.id || null;
+
+  const mergedDetail = {
+    ...normalizedDetail,
+    op,
+    id,
+    __crossTabSyncRemote: remote,
+    __crossTabSyncSkipBroadcast: skipBroadcast,
+  };
+
   window.dispatchEvent(new CustomEvent(SYNC_UPDATED_EVENT, {
-    detail: {
-      ...normalizedDetail,
-      __crossTabSyncRemote: remote,
-      __crossTabSyncSkipBroadcast: skipBroadcast,
-    },
+    detail: mergedDetail,
   }));
+
+  // Emit on our Global Event System (EventEmitter)
+  emitGlobalSyncEvents(mergedDetail.changedTables, mergedDetail.op, mergedDetail);
 }
 
 function ensureBroadcastChannel() {
@@ -140,6 +151,8 @@ function connectRealtimeSyncSSE() {
           reason: payload.reason || 'sse-sync',
           ts: payload.ts,
           sourceTabId: payload.sourceTabId,
+          op: payload.op,
+          id: payload.id,
         }, {
           remote: true,
           skipBroadcast: true,

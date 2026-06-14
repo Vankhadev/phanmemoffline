@@ -4,7 +4,8 @@ import { resolveApiUrl } from '../utils/apiClient';
 import { Users, FileDown, Plus, X, Edit2, Trash2, Loader, Tag, HelpCircle, UploadCloud, History } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
-import { customerTypesApi, customersApi, getApiErrorMessage, SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { customerTypesApi, customersApi, getApiErrorMessage } from '../utils/apiClient';
+import { globalSyncEmitter } from '../utils/eventEmitter';
 
 const API = resolveApiUrl('');
 
@@ -41,20 +42,19 @@ export default function Customers() {
   useEffect(() => { setLoading(true); Promise.all([fetchCustomers(), fetchCustomerTypes()]).finally(() => setLoading(false)); }, []);
 
   useEffect(() => {
-    const onSyncUpdated = (event) => {
-      const changedTables = event.detail?.changedTables || [];
-      const syncData = event.detail?.data || {};
-      if (changedTables.includes('customers')) {
-        if (Array.isArray(syncData.customers)) setCustomers(syncData.customers);
-        else fetchCustomers();
-      }
-      if (changedTables.includes('customer_types')) {
-        if (Array.isArray(syncData.customer_types)) setCustomerTypes(syncData.customer_types);
-        else fetchCustomerTypes();
-      }
+    const handleSyncRefresh = () => {
+      fetchCustomers();
+      fetchCustomerTypes();
+      console.log('[SYNC] Customers refreshed');
     };
-    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
-    return () => window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+
+    const unsubscribeCreated = globalSyncEmitter.on('CUSTOMER_CREATED', handleSyncRefresh);
+    const unsubscribeUpdated = globalSyncEmitter.on('CUSTOMER_UPDATED', handleSyncRefresh);
+
+    return () => {
+      unsubscribeCreated();
+      unsubscribeUpdated();
+    };
   }, []);
 
   useEffect(() => {

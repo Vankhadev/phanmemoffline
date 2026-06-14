@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiJson, apiJsonChecked, resolveApiUrl, SYNC_UPDATED_EVENT, requestSyncCheck } from '../utils/apiClient';
+import { apiJson, apiJsonChecked, resolveApiUrl, requestSyncCheck } from '../utils/apiClient';
+import { globalSyncEmitter } from '../utils/eventEmitter';
 import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud, Printer, FileDown } from 'lucide-react';
 import { getProductDisplayName } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
@@ -335,37 +336,27 @@ export default function OrderList() {
     };
     checkAndLoad();
 
-    // ── Lắng nghe sự kiện tạo/cập nhật/hủy/thanh toán đơn trong thiết bị hiện tại ──
-    const onOrderCreated = (e) => {
-      const inv = e.detail;
-      if (!inv || inv._syncOnly || !(inv.invoice_code || inv.client_order_id || inv.id)) {
-        fetchInvoices();
-        return;
-      }
-      setAllOrders(prev => dedupeOrdersByInvoiceCode([
-        { ...inv, _isOffline: !inv.invoice_code?.startsWith('HD') },
-        ...prev.filter(o => !sameOrderIdentity(o, inv)),
-      ]));
-      setInvoices(prev => {
-        if (prev.find(i => sameOrderIdentity(i, inv))) return prev;
-        return [{ ...inv, _isOffline: false }, ...prev];
-      });
-    };
-    const onSyncUpdated = (event) => {
-      const changedTables = event.detail?.changedTables || [];
-      const syncData = event.detail?.data || {};
-      if (changedTables.includes('invoices') || changedTables.includes('invoice_details')) {
-        fetchInvoices();
-      }
-      if (Array.isArray(syncData.customers) && changedTables.includes('customers')) setCustomers(syncData.customers);
+    const handleSyncRefresh = () => {
+      fetchInvoices();
+      console.log('[SYNC] OrderList refreshed');
     };
 
-    window.addEventListener('kha-order-created', onOrderCreated);
-    window.addEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+    const handleCustomerSync = () => {
+      apiJson('/customers', {}, 'Không tải được khách hàng.')
+        .then(custData => setCustomers(Array.isArray(custData) ? custData : []))
+        .catch(() => {});
+    };
+
+    const unsubscribeCreated = globalSyncEmitter.on('ORDER_CREATED', handleSyncRefresh);
+    const unsubscribeUpdated = globalSyncEmitter.on('ORDER_UPDATED', handleSyncRefresh);
+    const unsubscribeDeleted = globalSyncEmitter.on('ORDER_DELETED', handleSyncRefresh);
+    const unsubscribeCustomer = globalSyncEmitter.on('CUSTOMER_UPDATED', handleCustomerSync);
 
     return () => {
-      window.removeEventListener('kha-order-created', onOrderCreated);
-      window.removeEventListener(SYNC_UPDATED_EVENT, onSyncUpdated);
+      unsubscribeCreated();
+      unsubscribeUpdated();
+      unsubscribeDeleted();
+      unsubscribeCustomer();
     };
   }, []);
 

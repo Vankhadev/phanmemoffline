@@ -5,7 +5,7 @@
  * Kênh: File log, Electron notification, Email (nếu cấu hình).
  * 
  * Admin: Văn Kha - SĐT: 0904045075
- * Email: [EMAIL_ADDRESS] vankhaqc@gmail.com
+ * Email: [EMAIL_ADDRESS]
  */
 const fs = require('fs');
 const path = require('path');

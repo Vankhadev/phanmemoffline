@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { apiJson, SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import { apiJson, resolveApiUrl } from '../utils/apiClient';
+import { globalSyncEmitter } from '../utils/eventEmitter';
+import { getAuthToken } from '../utils/authStorage';
 import {
   Calendar,
   Download,
@@ -383,57 +385,77 @@ export default function CustomerOrderReport() {
   }, [customerId, from, to]);
 
   useEffect(() => {
-    const handleSync = (event) => {
-      const { changedTables } = event.detail || {};
-      if (!Array.isArray(changedTables)) return;
-      
-      if (changedTables.includes('customers')) {
-        loadCustomers(customerSearch);
-      }
-      if (
-        customerId && 
-        changedTables.some(t => ['invoices', 'invoice_details'].includes(t))
-      ) {
+    const handleCustomerSync = () => {
+      loadCustomers(customerSearch);
+      console.log('[SYNC] CustomerOrderReport refreshed');
+    };
+
+    const handleReportSync = () => {
+      if (customerId) {
         fetchReport();
+        console.log('[SYNC] CustomerOrderReport refreshed');
       }
     };
-    window.addEventListener(SYNC_UPDATED_EVENT, handleSync);
+
+    const unsubscribeCustomerCreated = globalSyncEmitter.on('CUSTOMER_CREATED', handleCustomerSync);
+    const unsubscribeCustomerUpdated = globalSyncEmitter.on('CUSTOMER_UPDATED', handleCustomerSync);
+    const unsubscribeOrderCreated = globalSyncEmitter.on('ORDER_CREATED', handleReportSync);
+    const unsubscribeOrderUpdated = globalSyncEmitter.on('ORDER_UPDATED', handleReportSync);
+    const unsubscribeOrderDeleted = globalSyncEmitter.on('ORDER_DELETED', handleReportSync);
+
     return () => {
-      window.removeEventListener(SYNC_UPDATED_EVENT, handleSync);
+      unsubscribeCustomerCreated();
+      unsubscribeCustomerUpdated();
+      unsubscribeOrderCreated();
+      unsubscribeOrderUpdated();
+      unsubscribeOrderDeleted();
     };
   }, [loadCustomers, fetchReport, customerId, customerSearch]);
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!canExport) return;
 
-    const customerName = report?.customer?.name || selectedCustomer?.name || 'Khách hàng';
-    
-    // Construct the Array of Arrays matching the visual sheet requested
-    const aoa = [
-      ['Tên khách hàng'],
-      [customerName],
-      [],
-      ['STT', 'hóa đơn', 'tiền'],
-      ...invoices.map((invoice, index) => [
-        index + 1,
-        invoice.invoice_code || '',
-        Number(invoice.total) || 0
-      ]),
-      ['', 'tổng', Number(summary.total_amount) || invoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0)]
-    ];
+    setLoadingReport(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({ customer_id: customerId, from, to });
+      const exportUrl = resolveApiUrl(`/invoices/reports/customer-orders/export?${params.toString()}`);
+      
+      const response = await fetch(exportUrl, {
+        headers: {
+          'Authorization': `Bearer ${getAuthToken()}`
+        }
+      });
 
-    const workbook = XLSX.utils.book_new();
-    const orderSheet = XLSX.utils.aoa_to_sheet(aoa);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Không tải được báo cáo Excel.');
+      }
 
-    // Set column widths to look clean
-    orderSheet['!cols'] = [
-      { wch: 15 }, // STT column
-      { wch: 20 }, // hóa đơn column
-      { wch: 20 }, // tiền column
-    ];
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
 
-    XLSX.utils.book_append_sheet(workbook, orderSheet, safeSheetName(customerName));
-    XLSX.writeFile(workbook, `BaoCaoDonHang_${customerName}_${from}_den_${to}.xlsx`);
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let fileName = `BaoCaoCongNo_${report?.customer?.name || selectedCustomer?.name || 'KhachHang'}_${from}_den_${to}.xlsx`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
+        if (match?.[1]) {
+          fileName = decodeURIComponent(match[1].replace(/['"]/g, ''));
+        }
+      }
+
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || 'Lỗi khi tải file báo cáo Excel');
+    } finally {
+      setLoadingReport(false);
+    }
   };
 
   const handlePrintRow = (invoice) => {
