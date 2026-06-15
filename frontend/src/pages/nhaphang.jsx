@@ -757,14 +757,12 @@ const Nhaphang = ({ store }) => {
 
   const categoriesById = useMemo(() => buildCategoriesById(categories), [categories]);
   const selectedSupplierId = getSupplierRecordId(selectedSupplier);
+  // Cho phép nhập bất kỳ sản phẩm nào với bất kỳ nhà cung cấp nào.
+  // Trước đây danh sách sản phẩm bị lọc theo selectedSupplier khiến chỉ
+  // những sản phẩm gắn với NCC đó mới hiện. Giờ luôn dùng toàn bộ allProducts.
   const getScopedProductSearchResults = useCallback((query = '') => {
     const trimmedQuery = query.trim();
-    const scopedProductTree = selectedSupplier
-      ? filterProductTreeBySupplier(allProducts, selectedSupplier, {
-        categoriesById,
-        importHistory: orderHistory,
-      })
-      : allProducts;
+    const scopedProductTree = allProducts;
     const localResults = searchFlatProducts(scopedProductTree, trimmedQuery, {
       categoriesById,
       includeParents: true,
@@ -772,7 +770,7 @@ const Nhaphang = ({ store }) => {
     });
 
     return prepareImportSearchResults(localResults, trimmedQuery, scopedProductTree);
-  }, [allProducts, categoriesById, orderHistory, selectedSupplier]);
+  }, [allProducts, categoriesById]);
 
   const normalizedImportCodeInput = normalizeImportCodeValue(importCodeInput);
   const importCodeInputError = useMemo(() => {

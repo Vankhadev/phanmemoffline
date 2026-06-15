@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.7.9 - 2026-06-15
+
+### Fixed
+
+- Tạo đơn hàng: Tìm kiếm khách hàng bỏ dấu tiếng Việt và không phân biệt hoa/thường. Gõ một ký tự bất kỳ (ví dụ "c") sẽ liệt kê mọi khách hàng có chứa ký tự đó trong tên, mã KH, email, loại, địa chỉ hoặc mã số thuế; số điện thoại vẫn tìm theo các chữ số.
+- Nhập hàng: Bỏ ràng buộc nhà cung cấp khi chọn sản phẩm. Một sản phẩm dù gắn NCC A vẫn có thể nhập từ bất kỳ NCC B/C/M/R/Y nào; sản phẩm chưa gắn NCC cũng nhập được với mọi NCC. Không còn yêu cầu khớp NCC mới hiện sản phẩm trong danh sách chọn.
+
 ## v1.7.8 - 2026-06-14
 
 ### Fixed

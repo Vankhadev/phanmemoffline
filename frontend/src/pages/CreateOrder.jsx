@@ -557,11 +557,26 @@ export default function CreateOrder({ user, store }) {
   const handleProductSearchKeyDown = (event) => {
     if (event.key === 'Escape' && !productSearch) setShowProductSearchResults(false);
   };
-  const filteredCustomers = customers.filter(c =>
-    !customerSearch ||
-    c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    (c.phone || '').includes(customerSearch)
-  );
+  const filteredCustomers = (() => {
+    const rawQuery = (customerSearch || '').trim();
+    if (!rawQuery) return customers;
+    const normQuery = normalizeSearchText(rawQuery);
+    const phoneQuery = rawQuery.replace(/\D+/g, '');
+    return customers.filter((c) => {
+      const haystack = normalizeSearchText([
+        c.name,
+        c.code,
+        c.email,
+        c.customer_type,
+        c.address,
+        c.tax_code,
+      ].filter(Boolean).join(' '));
+      if (normQuery && haystack.includes(normQuery)) return true;
+      const phone = String(c.phone || '').replace(/\D+/g, '');
+      if (phoneQuery && phone.includes(phoneQuery)) return true;
+      return false;
+    });
+  })();
 
   const subtotal = cart.reduce((s, i) => s + (Number(i.line_total) || 0), 0);
 
