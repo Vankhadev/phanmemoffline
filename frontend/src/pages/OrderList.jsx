@@ -236,6 +236,7 @@ export default function OrderList() {
   const [editForm, setEditForm] = useState({});
   const [editDetails, setEditDetails] = useState([]);
   const [editProducts, setEditProducts] = useState([]);
+  const [editProductsState, setEditProductsState] = useState('idle');
   const [editBaselineDetails, setEditBaselineDetails] = useState([]);
   const [editProductSearch, setEditProductSearch] = useState('');
   const [showProductPicker, setShowProductPicker] = useState(false);
@@ -525,25 +526,38 @@ export default function OrderList() {
   const getEditProductStockById = (productId, line = {}) => {
     const product = getEditProductById(productId);
     if (product && Number.isFinite(Number(product.stock))) return Number(product.stock);
-    const fallback = Number(line?.current_stock ?? line?.currentStock ?? line?.max_stock ?? line?.stock);
-    return Number.isFinite(fallback) ? fallback : 0;
+    const fallback = line?.current_stock ?? line?.currentStock ?? line?.max_stock ?? line?.stock;
+    const numericFallback = Number(fallback);
+    return Number.isFinite(numericFallback) ? numericFallback : undefined;
   };
 
-  const editStockValidation = useMemo(() => buildSaleStockValidation(editDetails, {
-    baselineLines: showEdit?._isOffline ? [] : editBaselineDetails,
-    getProductStockById: getEditProductStockById,
-    getLineKey: getEditDetailRowKey,
-    settings: negativeStockSettings,
-  }), [editDetails, editBaselineDetails, editProducts, negativeStockSettings, showEdit]);
-  const hasEditStockError = editStockValidation.hasInvalid;
+  const editProductsReady = showEdit?._isOffline || editProductsState === 'loaded' || editProductsState === 'empty';
+  const editProductsValidationEnabled = editProductsReady && editProductsState !== 'error';
+
+  const editStockValidation = useMemo(() => {
+    if (!editProductsValidationEnabled) {
+      return { hasInvalid: false, errors: [], firstError: null, productStates: new Map(), invalidProductIds: new Set(), invalidLineKeys: new Set(), settings: negativeStockSettings, minimumAllowedStock: 0, warningThreshold: 0, limitMessage: '', summaryMessage: '' };
+    }
+    return buildSaleStockValidation(editDetails, {
+      baselineLines: showEdit?._isOffline ? [] : editBaselineDetails,
+      getProductStockById: getEditProductStockById,
+      getLineKey: getEditDetailRowKey,
+      settings: negativeStockSettings,
+    });
+  }, [editDetails, editBaselineDetails, editProductsValidationEnabled, negativeStockSettings, showEdit]);
+  const hasEditStockError = editProductsValidationEnabled ? editStockValidation.hasInvalid : false;
   const showStockLimitToast = (message = NEGATIVE_STOCK_LIMIT_MESSAGE) => {
     setStockToast({ id: Date.now(), message });
   };
   const guardEditStockBeforeSubmit = () => {
+    if (!editProductsValidationEnabled) return true;
     if (!hasEditStockError) return true;
     showStockLimitToast(editStockValidation.firstError?.message || NEGATIVE_STOCK_LIMIT_MESSAGE);
     return false;
   };
+
+  const editProductsStateLabel = { loading: '�ang t?i d? li?u s?n ph?m...', loaded: '', empty: 'Kh�ng c� d? li?u s?n ph?m d? ki?m tra t?n kho.', error: 'Kh�ng t?i du?c d? li?u s?n ph?m, v?n cho ph�p luu.' }[editProductsState] || '';
+
 
   useEffect(() => {
     if (!showEdit || !hasEditStockError) {
@@ -597,6 +611,7 @@ export default function OrderList() {
       const nextDetails = mergeDuplicateProducts(cartDetails);
       setEditDetails(nextDetails);
       setEditBaselineDetails([]);
+      setEditProductsState('loaded');
       setEditForm({
         customer_id: inv.customer_id || null,
         customer_name: inv.customer_name || 'Khách lẻ',
@@ -628,6 +643,7 @@ export default function OrderList() {
       const nextDetails = mergeDuplicateProducts(data.details || []);
       setEditDetails(nextDetails);
       setEditBaselineDetails(nextDetails.map(item => ({ ...item })));
+      setEditProductsState('loading');
       setEditForm({
         customer_id: data.customer_id || inv.customer_id || null,
         customer_name: data.customer_name || inv.customer_name || '',
@@ -1716,7 +1732,7 @@ export default function OrderList() {
                     </div>
                   </div>
                 </div>
-                {hasEditStockError && (
+                {editProductsState === 'loaded' && hasEditStockError && (
                   <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
                     {editStockValidation.summaryMessage || NEGATIVE_STOCK_LIMIT_MESSAGE}
                   </div>
@@ -1729,8 +1745,13 @@ export default function OrderList() {
               <button onClick={() => { setShowEdit(null); setEditBaselineDetails([]); }} className="flex-1 py-2.5 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">
                 Hủy
               </button>
+              {showEdit && !editProductsReady && (
+                <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                  {editProductsStateLabel || '�ang t?i d? li?u s?n ph?m...'}
+                </div>
+              )}
               <button onClick={handleSaveEdit}
-                disabled={editDetails.length === 0 || saveLoading || hasEditStockError}
+                disabled={editDetails.length === 0 || saveLoading || (editProductsState === 'loaded' && hasEditStockError)}
                 className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-bold">
                 {saveLoading ? '⏳ Đang lưu...' : '💾 Lưu thay đổi'}
               </button>

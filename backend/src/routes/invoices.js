@@ -129,6 +129,16 @@ function toMoney(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function derivePaymentStatus(invoice = {}) {
+  if (isCancelledInvoiceStatus(invoice.status)) return 'cancelled';
+  const total = toMoney(invoice.total);
+  const paid = toMoney(invoice.paid_amount);
+  if (total <= 0) return paid > 0 ? 'paid' : 'unpaid';
+  if (paid >= total) return 'paid';
+  if (paid > 0) return 'partial';
+  return 'unpaid';
+}
+
 function firstNonEmpty(...values) {
   for (const value of values) {
     if (value === undefined || value === null) continue;
@@ -472,6 +482,7 @@ router.get('/reports/customer-orders', (req, res) => {
           paid_amount: Number(inv.paid_amount) || 0,
           change_amount: Number(inv.change_amount) || 0,
           remaining_amount: Number(inv.remaining_amount) || 0,
+          payment_status: derivePaymentStatus(inv),
           delivery_fee: Number(inv.delivery_fee) || 0,
           status: inv.status || '',
           cancelled_at: inv.cancelled_at || null,
@@ -579,6 +590,7 @@ router.get('/', async (req, res) => {
         subtotal: Number(inv.subtotal) || 0,
         paid_amount: Number(inv.paid_amount) || 0,
         remaining_amount: Number(inv.remaining_amount) || 0,
+        payment_status: derivePaymentStatus(inv),
         status: inv.status || 'pending',
         cancelled_at: inv.cancelled_at || null,
         payment_method: inv.payment_method || 'cash',
@@ -595,7 +607,7 @@ router.get('/', async (req, res) => {
     if (includeMeta) return res.json({ ok: true, items: pagedRows, total, limit: limit || total, offset });
     res.json(pagedRows);
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi khi lấy danh sách: ' + err.message });
+    res.status(500).json({ ok: false, error: 'Lỗi khi lấy danh sách: ' + err.message });
   }
 });
 
@@ -621,16 +633,16 @@ router.get('/:id', async (req, res) => {
   try {
     cleanupExpiredCancelledInvoicesForList();
     const inv = await Promise.resolve(getOne('invoices', i => Number(i.id) === Number(req.params.id)));
-    if (!inv || !isInvoiceVisibleInActiveList(inv)) return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+    if (!inv || !isInvoiceVisibleInActiveList(inv)) return res.status(404).json({ ok: false, error: 'Không tìm thấy đơn hàng' });
     const details = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id))
       .map(detail => ({
         ...detail,
         ...resolveInvoiceDetailDisplayFields(detail, id => getOne('products', product => Number(product.id) === Number(id))),
       }));
     const customer = getOne('customers', c => Number(c.id) === Number(inv.customer_id));
-    res.json({ ...inv, customer_name: customer?.name || '', details });
+    res.json({ ok: true, ...inv, payment_status: derivePaymentStatus(inv), customer_name: customer?.name || '', details });
   } catch (err) {
-    res.status(500).json({ error: 'Lỗi: ' + err.message });
+    res.status(500).json({ ok: false, error: 'Lỗi: ' + err.message });
   }
 });
 
@@ -697,9 +709,9 @@ router.put('/:id', async (req, res) => {
         ...(discount_amount !== undefined && { discount_amount }),
         ...(discount_percent !== undefined && { discount_percent }),
         ...(total !== undefined && { total: +total }),
-        ...(paid_amount !== undefined && { paid_amount: +paid_amount || 0 }),
-        ...(change_amount !== undefined && { change_amount: +change_amount || 0 }),
-        ...(remaining_amount !== undefined && { remaining_amount: +remaining_amount || 0 }),
+        ...(paid_amount !== undefined && { paid_amount: Math.max(0, +paid_amount || 0) }),
+        ...(change_amount !== undefined && { change_amount: Math.max(0, +change_amount || 0) }),
+        ...(remaining_amount !== undefined && { remaining_amount: Math.max(0, +remaining_amount || 0) }),
         ...(delivery_fee !== undefined && { delivery_fee: +delivery_fee || 0 }),
         ...(delivery_date !== undefined && { delivery_date: delivery_date || null }),
         ...(invoice_writer !== undefined && { invoice_writer }),
@@ -807,7 +819,7 @@ router.delete('/:id', async (req, res) => {
     res.json(result);
   } catch (err) {
     const status = err.status || 500;
-    res.status(status).json({ error: 'Lỗi khi hủy đơn: ' + err.message });
+    res.status(status).json({ ok: false, error: 'Lỗi khi hủy đơn: ' + err.message });
   }
 });
 
@@ -850,7 +862,7 @@ router.patch('/:id/confirm', async (req, res) => {
     res.json(result);
   } catch (err) {
     const status = err.status || 500;
-    res.status(status).json({ error: 'Lỗi khi xác nhận đơn: ' + err.message });
+    res.status(status).json({ ok: false, error: 'Lỗi khi xác nhận đơn: ' + err.message });
   }
 });
 

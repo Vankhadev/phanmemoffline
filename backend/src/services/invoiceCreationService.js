@@ -290,20 +290,35 @@ function deductStock(productOrVariantId, quantity, options = {}) {
 
 function restoreStock(productOrVariantId, quantity, options = {}) {
   const writeOptions = options.skipSave === true ? { skipSave: true } : {};
+  const normalizedQuantity = Math.max(0, Number(quantity) || 0);
+  if (normalizedQuantity <= 0) return null;
+
   const variant = getOne('products', v => Number(v.id) === Number(productOrVariantId) && v.parent_id != null);
   if (variant) {
-    update('products', variant.id, {
-      stock: (variant.stock || 0) + quantity,
-    }, writeOptions);
-    return;
+    return applyProductStockDeltaLocked({
+      productId: variant.id,
+      detail: { product_name: variant.name, product_sku: variant.sku },
+      delta: normalizedQuantity,
+      quantity: normalizedQuantity,
+      operation: 'hoan kho huy/sua hoa don',
+      options: writeOptions,
+      source: options.source || 'invoice_restore',
+    }).updated;
   }
 
   const product = getOne('products', p => Number(p.id) === Number(productOrVariantId) && !p.parent_id);
   if (product) {
-    update('products', product.id, {
-      stock: (product.stock || 0) + quantity,
-    }, writeOptions);
+    return applyProductStockDeltaLocked({
+      productId: product.id,
+      detail: { product_name: product.name, product_sku: product.sku },
+      delta: normalizedQuantity,
+      quantity: normalizedQuantity,
+      operation: 'hoan kho huy/sua hoa don',
+      options: writeOptions,
+      source: options.source || 'invoice_restore',
+    }).updated;
   }
+  return null;
 }
 
 function findExistingInvoiceByClientOrderId(clientOrderId, accountId = getActiveAccountId()) {
@@ -389,9 +404,10 @@ function buildInvoiceMoneyFields(payload = {}, details = []) {
   const delivery_fee = toNumber(payload.delivery_fee, 0);
   const fallbackTotal = subtotal + vat_amount - discount_amount + delivery_fee;
   const total = toNumber(payload.total, fallbackTotal);
-  const paid_amount = toNumber(payload.paid_amount, 0);
+  const raw_paid = toNumber(payload.paid_amount, 0);
+  const paid_amount = Math.max(0, raw_paid);
   const change_amount = toNumber(payload.change_amount, Math.max(0, paid_amount - total));
-  const remaining_amount = toNumber(payload.remaining_amount, Math.max(0, total - paid_amount));
+  const remaining_amount = Math.max(0, toNumber(payload.remaining_amount, Math.max(0, total - paid_amount)));
 
   return {
     subtotal,

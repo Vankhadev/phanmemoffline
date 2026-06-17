@@ -30,8 +30,10 @@ export default function Customers() {
   const [showHelp, setShowHelp] = useState(false);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [importing, setImporting] = useState(false);
   const customerNameInputRef = useRef(null);
   const typeNameInputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Customer types management
   const [showTypeManager, setShowTypeManager] = useState(false);
@@ -79,18 +81,27 @@ export default function Customers() {
 
   const getErrorMessage = (err, fallback = 'Thao tác thất bại.') => getApiErrorMessage(err?.data || err, err?.message || fallback);
 
-  const fetchCustomers = () => customersApi.list().then(data => setCustomers(Array.isArray(data) ? data : [])).catch(err => {
-    console.error('Không thể tải danh sách khách hàng:', err);
-    alert(getErrorMessage(err, 'Không thể tải danh sách khách hàng.'));
-  });
-  const fetchCustomerTypes = () => customerTypesApi.list().then(data => setCustomerTypes(Array.isArray(data) ? data : [])).catch(err => {
-    console.error('Không thể tải loại khách hàng:', err);
-  });
+  const fetchCustomers = async () => {
+    try {
+      const data = await customersApi.list();
+      setCustomers(Array.isArray(data) ? data : []);
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Kh�ng th? t?i danh s�ch kh�ch h�ng:', err);
+      alert(getErrorMessage(err, 'Kh�ng th? t?i danh s�ch kh�ch h�ng.'));
+      return [];
+    }
+  };
 
-  const getTypeLabel = (typeId) => {
-    if (!typeId) return 'Khách lẻ';
-    const ct = customerTypes.find(t => t.name?.toLowerCase() === String(typeId).toLowerCase());
-    return ct ? ct.name : String(typeId);
+  const fetchCustomerTypes = async () => {
+    try {
+      const data = await customerTypesApi.list();
+      setCustomerTypes(Array.isArray(data) ? data : []);
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Kh�ng th? t?i lo?i kh�ch h�ng:', err);
+      return [];
+    }
   };
   const getTypeColor = (typeId) => {
     if (!typeId) return { backgroundColor: '#f3f4f6', color: '#374151' };
@@ -116,16 +127,25 @@ export default function Customers() {
   const handleSubmit = async () => {
     if (!form.name) return;
     try {
+      const payload = { ...form, active: editing?.active ?? 1 };
       const data = editing
-        ? await customersApi.update(editing.id, { ...form, updated_at: editing.updated_at })
-        : await customersApi.create(form);
+        ? await customersApi.update(editing.id, { ...payload, updated_at: editing.updated_at })
+        : await customersApi.create(payload);
       if (data.ok) {
+        const saved = data.item || { id: data.id, ...payload };
+        setCustomers(prev => {
+          const next = [...prev];
+          const idx = next.findIndex(item => String(item.id) === String(saved.id));
+          if (idx >= 0) next[idx] = { ...next[idx], ...saved };
+          else next.unshift(saved);
+          return next;
+        });
         setShowForm(false);
         await fetchCustomers();
-        alert(editing ? '✅ Đã cập nhật khách hàng!' : '✅ Đã thêm khách hàng!');
+        alert(editing ? '? �� c?p nh?t kh�ch h�ng!' : '? �� th�m kh�ch h�ng!');
       }
     } catch (err) {
-      alert(getErrorMessage(err, editing ? 'Không thể cập nhật khách hàng.' : 'Không thể thêm khách hàng.'));
+      alert(getErrorMessage(err, editing ? 'Kh�ng th? c?p nh?t kh�ch h�ng.' : 'Kh�ng th? th�m kh�ch h�ng.'));
     }
   };
 
@@ -248,6 +268,102 @@ export default function Customers() {
     return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
   };
 
+  const getExcelCellValue = (row, keys) => {
+    if (!row) return '';
+    for (const key of keys) {
+      const value = row[key];
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        return String(value).trim();
+      }
+    }
+    return '';
+  };
+
+  const handleImportExcel = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) {
+        alert('File Excel không có sheet dữ liệu.');
+        return;
+      }
+
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { defval: '', raw: false });
+      const validCustomers = [];
+      let skipped = 0;
+
+      rows.forEach(row => {
+        const isEmptyRow = Object.values(row).every(value => String(value ?? '').trim() === '');
+        if (isEmptyRow) {
+          skipped += 1;
+          return;
+        }
+
+        const customer = {
+          name: getExcelCellValue(row, ['Tên khách hàng', 'Tên KH', 'Họ tên', 'name']),
+          phone: getExcelCellValue(row, ['Số điện thoại', 'SĐT', 'Phone', 'phone']),
+          email: getExcelCellValue(row, ['Email', 'email']),
+          tax_code: getExcelCellValue(row, ['Mã số thuế', 'MST', 'tax_code']),
+          address: getExcelCellValue(row, ['Địa chỉ', 'address']),
+          customer_type: getExcelCellValue(row, ['Nhóm/Loại', 'Loại khách hàng', 'Loại KH', 'customer_type']),
+          note: getExcelCellValue(row, ['Ghi chú', 'note']),
+        };
+
+        if (!customer.name) {
+          skipped += 1;
+          return;
+        }
+
+        if (!customer.customer_type) customer.customer_type = defaultType();
+
+        validCustomers.push(customer);
+      });
+
+      if (validCustomers.length === 0) {
+        alert(`Không có khách hàng hợp lệ để nhập. Lỗi/bỏ qua: ${skipped}.`);
+        return;
+      }
+
+      const confirmed = confirm(
+        `Tìm thấy ${validCustomers.length} khách hàng hợp lệ. Lỗi/bỏ qua: ${skipped}.\nBạn có muốn nhập dữ liệu này không?`
+      );
+      if (!confirmed) return;
+
+      setImporting(true);
+      let success = 0;
+      let failed = 0;
+
+      for (const customer of validCustomers) {
+        try {
+          await customersApi.create(customer);
+          success += 1;
+        } catch (err) {
+          console.error('Lỗi nhập khách hàng:', err);
+          failed += 1;
+        }
+      }
+
+      await fetchCustomers();
+      alert(`Nhập Excel hoàn tất!\n- Thành công: ${success}\n- Lỗi/bỏ qua: ${skipped + failed}`);
+    } catch (err) {
+      console.error('Lỗi đọc file Excel:', err);
+      alert('Không thể đọc file Excel: ' + (err?.message || err));
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const openImportFilePicker = () => {
+    if (importing || !fileInputRef.current) return;
+    fileInputRef.current.value = '';
+    fileInputRef.current.click();
+  };
+
   const exportCustomersList = () => {
     if (filtered.length === 0) {
       alert('Không có khách hàng để xuất Excel.');
@@ -348,19 +464,28 @@ export default function Customers() {
           <Users className="text-blue-600" size={24} /> Quản lý Khách hàng
         </h1>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => navigate('/dong-bo-san-pham?tab=customers&import=1')}
-            className="px-3 py-2 border border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-medium flex items-center gap-1">
-            <UploadCloud size={13} /> Nhập Excel
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleImportExcel}
+            className="absolute left-[-9999px] h-px w-px opacity-0"
+            tabIndex={-1}
+          />
+          <button type="button" onClick={openImportFilePicker}
+            disabled={importing}
+            className="px-3 py-2 border border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
+            <UploadCloud size={13} /> {importing ? 'Đang nhập...' : 'Nhập Excel'}
           </button>
-          <button onClick={() => navigate('/dong-bo-san-pham?tab=customers&import=1')}
-            className="px-3 py-2 border border-yellow-300 text-yellow-600 hover:bg-blue-50 rounded-lg text-xs font-medium flex items-center gap-1">
-            <UploadCloud size={13} /> Xuất Excel
+          <button type="button" onClick={exportCustomersList}
+            className="px-3 py-2 border border-yellow-300 text-yellow-600 hover:bg-yellow-50 rounded-lg text-xs font-medium flex items-center gap-1">
+            <FileDown size={13} /> Xuất Excel
           </button>
-          <button onClick={() => setShowTypeManager(true)}
+          <button type="button" onClick={() => setShowTypeManager(true)}
             className="px-3 py-2 border border-purple-300 text-purple-600 hover:bg-purple-50 rounded-lg text-xs font-medium flex items-center gap-1">
             <Tag size={13} /> Quản lý loại KH
           </button>
-          <button onClick={openAdd} className="btn-primary flex items-center gap-1">
+          <button type="button" onClick={openAdd} className="btn-primary flex items-center gap-1">
             <Plus size={16} /> Thêm khách hàng
           </button>
         </div>

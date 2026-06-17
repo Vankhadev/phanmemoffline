@@ -5,10 +5,17 @@ const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, now } = require('../db/database');
 
+function normalizeCustomerRow(row = {}) {
+  return {
+    ...row,
+    active: row.active === undefined || row.active === null ? 1 : Number(row.active) === 0 ? 0 : 1,
+  };
+}
+
 router.get('/', (req, res) => {
   try {
     const q = String(req.query.q || req.query.search || '').trim().toLowerCase();
-    let customers = getAll('customers', c => c.active !== 0);
+    let customers = getAll('customers', c => Number(c.active) !== 0);
 
     if (q) {
       customers = customers.filter(c => {
@@ -89,15 +96,18 @@ router.put('/:id', (req, res) => {
   const types = getAll('customer_types', t => t.active !== 0);
   const ct = types.find(t => String(t.id) === String(customer_type));
   const typeName = ct ? ct.name : (customer_type || 'Khách lẻ');
-  update('customers', +req.params.id, {
+  const updatedPayload = normalizeCustomerRow({
     name, phone: phone || '', email: email || '',
     tax_code: tax_code || '', customer_type: typeName,
     invoice_type: invoice_type || undefined,
     ...(address !== undefined && { address: address || '' }),
     ...(note !== undefined && { note: note || '' }),
     ...(Object.prototype.hasOwnProperty.call(req.body, 'customer_code') && { customer_code: req.body.customer_code || '' }),
+    ...(Object.prototype.hasOwnProperty.call(req.body, 'active') && { active: req.body.active }),
   });
-  res.json({ ok: true });
+  update('customers', +req.params.id, updatedPayload);
+  const updated = getOne('customers', row => Number(row.id) === Number(req.params.id), { skipAccountScope: true });
+  res.json({ ok: true, item: normalizeCustomerRow(updated || { id: +req.params.id, ...updatedPayload }) });
 });
 
 function parseCustomerId(value) {

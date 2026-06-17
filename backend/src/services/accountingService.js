@@ -146,8 +146,11 @@ function upsertCustomerDebtFromInvoice(invoice = {}, options = {}) {
   if (!invoice.id) return null;
   const accountId = getAccountId(invoice, options);
   const timestamp = normalizeTimestamp(options.timestamp || invoice.updated_at || invoice.created_at);
-  const remaining = isCompletedInvoiceStatus(invoice.status) ? toMoney(invoice.remaining_amount) : 0;
   const total = toMoney(invoice.total);
+  // Clamp remaining vao [0, total] de khong bao gio sinh cong no am.
+  const remaining = isCompletedInvoiceStatus(invoice.status)
+    ? Math.min(Math.max(0, toMoney(invoice.remaining_amount)), Math.max(0, total))
+    : 0;
   const paid = Math.max(0, total - remaining);
   const existing = getOne('customer_debts', row => Number(row.invoice_id) === Number(invoice.id));
   const payload = {
