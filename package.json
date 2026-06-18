@@ -1,6 +1,6 @@
-{
+﻿{
   "name": "phanmienoffline-electron",
-  "version": "1.8.5",
+  "version": "1.8.6",
   "description": "Bán hàng offline ",
   "repository": {
     "type": "git",
@@ -144,3 +144,4 @@
     "electron-builder": "^24.13.3"
   }
 }
+
