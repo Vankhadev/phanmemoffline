@@ -172,6 +172,7 @@ router.post('/restore', (req, res) => {
     // Restore from specific backup
     if (guardian?.dbModule) {
       const fs = require('fs');
+      const { readBackupData } = require('../utils/backupCodec');
       if (!fs.existsSync(backupPath)) {
         return res.status(404).json({ ok: false, error: 'Backup file không tồn tại' });
       }

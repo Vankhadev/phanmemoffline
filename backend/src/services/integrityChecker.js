@@ -8,6 +8,7 @@
  * Nếu dữ liệu giảm bất thường (>5%) → rollback.
  */
 const fs = require('fs');
+const { readBackupData } = require('../utils/backupCodec');
 const path = require('path');
 
 let alertService = null;
@@ -124,8 +125,7 @@ function performPostChangeCheck(dbModule, beforeSnapshot, backupPath, context = 
   if (backupPath && fs.existsSync(backupPath)) {
     try {
       console.log(`[KHA INTEGRITY] Rolling back from backup: ${backupPath}`);
-      const backupContent = fs.readFileSync(backupPath, 'utf8');
-      const backupData = JSON.parse(backupContent);
+      const backupData = readBackupData(backupPath);
       const db = dbModule.getDb();
 
       // Restore critical tables from backup

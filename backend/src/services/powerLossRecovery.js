@@ -13,6 +13,7 @@
  * Không yêu cầu người dùng thao tác.
  */
 const fs = require('fs');
+const { readBackupData } = require('../utils/backupCodec');
 const path = require('path');
 
 const LOCK_FILE_NAME = 'kha-guardian-running.lock';
@@ -141,8 +142,7 @@ function performRecovery(dbModule) {
       if (!result.backupRestore && backupScheduler) {
         const bestBackup = backupScheduler.findBestBackup();
         if (bestBackup) {
-          const content = fs.readFileSync(bestBackup.path, 'utf8');
-          const backupData = JSON.parse(content);
+          const backupData = readBackupData(bestBackup.path, 'utf8');
           const db = dbModule.getDb();
 
           // Merge backup data into current DB

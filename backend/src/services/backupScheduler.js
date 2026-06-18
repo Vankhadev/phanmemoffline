@@ -12,7 +12,9 @@
  */
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const cron = require('node-cron');
+const { encodeBackupData, readBackupData } = require('../utils/backupCodec');
 
 const BACKUP_TIERS = Object.freeze({
   FIVE_MIN: { name: '5min', retention: 12, subDir: 'tier-5min' },
@@ -110,11 +112,11 @@ function runTieredBackup(tier) {
     }
 
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `kha-backup-${tier.name}-${stamp}.json`;
+    const fileName = `kha-backup-${tier.name}-${stamp}.json.gz`;
     const backupPath = path.join(tierDir, fileName);
 
     // Copy database file
-    fs.copyFileSync(dbPath, backupPath);
+    fs.writeFileSync(backupPath, encodeBackupData(dbModule.getDb()));
     lastBackupTimes[tier.name] = Date.now();
     backupStats.total++;
 
@@ -154,7 +156,7 @@ function mirrorBackup(sourcePath, fileName, tier) {
     try {
       const mirrorDir = path.join(root, DATA_PRESERVATION_FOLDER, 'guardian', tier.subDir);
       fs.mkdirSync(mirrorDir, { recursive: true });
-      fs.copyFileSync(sourcePath, path.join(mirrorDir, fileName));
+      fs.writeFileSync(path.join(mirrorDir, fileName), fs.readFileSync(sourcePath));
       // Prune mirrors too
       pruneBackupsForTier(mirrorDir, tier.retention);
     } catch (_) {
@@ -172,7 +174,7 @@ function mirrorToUSB(sourcePath, fileName, tier) {
       try {
         const usbDir = path.join(drive.mount, DATA_PRESERVATION_FOLDER, 'guardian', tier.subDir);
         fs.mkdirSync(usbDir, { recursive: true });
-        fs.copyFileSync(sourcePath, path.join(usbDir, fileName));
+        fs.writeFileSync(path.join(usbDir, fileName), fs.readFileSync(sourcePath));
         console.log(`[KHA BACKUP SCHEDULER] Mirrored to USB: ${drive.mount}`);
       } catch (_) {}
     }
@@ -182,7 +184,7 @@ function mirrorToUSB(sourcePath, fileName, tier) {
 function pruneBackupsForTier(tierDir, retention) {
   try {
     const files = fs.readdirSync(tierDir)
-      .filter(f => f.startsWith('kha-backup-') && f.endsWith('.json'))
+      .filter(f => f.startsWith('kha-backup-') && (f.endsWith('.json') || f.endsWith('.json.gz')))
       .map(f => {
         try {
           const stat = fs.statSync(path.join(tierDir, f));
@@ -236,7 +238,7 @@ function listAllBackups(limit = 50) {
     try {
       if (!fs.existsSync(tierDir)) continue;
       const files = fs.readdirSync(tierDir)
-        .filter(f => f.startsWith('kha-backup-') && f.endsWith('.json'))
+        .filter(f => f.startsWith('kha-backup-') && (f.endsWith('.json') || f.endsWith('.json.gz')))
         .map(f => {
           try {
             const fullPath = path.join(tierDir, f);

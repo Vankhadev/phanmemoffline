@@ -330,9 +330,17 @@ export default function CustomerOrderReport() {
   const canExport = invoices.length > 0 && !loadingReport;
 
   useEffect(() => {
-    if (!selectedCustomer) return;
+    if (!selectedCustomer) {
+      setReport(null);
+      return;
+    }
     setCustomerSearch(customerDisplayName(selectedCustomer));
   }, [selectedCustomer]);
+
+  useEffect(() => {
+    if (!customerId) return;
+    fetchReport();
+  }, [customerId, from, to, fetchReport]);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -349,6 +357,7 @@ export default function CustomerOrderReport() {
     setCustomerSearch(customerDisplayName(customer));
     setShowCustomerResults(false);
     setError('');
+    setReport(null);
   };
 
   const handleInputFocus = () => {

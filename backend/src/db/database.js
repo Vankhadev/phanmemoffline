@@ -6,7 +6,9 @@
  */
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { AsyncLocalStorage } = require('async_hooks');
+const { encodeBackupData, readBackupData, isCompressedBackupPath } = require('../utils/backupCodec');
 
 // === SQLite durable write-through (gate sau KHA_SQLITE=1; mac dinh TAT) ===
 let sqliteEngine = null;
@@ -1251,11 +1253,17 @@ function ensureDbBackupDirectoryExists() {
   fs.mkdirSync(DB_BACKUP_DIR, { recursive: true });
 }
 
+const DB_BACKUP_TOTAL_SIZE_LIMIT_BYTES = Math.max(0, Number(process.env.KHA_DB_BACKUP_TOTAL_SIZE_LIMIT_BYTES) || 2 * 1024 * 1024 * 1024);
+
+function getBackupDisplayName(fileName = '') {
+  return String(fileName || '').replace(/\.gz$/i, '');
+}
+
 function listDbBackups() {
   try {
     ensureDbBackupDirectoryExists();
     return fs.readdirSync(DB_BACKUP_DIR)
-      .filter(file => file.startsWith('phanmienoffline-db-') && file.endsWith('.json'))
+      .filter(file => file.startsWith('phanmienoffline-db-') && (file.endsWith('.json') || file.endsWith('.json.gz')))
       .map(file => {
         const fullPath = path.join(DB_BACKUP_DIR, file);
         try {
@@ -1282,6 +1290,16 @@ function pruneDbBackups(retentionCount = DB_BACKUP_RETENTION_COUNT) {
       // Best-effort retention cleanup only.
     }
   }
+  if (DB_BACKUP_TOTAL_SIZE_LIMIT_BYTES > 0) {
+    let total = backups.slice(0, keep).reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+    for (const backup of backups.slice(keep).reverse()) {
+      if (total <= DB_BACKUP_TOTAL_SIZE_LIMIT_BYTES) break;
+      try {
+        fs.unlinkSync(backup.path);
+        total -= Number(backup.size) || 0;
+      } catch (_error) {}
+    }
+  }
   return backups.slice(0, keep);
 }
 
@@ -1290,14 +1308,14 @@ function createDbBackup(reason = 'manual', options = {}) {
   ensureDbBackupDirectoryExists();
   const safeReason = sanitizeBackupReason(reason);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const fileName = `phanmienoffline-db-${stamp}-${safeReason}.json`;
+  const fileName = `phanmienoffline-db-${stamp}-${safeReason}.json.gz`;
   const backupPath = path.join(DB_BACKUP_DIR, fileName);
-  try { fs.copyFileSync(DB_PATH, backupPath); } catch(e) { console.warn('[KHA DB] primary backup failed:', e.message); return null; }
+  try { fs.writeFileSync(backupPath, encodeBackupData(getDb())); } catch (e) { console.warn('[KHA DB] primary backup failed:', e.message); return null; }
   for (const root of DATA_PRESERVATION_BACKUP_ROOTS) {
     try {
       const mirrorDir = path.join(root, DATA_PRESERVATION_BACKUP_FOLDER, 'database');
       fs.mkdirSync(mirrorDir, { recursive: true });
-      fs.copyFileSync(DB_PATH, path.join(mirrorDir, fileName));
+      fs.writeFileSync(path.join(mirrorDir, fileName), encodeBackupData(getDb()));
     } catch (_error) {
       // Best-effort mirror backup: unavailable drives must not block the local recovery point.
     }
@@ -2172,8 +2190,7 @@ function loadDB(options = {}) {
   let parsed = {};
   let shouldPersist = options.forceSave === true;
   try {
-    const raw = fs.readFileSync(DB_PATH, 'utf8');
-    parsed = raw.trim() ? JSON.parse(raw) : {};
+    parsed = readBackupData(DB_PATH);
   } catch (error) {
     console.warn(`[KHA DB] Failed to read DB file ${path.basename(DB_PATH)}: ${error.message}`);
     backupDB('corrupt');
