@@ -756,7 +756,7 @@ async function startServer() {
   // Start Data Guardian services
   startGuardianServices();
 
-  app.listen(PORT, HOST, () => {
+  const server = app.listen(PORT, HOST, () => {
     console.log(`
 ----------------------------------------------
 📡 KHA Backend listening at http://${HOST}:${PORT}
@@ -766,6 +766,16 @@ DB path: ${dbModule.DB_PATH}
 Started: ${SERVER_STARTED_AT}
 ----------------------------------------------
 `);
+  });
+
+  server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      console.error(`[KHA SERVER] Cong ${PORT} dang bi mot ung dung khac chiem dung (EADDRINUSE).`);
+      console.error('[KHA SERVER] Hay tat ung dung dang giu cong nay, hoac dat bien moi truong PORT=<cong_khac> roi chay lai backend.');
+    } else {
+      console.error('[KHA SERVER] Loi HTTP server:', err && err.message ? err.message : err);
+    }
+    process.exit(1);
   });
 }
 

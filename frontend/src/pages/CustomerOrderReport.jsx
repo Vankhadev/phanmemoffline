@@ -125,7 +125,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
   };
 
   const handlePrint = () => {
-    window.open(`/hoa-don-in/${encodeURIComponent(invoice.invoice_code || invoice.id)}?print=1`, '_blank');
+    window.location.hash = `#/hoa-don-in/${encodeURIComponent(invoice.invoice_code || invoice.id)}?print=1`;
   };
 
   return (
@@ -459,7 +459,7 @@ export default function CustomerOrderReport() {
   };
 
   const handlePrintRow = (invoice) => {
-    window.open(`/hoa-don-in/${encodeURIComponent(invoice.invoice_code || invoice.id)}?print=1`, '_blank');
+    window.location.hash = `#/hoa-don-in/${encodeURIComponent(invoice.invoice_code || invoice.id)}?print=1`;
   };
 
   const handleDownloadRowPdf = async (invoice) => {

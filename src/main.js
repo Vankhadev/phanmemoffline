@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+﻿const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('path');
 const net = require('net');
 const http = require('http');
@@ -228,7 +228,7 @@ async function startBackend() {
       const reason = `Backend process exited (code=${code}, signal=${signal || 'none'})`;
       console.warn(`[KHA Electron] ${reason}`);
       if (healthConfirmed) {
-        quitAfterBackendFatalError('Backend nội bộ đã dừng bất thường', new Error(reason));
+        quitAfterBackendFatalError('Backend ná»™i bá»™ Ä‘Ã£ dá»«ng báº¥t thÆ°á»ng', new Error(reason));
       }
     }
   });
@@ -265,8 +265,8 @@ function showBackendFatalError(title, err) {
   console.error(`[KHA Electron] ${title}:`, err);
   try {
     dialog.showErrorBox(
-      'Không thể chạy backend',
-      `${title}.\n\nỨng dụng desktop cần backend nội bộ hoạt động để đọc/ghi dữ liệu. Ứng dụng sẽ dừng thay vì mở giao diện không có kết nối.\n\nChi tiết:\n${detail}`
+      'KhÃ´ng thá»ƒ cháº¡y backend',
+      `${title}.\n\ná»¨ng dá»¥ng desktop cáº§n backend ná»™i bá»™ hoáº¡t Ä‘á»™ng Ä‘á»ƒ Ä‘á»c/ghi dá»¯ liá»‡u. á»¨ng dá»¥ng sáº½ dá»«ng thay vÃ¬ má»Ÿ giao diá»‡n khÃ´ng cÃ³ káº¿t ná»‘i.\n\nChi tiáº¿t:\n${detail}`
     );
   } catch (_) {
     // Ignore dialog failures in headless/test environments.
@@ -366,7 +366,7 @@ function resolveSilentPrintPageSize(paperSize, widthMm, heightMm) {
 function sanitizePrintPayload(payload = {}) {
   return {
     html: String(payload?.html || ''),
-    jobTitle: String(payload?.jobTitle || 'In tài liệu').trim() || 'In tài liệu',
+    jobTitle: String(payload?.jobTitle || 'In tÃ i liá»‡u').trim() || 'In tÃ i liá»‡u',
     deviceName: String(payload?.deviceName || '').trim(),
     copies: Math.max(1, Math.min(99, Number(payload?.copies) || 1)),
     layout: String(payload?.layout || 'portrait').trim().toLowerCase() === 'landscape' ? 'landscape' : 'portrait',
@@ -410,7 +410,7 @@ function createSilentPrintWindow() {
 
 async function printHtmlSilently(payload = {}) {
   const printRequest = sanitizePrintPayload(payload);
-  if (!printRequest.html.trim()) throw new Error('Thiếu nội dung HTML để in.');
+  if (!printRequest.html.trim()) throw new Error('Thiáº¿u ná»™i dung HTML Ä‘á»ƒ in.');
 
   const printWindow = createSilentPrintWindow();
   const cleanup = () => {
@@ -440,11 +440,11 @@ async function printHtmlSilently(payload = {}) {
     };
 
     printWindow.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
-      finishReject(new Error(`Không thể tải nội dung in: ${errorDescription || errorCode || 'unknown'}`));
+      finishReject(new Error(`KhÃ´ng thá»ƒ táº£i ná»™i dung in: ${errorDescription || errorCode || 'unknown'}`));
     });
 
     printWindow.webContents.once('render-process-gone', (_event, details) => {
-      finishReject(new Error(`Tiến trình in đã dừng: ${details?.reason || 'unknown'}`));
+      finishReject(new Error(`Tiáº¿n trÃ¬nh in Ä‘Ã£ dá»«ng: ${details?.reason || 'unknown'}`));
     });
 
     printWindow.webContents.once('did-finish-load', () => {
@@ -478,7 +478,7 @@ async function printHtmlSilently(payload = {}) {
 
       printWindow.webContents.print(printOptions, (success, failureReason) => {
         if (!success) {
-          finishReject(new Error(failureReason || 'Lệnh in bị từ chối bởi hệ điều hành hoặc máy in.'));
+          finishReject(new Error(failureReason || 'Lá»‡nh in bá»‹ tá»« chá»‘i bá»Ÿi há»‡ Ä‘iá»u hÃ nh hoáº·c mÃ¡y in.'));
           return;
         }
 
@@ -510,15 +510,15 @@ function registerPrintIpc() {
 
 function sanitizeExternalUrl(value) {
   const text = String(value || '').trim();
-  if (!text) throw new Error('Thiếu URL cần mở.');
+  if (!text) throw new Error('Thiáº¿u URL cáº§n má»Ÿ.');
   let parsed;
   try {
     parsed = new URL(text);
   } catch (_) {
-    throw new Error('URL không hợp lệ.');
+    throw new Error('URL khÃ´ng há»£p lá»‡.');
   }
   if (!['https:', 'http:'].includes(parsed.protocol)) {
-    throw new Error('Chỉ cho phép mở link http/https.');
+    throw new Error('Chá»‰ cho phÃ©p má»Ÿ link http/https.');
   }
   return parsed.toString();
 }
@@ -542,7 +542,7 @@ function requestHeadWithRedirects(url, redirectCount = 0) {
       if ([301, 302, 303, 307, 308].includes(statusCode) && location) {
         res.resume();
         if (redirectCount >= 5) {
-          reject(new Error('URL tải chuyển hướng quá nhiều lần.'));
+          reject(new Error('URL táº£i chuyá»ƒn hÆ°á»›ng quÃ¡ nhiá»u láº§n.'));
           return;
         }
         const nextUrl = new URL(location, parsed).toString();
@@ -559,7 +559,7 @@ function requestHeadWithRedirects(url, redirectCount = 0) {
       });
     });
 
-    req.on('timeout', () => req.destroy(new Error('Kiểm tra link tải quá thời gian chờ.')));
+    req.on('timeout', () => req.destroy(new Error('Kiá»ƒm tra link táº£i quÃ¡ thá»i gian chá».')));
     req.on('error', reject);
     req.end();
   });
@@ -570,18 +570,18 @@ async function verifyInstallerDownloadUrl(url) {
   const parsed = new URL(safeUrl);
   const expectedFileName = path.basename(parsed.pathname || '');
   if (!/^banhangoffline-setup-v\d+\.\d+\.\d+-(x64|ia32)\.exe$/i.test(expectedFileName)) {
-    throw new Error(`Tên file tải không đúng định dạng kiến trúc x64/ia32: ${expectedFileName || safeUrl}`);
+    throw new Error(`TÃªn file táº£i khÃ´ng Ä‘Ãºng Ä‘á»‹nh dáº¡ng kiáº¿n trÃºc x64/ia32: ${expectedFileName || safeUrl}`);
   }
 
   const head = await requestHeadWithRedirects(safeUrl);
   if (head.statusCode < 200 || head.statusCode >= 300) {
-    throw new Error(`Link tải trả HTTP ${head.statusCode}.`);
+    throw new Error(`Link táº£i tráº£ HTTP ${head.statusCode}.`);
   }
   if (/text\/html|application\/xhtml\+xml/i.test(head.contentType)) {
-    throw new Error(`Link tải trả Content-Type HTML (${head.contentType}), có thể đang tải nhầm trang web thay vì installer.`);
+    throw new Error(`Link táº£i tráº£ Content-Type HTML (${head.contentType}), cÃ³ thá»ƒ Ä‘ang táº£i nháº§m trang web thay vÃ¬ installer.`);
   }
   if (head.contentLength > 0 && head.contentLength < MIN_INSTALLER_DOWNLOAD_BYTES) {
-    throw new Error(`File tải quá nhỏ (${head.contentLength} bytes), có thể bị rỗng hoặc bị truncate.`);
+    throw new Error(`File táº£i quÃ¡ nhá» (${head.contentLength} bytes), cÃ³ thá»ƒ bá»‹ rá»—ng hoáº·c bá»‹ truncate.`);
   }
 
   return {
@@ -615,8 +615,8 @@ function registerGuardianIpc() {
       const { Notification } = require('electron');
       if (Notification.isSupported()) {
         const notification = new Notification({
-          title: `⚠️ KHA Guardian - ${String(alert.severity || 'alert').toUpperCase()}`,
-          body: String(alert.message || 'Có cảnh báo từ hệ thống bảo vệ dữ liệu').slice(0, 256),
+          title: `âš ï¸ KHA Guardian - ${String(alert.severity || 'alert').toUpperCase()}`,
+          body: String(alert.message || 'CÃ³ cáº£nh bÃ¡o tá»« há»‡ thá»‘ng báº£o vá»‡ dá»¯ liá»‡u').slice(0, 256),
           icon: getAppIconPath(),
           urgency: alert.severity === 'emergency' ? 'critical' : 'normal',
         });
@@ -627,15 +627,15 @@ function registerGuardianIpc() {
       if (alert.severity === 'emergency' || alert.severity === 'critical') {
         dialog.showMessageBox(mainWindow, {
           type: 'warning',
-          title: 'KHA Data Guardian - Cảnh báo',
-          message: String(alert.message || 'Cảnh báo hệ thống').slice(0, 500),
+          title: 'KHA Data Guardian - Cáº£nh bÃ¡o',
+          message: String(alert.message || 'Cáº£nh bÃ¡o há»‡ thá»‘ng').slice(0, 500),
           detail: [
-            `Mức độ: ${alert.severity}`,
+            `Má»©c Ä‘á»™: ${alert.severity}`,
             `Module: ${alert.module || 'unknown'}`,
-            `Thời gian: ${alert.timestamp || new Date().toISOString()}`,
-            `Admin: Văn Kha - 0904045075`,
+            `Thá»i gian: ${alert.timestamp || new Date().toISOString()}`,
+            `Admin: VÄƒn Kha - 0904045075`,
           ].join('\n'),
-          buttons: ['Đã hiểu'],
+          buttons: ['ÄÃ£ hiá»ƒu'],
         }).catch(() => {});
       }
 
@@ -685,6 +685,33 @@ function createWindow() {
     updateManager?.scheduleStartupCheck();
   });
 
+  // === FIX: Chặn mở cửa sổ Electron mới khi frontend gọi window.open() ===
+  // Trước đây thiếu handler nên mỗi window.open() tạo một BrowserWindow mới.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) {
+      shell.openExternal(url).catch(() => {});
+      return { action: 'deny' };
+    }
+    try {
+      const parsed = new URL(url, 'file://');
+      const routePath = (parsed.pathname || '') + (parsed.search || '');
+      const safeRoute = routePath.replace(/\\/g, '/').replace(/'/g, "\\'");
+      mainWindow.webContents.executeJavaScript(
+        "window.location.hash = '#" + safeRoute + "';"
+      ).catch(() => {});
+    } catch (_) {}
+    return { action: 'deny' };
+  });
+
+  // Chặn điều hướng ra ngoài app; link ngoài mở bằng trình duyệt hệ thống.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const current = mainWindow.webContents.getURL();
+    const appOrigin = current.split('#')[0];
+    if (url.split('#')[0] === appOrigin) return; // điều hướng hash nội bộ -> cho phép
+    event.preventDefault();
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url).catch(() => {});
+  });
+
   if (!app.isPackaged && process.env.ELECTRON_DEV_URL) {
     mainWindow.loadURL(process.env.ELECTRON_DEV_URL);
   } else {
@@ -694,6 +721,20 @@ function createWindow() {
 
 if (process.platform === 'win32') {
   app.setAppUserModelId(APP_USER_MODEL_ID);
+}
+
+// === FIX: Ch? cho ph?p 1 instance app ch?y; m? l?n 2 s? focus c?a s? c? ===
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
 }
 
 app.whenReady().then(async () => {
@@ -708,7 +749,7 @@ app.whenReady().then(async () => {
   try {
     await startBackend();
   } catch (err) {
-    quitAfterBackendFatalError('Không thể khởi động backend nội bộ', err);
+    quitAfterBackendFatalError('KhÃ´ng thá»ƒ khá»Ÿi Ä‘á»™ng backend ná»™i bá»™', err);
     return;
   }
   createWindow();
@@ -727,3 +768,4 @@ app.on('before-quit', () => {
   app.isQuitting = true;
   stopBackend();
 });
+

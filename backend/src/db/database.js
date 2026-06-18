@@ -8,6 +8,38 @@ const fs = require('fs');
 const path = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
 
+// === SQLite durable write-through (gate sau KHA_SQLITE=1; mac dinh TAT) ===
+let sqliteEngine = null;
+const KHA_SQLITE_ENABLED = process.env.KHA_SQLITE !== '0'; // Mac dinh BAT, tat bang KHA_SQLITE=0
+if (KHA_SQLITE_ENABLED) { try { sqliteEngine = require('./sqliteEngine'); } catch (_) { sqliteEngine = null; } }
+function engineEnabled() { return KHA_SQLITE_ENABLED && sqliteEngine && sqliteEngine.isAvailable(); }
+function engineEnsureOpen() {
+  if (!engineEnabled()) return false;
+  if (!sqliteEngine.isOpen()) {
+    try { sqliteEngine.open(String(DB_PATH).replace(/\.json$/i, '') + '.sqlite'); }
+    catch (e) { console.warn('[KHA SQLITE] open failed:', e.message); return false; }
+  }
+  return true;
+}
+function engineUpsert(table, row) { if (engineEnsureOpen() && row && row.id != null) { try { sqliteEngine.upsertRow(table, row); } catch (e) { console.warn('[KHA SQLITE] upsert', table, e.message); } } }
+function engineDelete(table, id) { if (engineEnsureOpen() && id != null) { try { sqliteEngine.deleteRow(table, id); } catch (e) { console.warn('[KHA SQLITE] delete', table, e.message); } } }
+function engineReplace(table, rows) { if (engineEnsureOpen()) { try { sqliteEngine.replaceCollection(table, rows); } catch (e) { console.warn('[KHA SQLITE] replace', table, e.message); } } }
+function engineBegin() { if (engineEnsureOpen()) { try { sqliteEngine.begin(); } catch (_) {} } }
+function engineCommit() { if (engineEnabled() && sqliteEngine.isOpen()) { try { sqliteEngine.commit(); } catch (_) {} } }
+function engineRollback() { if (engineEnabled() && sqliteEngine.isOpen()) { try { sqliteEngine.rollback(); } catch (_) {} } }
+function engineFullSync() {
+  if (!engineEnsureOpen()) return;
+  try {
+    if (sqliteEngine.getMeta('full_synced') === true) return;
+    const cur = getDb();
+    sqliteEngine.begin();
+    for (const table of Object.keys(SCHEMA)) { sqliteEngine.replaceCollection(table, Array.isArray(cur[table]) ? cur[table] : []); }
+    sqliteEngine.setMeta('full_synced', true);
+    sqliteEngine.commit();
+    console.log('[KHA SQLITE] full sync done');
+  } catch (e) { try { sqliteEngine.rollback(); } catch (_) {} console.warn('[KHA SQLITE] full sync failed:', e.message); }
+}
+
 const DATA_PRESERVATION_BACKUP_FOLDER = 'backup_du_lieu_phan_mem_no_del';
 const DATA_PRESERVATION_BACKUP_ROOTS = (process.env.KHA_DATA_PRESERVATION_BACKUP_ROOTS || 'C:\\,D:\\,E:\\,F:\\')
   .split(',')
@@ -1260,7 +1292,7 @@ function createDbBackup(reason = 'manual', options = {}) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const fileName = `phanmienoffline-db-${stamp}-${safeReason}.json`;
   const backupPath = path.join(DB_BACKUP_DIR, fileName);
-  fs.copyFileSync(DB_PATH, backupPath);
+  try { fs.copyFileSync(DB_PATH, backupPath); } catch(e) { console.warn('[KHA DB] primary backup failed:', e.message); return null; }
   for (const root of DATA_PRESERVATION_BACKUP_ROOTS) {
     try {
       const mirrorDir = path.join(root, DATA_PRESERVATION_BACKUP_FOLDER, 'database');
@@ -2164,6 +2196,7 @@ function loadDB(options = {}) {
       saveDB();
     }
     hasLoadedDb = true;
+    engineFullSync();
     console.log('[INFO] Migration thành công');
     console.log('[INFO] Đăng nhập bằng dữ liệu cũ thành công');
     return getDb();
@@ -2189,15 +2222,16 @@ function shouldSaveImmediately(options = {}) {
 function withAtomicDbWrite(callback) {
   const isOuterAtomicWrite = atomicWriteDepth <= 0;
   const snapshot = isOuterAtomicWrite ? cloneDbState() : null;
+  if (isOuterAtomicWrite) engineBegin();
   atomicWriteDepth += 1;
   try {
     const result = callback();
     atomicWriteDepth -= 1;
-    if (isOuterAtomicWrite) saveDB();
+    if (isOuterAtomicWrite) { saveDB(); engineCommit(); }
     return result;
   } catch (error) {
     atomicWriteDepth = Math.max(0, atomicWriteDepth - 1);
-    if (isOuterAtomicWrite && snapshot) replaceDB(snapshot);
+    if (isOuterAtomicWrite) { engineRollback(); if (snapshot) replaceDB(snapshot); }
     throw error;
   }
 }
@@ -2335,6 +2369,7 @@ function ensureTable(table) {
 function replaceTable(table, rows, options = {}) {
   const current = getDb();
   current[table] = Array.isArray(rows) ? rows.map(row => ({ ...(row || {}) })) : [];
+  engineReplace(table, current[table]);
   recalculateNextIds();
   if (!options.skipTouch) touchSyncMetadata(table, options.accountId || getActiveAccountId());
   if (shouldSaveImmediately(options)) saveDB();
@@ -2355,6 +2390,7 @@ function insert(table, row, options = {}) {
     }
   }
   rows.push(normalized);
+  engineUpsert(table, normalized);
   current.nextId[table] = Math.max(Number(current.nextId[table]) || 1, id + 1);
   ensureDocumentSequenceForRow(table, normalized);
   if (!options.skipTouch) touchSyncMetadata(table, normalized.account_id || options.accountId || getActiveAccountId());
@@ -2378,6 +2414,7 @@ function update(table, id, changes, options = {}) {
     }
   }
   rows[index] = updated;
+  engineUpsert(table, updated);
   ensureDocumentSequenceForRow(table, updated);
   if (!options.skipTouch) touchSyncMetadata(table, updated.account_id || options.accountId || getActiveAccountId());
   if (shouldSaveImmediately(options)) saveDB();
@@ -2390,6 +2427,7 @@ function remove(table, id, options = {}) {
   const index = rows.findIndex(row => Number(row?.id) === numericId && isRowVisibleForCurrentScope(table, row, options));
   if (index === -1) return null;
   const [removed] = rows.splice(index, 1);
+  engineDelete(table, removed && removed.id);
   if (!options.skipTouch) touchSyncMetadata(table, removed?.account_id || options.accountId || getActiveAccountId());
   if (shouldSaveImmediately(options)) saveDB();
   return removed;

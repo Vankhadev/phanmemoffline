@@ -108,6 +108,11 @@ export default function Customers() {
     const ct = customerTypes.find(t => t.name?.toLowerCase() === String(typeId).toLowerCase());
     return ct ? { backgroundColor: ct.color + '20', color: ct.color, border: `1px solid ${ct.color}40` } : { backgroundColor: '#f3f4f6', color: '#374151' };
   };
+  const getTypeLabel = (typeId) => {
+    if (!typeId) return 'Chưa phân loại';
+    const ct = customerTypes.find(t => t.name?.toLowerCase() === String(typeId).toLowerCase());
+    return ct ? ct.name : typeId;
+  };
   const defaultType = () => customerTypes[0]?.name || 'Khách lẻ';
   const openAdd = () => {
     setEditing(null);
