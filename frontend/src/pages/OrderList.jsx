@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiJson, apiJsonChecked, resolveApiUrl, requestSyncCheck } from '../utils/apiClient';
 import { globalSyncEmitter } from '../utils/eventEmitter';
 import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud, Printer, FileDown } from 'lucide-react';
-import { getProductDisplayName } from '../utils/productSearch';
+import { getProductDisplayName, scoreProductMatch } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
 import {
   NEGATIVE_STOCK_LIMIT_MESSAGE,
@@ -556,6 +556,56 @@ export default function OrderList() {
     return false;
   };
 
+
+  const findCustomerForOrder = useCallback((order = {}) => {
+    const customerId = Number(order.customer_id ?? order.customerId ?? order.payload?.customer_id);
+    if (Number.isFinite(customerId) && customerId > 0) {
+      const byId = customers.find(c => Number(c.id) === customerId);
+      if (byId) return byId;
+    }
+    const orderName = String(order.customer_name || order.payload?.customer_name || '').trim().toLowerCase();
+    const orderPhone = String(order.customer_phone || order.phone || order.payload?.customer_phone || order.payload?.phone || '').trim();
+    if (orderPhone) {
+      const byPhone = customers.find(c => String(c.phone || '').trim() === orderPhone);
+      if (byPhone) return byPhone;
+    }
+    if (orderName && orderName !== 'kh?ch l?' && orderName !== 'khach le') {
+      const byName = customers.find(c => String(c.name || '').trim().toLowerCase() === orderName);
+      if (byName) return byName;
+    }
+    return null;
+  }, [customers]);
+
+  const getLineProductSource = useCallback((line = {}) => getEditProductById(line.variant_id || line.product_id) || line, [editProducts]);
+
+  const repriceEditDetailsForCustomer = useCallback((details = [], customer = null) => {
+    const priceType = customer ? customerTypeToPriceType(customer.customer_type || customer.customer_type_name) : 'retail';
+    return details.map(line => {
+      const unitPrice = getPriceValueByType(getLineProductSource(line), priceType);
+      const quantity = Number(line.quantity) || 1;
+      const discountPercent = Number(line.discount_percent) || 0;
+      const discountAmount = discountPercent > 0 ? quantity * unitPrice * discountPercent / 100 : (Number(line.discount_amount) || 0);
+      return { ...line, unit_price: unitPrice, discount_amount: discountAmount, line_total: quantity * unitPrice - discountAmount };
+    });
+  }, [getLineProductSource]);
+
+  const applyEditCustomer = useCallback((customerIdValue) => {
+    const customerId = Number(customerIdValue) || null;
+    const customer = customerId ? customers.find(c => Number(c.id) === customerId) : null;
+    setEditDetails(prev => {
+      const updated = repriceEditDetailsForCustomer(prev, customer);
+      const sub = updated.reduce((sum, d) => sum + (Number(d.line_total) || 0), 0);
+      setEditForm(f => {
+        const vat = sub * ((Number(f.vat_percent) || 0) / 100);
+        const disc = Number(f.discount_percent) ? sub * Number(f.discount_percent) / 100 : (Number(f.discount_amount) || 0);
+        const total = sub + vat - disc + (Number(f.delivery_fee) || 0);
+        const paid = Number(f.paid_amount) || 0;
+        return { ...f, customer_id: customerId, customer_name: customer?.name || (customerId ? f.customer_name : 'Kh?ch l?'), customer_type: customer?.customer_type || customer?.customer_type_name || (customerId ? f.customer_type : 'Kh?ch l?'), subtotal: sub, vat_amount: vat, total, remaining_amount: Math.max(0, total - paid), change_amount: Math.max(0, paid - total) };
+      });
+      return updated;
+    });
+  }, [customers, repriceEditDetailsForCustomer]);
+
   const editProductsStateLabel = { loading: '�ang t?i d? li?u s?n ph?m...', loaded: '', empty: 'Kh�ng c� d? li?u s?n ph?m d? ki?m tra t?n kho.', error: 'Kh�ng t?i du?c d? li?u s?n ph?m, v?n cho ph�p luu.' }[editProductsState] || '';
 
 
@@ -645,8 +695,9 @@ export default function OrderList() {
       setEditBaselineDetails(nextDetails.map(item => ({ ...item })));
       setEditProductsState('loading');
       setEditForm({
-        customer_id: data.customer_id || inv.customer_id || null,
-        customer_name: data.customer_name || inv.customer_name || '',
+        customer_id: (findCustomerForOrder({ ...inv, ...data })?.id ?? data.customer_id ?? inv.customer_id) || null,
+        customer_name: findCustomerForOrder({ ...inv, ...data })?.name || data.customer_name || inv.customer_name || 'Kh?ch l?',
+        customer_type: findCustomerForOrder({ ...inv, ...data })?.customer_type || data.customer_type || inv.customer_type || 'Kh?ch l?',
         payment_method: data.payment_method || inv.payment_method || 'cash',
         note: data.note || inv.note || '',
         subtotal: data.subtotal || inv.subtotal || 0,
@@ -801,6 +852,8 @@ export default function OrderList() {
           client_order_id: showEdit.client_order_id || showEdit.payload?.client_order_id || '',
           invoice_code: showEdit.invoice_code || showEdit.payload?.invoice_code || '',
           customer_id: editForm.customer_id || null,
+          customer_name: editForm.customer_name || 'Kh?ch l?',
+          customer_type: editForm.customer_type || 'Kh?ch l?',
           payment_method: editForm.payment_method,
           note: editForm.note || '',
           subtotal: sub,
@@ -866,6 +919,8 @@ export default function OrderList() {
     try {
       const payload = {
         customer_id: editForm.customer_id || null,
+        customer_name: editForm.customer_name || 'Kh?ch l?',
+        customer_type: editForm.customer_type || 'Kh?ch l?',
         payment_method: editForm.payment_method,
         note: editForm.note || '',
         subtotal: editForm.subtotal || 0,
@@ -1566,10 +1621,7 @@ export default function OrderList() {
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Khách hàng</label>
                   <select className="input-field w-full text-sm" value={editForm.customer_id || ''}
-                    onChange={e => {
-                      const c = customers.find(x => x.id === +e.target.value);
-                      setEditForm({ ...editForm, customer_id: +e.target.value || null, customer_name: c?.name || '' });
-                    }}>
+                    onChange={e => applyEditCustomer(e.target.value)}>
                     <option value="">-- Khách lẻ --</option>
                     {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
                   </select>
@@ -1780,19 +1832,13 @@ export default function OrderList() {
             <div className="flex-1 overflow-auto px-4 pb-4">
               <div className="space-y-1">
                 {(() => {
-                  const searchLower = editProductSearch.toLowerCase();
                   const customer = editForm.customer_id ? customers.find(c => Number(c.id) === Number(editForm.customer_id)) : null;
                   const activePriceType = customer ? customerTypeToPriceType(customer.customer_type) : 'retail';
                   const getDisplayPrice = (prod) => getPriceValueByType(prod, activePriceType);
 
                   const filteredParents = editProducts.filter(p =>
-                    !editProductSearch ||
-                    p.name.toLowerCase().includes(searchLower) ||
-                    (p.sku || '').toLowerCase().includes(searchLower) ||
-                    (p.variants || []).some(v =>
-                      String(getProductDisplayName(v, p)).toLowerCase().includes(searchLower) ||
-                      (v.sku || '').toLowerCase().includes(searchLower)
-                    )
+                    scoreProductMatch(p, editProductSearch).matched ||
+                    (p.variants || []).some(v => scoreProductMatch(v, editProductSearch, p).matched)
                   );
 
                   return filteredParents.map(parent => {
@@ -1865,15 +1911,9 @@ export default function OrderList() {
                   });
                 })()}
                 {(() => {
-                  const searchLower = editProductSearch.toLowerCase();
                   const filteredParents = editProducts.filter(p =>
-                    !editProductSearch ||
-                    p.name.toLowerCase().includes(searchLower) ||
-                    (p.sku || '').toLowerCase().includes(searchLower) ||
-                    (p.variants || []).some(v =>
-                      String(getProductDisplayName(v, p)).toLowerCase().includes(searchLower) ||
-                      (v.sku || '').toLowerCase().includes(searchLower)
-                    )
+                    scoreProductMatch(p, editProductSearch).matched ||
+                    (p.variants || []).some(v => scoreProductMatch(v, editProductSearch, p).matched)
                   );
                   return filteredParents.length === 0 && (
                     <div className="text-center text-gray-400 py-8">Không tìm thấy sản phẩm</div>

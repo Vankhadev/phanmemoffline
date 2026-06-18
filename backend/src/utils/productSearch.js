@@ -1,7 +1,8 @@
-function normalizeSearchText(value) {
+﻿function normalizeSearchText(value) {
   return String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, match => (match === 'Đ' ? 'D' : 'd'))
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'D')
     .toLowerCase()
@@ -151,3 +152,4 @@ module.exports = {
   scoreProductMatch,
   searchFlatProducts,
 };
+

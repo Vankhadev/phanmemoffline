@@ -1,7 +1,8 @@
-export function normalizeSearchText(value) {
+﻿export function normalizeSearchText(value) {
   return String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, match => (match === 'Đ' ? 'D' : 'd'))
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'D')
     .toLowerCase()
@@ -540,3 +541,4 @@ export function searchFlatProducts(products = [], query = '', options = {}) {
     : rows.sort((a, b) => (b._searchScore || 0) - (a._searchScore || 0) || String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
   return limit > 0 ? sortedRows.slice(0, limit) : sortedRows;
 }
+

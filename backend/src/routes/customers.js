@@ -35,9 +35,15 @@ router.get('/', (req, res) => {
     // Sort A-Z by name
     customers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'vi'));
 
-    // Apply limit to prevent huge payloads and frontend lag
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 1000);
-    const pagedCustomers = customers.slice(0, limit);
+    // Return all customers by default so newly-added customers are never hidden
+    // after the list grows beyond the old 100-row default. A limit can still be
+    // supplied explicitly by search/dropdown screens that need a smaller payload.
+    const hasExplicitLimit = Object.prototype.hasOwnProperty.call(req.query, 'limit');
+    const parsedLimit = parseInt(req.query.limit, 10);
+    const limit = hasExplicitLimit && Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), 10000)
+      : null;
+    const pagedCustomers = limit ? customers.slice(0, limit) : customers;
 
     const types = getAll('customer_types', t => t.active !== 0);
     const invoices = getAll('invoices');
@@ -85,6 +91,7 @@ router.post('/', (req, res) => {
     address: address || '',
     note: note || '',
     customer_code: req.body.customer_code || '',
+    active: 1,
     created_at: now(),
   });
   res.json({ id, ok: true });
