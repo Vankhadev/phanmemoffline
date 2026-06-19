@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-backend",
-  "version": "1.8.8",
+  "version": "1.8.9",
   "description": "Backend for Bán Hàng Pos",
   "main": "src/server.js",
   "scripts": {
