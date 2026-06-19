@@ -675,7 +675,7 @@ export default function PrintTemplateEditorModal({
             onToggleSnap={() => setEditorSettings(current => ({ ...current, editor: { ...current.editor, snapEnabled: current.editor?.snapEnabled === false } }))}
             onFitZoom={handleFitZoom}
             onSaveDraft={saveDraftNow}
-            onPublish={hasConflict ? undefined : handlePublish}
+            onPublish={handlePublish}
             onDiscardDraft={handleDiscardDraft}
             onReload={handleReload}
             onLogoChange={handleLogoChange}

@@ -337,10 +337,6 @@ export default function CustomerOrderReport() {
     setCustomerSearch(customerDisplayName(selectedCustomer));
   }, [selectedCustomer]);
 
-  useEffect(() => {
-    if (!customerId) return;
-    fetchReport();
-  }, [customerId, from, to, fetchReport]);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -392,6 +388,10 @@ export default function CustomerOrderReport() {
       setLoadingReport(false);
     }
   }, [customerId, from, to]);
+  useEffect(() => {
+    if (!customerId) return;
+    fetchReport();
+  }, [customerId, from, to, fetchReport]);
 
   useEffect(() => {
     const handleCustomerSync = () => {

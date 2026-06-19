@@ -14,6 +14,8 @@
  * POST /api/data-guardian/maintenance  - Trigger bảo trì thủ công
  */
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 
 let guardian = null;
@@ -40,6 +42,12 @@ router.get('/status', (_req, res) => {
       if (guardian.transactionJournal) status.modules.journal = guardian.transactionJournal.getStatus();
       if (guardian.realtimeBackup) status.modules.realtimeBackup = guardian.realtimeBackup.getStatus();
       if (guardian.backupScheduler) status.modules.backupScheduler = guardian.backupScheduler.getStatus();
+      if (guardian.dbModule) {
+        status.modules.backupTables = {
+          system_backups: guardian.dbModule.getBackupRecords ? guardian.dbModule.getBackupRecords(5) : [],
+          backup_logs: guardian.dbModule.getBackupLogs ? guardian.dbModule.getBackupLogs(5) : [],
+        };
+      }
       if (guardian.diskHealthMonitor) status.modules.diskHealth = guardian.diskHealthMonitor.getStatus();
       if (guardian.powerLossRecovery) status.modules.powerRecovery = guardian.powerLossRecovery.getStatus();
       if (guardian.databaseAutoRecovery) status.modules.dbRecovery = guardian.databaseAutoRecovery.getStatus();
@@ -66,11 +74,27 @@ router.get('/backups', (_req, res) => {
       result.backups = guardian.backupScheduler.listAllBackups(limit);
     }
 
-    if (guardian?.realtimeBackup) {
-      result.snapshots = guardian.realtimeBackup.listSnapshots(20);
+    if (guardian?.dbModule?.getBackupRecords) {
+      result.records = guardian.dbModule.getBackupRecords(limit);
+    }
+
+    if (guardian?.dbModule?.getBackupLogs) {
+      result.logs = guardian.dbModule.getBackupLogs(Math.min(200, limit * 2));
     }
 
     res.json(result);
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// GET /api/data-guardian/download
+router.get('/download', (_req, res) => {
+  try {
+    const filePath = String(_req.query.path || '').trim();
+    if (!filePath) return res.status(400).json({ ok: false, error: 'Thiếu path backup' });
+    if (!fs.existsSync(filePath)) return res.status(404).json({ ok: false, error: 'Backup file không tồn tại' });
+    return res.download(filePath, path.basename(filePath));
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
@@ -131,21 +155,13 @@ router.post('/backup-now', (_req, res) => {
   try {
     const results = { ok: true, backups: [] };
 
-    // Trigger scheduled backup
     if (guardian?.backupScheduler) {
-      const backup = guardian.backupScheduler.backupEmergency();
-      results.backups.push({ tier: 'emergency', ...backup });
+      const backup = guardian.backupScheduler.backupNow('manual-api');
+      results.backups.push({ tier: 'scheduled', ...backup });
     }
 
-    // Also trigger realtime snapshot
-    if (guardian?.realtimeBackup) {
-      const snapshot = guardian.realtimeBackup.forceSnapshot();
-      if (snapshot) results.backups.push({ tier: 'realtime', ...snapshot });
-    }
-
-    // Also trigger the existing DB backup
     if (guardian?.dbModule && typeof guardian.dbModule.createDbBackup === 'function') {
-      const dbBackup = guardian.dbModule.createDbBackup('manual-api');
+      const dbBackup = guardian.dbModule.createDbBackup('manual-api', { retentionCount: 30 });
       if (dbBackup) results.backups.push({ tier: 'database', ...dbBackup });
     }
 
@@ -169,38 +185,33 @@ router.post('/restore', (req, res) => {
       return res.status(400).json({ ok: false, error: 'Thiếu path backup hoặc database module' });
     }
 
-    // Restore from specific backup
-    if (guardian?.dbModule) {
-      const fs = require('fs');
-      const { readBackupData } = require('../utils/backupCodec');
-      if (!fs.existsSync(backupPath)) {
-        return res.status(404).json({ ok: false, error: 'Backup file không tồn tại' });
-      }
-
-      // Create emergency backup before restore
-      if (guardian.backupScheduler) {
-        guardian.backupScheduler.backupEmergency();
-      }
-
-      // Take integrity snapshot before
-      let beforeSnapshot = null;
-      if (guardian.integrityChecker) {
-        beforeSnapshot = guardian.integrityChecker.takeSnapshot(guardian.dbModule);
-      }
-
-      // Perform restore
-      guardian.dbModule.setDBPath(backupPath);
-      guardian.dbModule.writeDatabaseConfig(backupPath);
-      guardian.dbModule.loadDB({ forceReload: true });
-
-      res.json({
-        ok: true,
-        message: `Đã khôi phục database từ: ${backupPath}`,
-        path: backupPath,
-      });
-    } else {
-      res.status(500).json({ ok: false, error: 'Database module không khả dụng' });
+    if (!guardian?.dbModule) {
+      return res.status(500).json({ ok: false, error: 'Database module không khả dụng' });
     }
+
+    const fs = require('fs');
+    if (!fs.existsSync(backupPath)) {
+      return res.status(404).json({ ok: false, error: 'Backup file không tồn tại' });
+    }
+
+    if (guardian.backupScheduler) guardian.backupScheduler.backupEmergency();
+
+    let result = null;
+    if (guardian.backupScheduler?.restoreBackup) {
+      result = guardian.backupScheduler.restoreBackup(backupPath);
+    } else {
+      const { readBackupData } = require('../utils/backupCodec');
+      const data = readBackupData(backupPath);
+      const db = guardian.dbModule.getDb();
+      for (const key of Object.keys(data)) {
+        if (Array.isArray(data[key])) db[key] = data[key];
+      }
+      if (data.nextId) db.nextId = { ...(db.nextId || {}), ...data.nextId };
+      guardian.dbModule.saveDB();
+      result = { ok: true };
+    }
+
+    res.json({ ok: true, message: `Đã khôi phục database từ: ${backupPath}`, path: backupPath, result });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }

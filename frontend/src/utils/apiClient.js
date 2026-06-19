@@ -1172,6 +1172,22 @@ export const authApi = {
   restoreScan() { return apiJson('/database/restore-scan', { method: 'POST' }, 'Không thể khôi phục dữ liệu.'); },
 };
 
+export const dataGuardianApi = {
+  status() { return apiJson('/data-guardian/status', {}, 'Không thể tải trạng thái backup.'); },
+  backups(params = {}) {
+    const query = new URLSearchParams();
+    if (params.limit) query.set('limit', String(params.limit));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return apiJson(`/data-guardian/backups${suffix}`, {}, 'Không thể tải danh sách backup.');
+  },
+  backupNow() { return apiJson('/data-guardian/backup-now', { method: 'POST' }, 'Không thể tạo backup thủ công.'); },
+  restore(payload = {}) { return apiJson('/data-guardian/restore', { method: 'POST', body: payload }, 'Không thể khôi phục dữ liệu.'); },
+  download(path) {
+    const query = new URLSearchParams({ path: String(path || '') });
+    return apiJson(`/data-guardian/download?${query.toString()}`, {}, 'Không thể tải file backup.');
+  },
+};
+
 export const usersApi = {
   list() { return apiJson('/users', {}, 'Không thể tải danh sách người dùng.'); },
   update(id, payload = {}) { return apiJson(`/users/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }, 'Không thể cập nhật người dùng.'); },

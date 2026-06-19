@@ -153,7 +153,7 @@ function renderItemsTable(data) {
         <td class="text-center">${escapeHtml(item.no)}</td>
         <td>
           <strong>${escapeHtml(item.name)}</strong>
-          ${item.sku ? `<div class="muted">SKU: ${escapeHtml(item.sku)}</div>` : ''}
+
         </td>
         <td class="text-center">${escapeHtml(item.unit)}</td>
         <td class="text-center">${escapeHtml(item.quantity_text)}</td>

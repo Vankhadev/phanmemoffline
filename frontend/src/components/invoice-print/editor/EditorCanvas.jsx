@@ -272,7 +272,8 @@ function TablePreview({ document, payload, selected, zoom, snapEnabled, snapGrid
   const table = document.table || {};
   const items = Array.isArray(payload.items) ? payload.items : [];
   const { zone, frame, pageFrame } = getPageTableFrame(document, items.length, items);
-  const columns = Array.isArray(table.columns) && table.columns.length ? table.columns : [];
+  const showSku = tableStyle.showSku === true;
+  const columns = (Array.isArray(table.columns) && table.columns.length ? table.columns : []).filter(column => showSku || column.key !== 'sku');
   const page = getEditorPaperDimensions(document);
   const tableStyleElement = getTableStyleElement(document) || {};
   const tableStyle = tableStyleElement.style || {};

@@ -1,4 +1,4 @@
-const {
+﻿const {
   getAll,
   getOne,
   insert,
@@ -281,9 +281,21 @@ function calculateInvoiceCost(details = []) {
   return roundMoney((details || []).reduce((sum, detail) => sum + toMoney(detail.quantity) * toMoney(detail.import_price), 0));
 }
 
+function calculateInvoiceRevenue(invoice = {}) {
+  const total = toMoney(invoice.total);
+  const vat = toMoney(invoice.vat_amount);
+  const subtotal = toMoney(invoice.subtotal);
+  const discount = toMoney(invoice.discount_amount);
+  const deliveryFee = toMoney(invoice.delivery_fee);
+  const hasSubtotal = invoice.subtotal !== undefined && invoice.subtotal !== null && String(invoice.subtotal).trim() !== '';
+  const baseRevenue = hasSubtotal ? subtotal : Math.max(0, total - vat);
+  const revenue = baseRevenue + deliveryFee - discount;
+  return roundMoney(Math.max(0, revenue));
+}
+
 function buildInvoiceTransactions(invoice, details, options = {}) {
   const timestamp = normalizeTimestamp(options.timestamp || invoice.updated_at || invoice.created_at);
-  const revenue = roundMoney(invoice.subtotal !== undefined ? invoice.subtotal : Math.max(0, toMoney(invoice.total) - toMoney(invoice.vat_amount)));
+  const revenue = calculateInvoiceRevenue(invoice);
   const vat = roundMoney(invoice.vat_amount);
   const total = roundMoney(invoice.total);
   const remaining = Math.min(total, toMoney(invoice.remaining_amount));
@@ -323,7 +335,7 @@ function rebuildOperationalReportsForDate(date, options = {}) {
   let vat = 0;
   let cost = 0;
   for (const invoice of completed) {
-    revenue += toMoney(invoice.subtotal, Math.max(0, toMoney(invoice.total) - toMoney(invoice.vat_amount)));
+    revenue += calculateInvoiceRevenue(invoice);
     vat += toMoney(invoice.vat_amount);
     cost += calculateInvoiceCost(details.filter(detail => Number(detail.invoice_id) === Number(invoice.id)));
   }
@@ -581,3 +593,4 @@ module.exports = {
   calculateInvoiceCost,
   roundMoney,
 };
+

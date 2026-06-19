@@ -181,6 +181,7 @@ function TableProperties({ document, onUpdateTable, onUpdateElement }) {
         <ToggleField label="Border bảng" checked={style.tableBorder !== false} onChange={value => updateStyle({ tableBorder: value, borderWidthMm: value ? (style.borderWidthMm ?? 0.22) : 0 })} />
         <ToggleField label="Header repeat khi in" checked={table.headerRepeat !== false} onChange={value => onUpdateTable?.({ headerRepeat: value })} />
         <ToggleField label="Cho phép qua trang" checked={table.allowPageBreak !== false} onChange={value => onUpdateTable?.({ allowPageBreak: value })} />
+        <ToggleField label="Hiện SKU" checked={style.showSku === true} onChange={value => updateStyle({ showSku: value })} />
       </section>
       <section>
         <h4>Độ rộng cột ({Math.round(totalWidth * 10) / 10}mm)</h4>

@@ -1,0 +1,30 @@
+{
+  "accounts": [
+    {
+      "id": "acc-1",
+      "name": "Mock Account"
+    }
+  ],
+  "users": [
+    {
+      "id": 1,
+      "name": "Van Kha",
+      "email": "vankhaqc@gmail.com",
+      "phone": "0904045075",
+      "role": "admin",
+      "approved": 1,
+      "active": 1
+    }
+  ],
+  "products": [],
+  "customers": [],
+  "invoices": [],
+  "invoice_details": [],
+  "nextId": {
+    "users": 2,
+    "products": 1,
+    "customers": 1,
+    "invoices": 1,
+    "invoice_details": 1
+  }
+}

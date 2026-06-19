@@ -19,7 +19,7 @@ import {
 import HelpModal from '../components/HelpModal';
 import PrintTemplateEditorModal from '../components/invoice-print/PrintTemplateEditorModal';
 import { buildTemplateJsonFromSettings, DEFAULT_INVOICE_TEMPLATE_SETTINGS, normalizePrintTemplate } from '../components/invoice-print/templateDefaults';
-import { SYNC_UPDATED_EVENT, apiJson, customerTypesApi, getApiErrorMessage, printTemplatesApi, settingsApi, usersApi } from '../utils/apiClient';
+import { SYNC_UPDATED_EVENT, apiJson, customerTypesApi, dataGuardianApi, getApiErrorMessage, printTemplatesApi, settingsApi, usersApi, resolveApiUrl } from '../utils/apiClient';
 import {
   cacheNegativeStockSettings,
   getNegativeStockAdminLimitLabel,
@@ -591,6 +591,13 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const [printTemplateLogoFile, setPrintTemplateLogoFile] = useState(null);
   const [printTemplateLogoPreviewUrl, setPrintTemplateLogoPreviewUrl] = useState('');
 
+  const [backupStatus, setBackupStatus] = useState(null);
+  const [backupItems, setBackupItems] = useState([]);
+  const [backupLogs, setBackupLogs] = useState([]);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupNotice, setBackupNotice] = useState(null);
+  const [restoringBackup, setRestoringBackup] = useState('');
+
   const getErrorMessage = useCallback(
     (error, fallback = 'Thao tác thất bại.') => getApiErrorMessage(error?.data || error, error?.message || fallback),
     [],
@@ -719,6 +726,28 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     }
   }, [getErrorMessage, setTimedNotice]);
 
+  const loadBackups = useCallback(async () => {
+    if (mountedRef.current) setBackupLoading(true);
+    try {
+      const [statusData, listData] = await Promise.all([
+        dataGuardianApi.status(),
+        dataGuardianApi.backups({ limit: 50 }),
+      ]);
+      if (!mountedRef.current) return null;
+      setBackupStatus(statusData?.modules?.backupScheduler || statusData?.modules?.backupTables || null);
+      setBackupItems(Array.isArray(listData?.records) ? listData.records : Array.isArray(listData?.backups) ? listData.backups : []);
+      setBackupLogs(Array.isArray(listData?.logs) ? listData.logs : []);
+      setBackupNotice(null);
+      return statusData;
+    } catch (error) {
+      const message = getErrorMessage(error, 'Không thể tải trạng thái backup.');
+      if (mountedRef.current) setBackupNotice({ tone: 'error', message });
+      return null;
+    } finally {
+      if (mountedRef.current) setBackupLoading(false);
+    }
+  }, [getErrorMessage]);
+
   useEffect(() => {
     if (storeDirty) return;
     setStoreForm(current => ({ ...current, ...normalizeStorePayload(store) }));
@@ -735,6 +764,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
         ...(canViewCustomerTypes ? [{ label: 'loại khách hàng', promise: loadCustomerTypes() }] : []),
         ...(canViewNegativeStock ? [{ label: 'xuất âm tồn kho', promise: loadNegativeStockSettings() }] : []),
         ...(canViewPrintTemplates ? [{ label: 'mẫu in hóa đơn', promise: loadPrintTemplates() }] : []),
+        ...(canAccessSection(['settings.read', 'settings.manage']) ? [{ label: 'backup', promise: loadBackups() }] : []),
       ];
 
       if (sections.length === 0) {
@@ -1417,9 +1447,10 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     if (canViewCustomerTypes) nextTabs.push({ key: 'customer-types', label: 'Loại khách', icon: <Tag size={16} /> });
     if (canViewNegativeStock) nextTabs.push({ key: 'negative-stock', label: 'Xuất âm', icon: <Package size={16} /> });
     if (canViewPrintTemplates) nextTabs.push({ key: 'print-templates', label: 'Mẫu in hóa đơn', icon: <FileText size={16} /> });
+    if (canAccessSection(['settings.read', 'settings.manage'])) nextTabs.push({ key: 'backup', label: 'Backup', icon: <Image size={16} /> });
     if (canViewUpdates) nextTabs.push({ key: 'updates', label: 'Cập nhật', icon: <Settings2 size={16} /> });
     return nextTabs;
-  }, [canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewPrintTemplates, canViewStore, canViewUpdates]);
+  }, [canAccessSection, canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewPrintTemplates, canViewStore, canViewUpdates]);
 
   useEffect(() => {
     if (!tabs.length) return;
@@ -1955,6 +1986,91 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {!initialLoading && tab === 'backup' && (
+        <div className="space-y-4">
+          <div className="card space-y-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="font-bold flex items-center gap-2">
+                  <Image size={18} /> Quản lý Backup
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Backup định kỳ mỗi 72 giờ, giữ tối đa 30 bản gần nhất, nén ZIP và lưu lịch sử vào bảng system_backups / backup_logs.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={loadBackups} disabled={backupLoading} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60">
+                  <Loader2 size={16} className={backupLoading ? 'animate-spin' : ''} /> Tải lại
+                </button>
+                <button type="button" onClick={async () => { setBackupNotice(null); try { await dataGuardianApi.backupNow(); await loadBackups(); setBackupNotice({ tone: 'success', message: 'Đã tạo backup thủ công.' }); } catch (error) { setBackupNotice({ tone: 'error', message: getErrorMessage(error, 'Không thể tạo backup thủ công.') }); } }} disabled={backupLoading} className="btn-success inline-flex min-h-10 items-center gap-2 disabled:opacity-60">
+                  <CheckCircle size={16} /> Backup ngay
+                </button>
+              </div>
+            </div>
+
+            <SectionNotice notice={backupNotice} />
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Lần backup gần nhất</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.lastBackupAt || 'Chưa có'}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Lần backup kế tiếp</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.nextBackupAt || 'Chưa xác định'}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Tổng số file</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.totalBackups ?? backupItems.length}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Trạng thái</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.scheduleRunning ? 'Đang chạy' : 'Đang dừng'}</div></div>
+            </div>
+          </div>
+
+          <div className="card space-y-4">
+            <h3 className="font-bold">Danh sách backup</h3>
+            <div className="overflow-auto rounded-xl border">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3">Tên file</th>
+                    <th className="px-4 py-3">Ngày tạo</th>
+                    <th className="px-4 py-3">Kích thước</th>
+                    <th className="px-4 py-3">Loại</th>
+                    <th className="px-4 py-3">Trạng thái</th>
+                    <th className="px-4 py-3 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {backupItems.map(item => (
+                    <tr key={item.path || item.file} className="border-t">
+                      <td className="px-4 py-3 font-medium text-gray-800">{item.file || item.backup_name || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600">{formatDateTime(item.mtime || item.created_at)}</td>
+                      <td className="px-4 py-3 text-gray-600">{formatBytes(item.size || item.file_size)}</td>
+                      <td className="px-4 py-3 text-gray-600">{item.tier || item.backup_type || 'scheduled'}</td>
+                      <td className="px-4 py-3 text-gray-600">{item.status || 'success'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button type="button" className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium hover:bg-gray-50" onClick={() => window.open(resolveApiUrl(`/data-guardian/download?path=${encodeURIComponent(item.path || '')}`), '_blank')}>Tải xuống</button>
+                          <button type="button" className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-100" onClick={async () => { if (!window.confirm(`Khôi phục từ backup ${item.file || item.backup_name}?`)) return; setRestoringBackup(item.path); try { await dataGuardianApi.restore({ path: item.path }); setBackupNotice({ tone: 'success', message: 'Đã khôi phục backup.' }); await loadBackups(); } catch (error) { setBackupNotice({ tone: 'error', message: getErrorMessage(error, 'Không thể khôi phục backup.') }); } finally { setRestoringBackup(''); } }} disabled={restoringBackup === item.path}>Khôi phục</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {!backupItems.length && (
+                    <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">Chưa có backup nào.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="card space-y-4">
+            <h3 className="font-bold">Backup logs</h3>
+            <div className="space-y-2 text-sm">
+              {backupLogs.slice(0, 10).map(log => (
+                <div key={log.id || `${log.created_at}-${log.backup_file}`} className="rounded-lg border bg-gray-50 px-4 py-3">
+                  <div className="font-medium text-gray-800">{log.backup_file || '—'} · {log.status || 'success'}</div>
+                  <div className="text-xs text-gray-500">{formatDateTime(log.created_at)} · {formatBytes(log.file_size)} · {log.detail || ''}</div>
+                </div>
+              ))}
+              {!backupLogs.length && <div className="text-gray-500">Chưa có log backup.</div>}
+            </div>
+          </div>
         </div>
       )}
 

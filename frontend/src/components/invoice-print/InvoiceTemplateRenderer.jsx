@@ -459,7 +459,8 @@ function V2ItemsTable({ document, data, segment }) {
   const frame = table.frame || { x: 0, y: 0, w: zone.frame?.w || 100 };
   const tableStyleElement = getTableStyleElement(document) || {};
   const tableStyle = tableStyleElement.style || {};
-  const columns = Array.isArray(table.columns) && table.columns.length ? table.columns : [];
+  const showSku = tableStyle.showSku === true;
+  const columns = (Array.isArray(table.columns) && table.columns.length ? table.columns : []).filter(column => showSku || column.key !== 'sku');
   const allItems = data.items || [];
   const startIndex = Number(segment?.startIndex) || 0;
   const endIndex = Number.isFinite(Number(segment?.endIndex)) ? Number(segment.endIndex) : allItems.length;
@@ -514,9 +515,9 @@ function V2ItemsTable({ document, data, segment }) {
                 {columns.map(column => (
                   <td key={column.key} style={{ textAlign: column.align }}>
                     <div className={column.key === 'name' ? 'invoice-template-item-name' : ''}>{getItemValue(item, column.key, absoluteIndex)}</div>
-                    {column.key === 'name' && (item.sku || item.note) && (
+                    {column.key === 'name' && ((showSku && item.sku) || item.note) && (
                       <div className="invoice-template-item-meta">
-                        {item.sku && <span>SKU: {item.sku}</span>}
+                        {showSku && item.sku && <span>SKU: {item.sku}</span>}
                         {item.note && <span>{item.note}</span>}
                       </div>
                     )}
@@ -853,9 +854,8 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
                   <td className="invoice-template-col-no">{index + 1}</td>
                   <td className="invoice-template-col-name">
                     <div className="invoice-template-item-name">{getItemName(item)}</div>
-                    {(item.sku || item.note) && (
+                    {item.note && (
                       <div className="invoice-template-item-meta">
-                        {item.sku && <span>SKU: {item.sku}</span>}
                         {item.note && <span>{item.note}</span>}
                       </div>
                     )}

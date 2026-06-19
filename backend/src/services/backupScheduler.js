@@ -1,33 +1,15 @@
 /**
- * KHA Data Guardian - Multi-Tier Backup Scheduler
- * 
- * Lịch backup đa tầng:
- * - 5 phút/lần (incremental, giữ 12 bản = 1 giờ)
- * - 1 giờ/lần (full, giữ 24 bản = 1 ngày)
- * - 17:30 hằng ngày (end-of-day, giữ 30 bản = 1 tháng)
- * - Trước bảo trì (on demand)
- * - Trước cập nhật (on demand)
- * 
- * Tất cả backup mirror sang đa ổ đĩa (C:\, D:\, E:\, USB).
+ * KHA Data Guardian - Backup Scheduler
+ * Backup định kỳ mỗi 72 giờ, giữ tối đa 30 bản gần nhất.
  */
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
 const cron = require('node-cron');
-const { encodeBackupData, readBackupData } = require('../utils/backupCodec');
-
-const BACKUP_TIERS = Object.freeze({
-  FIVE_MIN: { name: '5min', retention: 12, subDir: 'tier-5min' },
-  HOURLY: { name: 'hourly', retention: 24, subDir: 'tier-hourly' },
-  END_OF_DAY: { name: 'end-of-day', retention: 30, subDir: 'tier-daily' },
-  PRE_MAINTENANCE: { name: 'pre-maintenance', retention: 5, subDir: 'tier-pre-maintenance' },
-  PRE_UPDATE: { name: 'pre-update', retention: 5, subDir: 'tier-pre-update' },
-  EMERGENCY: { name: 'emergency', retention: 10, subDir: 'tier-emergency' },
-});
+const { readBackupData } = require('../utils/backupCodec');
 
 const DATA_PRESERVATION_FOLDER = 'backup_du_lieu_phan_mem_no_del';
-const MIRROR_ROOTS = (process.env.KHA_DATA_PRESERVATION_BACKUP_ROOTS || 'C:\\,D:\\,E:\\,F:\\')
-  .split(',').map(r => r.trim()).filter(Boolean);
+const SCHEDULE_CRON = '0 */12 * * *';
+const AUTO_BACKUP_INTERVAL_MS = 72 * 60 * 60 * 1000;
 
 let baseBackupDir = null;
 let dbModule = null;
@@ -35,49 +17,16 @@ let alertService = null;
 let diskHealthMonitor = null;
 let cronJobs = [];
 let initialized = false;
-let lastBackupTimes = {};
-let backupStats = { total: 0, errors: 0, lastError: null };
 
 function initialize(options = {}) {
   const dataDir = options.dataDir || process.env.ELECTRON_USER_DATA || path.resolve(__dirname, '..', '..', 'data');
-  baseBackupDir = path.join(dataDir, DATA_PRESERVATION_FOLDER);
   dbModule = options.dbModule || null;
   alertService = options.alertService || null;
   diskHealthMonitor = options.diskHealthMonitor || null;
+  baseBackupDir = options.backupDir || dbModule?.DB_BACKUP_DIR || path.join(dataDir, DATA_PRESERVATION_FOLDER);
 
-  // Create tier directories
-  for (const tier of Object.values(BACKUP_TIERS)) {
-    try {
-      fs.mkdirSync(path.join(baseBackupDir, tier.subDir), { recursive: true });
-    } catch (_) {}
-  }
-
+  try { fs.mkdirSync(baseBackupDir, { recursive: true }); } catch (_) {}
   initialized = true;
-  console.log(`[KHA BACKUP SCHEDULER] Initialized. Dir: ${baseBackupDir}`);
-}
-
-function startSchedules() {
-  if (!initialized) return;
-
-  // Stop existing jobs
-  stopSchedules();
-
-  // 5 minutes - incremental backup
-  cronJobs.push(cron.schedule('*/5 * * * *', () => {
-    runTieredBackup(BACKUP_TIERS.FIVE_MIN);
-  }));
-
-  // 1 hour - full backup
-  cronJobs.push(cron.schedule('0 * * * *', () => {
-    runTieredBackup(BACKUP_TIERS.HOURLY);
-  }));
-
-  // 17:30 daily - end of day backup
-  cronJobs.push(cron.schedule('30 17 * * *', () => {
-    runTieredBackup(BACKUP_TIERS.END_OF_DAY);
-  }));
-
-  console.log('[KHA BACKUP SCHEDULER] Cron schedules started (5min, hourly, 17:30 daily)');
 }
 
 function stopSchedules() {
@@ -87,209 +36,89 @@ function stopSchedules() {
   cronJobs = [];
 }
 
-/**
- * Create a backup for a specific tier, with retention and mirroring.
- */
-function runTieredBackup(tier) {
-  if (!initialized || !dbModule) return null;
+function startSchedules() {
+  if (!initialized) return;
+  stopSchedules();
+  cronJobs.push(cron.schedule(SCHEDULE_CRON, () => runScheduledBackup('scheduled-cron')));
+}
 
-  const tierDir = path.join(baseBackupDir, tier.subDir);
-  try {
-    fs.mkdirSync(tierDir, { recursive: true });
-  } catch (_) {}
+function getLatestBackup() {
+  const backups = listAllBackups(1);
+  return backups[0] || null;
+}
 
-  try {
-    const dbPath = dbModule.DB_PATH;
-    if (!dbPath || !fs.existsSync(dbPath)) {
-      return { ok: false, reason: 'db_file_missing' };
-    }
+function shouldRunBackup(nowMs = Date.now()) {
+  const latest = getLatestBackup();
+  if (!latest) return true;
+  return nowMs - latest.mtimeMs >= AUTO_BACKUP_INTERVAL_MS;
+}
 
-    // Check if data has changed since last backup of this tier
-    const lastTime = lastBackupTimes[tier.name] || 0;
-    const dbStat = fs.statSync(dbPath);
-    if (tier.name === '5min' && lastTime > 0 && dbStat.mtimeMs <= lastTime) {
-      return { ok: true, skipped: true, reason: 'no_changes' };
-    }
-
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `kha-backup-${tier.name}-${stamp}.json.gz`;
-    const backupPath = path.join(tierDir, fileName);
-
-    // Copy database file
-    fs.writeFileSync(backupPath, encodeBackupData(dbModule.getDb()));
-    lastBackupTimes[tier.name] = Date.now();
-    backupStats.total++;
-
-    // Mirror to other drives
-    mirrorBackup(backupPath, fileName, tier);
-
-    // Mirror to USB if available
-    mirrorToUSB(backupPath, fileName, tier);
-
-    // Prune old backups
-    pruneBackupsForTier(tierDir, tier.retention);
-
-    const stat = fs.statSync(backupPath);
-    console.log(`[KHA BACKUP SCHEDULER] ${tier.name}: ${fileName} (${(stat.size / 1024).toFixed(1)}KB)`);
-
-    return {
-      ok: true,
-      tier: tier.name,
-      file: fileName,
-      path: backupPath,
-      size: stat.size,
-      created_at: new Date().toISOString(),
-    };
-  } catch (error) {
-    backupStats.errors++;
-    backupStats.lastError = { message: error.message, time: new Date().toISOString(), tier: tier.name };
-    console.error(`[KHA BACKUP SCHEDULER] ${tier.name} error: ${error.message}`);
-    if (alertService) {
-      alertService.sendWarningAlert('backup-scheduler', `Lỗi backup ${tier.name}: ${error.message}`);
-    }
-    return { ok: false, error: error.message };
+function runScheduledBackup(reason = 'scheduled') {
+  if (!initialized || !dbModule || typeof dbModule.createDbBackup !== 'function') return { ok: false, reason: 'not_initialized' };
+  if (!shouldRunBackup()) return { ok: true, skipped: true, reason: 'recent_backup_exists', latest: getLatestBackup() };
+  const backup = dbModule.createDbBackup(reason, { retentionCount: 30 });
+  if (!backup) {
+    if (alertService) alertService.sendWarningAlert('backup-scheduler', 'Không tạo được backup định kỳ.');
+    return { ok: false, error: 'backup_failed' };
   }
+  return { ok: true, backup };
 }
 
-function mirrorBackup(sourcePath, fileName, tier) {
-  for (const root of MIRROR_ROOTS) {
-    try {
-      const mirrorDir = path.join(root, DATA_PRESERVATION_FOLDER, 'guardian', tier.subDir);
-      fs.mkdirSync(mirrorDir, { recursive: true });
-      fs.writeFileSync(path.join(mirrorDir, fileName), fs.readFileSync(sourcePath));
-      // Prune mirrors too
-      pruneBackupsForTier(mirrorDir, tier.retention);
-    } catch (_) {
-      // Best-effort mirror: unavailable drives must not block
-    }
-  }
+function backupNow(reason = 'manual') {
+  return runScheduledBackup(reason);
 }
 
-function mirrorToUSB(sourcePath, fileName, tier) {
-  if (!diskHealthMonitor) return;
+function backupBeforeMaintenance() { return runScheduledBackup('pre-maintenance'); }
+function backupBeforeUpdate() { return runScheduledBackup('pre-update'); }
+function backupEmergency() { return runScheduledBackup('emergency'); }
 
-  try {
-    const usbDrives = diskHealthMonitor.getUSBDrives();
-    for (const drive of usbDrives) {
-      try {
-        const usbDir = path.join(drive.mount, DATA_PRESERVATION_FOLDER, 'guardian', tier.subDir);
-        fs.mkdirSync(usbDir, { recursive: true });
-        fs.writeFileSync(path.join(usbDir, fileName), fs.readFileSync(sourcePath));
-        console.log(`[KHA BACKUP SCHEDULER] Mirrored to USB: ${drive.mount}`);
-      } catch (_) {}
-    }
-  } catch (_) {}
-}
-
-function pruneBackupsForTier(tierDir, retention) {
-  try {
-    const files = fs.readdirSync(tierDir)
-      .filter(f => f.startsWith('kha-backup-') && (f.endsWith('.json') || f.endsWith('.json.gz')))
-      .map(f => {
-        try {
-          const stat = fs.statSync(path.join(tierDir, f));
-          return { file: f, mtimeMs: stat.mtimeMs };
-        } catch (_) { return null; }
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.mtimeMs - a.mtimeMs);
-
-    for (const file of files.slice(retention)) {
-      try {
-        fs.unlinkSync(path.join(tierDir, file.file));
-      } catch (_) {}
-    }
-  } catch (_) {}
-}
-
-/**
- * Trigger a pre-maintenance backup.
- */
-function backupBeforeMaintenance() {
-  console.log('[KHA BACKUP SCHEDULER] Creating pre-maintenance backup...');
-  return runTieredBackup(BACKUP_TIERS.PRE_MAINTENANCE);
-}
-
-/**
- * Trigger a pre-update backup.
- */
-function backupBeforeUpdate() {
-  console.log('[KHA BACKUP SCHEDULER] Creating pre-update backup...');
-  return runTieredBackup(BACKUP_TIERS.PRE_UPDATE);
-}
-
-/**
- * Trigger an emergency backup.
- */
-function backupEmergency() {
-  console.log('[KHA BACKUP SCHEDULER] Creating emergency backup...');
-  return runTieredBackup(BACKUP_TIERS.EMERGENCY);
-}
-
-/**
- * List all backups across all tiers.
- */
 function listAllBackups(limit = 50) {
   if (!baseBackupDir) return [];
-
-  const allBackups = [];
-  for (const tier of Object.values(BACKUP_TIERS)) {
-    const tierDir = path.join(baseBackupDir, tier.subDir);
-    try {
-      if (!fs.existsSync(tierDir)) continue;
-      const files = fs.readdirSync(tierDir)
-        .filter(f => f.startsWith('kha-backup-') && (f.endsWith('.json') || f.endsWith('.json.gz')))
-        .map(f => {
-          try {
-            const fullPath = path.join(tierDir, f);
-            const stat = fs.statSync(fullPath);
-            return {
-              tier: tier.name,
-              file: f,
-              path: fullPath,
-              size: stat.size,
-              mtimeMs: stat.mtimeMs,
-              mtime: new Date(stat.mtimeMs).toISOString(),
-            };
-          } catch (_) { return null; }
-        })
-        .filter(Boolean);
-      allBackups.push(...files);
-    } catch (_) {}
+  try {
+    return fs.readdirSync(baseBackupDir)
+      .filter(file => file.startsWith('phanmienoffline-db-') && file.endsWith('.zip'))
+      .map(file => {
+        const fullPath = path.join(baseBackupDir, file);
+        const stat = fs.statSync(fullPath);
+        return { tier: 'scheduled', file, path: fullPath, size: stat.size, mtimeMs: stat.mtimeMs, mtime: new Date(stat.mtimeMs).toISOString() };
+      })
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)
+      .slice(0, limit);
+  } catch (_) {
+    return [];
   }
-
-  return allBackups
-    .sort((a, b) => b.mtimeMs - a.mtimeMs)
-    .slice(0, limit);
 }
 
-/**
- * Find the best backup for recovery.
- */
 function findBestBackup() {
-  const allBackups = listAllBackups(200);
-  if (allBackups.length === 0) return null;
+  return getLatestBackup();
+}
 
-  // Prefer: end-of-day > hourly > pre-maintenance > 5min > emergency
-  const priority = ['end-of-day', 'pre-maintenance', 'pre-update', 'hourly', '5min', 'emergency'];
-  for (const tierName of priority) {
-    const backup = allBackups.find(b => b.tier === tierName);
-    if (backup && backup.size > 100) return backup;
+function restoreBackup(backupPath) {
+  if (!backupPath || !fs.existsSync(backupPath)) throw new Error('Backup file không tồn tại');
+  const data = readBackupData(backupPath);
+  if (!data || typeof data !== 'object') throw new Error('Backup không hợp lệ');
+  if (!dbModule || typeof dbModule.getDb !== 'function') throw new Error('Database module không khả dụng');
+  const db = dbModule.getDb();
+  for (const key of Object.keys(data)) {
+    if (Array.isArray(data[key])) db[key] = data[key];
   }
-
-  return allBackups[0]; // fallback to most recent
+  if (data.nextId) db.nextId = { ...(db.nextId || {}), ...data.nextId };
+  if (typeof dbModule.saveDB === 'function') dbModule.saveDB();
+  return { ok: true, restoredTables: Object.keys(data).filter(key => Array.isArray(data[key])) };
 }
 
 function getStatus() {
+  const latest = getLatestBackup();
+  const nextAt = latest ? new Date(latest.mtimeMs + AUTO_BACKUP_INTERVAL_MS).toISOString() : null;
   return {
     initialized,
     baseBackupDir,
-    lastBackupTimes: Object.fromEntries(
-      Object.entries(lastBackupTimes).map(([k, v]) => [k, new Date(v).toISOString()])
-    ),
-    stats: backupStats,
+    latestBackup: latest,
+    lastBackupAt: latest?.mtime || null,
+    nextBackupAt: nextAt,
     totalBackups: listAllBackups(1000).length,
     scheduleRunning: cronJobs.length > 0,
+    intervalHours: 72,
   };
 }
 
@@ -302,13 +131,14 @@ module.exports = {
   initialize,
   startSchedules,
   stopSchedules,
-  runTieredBackup,
+  backupNow,
+  runScheduledBackup,
   backupBeforeMaintenance,
   backupBeforeUpdate,
   backupEmergency,
   listAllBackups,
   findBestBackup,
+  restoreBackup,
   getStatus,
   shutdown,
-  BACKUP_TIERS,
 };

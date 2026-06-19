@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const { spawnSync } = require('child_process');
 const { AsyncLocalStorage } = require('async_hooks');
 const { encodeBackupData, readBackupData, isCompressedBackupPath } = require('../utils/backupCodec');
 
@@ -417,8 +418,9 @@ function setDBPath(newPath) {
 let DB_PATH = resolveDBPath();
 
 const DB_BACKUP_DIR = path.resolve(process.env.KHA_DB_BACKUP_DIR || path.join(path.dirname(DB_PATH), DATA_PRESERVATION_BACKUP_FOLDER));
-const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.KHA_DB_BACKUP_RETENTION_COUNT) || 14);
-const DB_BACKUP_MIN_INTERVAL_MS = Math.max(0, Number(process.env.KHA_DB_BACKUP_MIN_INTERVAL_MS) || 20 * 60 * 60 * 1000);
+const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.KHA_DB_BACKUP_RETENTION_COUNT) || 30);
+const DB_BACKUP_MIN_INTERVAL_MS = Math.max(0, Number(process.env.KHA_DB_BACKUP_MIN_INTERVAL_MS) || 72 * 60 * 60 * 1000);
+const DB_BACKUP_MAX_FILE_BYTES = Math.max(0, Number(process.env.KHA_DB_BACKUP_MAX_FILE_BYTES) || 1024 * 1024 * 1024);
 const DEFAULT_ACCOUNT_SLUG = 'default';
 const requestContext = new AsyncLocalStorage();
 
@@ -430,6 +432,8 @@ const SCHEMA = {
   role_permissions: [],
   sync_metadata: [],
   audit_logs: [],
+  system_backups: [],
+  backup_logs: [],
   system_settings: [],
   feature_catalog: [],
   store_info: [],
@@ -729,6 +733,21 @@ function ensureDBDirectoryExists() {
 
 function createEmptyDB() {
   return { ...Object.fromEntries(Object.keys(SCHEMA).map(table => [table, []])), nextId: { ...INITIAL_NEXT_ID } };
+}
+
+function getBackupTables() {
+  return ['system_backups', 'backup_logs'];
+}
+
+function getBackupDataset() {
+  const current = getDb();
+  const data = createEmptyDB();
+  for (const table of Object.keys(SCHEMA)) {
+    if (['backup_logs'].includes(table)) continue;
+    data[table] = Array.isArray(current[table]) ? current[table] : [];
+  }
+  data.nextId = { ...(current.nextId || {}) };
+  return data;
 }
 
 function matchesDatabaseTmpFile(fileName = '') {
@@ -1255,6 +1274,61 @@ function ensureDbBackupDirectoryExists() {
 
 const DB_BACKUP_TOTAL_SIZE_LIMIT_BYTES = Math.max(0, Number(process.env.KHA_DB_BACKUP_TOTAL_SIZE_LIMIT_BYTES) || 2 * 1024 * 1024 * 1024);
 
+function normalizeBackupRecord(record = {}) {
+  return {
+    ...record,
+    backup_type: String(record.backup_type || 'scheduled').trim(),
+    status: String(record.status || 'success').trim(),
+    backup_name: String(record.backup_name || '').trim(),
+    file_path: String(record.file_path || '').trim(),
+    note: String(record.note || '').trim(),
+    created_at: record.created_at || now(),
+  };
+}
+
+function ensureBackupTables() {
+  const current = getDb();
+  for (const table of ['system_backups', 'backup_logs']) {
+    if (!Array.isArray(current[table])) current[table] = [];
+    if (!current.nextId || typeof current.nextId !== 'object') current.nextId = { ...INITIAL_NEXT_ID };
+    if (current.nextId[table] == null) current.nextId[table] = 1;
+  }
+}
+
+function getBackupRecords(limit = 1000) {
+  ensureBackupTables();
+  return getAll('system_backups', null, { skipAccountScope: true })
+    .slice()
+    .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+    .slice(0, Math.max(1, Number(limit) || 1000));
+}
+
+function getBackupLogs(limit = 200) {
+  ensureBackupTables();
+  return getAll('backup_logs', null, { skipAccountScope: true })
+    .slice()
+    .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+    .slice(0, Math.max(1, Number(limit) || 200));
+}
+
+function addBackupRecord(record = {}, options = {}) {
+  ensureBackupTables();
+  const payload = normalizeBackupRecord(record);
+  const inserted = insert('system_backups', payload, { skipSave: options.skipSave === true, skipTouch: true, skipAccountScope: true });
+  return getOne('system_backups', row => Number(row.id) === Number(inserted), { skipAccountScope: true });
+}
+
+function addBackupLog(record = {}, options = {}) {
+  ensureBackupTables();
+  const payload = {
+    ...record,
+    status: String(record.status || 'success').trim(),
+    created_at: record.created_at || now(),
+  };
+  const inserted = insert('backup_logs', payload, { skipSave: options.skipSave === true, skipTouch: true, skipAccountScope: true });
+  return getOne('backup_logs', row => Number(row.id) === Number(inserted), { skipAccountScope: true });
+}
+
 function getBackupDisplayName(fileName = '') {
   return String(fileName || '').replace(/\.gz$/i, '');
 }
@@ -1263,7 +1337,7 @@ function listDbBackups() {
   try {
     ensureDbBackupDirectoryExists();
     return fs.readdirSync(DB_BACKUP_DIR)
-      .filter(file => file.startsWith('phanmienoffline-db-') && (file.endsWith('.json') || file.endsWith('.json.gz')))
+      .filter(file => file.startsWith('phanmienoffline-db-') && (file.endsWith('.zip') || file.endsWith('.json') || file.endsWith('.json.gz')))
       .map(file => {
         const fullPath = path.join(DB_BACKUP_DIR, file);
         try {
@@ -1306,29 +1380,59 @@ function pruneDbBackups(retentionCount = DB_BACKUP_RETENTION_COUNT) {
 function createDbBackup(reason = 'manual', options = {}) {
   if (!fs.existsSync(DB_PATH)) return null;
   ensureDbBackupDirectoryExists();
+  ensureBackupTables();
   const safeReason = sanitizeBackupReason(reason);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const fileName = `phanmienoffline-db-${stamp}-${safeReason}.json.gz`;
+  const backupData = getBackupDataset();
+  const fileName = `phanmienoffline-db-${stamp}-${safeReason}.zip`;
   const backupPath = path.join(DB_BACKUP_DIR, fileName);
-  try { fs.writeFileSync(backupPath, encodeBackupData(getDb())); } catch (e) { console.warn('[KHA DB] primary backup failed:', e.message); return null; }
-  for (const root of DATA_PRESERVATION_BACKUP_ROOTS) {
-    try {
-      const mirrorDir = path.join(root, DATA_PRESERVATION_BACKUP_FOLDER, 'database');
-      fs.mkdirSync(mirrorDir, { recursive: true });
-      fs.writeFileSync(path.join(mirrorDir, fileName), encodeBackupData(getDb()));
-    } catch (_error) {
-      // Best-effort mirror backup: unavailable drives must not block the local recovery point.
+  const tempDir = fs.mkdtempSync(path.join(path.dirname(DB_BACKUP_DIR), 'kha-backup-'));
+  const tempJson = path.join(tempDir, 'database.json');
+  const tempManifest = path.join(tempDir, 'manifest.json');
+  try {
+    fs.writeFileSync(tempJson, JSON.stringify(backupData, null, 2), 'utf8');
+    fs.writeFileSync(tempManifest, JSON.stringify({
+      backup_name: fileName,
+      backup_type: safeReason,
+      created_at: now(),
+      total_records: Object.keys(SCHEMA).reduce((sum, table) => sum + (Array.isArray(backupData[table]) ? backupData[table].length : 0), 0),
+    }, null, 2), 'utf8');
+
+    const zipCmd = `Compress-Archive -Path '${tempJson.replace(/'/g, "''")}', '${tempManifest.replace(/'/g, "''")}' -DestinationPath '${backupPath.replace(/'/g, "''")}' -CompressionLevel Optimal -Force`;
+    const zipResult = spawnSync('powershell', ['-NoProfile', '-Command', zipCmd], { encoding: 'utf8' });
+    if (zipResult.status !== 0 || !fs.existsSync(backupPath)) {
+      throw new Error(zipResult.stderr || zipResult.stdout || 'Compress-Archive failed');
     }
+
+    const stat = fs.statSync(backupPath);
+    const totalRecords = Object.keys(SCHEMA).reduce((sum, table) => sum + (Array.isArray(backupData[table]) ? backupData[table].length : 0), 0);
+    const record = addBackupRecord({ backup_name: fileName, backup_type: safeReason, file_path: backupPath, file_size: stat.size, total_records: totalRecords, status: 'success', note: '' }, { skipSave: true });
+    addBackupLog({ backup_file: fileName, file_size: stat.size, total_records: totalRecords, status: 'success', detail: `Backup ${safeReason} created`, backup_id: record?.id || null }, { skipSave: true });
+
+    for (const root of DATA_PRESERVATION_BACKUP_ROOTS) {
+      try {
+        const mirrorDir = path.join(root, DATA_PRESERVATION_BACKUP_FOLDER, 'database');
+        fs.mkdirSync(mirrorDir, { recursive: true });
+        fs.copyFileSync(backupPath, path.join(mirrorDir, fileName));
+      } catch (_error) {}
+    }
+
+    if (options.skipRetention !== true) pruneDbBackups(options.retentionCount || DB_BACKUP_RETENTION_COUNT);
+    return {
+      path: backupPath,
+      file: path.basename(backupPath),
+      reason: safeReason,
+      size: stat.size,
+      created_at: now(),
+      total_records: totalRecords,
+    };
+  } catch (error) {
+    console.warn('[KHA DB] primary backup failed:', error.message);
+    addBackupLog({ backup_file: fileName, file_size: 0, total_records: 0, status: 'failed', detail: error.message }, { skipSave: true });
+    return null;
+  } finally {
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
   }
-  const stat = fs.statSync(backupPath);
-  if (options.skipRetention !== true) pruneDbBackups(options.retentionCount || DB_BACKUP_RETENTION_COUNT);
-  return {
-    path: backupPath,
-    file: path.basename(backupPath),
-    reason: safeReason,
-    size: stat.size,
-    created_at: new Date().toISOString(),
-  };
 }
 
 function backupDB(reason = 'migration') {
@@ -2203,6 +2307,7 @@ function loadDB(options = {}) {
     nextDB[table] = Array.isArray(parsed[table]) ? parsed[table] : [];
   }
   nextDB.nextId = { ...INITIAL_NEXT_ID, ...(parsed.nextId || {}) };
+  ensureBackupTables();
 
   try {
     replaceDB(nextDB);
@@ -2224,7 +2329,6 @@ function loadDB(options = {}) {
 }
 
 function saveDB() {
-  createDbBackup('before-write-recovery-point', { skipRetention: true });
   atomicWriteJSON(DB_PATH, getDb());
 }
 
@@ -2755,4 +2859,3 @@ Object.defineProperty(exportsObject, 'DB_BACKUP_DIR', {
 module.exports = exportsObject;
 
 loadDB();
-

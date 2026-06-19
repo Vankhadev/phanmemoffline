@@ -387,10 +387,10 @@ cron.schedule('*/30 * * * *', () => {
 });
 
 // ============================================================
-//  CRON: mỗi ngày 02:30 - backup DB JSON với retention gọn
+//  CRON: kiểm tra backup định kỳ 72 giờ/lần
 // ============================================================
-cron.schedule('30 2 * * *', () => {
-  runDbBackup('scheduler-daily');
+cron.schedule('0 */12 * * *', () => {
+  runDbBackup('scheduler-72h');
 });
 
 // ============================================================
@@ -600,8 +600,6 @@ function hookGuardianIntoDatabase() {
   dbModule.insert = function guardianInsert(table, row, options = {}) {
     const result = originalInsert.call(this, table, row, options);
     transactionJournal.writeEntry('insert', table, result?.id || row?.id, { after: result || row });
-    realtimeBackup.onDataChange(table, 'insert', result?.id || row?.id);
-
     // Ghi nhận lịch sử và phát realtime
     const ctx = getRequestContext();
     if (!options.skipHistory && table !== 'edit_history') {
@@ -621,8 +619,6 @@ function hookGuardianIntoDatabase() {
     const before = dbModule.getOne(table, r => r.id === id);
     const result = originalUpdate.call(this, table, id, changes, options);
     transactionJournal.writeEntry('update', table, id, { before, after: changes });
-    realtimeBackup.onDataChange(table, 'update', id);
-
     // Ghi nhận lịch sử và phát realtime
     const ctx = getRequestContext();
     if (!options.skipHistory && table !== 'edit_history') {
@@ -652,7 +648,6 @@ function hookGuardianIntoDatabase() {
     if (safetyResult.action === 'soft_delete') {
       // Convert to update with soft-delete fields
       transactionJournal.writeEntry('update', table, id, { before: existingRow, after: safetyResult.data });
-      realtimeBackup.onDataChange(table, 'update', id);
       result = originalUpdate.call(this, table, id, safetyResult.data, options);
 
       // Ghi nhận lịch sử và phát realtime
@@ -669,7 +664,6 @@ function hookGuardianIntoDatabase() {
 
     // Allow delete for non-protected tables
     transactionJournal.writeEntry('delete', table, id, { before: existingRow });
-    realtimeBackup.onDataChange(table, 'delete', id);
     result = originalRemove.call(this, table, id, options);
 
     // Ghi nhận lịch sử và phát realtime

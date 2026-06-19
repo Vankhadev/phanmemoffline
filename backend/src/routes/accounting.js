@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const {
   getAll,
@@ -188,7 +188,7 @@ router.get('/summary/revenue-profit', requireAnyPermission(['revenue_reports.rea
     let vat = 0;
     let cost = 0;
     for (const invoice of invoices) {
-      revenue += toNumber(invoice.subtotal, Math.max(0, toNumber(invoice.total) - toNumber(invoice.vat_amount)));
+      revenue += accountingService.calculateInvoiceRevenue(invoice);
       vat += toNumber(invoice.vat_amount);
       cost += accountingService.calculateInvoiceCost(details.filter(detail => Number(detail.invoice_id) === Number(invoice.id)));
     }
@@ -375,3 +375,4 @@ router.get('/logs/:id', requirePermission('activity_logs.read'), (req, res) => {
 });
 
 module.exports = router;
+

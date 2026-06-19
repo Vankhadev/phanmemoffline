@@ -475,6 +475,7 @@ function estimateItemsTableRowHeightMm(item = {}, index = 0, columns = [], table
   const padding = Number(tableStyle.paddingMm ?? 1.35);
   const lineHeight = Number(tableStyle.lineHeight) || 1.18;
   const bodyFont = Number(tableStyle.fontSizePt) || 8.2;
+  const showSku = tableStyle.showSku === true;
   const lineMm = Math.max(2.8, bodyFont * 0.3528 * lineHeight);
   const baseRowMm = Math.max(4.8, lineMm + padding * 2);
   const maxLines = (Array.isArray(columns) && columns.length ? columns : DEFAULT_TABLE_COLUMNS).reduce((max, column) => {
@@ -482,7 +483,7 @@ function estimateItemsTableRowHeightMm(item = {}, index = 0, columns = [], table
     const width = Math.max(4, Number(column.widthMm) || 20);
     let lines = estimateTextLineCount(getEstimatedItemCellText(item, key, index), width, bodyFont);
     if (key === 'name') {
-      if (item.sku || item.product_sku) lines += 1;
+      if (showSku && (item.sku || item.product_sku)) lines += 1;
       if (item.note) lines += estimateTextLineCount(item.note, width, Math.max(6, bodyFont * 0.85));
     }
     return Math.max(max, lines);
@@ -677,6 +678,7 @@ function defaultTableStyleElement(bodyZone, tableFrame) {
       headerFontWeight: 900,
       lineHeight: 1.15,
       widthPercent: 100,
+      showSku: false,
     },
   };
 }
