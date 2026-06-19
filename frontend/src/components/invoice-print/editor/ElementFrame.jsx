@@ -291,8 +291,8 @@ export default function ElementFrame({
     window.addEventListener('pointercancel', handlePointerUp, { passive: false });
   }, [element.frame, element.id, handlePointerMove, handlePointerUp, lockY, locked, onGestureStart, onSelect, snapEnabled, snapGridMm, snapTargets, zone, zoom]);
 
-  useEffect(() => () => finishGesture({ commit: false }), [finishGesture]);
 
+  useEffect(() => () => finishGesture({ commit: false }), [finishGesture]);
   return (
     <div
       className={`invoice-editor-element-frame ${selected ? 'is-selected' : ''} ${dragging ? 'is-dragging' : ''} ${locked ? 'is-locked' : ''}`}
