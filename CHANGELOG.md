@@ -1,56 +1,64 @@
+﻿
+## v1.9.2 - 2026-06-20
+
+### Fixed
+
+- Fix app icon: include app-icon.ico in packaged Electron app.
+- Add fallback favicon for Windows tab to ensure proper icon display.
+
 # Changelog
 
 ## v1.7.9 - 2026-06-15
 
 ### Fixed
 
-- Tạo đơn hàng: Tìm kiếm khách hàng bỏ dấu tiếng Việt và không phân biệt hoa/thường. Gõ một ký tự bất kỳ (ví dụ "c") sẽ liệt kê mọi khách hàng có chứa ký tự đó trong tên, mã KH, email, loại, địa chỉ hoặc mã số thuế; số điện thoại vẫn tìm theo các chữ số.
-- Nhập hàng: Bỏ ràng buộc nhà cung cấp khi chọn sản phẩm. Một sản phẩm dù gắn NCC A vẫn có thể nhập từ bất kỳ NCC B/C/M/R/Y nào; sản phẩm chưa gắn NCC cũng nhập được với mọi NCC. Không còn yêu cầu khớp NCC mới hiện sản phẩm trong danh sách chọn.
+- Táº¡o Ä‘Æ¡n hÃ ng: TÃ¬m kiáº¿m khÃ¡ch hÃ ng bá» dáº¥u tiáº¿ng Viá»‡t vÃ  khÃ´ng phÃ¢n biá»‡t hoa/thÆ°á»ng. GÃµ má»™t kÃ½ tá»± báº¥t ká»³ (vÃ­ dá»¥ "c") sáº½ liá»‡t kÃª má»i khÃ¡ch hÃ ng cÃ³ chá»©a kÃ½ tá»± Ä‘Ã³ trong tÃªn, mÃ£ KH, email, loáº¡i, Ä‘á»‹a chá»‰ hoáº·c mÃ£ sá»‘ thuáº¿; sá»‘ Ä‘iá»‡n thoáº¡i váº«n tÃ¬m theo cÃ¡c chá»¯ sá»‘.
+- Nháº­p hÃ ng: Bá» rÃ ng buá»™c nhÃ  cung cáº¥p khi chá»n sáº£n pháº©m. Má»™t sáº£n pháº©m dÃ¹ gáº¯n NCC A váº«n cÃ³ thá»ƒ nháº­p tá»« báº¥t ká»³ NCC B/C/M/R/Y nÃ o; sáº£n pháº©m chÆ°a gáº¯n NCC cÅ©ng nháº­p Ä‘Æ°á»£c vá»›i má»i NCC. KhÃ´ng cÃ²n yÃªu cáº§u khá»›p NCC má»›i hiá»‡n sáº£n pháº©m trong danh sÃ¡ch chá»n.
 
 ## v1.7.8 - 2026-06-14
 
 ### Fixed
 
-- Đồng bộ dữ liệu đa tab: Xây dựng hệ thống sự kiện toàn cục (Global Event System), cơ chế cache GET API thông minh ở client giúp đồng bộ tức thì (<500ms) các hành động tạo/sửa/xóa đơn hàng, nhập hàng, khách hàng, công nợ trên toàn bộ các tab mà không cần reload ứng dụng.
+- Äá»“ng bá»™ dá»¯ liá»‡u Ä‘a tab: XÃ¢y dá»±ng há»‡ thá»‘ng sá»± kiá»‡n toÃ n cá»¥c (Global Event System), cÆ¡ cháº¿ cache GET API thÃ´ng minh á»Ÿ client giÃºp Ä‘á»“ng bá»™ tá»©c thÃ¬ (<500ms) cÃ¡c hÃ nh Ä‘á»™ng táº¡o/sá»­a/xÃ³a Ä‘Æ¡n hÃ ng, nháº­p hÃ ng, khÃ¡ch hÃ ng, cÃ´ng ná»£ trÃªn toÃ n bá»™ cÃ¡c tab mÃ  khÃ´ng cáº§n reload á»©ng dá»¥ng.
 
 ## v1.7.7 - 2026-06-13
 
 ### Fixed
 
-- Báo cáo đơn hàng theo khách hàng: Định dạng lại tệp xuất Excel theo bố cục tinh giản chỉ gồm 3 cột (STT, hóa đơn, tiền), bổ sung tiêu đề tên khách hàng và tổng kết tổng tiền.
+- BÃ¡o cÃ¡o Ä‘Æ¡n hÃ ng theo khÃ¡ch hÃ ng: Äá»‹nh dáº¡ng láº¡i tá»‡p xuáº¥t Excel theo bá»‘ cá»¥c tinh giáº£n chá»‰ gá»“m 3 cá»™t (STT, hÃ³a Ä‘Æ¡n, tiá»n), bá»• sung tiÃªu Ä‘á» tÃªn khÃ¡ch hÃ ng vÃ  tá»•ng káº¿t tá»•ng tiá»n.
 
 ## v1.7.6 - 2026-06-13
 
 ### Fixed
 
-- Báo cáo đơn hàng theo khách hàng: Sửa lỗi danh sách gợi ý khách hàng bị che khuất/không hiển thị khi phóng to hoặc thu nhỏ màn hình.
+- BÃ¡o cÃ¡o Ä‘Æ¡n hÃ ng theo khÃ¡ch hÃ ng: Sá»­a lá»—i danh sÃ¡ch gá»£i Ã½ khÃ¡ch hÃ ng bá»‹ che khuáº¥t/khÃ´ng hiá»ƒn thá»‹ khi phÃ³ng to hoáº·c thu nhá» mÃ n hÃ¬nh.
 
 ## v1.7.5 - 2026-06-13
 
 ### Fixed
 
-- Báo cáo đơn hàng theo khách hàng: Cải thiện tìm kiếm gợi ý tên khách hàng, hiển thị danh sách tất cả khách hàng.
-- Sửa đơn hàng: Cập nhật giá sản phẩm thêm mới và sản phẩm trong giỏ hàng theo đúng nhóm/loại giá của khách hàng (Sỉ, VIP, Lẻ).
+- BÃ¡o cÃ¡o Ä‘Æ¡n hÃ ng theo khÃ¡ch hÃ ng: Cáº£i thiá»‡n tÃ¬m kiáº¿m gá»£i Ã½ tÃªn khÃ¡ch hÃ ng, hiá»ƒn thá»‹ danh sÃ¡ch táº¥t cáº£ khÃ¡ch hÃ ng.
+- Sá»­a Ä‘Æ¡n hÃ ng: Cáº­p nháº­t giÃ¡ sáº£n pháº©m thÃªm má»›i vÃ  sáº£n pháº©m trong giá» hÃ ng theo Ä‘Ãºng nhÃ³m/loáº¡i giÃ¡ cá»§a khÃ¡ch hÃ ng (Sá»‰, VIP, Láº»).
 
 ## v1.7.4 - 2026-06-13
 
 ### Fixed
 
-- Sửa lỗi không gõ được dấu cách (phím Space) tại ô nhập dịch vụ khác ở màn hình tạo đơn hàng.
+- Sá»­a lá»—i khÃ´ng gÃµ Ä‘Æ°á»£c dáº¥u cÃ¡ch (phÃ­m Space) táº¡i Ã´ nháº­p dá»‹ch vá»¥ khÃ¡c á»Ÿ mÃ n hÃ¬nh táº¡o Ä‘Æ¡n hÃ ng.
 
 ## v1.7.3 - 2026-06-13
 
 ### Fixed
 
-- Sửa lỗi trắng màn hình và `ReferenceError: Cannot access variable before initialization` trong `Settings` và `ProductReport` do Temporal Dead Zone (TDZ).
+- Sá»­a lá»—i tráº¯ng mÃ n hÃ¬nh vÃ  `ReferenceError: Cannot access variable before initialization` trong `Settings` vÃ  `ProductReport` do Temporal Dead Zone (TDZ).
 
 ## v1.7.2 - 2026-06-13
 
 ### Thay doi chinh
 
-- Đồng bộ dữ liệu realtime giữa các tab (Realtime Multi Tab Sync).
-- Hệ thống backup đa tầng và tự khôi phục sau mất điện.
-- Nâng cấp hệ thống báo cáo và bảo trì tự động 15h.
+- Äá»“ng bá»™ dá»¯ liá»‡u realtime giá»¯a cÃ¡c tab (Realtime Multi Tab Sync).
+- Há»‡ thá»‘ng backup Ä‘a táº§ng vÃ  tá»± khÃ´i phá»¥c sau máº¥t Ä‘iá»‡n.
+- NÃ¢ng cáº¥p há»‡ thá»‘ng bÃ¡o cÃ¡o vÃ  báº£o trÃ¬ tá»± Ä‘á»™ng 15h.
 
 ## v1.6.7 - 2026-06-12
 
@@ -122,317 +130,318 @@
 
 ## v1.5.4 - 2026-06-09
 
-### Thay đổi chính
+### Thay Ä‘á»•i chÃ­nh
 
-- Thiết kế lại luồng thêm sản phẩm trong trang nhập hàng: khi bấm Thêm sản phẩm/Chọn nhiều sẽ mở modal chọn sản phẩm giống trang tạo đơn hàng.
-- Modal nhập hàng hỗ trợ tìm kiếm sản phẩm, ảnh/placeholder, thông tin tồn kho, nút cộng nhanh và chỉnh số lượng trực tiếp bằng nút +/- hoặc ô nhập.
-- Khi bấm Chọn xong, danh sách đã chọn được đưa xuống bảng nhập hàng, tự gộp sản phẩm trùng và vẫn cho chỉnh số lượng, giá nhập, chiết khấu, thuế trong bảng.
+- Thiáº¿t káº¿ láº¡i luá»“ng thÃªm sáº£n pháº©m trong trang nháº­p hÃ ng: khi báº¥m ThÃªm sáº£n pháº©m/Chá»n nhiá»u sáº½ má»Ÿ modal chá»n sáº£n pháº©m giá»‘ng trang táº¡o Ä‘Æ¡n hÃ ng.
+- Modal nháº­p hÃ ng há»— trá»£ tÃ¬m kiáº¿m sáº£n pháº©m, áº£nh/placeholder, thÃ´ng tin tá»“n kho, nÃºt cá»™ng nhanh vÃ  chá»‰nh sá»‘ lÆ°á»£ng trá»±c tiáº¿p báº±ng nÃºt +/- hoáº·c Ã´ nháº­p.
+- Khi báº¥m Chá»n xong, danh sÃ¡ch Ä‘Ã£ chá»n Ä‘Æ°á»£c Ä‘Æ°a xuá»‘ng báº£ng nháº­p hÃ ng, tá»± gá»™p sáº£n pháº©m trÃ¹ng vÃ  váº«n cho chá»‰nh sá»‘ lÆ°á»£ng, giÃ¡ nháº­p, chiáº¿t kháº¥u, thuáº¿ trong báº£ng.
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.5.4 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Tạo tag GitHub `v1.5.4`; GitHub Actions sẽ build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.5.4 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Táº¡o tag GitHub `v1.5.4`; GitHub Actions sáº½ build/publish installer Windows x64 vÃ  ia32 kÃ¨m latest.yml/update-manifest.json.
 
 ## v1.5.3 - 2026-06-09
 
-### Thay đổi chính
+### Thay Ä‘á»•i chÃ­nh
 
-- Thiết kế lại trang nhập hàng theo bố cục Sapo: tách thông tin nhà cung cấp và thông tin đơn, đưa bảng sản phẩm ra toàn chiều rộng, bổ sung thanh tìm nhanh/chọn nhiều và khu ghi chú, thanh toán phía dưới.
-- Bổ sung công tắc ON/OFF cho từng dòng trong khối tổng tiền của mẫu hóa đơn, gồm Tổng tiền hàng, Chiết khấu, Tổng tiền và Công nợ; trạng thái áp dụng đồng thời cho canvas thiết kế và bản in thật.
-- Tối ưu trình chỉnh sửa mẫu in: kéo/resize cập nhật cục bộ theo khung hình, chỉ ghi layout khi thả chuột, tạm dừng preview in thật trong lúc kéo và giữ ổn định vị trí khối tổng tiền tự động.
+- Thiáº¿t káº¿ láº¡i trang nháº­p hÃ ng theo bá»‘ cá»¥c Sapo: tÃ¡ch thÃ´ng tin nhÃ  cung cáº¥p vÃ  thÃ´ng tin Ä‘Æ¡n, Ä‘Æ°a báº£ng sáº£n pháº©m ra toÃ n chiá»u rá»™ng, bá»• sung thanh tÃ¬m nhanh/chá»n nhiá»u vÃ  khu ghi chÃº, thanh toÃ¡n phÃ­a dÆ°á»›i.
+- Bá»• sung cÃ´ng táº¯c ON/OFF cho tá»«ng dÃ²ng trong khá»‘i tá»•ng tiá»n cá»§a máº«u hÃ³a Ä‘Æ¡n, gá»“m Tá»•ng tiá»n hÃ ng, Chiáº¿t kháº¥u, Tá»•ng tiá»n vÃ  CÃ´ng ná»£; tráº¡ng thÃ¡i Ã¡p dá»¥ng Ä‘á»“ng thá»i cho canvas thiáº¿t káº¿ vÃ  báº£n in tháº­t.
+- Tá»‘i Æ°u trÃ¬nh chá»‰nh sá»­a máº«u in: kÃ©o/resize cáº­p nháº­t cá»¥c bá»™ theo khung hÃ¬nh, chá»‰ ghi layout khi tháº£ chuá»™t, táº¡m dá»«ng preview in tháº­t trong lÃºc kÃ©o vÃ  giá»¯ á»•n Ä‘á»‹nh vá»‹ trÃ­ khá»‘i tá»•ng tiá»n tá»± Ä‘á»™ng.
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.5.3 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Tạo tag GitHub `v1.5.3`; GitHub Actions sẽ build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.5.3 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Táº¡o tag GitHub `v1.5.3`; GitHub Actions sáº½ build/publish installer Windows x64 vÃ  ia32 kÃ¨m latest.yml/update-manifest.json.
 
 ## v1.5.2 - 2026-06-09
 
-### Thay đổi chính
+### Thay Ä‘á»•i chÃ­nh
 
-- Cải thiện mẫu in hóa đơn: tổng tiền có thể tự bám dưới bảng sản phẩm theo độ dài đơn hàng và phần chữ ký chỉ còn nhãn Khách hàng/Người bán kèm dòng ký tên.
-- Thiết kế lại popup chọn nhanh sản phẩm theo phong cách Sapo: tìm kiếm, ảnh/placeholder, tồn kho/có thể bán, nút cộng/trừ số lượng và nút Chọn xong.
-- Làm mới giao diện tạo đơn hàng theo bố cục Sapo với topbar hành động, thẻ thông tin khách hàng, thông tin bổ sung, bảng sản phẩm có cột ảnh và khu tổng tiền.
-- Làm mới giao diện nhập hàng theo bố cục Sapo với topbar phát hành phiếu, thẻ nhà cung cấp, thông tin đơn nhập hàng, bảng sản phẩm có cột ảnh/đơn vị và empty-state rõ ràng.
+- Cáº£i thiá»‡n máº«u in hÃ³a Ä‘Æ¡n: tá»•ng tiá»n cÃ³ thá»ƒ tá»± bÃ¡m dÆ°á»›i báº£ng sáº£n pháº©m theo Ä‘á»™ dÃ i Ä‘Æ¡n hÃ ng vÃ  pháº§n chá»¯ kÃ½ chá»‰ cÃ²n nhÃ£n KhÃ¡ch hÃ ng/NgÆ°á»i bÃ¡n kÃ¨m dÃ²ng kÃ½ tÃªn.
+- Thiáº¿t káº¿ láº¡i popup chá»n nhanh sáº£n pháº©m theo phong cÃ¡ch Sapo: tÃ¬m kiáº¿m, áº£nh/placeholder, tá»“n kho/cÃ³ thá»ƒ bÃ¡n, nÃºt cá»™ng/trá»« sá»‘ lÆ°á»£ng vÃ  nÃºt Chá»n xong.
+- LÃ m má»›i giao diá»‡n táº¡o Ä‘Æ¡n hÃ ng theo bá»‘ cá»¥c Sapo vá»›i topbar hÃ nh Ä‘á»™ng, tháº» thÃ´ng tin khÃ¡ch hÃ ng, thÃ´ng tin bá»• sung, báº£ng sáº£n pháº©m cÃ³ cá»™t áº£nh vÃ  khu tá»•ng tiá»n.
+- LÃ m má»›i giao diá»‡n nháº­p hÃ ng theo bá»‘ cá»¥c Sapo vá»›i topbar phÃ¡t hÃ nh phiáº¿u, tháº» nhÃ  cung cáº¥p, thÃ´ng tin Ä‘Æ¡n nháº­p hÃ ng, báº£ng sáº£n pháº©m cÃ³ cá»™t áº£nh/Ä‘Æ¡n vá»‹ vÃ  empty-state rÃµ rÃ ng.
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.5.2 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Tạo tag GitHub `v1.5.2`; GitHub Actions sẽ build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.5.2 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Táº¡o tag GitHub `v1.5.2`; GitHub Actions sáº½ build/publish installer Windows x64 vÃ  ia32 kÃ¨m latest.yml/update-manifest.json.
 
 ## v1.5.1 - 2026-06-09
 
-### Thay đổi chính
+### Thay Ä‘á»•i chÃ­nh
 
-- Bổ sung trình chỉnh sửa mẫu in hóa đơn kiểu kéo thả/Sapo: resize khung, căn chỉnh bằng ruler/snap grid, autosave draft và publish layout in thật.
-- Thêm fallback mẫu in local khi thiếu cấu hình MySQL cho module mẫu in, giúp trang cài đặt và trang in vẫn thao tác được.
-- Cải thiện luồng tạo đơn: chọn nhanh sản phẩm qua danh sách tạm, bấm "Thêm vào đơn" rồi chỉnh số lượng, giá, chiết khấu trong bảng đơn hàng.
-- Thêm lựa chọn in tạm tính/in hóa đơn, chọn kiểu máy in, khổ K80/K57/A5/A4 và scale nội dung trước khi mở hộp thoại in.
-- Cho phép chỉnh kích thước khung bảng sản phẩm trong mẫu in và chỉnh độ đậm font nội dung/header của bảng.
+- Bá»• sung trÃ¬nh chá»‰nh sá»­a máº«u in hÃ³a Ä‘Æ¡n kiá»ƒu kÃ©o tháº£/Sapo: resize khung, cÄƒn chá»‰nh báº±ng ruler/snap grid, autosave draft vÃ  publish layout in tháº­t.
+- ThÃªm fallback máº«u in local khi thiáº¿u cáº¥u hÃ¬nh MySQL cho module máº«u in, giÃºp trang cÃ i Ä‘áº·t vÃ  trang in váº«n thao tÃ¡c Ä‘Æ°á»£c.
+- Cáº£i thiá»‡n luá»“ng táº¡o Ä‘Æ¡n: chá»n nhanh sáº£n pháº©m qua danh sÃ¡ch táº¡m, báº¥m "ThÃªm vÃ o Ä‘Æ¡n" rá»“i chá»‰nh sá»‘ lÆ°á»£ng, giÃ¡, chiáº¿t kháº¥u trong báº£ng Ä‘Æ¡n hÃ ng.
+- ThÃªm lá»±a chá»n in táº¡m tÃ­nh/in hÃ³a Ä‘Æ¡n, chá»n kiá»ƒu mÃ¡y in, khá»• K80/K57/A5/A4 vÃ  scale ná»™i dung trÆ°á»›c khi má»Ÿ há»™p thoáº¡i in.
+- Cho phÃ©p chá»‰nh kÃ­ch thÆ°á»›c khung báº£ng sáº£n pháº©m trong máº«u in vÃ  chá»‰nh Ä‘á»™ Ä‘áº­m font ná»™i dung/header cá»§a báº£ng.
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.5.1 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Tạo tag GitHub `v1.5.1` cho bản release này.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.5.1 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Táº¡o tag GitHub `v1.5.1` cho báº£n release nÃ y.
 
 ## v1.5.0 - 2026-06-06
 
-### Thay đổi chính
+### Thay Ä‘á»•i chÃ­nh
 
-- Bổ sung nền tảng module kế toán: schema JSON cho ledger, quỹ kế toán, tài khoản ngân hàng, công nợ, hóa đơn điện tử, snapshot báo cáo và nhật ký hoạt động.
-- Thêm API/page kế toán cho tổng quan doanh thu/lợi nhuận, báo cáo thuế GTGT, báo cáo tồn kho và nhật ký hoạt động; hỗ trợ phân quyền mới cho kế toán, thu ngân, nhân viên.
-- Kết nối luồng bán hàng/nhập hàng với kế toán: ghi bút toán, quỹ, công nợ, hóa đơn điện tử, đảo bút toán khi hủy và log thao tác nghiệp vụ.
-- Cải thiện kiểm soát tồn kho và thao tác chọn số lượng: báo cáo tồn kho có cảnh báo sắp hết/hết/âm kho, order/import picker dùng QuantityStepper và kiểm tra âm kho.
+- Bá»• sung ná»n táº£ng module káº¿ toÃ¡n: schema JSON cho ledger, quá»¹ káº¿ toÃ¡n, tÃ i khoáº£n ngÃ¢n hÃ ng, cÃ´ng ná»£, hÃ³a Ä‘Æ¡n Ä‘iá»‡n tá»­, snapshot bÃ¡o cÃ¡o vÃ  nháº­t kÃ½ hoáº¡t Ä‘á»™ng.
+- ThÃªm API/page káº¿ toÃ¡n cho tá»•ng quan doanh thu/lá»£i nhuáº­n, bÃ¡o cÃ¡o thuáº¿ GTGT, bÃ¡o cÃ¡o tá»“n kho vÃ  nháº­t kÃ½ hoáº¡t Ä‘á»™ng; há»— trá»£ phÃ¢n quyá»n má»›i cho káº¿ toÃ¡n, thu ngÃ¢n, nhÃ¢n viÃªn.
+- Káº¿t ná»‘i luá»“ng bÃ¡n hÃ ng/nháº­p hÃ ng vá»›i káº¿ toÃ¡n: ghi bÃºt toÃ¡n, quá»¹, cÃ´ng ná»£, hÃ³a Ä‘Æ¡n Ä‘iá»‡n tá»­, Ä‘áº£o bÃºt toÃ¡n khi há»§y vÃ  log thao tÃ¡c nghiá»‡p vá»¥.
+- Cáº£i thiá»‡n kiá»ƒm soÃ¡t tá»“n kho vÃ  thao tÃ¡c chá»n sá»‘ lÆ°á»£ng: bÃ¡o cÃ¡o tá»“n kho cÃ³ cáº£nh bÃ¡o sáº¯p háº¿t/háº¿t/Ã¢m kho, order/import picker dÃ¹ng QuantityStepper vÃ  kiá»ƒm tra Ã¢m kho.
 
-### Vận hành và dữ liệu
+### Váº­n hÃ nh vÃ  dá»¯ liá»‡u
 
-- Tạo backup database JSON trước migration kế toán và backup định kỳ/startup với retention cấu hình được; tự dọn đơn đã hủy quá 24 giờ khi tải danh sách hoặc theo lịch.
-- Mở rộng sync metadata/pull có giới hạn cho các bảng kế toán mới để tránh kéo payload quá lớn.
+- Táº¡o backup database JSON trÆ°á»›c migration káº¿ toÃ¡n vÃ  backup Ä‘á»‹nh ká»³/startup vá»›i retention cáº¥u hÃ¬nh Ä‘Æ°á»£c; tá»± dá»n Ä‘Æ¡n Ä‘Ã£ há»§y quÃ¡ 24 giá» khi táº£i danh sÃ¡ch hoáº·c theo lá»‹ch.
+- Má»Ÿ rá»™ng sync metadata/pull cÃ³ giá»›i háº¡n cho cÃ¡c báº£ng káº¿ toÃ¡n má»›i Ä‘á»ƒ trÃ¡nh kÃ©o payload quÃ¡ lá»›n.
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.5.0 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Cập nhật tài liệu release, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.5.0.
-- GitHub Actions sẽ build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json từ artifact thực tế sau khi push tag.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.5.0 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Cáº­p nháº­t tÃ i liá»‡u release, hÆ°á»›ng dáº«n táº£i/cÃ i Ä‘áº·t vÃ  manifest vÃ­ dá»¥ theo tag v1.5.0.
+- GitHub Actions sáº½ build/publish installer Windows x64 vÃ  ia32 kÃ¨m latest.yml/update-manifest.json tá»« artifact thá»±c táº¿ sau khi push tag.
 
-### Lưu ý quan trọng
+### LÆ°u Ã½ quan trá»ng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.5.0-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.5.0-ia32.exe`.
-- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
-- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới, đặc biệt vì bản này có migration schema kế toán và tự tạo backup trước migration.
-- Metadata production generated latest.yml/update-manifest.json chỉ sinh lại từ installer thực tế, không chỉnh tay trước publish.
+- Windows 10/11 64-bit nÃªn dÃ¹ng `banhangoffline-setup-v1.5.0-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€ nÃªn dÃ¹ng `banhangoffline-setup-v1.5.0-ia32.exe`.
+- Chá»‰ táº£i bá»™ cÃ i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`; khÃ´ng cháº¡y file náº¿u tÃªn, nguá»“n táº£i, SHA256 hoáº·c kÃ­ch thÆ°á»›c khÃ´ng khá»›p manifest phÃ¡t hÃ nh.
+- NÃªn backup dá»¯ liá»‡u runtime trÆ°á»›c khi cáº­p nháº­t/cÃ i Ä‘áº·t phiÃªn báº£n má»›i, Ä‘áº·c biá»‡t vÃ¬ báº£n nÃ y cÃ³ migration schema káº¿ toÃ¡n vÃ  tá»± táº¡o backup trÆ°á»›c migration.
+- Metadata production generated latest.yml/update-manifest.json chá»‰ sinh láº¡i tá»« installer thá»±c táº¿, khÃ´ng chá»‰nh tay trÆ°á»›c publish.
 
 ## v1.4.9 - 2026-06-03
 
-### Thay đổi chính
+### Thay Ä‘á»•i chÃ­nh
 
-- Bổ sung API tồn kho backend và route inventory để phục vụ nghiệp vụ kho hàng.
-- Cải thiện luồng nhập hàng, đồng bộ và điều chỉnh tồn kho giữa backend và frontend.
-- Cập nhật giao diện kho hàng/nhập hàng để thao tác tồn kho ổn định hơn trong bản phát hành này.
+- Bá»• sung API tá»“n kho backend vÃ  route inventory Ä‘á»ƒ phá»¥c vá»¥ nghiá»‡p vá»¥ kho hÃ ng.
+- Cáº£i thiá»‡n luá»“ng nháº­p hÃ ng, Ä‘á»“ng bá»™ vÃ  Ä‘iá»u chá»‰nh tá»“n kho giá»¯a backend vÃ  frontend.
+- Cáº­p nháº­t giao diá»‡n kho hÃ ng/nháº­p hÃ ng Ä‘á»ƒ thao tÃ¡c tá»“n kho á»•n Ä‘á»‹nh hÆ¡n trong báº£n phÃ¡t hÃ nh nÃ y.
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.4.9 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Cập nhật tài liệu release, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.4.9.
-- GitHub Actions tiếp tục build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json từ artifact thực tế sau khi push tag.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.4.9 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Cáº­p nháº­t tÃ i liá»‡u release, hÆ°á»›ng dáº«n táº£i/cÃ i Ä‘áº·t vÃ  manifest vÃ­ dá»¥ theo tag v1.4.9.
+- GitHub Actions tiáº¿p tá»¥c build/publish installer Windows x64 vÃ  ia32 kÃ¨m latest.yml/update-manifest.json tá»« artifact thá»±c táº¿ sau khi push tag.
 
-### Lưu ý quan trọng
+### LÆ°u Ã½ quan trá»ng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.9-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.9-ia32.exe`.
-- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
-- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+- Windows 10/11 64-bit nÃªn dÃ¹ng `banhangoffline-setup-v1.4.9-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€ nÃªn dÃ¹ng `banhangoffline-setup-v1.4.9-ia32.exe`.
+- Chá»‰ táº£i bá»™ cÃ i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`; khÃ´ng cháº¡y file náº¿u tÃªn, nguá»“n táº£i, SHA256 hoáº·c kÃ­ch thÆ°á»›c khÃ´ng khá»›p manifest phÃ¡t hÃ nh.
+- NÃªn backup dá»¯ liá»‡u runtime trÆ°á»›c khi cáº­p nháº­t/cÃ i Ä‘áº·t phiÃªn báº£n má»›i.
 
 ## v1.4.8 - 2026-06-03
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.4.8 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Cập nhật tài liệu release, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.4.8.
-- GitHub Actions tiếp tục build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json từ artifact thực tế sau khi push tag.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.4.8 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Cáº­p nháº­t tÃ i liá»‡u release, hÆ°á»›ng dáº«n táº£i/cÃ i Ä‘áº·t vÃ  manifest vÃ­ dá»¥ theo tag v1.4.8.
+- GitHub Actions tiáº¿p tá»¥c build/publish installer Windows x64 vÃ  ia32 kÃ¨m latest.yml/update-manifest.json tá»« artifact thá»±c táº¿ sau khi push tag.
 
-### Lưu ý quan trọng
+### LÆ°u Ã½ quan trá»ng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.8-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.8-ia32.exe`.
-- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
-- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+- Windows 10/11 64-bit nÃªn dÃ¹ng `banhangoffline-setup-v1.4.8-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€ nÃªn dÃ¹ng `banhangoffline-setup-v1.4.8-ia32.exe`.
+- Chá»‰ táº£i bá»™ cÃ i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`; khÃ´ng cháº¡y file náº¿u tÃªn, nguá»“n táº£i, SHA256 hoáº·c kÃ­ch thÆ°á»›c khÃ´ng khá»›p manifest phÃ¡t hÃ nh.
+- NÃªn backup dá»¯ liá»‡u runtime trÆ°á»›c khi cáº­p nháº­t/cÃ i Ä‘áº·t phiÃªn báº£n má»›i.
 
 
 ## v1.4.7 - 2026-06-03
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.4.7 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Cập nhật tài liệu release, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.4.7.
-- GitHub Actions tiếp tục build/publish installer Windows x64 và ia32 kèm latest.yml/update-manifest.json từ artifact thực tế sau khi push tag.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.4.7 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Cáº­p nháº­t tÃ i liá»‡u release, hÆ°á»›ng dáº«n táº£i/cÃ i Ä‘áº·t vÃ  manifest vÃ­ dá»¥ theo tag v1.4.7.
+- GitHub Actions tiáº¿p tá»¥c build/publish installer Windows x64 vÃ  ia32 kÃ¨m latest.yml/update-manifest.json tá»« artifact thá»±c táº¿ sau khi push tag.
 
-### Lưu ý quan trọng
+### LÆ°u Ã½ quan trá»ng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.7-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.7-ia32.exe`.
-- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
-- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+- Windows 10/11 64-bit nÃªn dÃ¹ng `banhangoffline-setup-v1.4.7-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€ nÃªn dÃ¹ng `banhangoffline-setup-v1.4.7-ia32.exe`.
+- Chá»‰ táº£i bá»™ cÃ i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`; khÃ´ng cháº¡y file náº¿u tÃªn, nguá»“n táº£i, SHA256 hoáº·c kÃ­ch thÆ°á»›c khÃ´ng khá»›p manifest phÃ¡t hÃ nh.
+- NÃªn backup dá»¯ liá»‡u runtime trÆ°á»›c khi cáº­p nháº­t/cÃ i Ä‘áº·t phiÃªn báº£n má»›i.
 
 ## v1.4.6 - 2026-06-02
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.4.6 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Cập nhật tài liệu release, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.4.6.
-- Giữ nguyên metadata production generated cho tới khi có installer v1.4.6 thực tế để sinh lại SHA/size an toàn.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.4.6 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Cáº­p nháº­t tÃ i liá»‡u release, hÆ°á»›ng dáº«n táº£i/cÃ i Ä‘áº·t vÃ  manifest vÃ­ dá»¥ theo tag v1.4.6.
+- Giá»¯ nguyÃªn metadata production generated cho tá»›i khi cÃ³ installer v1.4.6 thá»±c táº¿ Ä‘á»ƒ sinh láº¡i SHA/size an toÃ n.
 
-### Lưu ý quan trọng
+### LÆ°u Ã½ quan trá»ng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.6-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.6-ia32.exe`.
-- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
-- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+- Windows 10/11 64-bit nÃªn dÃ¹ng `banhangoffline-setup-v1.4.6-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€ nÃªn dÃ¹ng `banhangoffline-setup-v1.4.6-ia32.exe`.
+- Chá»‰ táº£i bá»™ cÃ i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`; khÃ´ng cháº¡y file náº¿u tÃªn, nguá»“n táº£i, SHA256 hoáº·c kÃ­ch thÆ°á»›c khÃ´ng khá»›p manifest phÃ¡t hÃ nh.
+- NÃªn backup dá»¯ liá»‡u runtime trÆ°á»›c khi cáº­p nháº­t/cÃ i Ä‘áº·t phiÃªn báº£n má»›i.
 
 ## v1.4.4 - 2026-06-02
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.4.4 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Cập nhật tài liệu release, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.4.4.
-- Giữ nguyên metadata production generated cho tới khi có installer v1.4.4 thực tế để sinh lại SHA/size an toàn.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.4.4 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Cáº­p nháº­t tÃ i liá»‡u release, hÆ°á»›ng dáº«n táº£i/cÃ i Ä‘áº·t vÃ  manifest vÃ­ dá»¥ theo tag v1.4.4.
+- Giá»¯ nguyÃªn metadata production generated cho tá»›i khi cÃ³ installer v1.4.4 thá»±c táº¿ Ä‘á»ƒ sinh láº¡i SHA/size an toÃ n.
 
-### Lưu ý quan trọng
+### LÆ°u Ã½ quan trá»ng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.4-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.4-ia32.exe`.
-- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
-- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+- Windows 10/11 64-bit nÃªn dÃ¹ng `banhangoffline-setup-v1.4.4-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€ nÃªn dÃ¹ng `banhangoffline-setup-v1.4.4-ia32.exe`.
+- Chá»‰ táº£i bá»™ cÃ i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`; khÃ´ng cháº¡y file náº¿u tÃªn, nguá»“n táº£i, SHA256 hoáº·c kÃ­ch thÆ°á»›c khÃ´ng khá»›p manifest phÃ¡t hÃ nh.
+- NÃªn backup dá»¯ liá»‡u runtime trÆ°á»›c khi cáº­p nháº­t/cÃ i Ä‘áº·t phiÃªn báº£n má»›i.
 
 ## v1.4.3 - 2026-06-02
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.4.3 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Cập nhật changelog, tài liệu release, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.4.3.
-- Giữ nguyên metadata production generated cho tới khi có installer v1.4.3 thực tế để sinh lại SHA/size an toàn.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.4.3 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Cáº­p nháº­t changelog, tÃ i liá»‡u release, hÆ°á»›ng dáº«n táº£i/cÃ i Ä‘áº·t vÃ  manifest vÃ­ dá»¥ theo tag v1.4.3.
+- Giá»¯ nguyÃªn metadata production generated cho tá»›i khi cÃ³ installer v1.4.3 thá»±c táº¿ Ä‘á»ƒ sinh láº¡i SHA/size an toÃ n.
 
-### Lưu ý quan trọng
+### LÆ°u Ã½ quan trá»ng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.3-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.3-ia32.exe`.
-- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
-- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+- Windows 10/11 64-bit nÃªn dÃ¹ng `banhangoffline-setup-v1.4.3-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€ nÃªn dÃ¹ng `banhangoffline-setup-v1.4.3-ia32.exe`.
+- Chá»‰ táº£i bá»™ cÃ i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`; khÃ´ng cháº¡y file náº¿u tÃªn, nguá»“n táº£i, SHA256 hoáº·c kÃ­ch thÆ°á»›c khÃ´ng khá»›p manifest phÃ¡t hÃ nh.
+- NÃªn backup dá»¯ liá»‡u runtime trÆ°á»›c khi cáº­p nháº­t/cÃ i Ä‘áº·t phiÃªn báº£n má»›i.
 
 ## v1.4.2 - 2026-06-01
 
-### Tính năng và cải tiến
+### TÃ­nh nÄƒng vÃ  cáº£i tiáº¿n
 
-- Bổ sung module quản lý mẫu in hóa đơn với API backend, schema MySQL, upload asset an toàn và service CRUD/kích hoạt mẫu in.
-- Cập nhật frontend quản lý mẫu in hóa đơn gồm danh sách mẫu, form cấu hình, xem trước renderer và dữ liệu mẫu để kiểm tra bố cục.
-- Kết nối điều hướng, thiết lập, API client và dữ liệu in hóa đơn để module mẫu in mới hoạt động ổn định trong luồng hiện tại.
+- Bá»• sung module quáº£n lÃ½ máº«u in hÃ³a Ä‘Æ¡n vá»›i API backend, schema MySQL, upload asset an toÃ n vÃ  service CRUD/kÃ­ch hoáº¡t máº«u in.
+- Cáº­p nháº­t frontend quáº£n lÃ½ máº«u in hÃ³a Ä‘Æ¡n gá»“m danh sÃ¡ch máº«u, form cáº¥u hÃ¬nh, xem trÆ°á»›c renderer vÃ  dá»¯ liá»‡u máº«u Ä‘á»ƒ kiá»ƒm tra bá»‘ cá»¥c.
+- Káº¿t ná»‘i Ä‘iá»u hÆ°á»›ng, thiáº¿t láº­p, API client vÃ  dá»¯ liá»‡u in hÃ³a Ä‘Æ¡n Ä‘á»ƒ module máº«u in má»›i hoáº¡t Ä‘á»™ng á»•n Ä‘á»‹nh trong luá»“ng hiá»‡n táº¡i.
 
-### QA và build
+### QA vÃ  build
 
-- Đồng bộ version phát hành 1.4.2 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Kiểm tra cú pháp các file backend quan trọng mới/sửa bằng node --check.
-- Kiểm tra khả năng resolve driver mysql2/promise trong backend cho module mẫu in hóa đơn.
-- Build frontend production để xác nhận bundle Vite hợp lệ trước khi tạo tag phát hành.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.4.2 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Kiá»ƒm tra cÃº phÃ¡p cÃ¡c file backend quan trá»ng má»›i/sá»­a báº±ng node --check.
+- Kiá»ƒm tra kháº£ nÄƒng resolve driver mysql2/promise trong backend cho module máº«u in hÃ³a Ä‘Æ¡n.
+- Build frontend production Ä‘á»ƒ xÃ¡c nháº­n bundle Vite há»£p lá»‡ trÆ°á»›c khi táº¡o tag phÃ¡t hÃ nh.
 
-### Lưu ý quan trọng
+### LÆ°u Ã½ quan trá»ng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.2-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.2-ia32.exe`.
-- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
-- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+- Windows 10/11 64-bit nÃªn dÃ¹ng `banhangoffline-setup-v1.4.2-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€ nÃªn dÃ¹ng `banhangoffline-setup-v1.4.2-ia32.exe`.
+- Chá»‰ táº£i bá»™ cÃ i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`; khÃ´ng cháº¡y file náº¿u tÃªn, nguá»“n táº£i, SHA256 hoáº·c kÃ­ch thÆ°á»›c khÃ´ng khá»›p manifest phÃ¡t hÃ nh.
+- NÃªn backup dá»¯ liá»‡u runtime trÆ°á»›c khi cáº­p nháº­t/cÃ i Ä‘áº·t phiÃªn báº£n má»›i.
 
 ## v1.4.0 - 2026-06-01
 
-### Tính năng và cải tiến
+### TÃ­nh nÄƒng vÃ  cáº£i tiáº¿n
 
-- Chuẩn hóa luồng in hóa đơn bằng trang in riêng theo mã/ID đơn hàng, hỗ trợ mở nhanh bản in từ tạo đơn và danh sách đơn hàng.
-- Cải thiện danh sách đơn hàng với dữ liệu từ API, nhãn nguồn đơn, gộp dòng hàng ổn định hơn và xử lý đơn offline rõ ràng hơn.
-- Bổ sung lại nghiệp vụ bảng lương nhân viên theo service/controller riêng, validation đầu vào, tổng hợp lương và thao tác thêm/sửa/xóa mềm.
-- Tinh gọn module in legacy, bỏ các route/component mẫu in cũ và cập nhật dependency in/xuất file phù hợp frontend hiện tại.
+- Chuáº©n hÃ³a luá»“ng in hÃ³a Ä‘Æ¡n báº±ng trang in riÃªng theo mÃ£/ID Ä‘Æ¡n hÃ ng, há»— trá»£ má»Ÿ nhanh báº£n in tá»« táº¡o Ä‘Æ¡n vÃ  danh sÃ¡ch Ä‘Æ¡n hÃ ng.
+- Cáº£i thiá»‡n danh sÃ¡ch Ä‘Æ¡n hÃ ng vá»›i dá»¯ liá»‡u tá»« API, nhÃ£n nguá»“n Ä‘Æ¡n, gá»™p dÃ²ng hÃ ng á»•n Ä‘á»‹nh hÆ¡n vÃ  xá»­ lÃ½ Ä‘Æ¡n offline rÃµ rÃ ng hÆ¡n.
+- Bá»• sung láº¡i nghiá»‡p vá»¥ báº£ng lÆ°Æ¡ng nhÃ¢n viÃªn theo service/controller riÃªng, validation Ä‘áº§u vÃ o, tá»•ng há»£p lÆ°Æ¡ng vÃ  thao tÃ¡c thÃªm/sá»­a/xÃ³a má»m.
+- Tinh gá»n module in legacy, bá» cÃ¡c route/component máº«u in cÅ© vÃ  cáº­p nháº­t dependency in/xuáº¥t file phÃ¹ há»£p frontend hiá»‡n táº¡i.
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.4.0 cho ứng dụng desktop, frontend, backend và các lockfile tương ứng.
-- Cập nhật tài liệu phát hành, hướng dẫn tải/cài đặt và manifest ví dụ theo tag v1.4.0.
-- GitHub Actions tiếp tục build/publish installer Windows x64 và ia32 kèm latest.yml và update-manifest.json từ artifact thực tế.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.4.0 cho á»©ng dá»¥ng desktop, frontend, backend vÃ  cÃ¡c lockfile tÆ°Æ¡ng á»©ng.
+- Cáº­p nháº­t tÃ i liá»‡u phÃ¡t hÃ nh, hÆ°á»›ng dáº«n táº£i/cÃ i Ä‘áº·t vÃ  manifest vÃ­ dá»¥ theo tag v1.4.0.
+- GitHub Actions tiáº¿p tá»¥c build/publish installer Windows x64 vÃ  ia32 kÃ¨m latest.yml vÃ  update-manifest.json tá»« artifact thá»±c táº¿.
 
-### Lưu ý quan trọng
+### LÆ°u Ã½ quan trá»ng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.4.0-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.4.0-ia32.exe`.
-- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
-- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+- Windows 10/11 64-bit nÃªn dÃ¹ng `banhangoffline-setup-v1.4.0-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€ nÃªn dÃ¹ng `banhangoffline-setup-v1.4.0-ia32.exe`.
+- Chá»‰ táº£i bá»™ cÃ i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`; khÃ´ng cháº¡y file náº¿u tÃªn, nguá»“n táº£i, SHA256 hoáº·c kÃ­ch thÆ°á»›c khÃ´ng khá»›p manifest phÃ¡t hÃ nh.
+- NÃªn backup dá»¯ liá»‡u runtime trÆ°á»›c khi cáº­p nháº­t/cÃ i Ä‘áº·t phiÃªn báº£n má»›i.
 
 ## v1.3.9 - 2026-05-30
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.3.9 cho ứng dụng desktop, frontend, backend, lockfile và metadata cập nhật Windows.
-- Chuẩn hóa tài liệu release và hướng dẫn tải/cập nhật theo tag v1.3.9.
-- Không đưa các thay đổi chưa commit ngoài phạm vi release vào commit phát hành.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.3.9 cho á»©ng dá»¥ng desktop, frontend, backend, lockfile vÃ  metadata cáº­p nháº­t Windows.
+- Chuáº©n hÃ³a tÃ i liá»‡u release vÃ  hÆ°á»›ng dáº«n táº£i/cáº­p nháº­t theo tag v1.3.9.
+- KhÃ´ng Ä‘Æ°a cÃ¡c thay Ä‘á»•i chÆ°a commit ngoÃ i pháº¡m vi release vÃ o commit phÃ¡t hÃ nh.
 
-### Lưu ý quan trọng
+### LÆ°u Ã½ quan trá»ng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.3.9-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.3.9-ia32.exe`.
-- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
-- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+- Windows 10/11 64-bit nÃªn dÃ¹ng `banhangoffline-setup-v1.3.9-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€ nÃªn dÃ¹ng `banhangoffline-setup-v1.3.9-ia32.exe`.
+- Chá»‰ táº£i bá»™ cÃ i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`; khÃ´ng cháº¡y file náº¿u tÃªn, nguá»“n táº£i, SHA256 hoáº·c kÃ­ch thÆ°á»›c khÃ´ng khá»›p manifest phÃ¡t hÃ nh.
+- NÃªn backup dá»¯ liá»‡u runtime trÆ°á»›c khi cáº­p nháº­t/cÃ i Ä‘áº·t phiÃªn báº£n má»›i.
 
 ## v1.3.8 - 2026-05-30
 
-### Bảng phát hành chính thức
+### Báº£ng phÃ¡t hÃ nh chÃ­nh thá»©c
 
-| Hạng mục | Nội dung |
+| Háº¡ng má»¥c | Ná»™i dung |
 | --- | --- |
-| Phiên bản | 1.3.8 |
-| Ngày phát hành | 2026-05-30 |
-| Trạng thái | Sẵn sàng công bố cho người dùng Windows x64 và ia32 |
-| Tổng quan | Bản 1.3.8 tập trung ổn định trải nghiệm in hóa đơn A5, in tem sản phẩm và đồng bộ metadata phát hành Windows. |
+| PhiÃªn báº£n | 1.3.8 |
+| NgÃ y phÃ¡t hÃ nh | 2026-05-30 |
+| Tráº¡ng thÃ¡i | Sáºµn sÃ ng cÃ´ng bá»‘ cho ngÆ°á»i dÃ¹ng Windows x64 vÃ  ia32 |
+| Tá»•ng quan | Báº£n 1.3.8 táº­p trung á»•n Ä‘á»‹nh tráº£i nghiá»‡m in hÃ³a Ä‘Æ¡n A5, in tem sáº£n pháº©m vÃ  Ä‘á»“ng bá»™ metadata phÃ¡t hÃ nh Windows. |
 
-### Ghi chú thay đổi tổng quan
+### Ghi chÃº thay Ä‘á»•i tá»•ng quan
 
-- Cải thiện độ chính xác khổ giấy, lề và vị trí trang khi in hóa đơn A5 trong cửa sổ in cũng như silent print.
-- Chuẩn hóa luồng in tem sản phẩm cho cả dạng cuộn và dạng tờ A4/A5 để màu in, vùng in và căn trang nhất quán hơn.
-- Đồng bộ version phát hành 1.3.8 cho ứng dụng desktop, frontend, backend, metadata auto-update và tài liệu đi kèm.
+- Cáº£i thiá»‡n Ä‘á»™ chÃ­nh xÃ¡c khá»• giáº¥y, lá» vÃ  vá»‹ trÃ­ trang khi in hÃ³a Ä‘Æ¡n A5 trong cá»­a sá»• in cÅ©ng nhÆ° silent print.
+- Chuáº©n hÃ³a luá»“ng in tem sáº£n pháº©m cho cáº£ dáº¡ng cuá»™n vÃ  dáº¡ng tá» A4/A5 Ä‘á»ƒ mÃ u in, vÃ¹ng in vÃ  cÄƒn trang nháº¥t quÃ¡n hÆ¡n.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.3.8 cho á»©ng dá»¥ng desktop, frontend, backend, metadata auto-update vÃ  tÃ i liá»‡u Ä‘i kÃ¨m.
 
-### Tính năng mới
+### TÃ­nh nÄƒng má»›i
 
-- Thêm demo hóa đơn A5 độc lập để kiểm tra nhanh layout, iframe in và trạng thái nút in trước khi phát hành.
-- Bổ sung đánh dấu trang A5 bằng lớp print-page trong renderer mẫu hóa đơn để hệ thống in nhận diện đúng vùng trang.
-- Hoàn thiện ghi chú phát hành và metadata cho bộ cài Windows x64/ia32 của phiên bản 1.3.8.
+- ThÃªm demo hÃ³a Ä‘Æ¡n A5 Ä‘á»™c láº­p Ä‘á»ƒ kiá»ƒm tra nhanh layout, iframe in vÃ  tráº¡ng thÃ¡i nÃºt in trÆ°á»›c khi phÃ¡t hÃ nh.
+- Bá»• sung Ä‘Ã¡nh dáº¥u trang A5 báº±ng lá»›p print-page trong renderer máº«u hÃ³a Ä‘Æ¡n Ä‘á»ƒ há»‡ thá»‘ng in nháº­n diá»‡n Ä‘Ãºng vÃ¹ng trang.
+- HoÃ n thiá»‡n ghi chÃº phÃ¡t hÃ nh vÃ  metadata cho bá»™ cÃ i Windows x64/ia32 cá»§a phiÃªn báº£n 1.3.8.
 
-### Lỗi đã sửa
+### Lá»—i Ä‘Ã£ sá»­a
 
-- Sửa tình trạng in hóa đơn A5 bị lệch lề, sai zoom hoặc không căn từ góc trên trái trong cửa sổ in và silent print.
-- Giảm lỗi vỡ bố cục bảng, hình ảnh hoặc nội dung hóa đơn khi renderer mẫu in gặp dữ liệu dài.
-- Sửa độ không nhất quán về khổ giấy, lề và màu in giữa in tem dạng cuộn với in tem dạng tờ A4/A5.
+- Sá»­a tÃ¬nh tráº¡ng in hÃ³a Ä‘Æ¡n A5 bá»‹ lá»‡ch lá», sai zoom hoáº·c khÃ´ng cÄƒn tá»« gÃ³c trÃªn trÃ¡i trong cá»­a sá»• in vÃ  silent print.
+- Giáº£m lá»—i vá»¡ bá»‘ cá»¥c báº£ng, hÃ¬nh áº£nh hoáº·c ná»™i dung hÃ³a Ä‘Æ¡n khi renderer máº«u in gáº·p dá»¯ liá»‡u dÃ i.
+- Sá»­a Ä‘á»™ khÃ´ng nháº¥t quÃ¡n vá» khá»• giáº¥y, lá» vÃ  mÃ u in giá»¯a in tem dáº¡ng cuá»™n vá»›i in tem dáº¡ng tá» A4/A5.
 
-### Cải tiến hiệu năng
+### Cáº£i tiáº¿n hiá»‡u nÄƒng
 
-- Tối ưu CSS print theo đúng khổ 148mm x 210mm và vùng in thực tế để trình in dựng trang ổn định hơn.
-- Áp dụng guard bố cục cho bảng/hình ảnh nhằm giảm reflow và hạn chế phải căn chỉnh thủ công trước khi in.
-- Chuẩn hóa metadata auto-update để quy trình kiểm tra phiên bản, kích thước và hash installer cho x64/ia32 rõ ràng hơn.
+- Tá»‘i Æ°u CSS print theo Ä‘Ãºng khá»• 148mm x 210mm vÃ  vÃ¹ng in thá»±c táº¿ Ä‘á»ƒ trÃ¬nh in dá»±ng trang á»•n Ä‘á»‹nh hÆ¡n.
+- Ãp dá»¥ng guard bá»‘ cá»¥c cho báº£ng/hÃ¬nh áº£nh nháº±m giáº£m reflow vÃ  háº¡n cháº¿ pháº£i cÄƒn chá»‰nh thá»§ cÃ´ng trÆ°á»›c khi in.
+- Chuáº©n hÃ³a metadata auto-update Ä‘á»ƒ quy trÃ¬nh kiá»ƒm tra phiÃªn báº£n, kÃ­ch thÆ°á»›c vÃ  hash installer cho x64/ia32 rÃµ rÃ ng hÆ¡n.
 
-### Lưu ý quan trọng
+### LÆ°u Ã½ quan trá»ng
 
-- Windows 10/11 64-bit nên dùng `banhangoffline-setup-v1.3.8-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn” nên dùng `banhangoffline-setup-v1.3.8-ia32.exe`.
-- Chỉ tải bộ cài từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
-- Nên backup dữ liệu runtime trước khi cập nhật/cài đặt phiên bản mới.
+- Windows 10/11 64-bit nÃªn dÃ¹ng `banhangoffline-setup-v1.3.8-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€ nÃªn dÃ¹ng `banhangoffline-setup-v1.3.8-ia32.exe`.
+- Chá»‰ táº£i bá»™ cÃ i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`; khÃ´ng cháº¡y file náº¿u tÃªn, nguá»“n táº£i, SHA256 hoáº·c kÃ­ch thÆ°á»›c khÃ´ng khá»›p manifest phÃ¡t hÃ nh.
+- NÃªn backup dá»¯ liá»‡u runtime trÆ°á»›c khi cáº­p nháº­t/cÃ i Ä‘áº·t phiÃªn báº£n má»›i.
 
 ## v1.3.7 - 2026-05-27
 
-### Cải thiện in hóa đơn
+### Cáº£i thiá»‡n in hÃ³a Ä‘Æ¡n
 
-- Thêm API backend `/api/invoices/:id/print-data` để chuẩn hóa dữ liệu in hóa đơn A5 cho hóa đơn online, bao gồm khách hàng, người lập, chi tiết hàng và trạng thái thanh toán.
-- Cập nhật màn `OrderList` để ưu tiên tải dữ liệu in từ server cho hóa đơn đã lưu và tự fallback về dữ liệu local/offline khi cần.
-- Tinh chỉnh renderer mẫu in và silent print Electron để bản xem trước/in A5 giữ đúng kích thước trang, lề và zoom.
+- ThÃªm API backend `/api/invoices/:id/print-data` Ä‘á»ƒ chuáº©n hÃ³a dá»¯ liá»‡u in hÃ³a Ä‘Æ¡n A5 cho hÃ³a Ä‘Æ¡n online, bao gá»“m khÃ¡ch hÃ ng, ngÆ°á»i láº­p, chi tiáº¿t hÃ ng vÃ  tráº¡ng thÃ¡i thanh toÃ¡n.
+- Cáº­p nháº­t mÃ n `OrderList` Ä‘á»ƒ Æ°u tiÃªn táº£i dá»¯ liá»‡u in tá»« server cho hÃ³a Ä‘Æ¡n Ä‘Ã£ lÆ°u vÃ  tá»± fallback vá» dá»¯ liá»‡u local/offline khi cáº§n.
+- Tinh chá»‰nh renderer máº«u in vÃ  silent print Electron Ä‘á»ƒ báº£n xem trÆ°á»›c/in A5 giá»¯ Ä‘Ãºng kÃ­ch thÆ°á»›c trang, lá» vÃ  zoom.
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.3.7 cho ứng dụng desktop, metadata auto-update và tài liệu đi kèm.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.3.7 cho á»©ng dá»¥ng desktop, metadata auto-update vÃ  tÃ i liá»‡u Ä‘i kÃ¨m.
 
 ## v1.3.6 - 2026-05-27
 
-### Phát hành
+### PhÃ¡t hÃ nh
 
-- Đồng bộ version phát hành 1.3.6 cho ứng dụng desktop, metadata auto-update và tài liệu đi kèm.
-- Không thay đổi tính năng; bản này tập trung chuẩn hóa metadata release và hướng dẫn tải/cập nhật.
+- Äá»“ng bá»™ version phÃ¡t hÃ nh 1.3.6 cho á»©ng dá»¥ng desktop, metadata auto-update vÃ  tÃ i liá»‡u Ä‘i kÃ¨m.
+- KhÃ´ng thay Ä‘á»•i tÃ­nh nÄƒng; báº£n nÃ y táº­p trung chuáº©n hÃ³a metadata release vÃ  hÆ°á»›ng dáº«n táº£i/cáº­p nháº­t.
 
 ## v1.3.5 - 2026-05-25
 
-### Sửa lỗi phát hành Windows
+### Sá»­a lá»—i phÃ¡t hÃ nh Windows
 
-- Tạo installer riêng cho Windows 64-bit (`x64`) và Windows 32-bit (`ia32`) với tên asset rõ kiến trúc.
-- Sinh lại `latest.yml` và `update-manifest.json` từ installer thực để tránh version/hash/size lệch release.
-- Thêm kiểm tra local/remote bằng PowerShell cho HTTP 200, Content-Type, kích thước, header MZ/PE và SHA256.
-- Cập nhật màn cập nhật trong ứng dụng để hiển thị kiến trúc runtime, bộ cài khuyến nghị và cảnh báo nếu máy không tương thích.
-- Chặn mở link tải thủ công nếu URL trả HTML, HTTP lỗi, tên file không đúng kiến trúc hoặc file quá nhỏ.
-- Cập nhật workflow GitHub Actions để build/publish đủ asset x64/ia32 và verify public release.
+- Táº¡o installer riÃªng cho Windows 64-bit (`x64`) vÃ  Windows 32-bit (`ia32`) vá»›i tÃªn asset rÃµ kiáº¿n trÃºc.
+- Sinh láº¡i `latest.yml` vÃ  `update-manifest.json` tá»« installer thá»±c Ä‘á»ƒ trÃ¡nh version/hash/size lá»‡ch release.
+- ThÃªm kiá»ƒm tra local/remote báº±ng PowerShell cho HTTP 200, Content-Type, kÃ­ch thÆ°á»›c, header MZ/PE vÃ  SHA256.
+- Cáº­p nháº­t mÃ n cáº­p nháº­t trong á»©ng dá»¥ng Ä‘á»ƒ hiá»ƒn thá»‹ kiáº¿n trÃºc runtime, bá»™ cÃ i khuyáº¿n nghá»‹ vÃ  cáº£nh bÃ¡o náº¿u mÃ¡y khÃ´ng tÆ°Æ¡ng thÃ­ch.
+- Cháº·n má»Ÿ link táº£i thá»§ cÃ´ng náº¿u URL tráº£ HTML, HTTP lá»—i, tÃªn file khÃ´ng Ä‘Ãºng kiáº¿n trÃºc hoáº·c file quÃ¡ nhá».
+- Cáº­p nháº­t workflow GitHub Actions Ä‘á»ƒ build/publish Ä‘á»§ asset x64/ia32 vÃ  verify public release.
 
-### Hướng dẫn người dùng
+### HÆ°á»›ng dáº«n ngÆ°á»i dÃ¹ng
 
-- Windows 10/11 thông thường: dùng `banhangoffline-setup-v1.3.5-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn”: dùng `banhangoffline-setup-v1.3.5-ia32.exe`.
-- Chỉ tải từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`.
+- Windows 10/11 thÃ´ng thÆ°á»ng: dÃ¹ng `banhangoffline-setup-v1.3.5-x64.exe`.
+- Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€: dÃ¹ng `banhangoffline-setup-v1.3.5-ia32.exe`.
+- Chá»‰ táº£i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`.
+

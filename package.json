@@ -1,150 +1,150 @@
-{
-  "name": "phanmienoffline-electron",
-  "version": "1.9.1",
-  "description": "Bán hàng offline ",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Vankhadev/phanmemoffline.git"
-  },
-  "homepage": "https://github.com/Vankhadev/phanmemoffline#readme",
-  "bugs": {
-    "url": "https://github.com/Vankhadev/phanmemoffline/issues"
-  },
-  "main": "src/main.js",
-  "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "set KHA_BACKEND_HOST=127.0.0.1&& npm --prefix backend start",
-    "dev:frontend": "set VITE_BACKEND_HOST=127.0.0.1&& set VITE_BACKEND_PORT=%KHA_BACKEND_PORT%&& npm --prefix frontend run dev -- --host 127.0.0.1 --port 5174 --strictPort",
-    "dev:electron": "set ELECTRON_DEV_URL=http://127.0.0.1:5174&& electron .",
-    "reset-local-admin": "npm --prefix backend run reset-local-admin --",
-    "icons:generate": "node scripts/generate-app-icons.js",
-    "sync:desktop-icon": "node scripts/sync-desktop-icon.js",
-    "prepare:build-cache": "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path .tmp,.npm-cache,.electron-cache,.electron-builder-cache | Out-Null\"",
-    "build:frontend": "cd frontend && npm run build",
-    "package:portable": "npm run package:portable:x64 && npm run package:portable:ia32",
-    "package:portable:x64": "npm run prepare:build-cache && npm run sync:desktop-icon && set TMP=%CD%\\.tmp&& set TEMP=%CD%\\.tmp&& set npm_config_cache=%CD%\\.npm-cache&& set ELECTRON_CACHE=%CD%\\.electron-cache&& set ELECTRON_BUILDER_CACHE=%CD%\\.electron-builder-cache&& electron-builder --win portable --x64 --publish never",
-    "package:portable:ia32": "npm run prepare:build-cache && npm run sync:desktop-icon && set TMP=%CD%\\.tmp&& set TEMP=%CD%\\.tmp&& set npm_config_cache=%CD%\\.npm-cache&& set ELECTRON_CACHE=%CD%\\.electron-cache&& set ELECTRON_BUILDER_CACHE=%CD%\\.electron-builder-cache&& electron-builder --win portable --ia32 --publish never",
-    "package:installer": "npm run package:installer:x64 && npm run package:installer:ia32",
-    "package:installer:x64": "npm run prepare:build-cache && npm run sync:desktop-icon && set TMP=%CD%\\.tmp&& set TEMP=%CD%\\.tmp&& set npm_config_cache=%CD%\\.npm-cache&& set ELECTRON_CACHE=%CD%\\.electron-cache&& set ELECTRON_BUILDER_CACHE=%CD%\\.electron-builder-cache&& electron-builder --win nsis --x64 --publish never",
-    "package:installer:ia32": "npm run prepare:build-cache && npm run sync:desktop-icon && set TMP=%CD%\\.tmp&& set TEMP=%CD%\\.tmp&& set npm_config_cache=%CD%\\.npm-cache&& set ELECTRON_CACHE=%CD%\\.electron-cache&& set ELECTRON_BUILDER_CACHE=%CD%\\.electron-builder-cache&& electron-builder --win nsis --ia32 --publish never",
-    "build:portable": "npm run build:frontend && npm run package:portable",
-    "build:installer": "npm run build:frontend && npm run package:installer && npm run generate:latest-yml && npm run generate:update-manifest",
-    "build:electron": "npm run build:installer",
-    "build": "npm run build:installer",
-    "build:all": "npm run build:frontend && npm run package:portable && npm run package:installer && npm run generate:latest-yml && npm run generate:update-manifest",
-    "generate:latest-yml": "node scripts/generate-latest-yml.js",
-    "generate:update-manifest": "node scripts/generate-update-manifest.js",
-    "test:repeat-sku-orders": "npm --prefix backend run test:repeat-sku-orders"
-  },
-  "build": {
-    "appId": "com.vankhammo.phanmienoffline",
-    "productName": "Bán Hàng Pos",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "src/**/*",
-      "backend/**/*",
-      "!backend/phanmienoffline.db.json",
-      "!**/*.db",
-      "!**/*.db.json",
-      "!**/*.sql",
-      "frontend/dist/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "build/icons/app-icon.png",
-        "to": "icons/app-icon.png"
-      },
-      {
-        "from": "build/icons/app-icon.ico",
-        "to": "icons/app-icon.ico"
-      }
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        }
-      ],
-      "icon": "build/icons/app-icon.ico",
-      "signAndEditExecutable": false
-    },
-    "mac": {
-      "icon": "build/icons/app-icon.icns"
-    },
-    "linux": {
-      "icon": "build/icons/app-icon.png"
-    },
-    "portable": {
-      "artifactName": "BanHangOffline_v${version}-${arch}.exe"
-    },
-    "nsis": {
-      "artifactName": "banhangoffline-setup-v${version}-${arch}.exe",
-      "oneClick": false,
-      "perMachine": false,
-      "allowElevation": true,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Bán Hàng Pos"
-    },
-    "publish": [
-      {
-        "provider": "generic",
-        "url": "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/",
-        "channel": "latest"
-      }
-    ],
-    "asar": true
-  },
-  "khaUpdate": {
-    "provider": "github",
-    "owner": "Vankhadev",
-    "repo": "phanmemoffline",
-    "channel": "latest",
-    "archChannels": {
-      "x64": "latest-x64",
-      "ia32": "latest-ia32"
-    },
-    "latestYmlUrl": "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/latest.yml",
-    "latestYmlBaseUrl": "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/",
-    "manifestUrl": "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/update-manifest.json",
-    "assetBaseUrl": "https://github.com/Vankhadev/phanmemoffline/releases/download",
-    "downloadLatestBaseUrl": "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/",
-    "supportedWindowsArch": [
-      "x64",
-      "ia32"
-    ]
-  },
-  "dependencies": {
-    "@capacitor/core": "^8.4.0",
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "dayjs": "^1.11.13",
-    "dotenv": "^16.4.5",
-    "electron-updater": "^6.8.3",
-    "exceljs": "^4.4.0",
-    "express": "^5.0.1",
-    "express-rate-limit": "^7.4.1",
-    "helmet": "^8.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "multer": "^2.0.1",
-    "node-cron": "^3.0.3",
-    "nodemailer": "^6.10.1",
-    "uuid": "^11.1.0"
-  },
-  "devDependencies": {
-    "@capacitor/android": "^8.4.0",
-    "@capacitor/cli": "^8.4.0",
-    "@capacitor/ios": "^8.4.0",
-    "concurrently": "^8.2.2",
-    "electron": "^28.2.2",
-    "electron-builder": "^24.13.3"
-  }
+﻿{
+    "name":  "phanmienoffline-electron",
+    "version":  "1.9.2",
+    "description":  "BÃ¡n hÃ ng offline ",
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/Vankhadev/phanmemoffline.git"
+                   },
+    "homepage":  "https://github.com/Vankhadev/phanmemoffline#readme",
+    "bugs":  {
+                 "url":  "https://github.com/Vankhadev/phanmemoffline/issues"
+             },
+    "main":  "src/main.js",
+    "scripts":  {
+                    "dev":  "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+                    "dev:backend":  "set KHA_BACKEND_HOST=127.0.0.1\u0026\u0026 npm --prefix backend start",
+                    "dev:frontend":  "set VITE_BACKEND_HOST=127.0.0.1\u0026\u0026 set VITE_BACKEND_PORT=%KHA_BACKEND_PORT%\u0026\u0026 npm --prefix frontend run dev -- --host 127.0.0.1 --port 5174 --strictPort",
+                    "dev:electron":  "set ELECTRON_DEV_URL=http://127.0.0.1:5174\u0026\u0026 electron .",
+                    "reset-local-admin":  "npm --prefix backend run reset-local-admin --",
+                    "icons:generate":  "node scripts/generate-app-icons.js",
+                    "sync:desktop-icon":  "node scripts/sync-desktop-icon.js",
+                    "prepare:build-cache":  "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path .tmp,.npm-cache,.electron-cache,.electron-builder-cache | Out-Null\"",
+                    "build:frontend":  "cd frontend \u0026\u0026 npm run build",
+                    "package:portable":  "npm run package:portable:x64 \u0026\u0026 npm run package:portable:ia32",
+                    "package:portable:x64":  "npm run prepare:build-cache \u0026\u0026 npm run sync:desktop-icon \u0026\u0026 set TMP=%CD%\\.tmp\u0026\u0026 set TEMP=%CD%\\.tmp\u0026\u0026 set npm_config_cache=%CD%\\.npm-cache\u0026\u0026 set ELECTRON_CACHE=%CD%\\.electron-cache\u0026\u0026 set ELECTRON_BUILDER_CACHE=%CD%\\.electron-builder-cache\u0026\u0026 electron-builder --win portable --x64 --publish never",
+                    "package:portable:ia32":  "npm run prepare:build-cache \u0026\u0026 npm run sync:desktop-icon \u0026\u0026 set TMP=%CD%\\.tmp\u0026\u0026 set TEMP=%CD%\\.tmp\u0026\u0026 set npm_config_cache=%CD%\\.npm-cache\u0026\u0026 set ELECTRON_CACHE=%CD%\\.electron-cache\u0026\u0026 set ELECTRON_BUILDER_CACHE=%CD%\\.electron-builder-cache\u0026\u0026 electron-builder --win portable --ia32 --publish never",
+                    "package:installer":  "npm run package:installer:x64 \u0026\u0026 npm run package:installer:ia32",
+                    "package:installer:x64":  "npm run prepare:build-cache \u0026\u0026 npm run sync:desktop-icon \u0026\u0026 set TMP=%CD%\\.tmp\u0026\u0026 set TEMP=%CD%\\.tmp\u0026\u0026 set npm_config_cache=%CD%\\.npm-cache\u0026\u0026 set ELECTRON_CACHE=%CD%\\.electron-cache\u0026\u0026 set ELECTRON_BUILDER_CACHE=%CD%\\.electron-builder-cache\u0026\u0026 electron-builder --win nsis --x64 --publish never",
+                    "package:installer:ia32":  "npm run prepare:build-cache \u0026\u0026 npm run sync:desktop-icon \u0026\u0026 set TMP=%CD%\\.tmp\u0026\u0026 set TEMP=%CD%\\.tmp\u0026\u0026 set npm_config_cache=%CD%\\.npm-cache\u0026\u0026 set ELECTRON_CACHE=%CD%\\.electron-cache\u0026\u0026 set ELECTRON_BUILDER_CACHE=%CD%\\.electron-builder-cache\u0026\u0026 electron-builder --win nsis --ia32 --publish never",
+                    "build:portable":  "npm run build:frontend \u0026\u0026 npm run package:portable",
+                    "build:installer":  "npm run build:frontend \u0026\u0026 npm run package:installer \u0026\u0026 npm run generate:latest-yml \u0026\u0026 npm run generate:update-manifest",
+                    "build:electron":  "npm run build:installer",
+                    "build":  "npm run build:installer",
+                    "build:all":  "npm run build:frontend \u0026\u0026 npm run package:portable \u0026\u0026 npm run package:installer \u0026\u0026 npm run generate:latest-yml \u0026\u0026 npm run generate:update-manifest",
+                    "generate:latest-yml":  "node scripts/generate-latest-yml.js",
+                    "generate:update-manifest":  "node scripts/generate-update-manifest.js",
+                    "test:repeat-sku-orders":  "npm --prefix backend run test:repeat-sku-orders"
+                },
+    "build":  {
+                  "appId":  "com.vankhammo.phanmienoffline",
+                  "productName":  "BÃ¡n HÃ ng Pos",
+                  "directories":  {
+                                      "output":  "release"
+                                  },
+                  "files":  [
+                                "src/**/*",
+                                "backend/**/*",
+                                "!backend/phanmienoffline.db.json",
+                                "!**/*.db",
+                                "!**/*.db.json",
+                                "!**/*.sql",
+                                "frontend/dist/**/*",
+                                "package.json"
+                            ],
+                  "extraResources":  [
+                                         {
+                                             "from":  "build/icons/app-icon.png",
+                                             "to":  "icons/app-icon.png"
+                                         },
+                                         {
+                                             "from":  "build/icons/app-icon.ico",
+                                             "to":  "icons/app-icon.ico"
+                                         }
+                                     ],
+                  "win":  {
+                              "target":  [
+                                             {
+                                                 "target":  "nsis",
+                                                 "arch":  [
+                                                              "x64",
+                                                              "ia32"
+                                                          ]
+                                             }
+                                         ],
+                              "icon":  "build/icons/app-icon.ico",
+                              "signAndEditExecutable":  false
+                          },
+                  "mac":  {
+                              "icon":  "build/icons/app-icon.icns"
+                          },
+                  "linux":  {
+                                "icon":  "build/icons/app-icon.png"
+                            },
+                  "portable":  {
+                                   "artifactName":  "BanHangOffline_v${version}-${arch}.exe"
+                               },
+                  "nsis":  {
+                               "artifactName":  "banhangoffline-setup-v${version}-${arch}.exe",
+                               "oneClick":  false,
+                               "perMachine":  false,
+                               "allowElevation":  true,
+                               "allowToChangeInstallationDirectory":  true,
+                               "createDesktopShortcut":  true,
+                               "createStartMenuShortcut":  true,
+                               "shortcutName":  "BÃ¡n HÃ ng Pos"
+                           },
+                  "publish":  [
+                                  {
+                                      "provider":  "generic",
+                                      "url":  "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/",
+                                      "channel":  "latest"
+                                  }
+                              ],
+                  "asar":  true
+              },
+    "khaUpdate":  {
+                      "provider":  "github",
+                      "owner":  "Vankhadev",
+                      "repo":  "phanmemoffline",
+                      "channel":  "latest",
+                      "archChannels":  {
+                                           "x64":  "latest-x64",
+                                           "ia32":  "latest-ia32"
+                                       },
+                      "latestYmlUrl":  "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/latest.yml",
+                      "latestYmlBaseUrl":  "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/",
+                      "manifestUrl":  "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/update-manifest.json",
+                      "assetBaseUrl":  "https://github.com/Vankhadev/phanmemoffline/releases/download",
+                      "downloadLatestBaseUrl":  "https://github.com/Vankhadev/phanmemoffline/releases/latest/download/",
+                      "supportedWindowsArch":  [
+                                                   "x64",
+                                                   "ia32"
+                                               ]
+                  },
+    "dependencies":  {
+                         "@capacitor/core":  "^8.4.0",
+                         "bcryptjs":  "^2.4.3",
+                         "cors":  "^2.8.5",
+                         "dayjs":  "^1.11.13",
+                         "dotenv":  "^16.4.5",
+                         "electron-updater":  "^6.8.3",
+                         "exceljs":  "^4.4.0",
+                         "express":  "^5.0.1",
+                         "express-rate-limit":  "^7.4.1",
+                         "helmet":  "^8.1.0",
+                         "jsonwebtoken":  "^9.0.2",
+                         "multer":  "^2.0.1",
+                         "node-cron":  "^3.0.3",
+                         "nodemailer":  "^6.10.1",
+                         "uuid":  "^11.1.0"
+                     },
+    "devDependencies":  {
+                            "@capacitor/android":  "^8.4.0",
+                            "@capacitor/cli":  "^8.4.0",
+                            "@capacitor/ios":  "^8.4.0",
+                            "concurrently":  "^8.2.2",
+                            "electron":  "^28.2.2",
+                            "electron-builder":  "^24.13.3"
+                        }
 }
