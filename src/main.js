@@ -659,10 +659,11 @@ function registerGuardianIpc() {
 }
 
 function getAppIconPath() {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'icons', 'app-icon.png');
+  const base = app.isPackaged ? path.join(process.resourcesPath, 'icons') : path.join(__dirname, '..', 'build', 'icons');
+  if (process.platform === 'win32') {
+    return path.join(base, 'app-icon.ico');
   }
-  return path.join(__dirname, '..', 'build', 'icons', 'app-icon.png');
+  return path.join(base, 'app-icon.png');
 }
 
 function createWindow() {

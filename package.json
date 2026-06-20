@@ -56,6 +56,10 @@
       {
         "from": "build/icons/app-icon.png",
         "to": "icons/app-icon.png"
+      },
+      {
+        "from": "build/icons/app-icon.ico",
+        "to": "icons/app-icon.ico"
       }
     ],
     "win": {
