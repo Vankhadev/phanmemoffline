@@ -190,9 +190,9 @@ function ElementContent({ element, template, payload }) {
   if (element.type === 'invoiceMeta') {
     return (
       <div className="invoice-editor-preview-pairs" style={baseStyle}>
-        {isStyleEnabled(style, 'showOrderCode') && <div><span>{style.orderCodeLabel || 'Mã đơn'}:</span><b>{invoiceCode}</b></div>}
+        {isStyleEnabled(style, 'showOrderCode') && <div><span>{style.orderCodeLabel || 'M? don'}:</span><b>{invoiceCode}</b></div>}
         {isStyleEnabled(style, 'showOrderDate') && <div><span>{style.orderDateLabel || 'Ngày'}:</span><b>{formatDate(invoice.created_at)} {formatTime(invoice.created_at)}</b></div>}
-        {isStyleEnabled(style, 'showSeller') && <div><span>{style.sellerLabelShort || 'NV'}:</span><b>{payload.metadata?.user_name || '—'}</b></div>}
+        {isStyleEnabled(style, 'showSeller') && <div><span>{style.sellerLabelShort || 'NV'}:</span><b>{payload.metadata?.user_name || ''}</b></div>}
         {isStyleEnabled(style, 'showOrderSource', false) && <div><span>{style.orderSourceLabel || 'Nguồn'}:</span><b>{invoice.source || '—'}</b></div>}
       </div>
     );
@@ -224,8 +224,8 @@ function ElementContent({ element, template, payload }) {
   if (element.type === 'signatures') {
     return (
       <div className="invoice-editor-preview-signatures" style={{ ...baseStyle, gap: style.signatureGapMm !== undefined ? `${style.signatureGapMm}mm` : undefined }}>
-        <div><b>{style.buyerLabel || signatures.buyer?.label || 'Khách hàng'}</b><span>{style.buyerHint || '(Ký và ghi rõ họ tên)'}</span></div>
-        <div><b>{style.sellerLabel || signatures.seller?.label || 'Người bán'}</b><span>{style.sellerHint || '(Ký và ghi rõ họ tên)'}</span></div>
+        <div><b>{style.buyerLabel || signatures.buyer?.label || 'Kh?ch h?ng'}</b><span>{style.buyerHint || '(K? v? ghi r? h? t?n)'}</span></div>
+        <div><b>{style.sellerLabel || signatures.seller?.label || 'Ng??i b?n'}</b><span>{style.sellerHint || '(K? v? ghi r? h? t?n)'}</span></div>
       </div>
     );
   }
@@ -272,11 +272,11 @@ function TablePreview({ document, payload, selected, zoom, snapEnabled, snapGrid
   const table = document.table || {};
   const items = Array.isArray(payload.items) ? payload.items : [];
   const { zone, frame, pageFrame } = getPageTableFrame(document, items.length, items);
-  const showSku = tableStyle.showSku === true;
-  const columns = (Array.isArray(table.columns) && table.columns.length ? table.columns : []).filter(column => showSku || column.key !== 'sku');
   const page = getEditorPaperDimensions(document);
   const tableStyleElement = getTableStyleElement(document) || {};
   const tableStyle = tableStyleElement.style || {};
+  const showSku = tableStyle.showSku === true;
+  const columns = (Array.isArray(table.columns) && table.columns.length ? table.columns : []).filter(column => showSku || column.key !== 'sku');
 
   return (
     <ElementFrame
@@ -632,9 +632,10 @@ export default function EditorCanvas({
         </div>
       </div>
       <div className="invoice-editor-canvas-footer">
-        <span>{page.paperSize} {page.orientation === 'landscape' ? 'ngang' : 'dọc'} · {page.width}×{page.height}mm · zoom {Math.round(zoom * 100)}%</span>
-        <span>Snap grid {snapEnabled ? `${snapGridMm}mm + alignment` : 'OFF'} · Arrow 0.5mm · Shift+Arrow 1mm</span>
+        <span>{page.paperSize} {page.orientation === 'landscape' ? 'ngang' : 'd?c'} ? {page.width}?{page.height}mm ? zoom {Math.round(zoom * 100)}%</span>
+        <span>Snap grid {snapEnabled ? `${snapGridMm}mm + alignment` : 'OFF'} ? Arrow 0.5mm ? Shift+Arrow 1mm</span>
       </div>
     </section>
   );
 }
+

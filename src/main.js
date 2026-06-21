@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('path');
 const net = require('net');
 const http = require('http');
@@ -28,6 +28,8 @@ let backendProcess = null;
 let backendPort = null;
 let backendApiBase = '';
 let backendHealth = null;
+let backendWatchdogTimer = null;
+let backendRestarting = false;
 let updateManager = null;
 let backendIpcRegistered = false;
 const backendInstanceId = randomUUID();
@@ -153,6 +155,60 @@ function getBackendCwd() {
   return app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
 }
 
+function clearBackendWatchdog() {
+  if (backendWatchdogTimer) {
+    clearInterval(backendWatchdogTimer);
+    backendWatchdogTimer = null;
+  }
+}
+
+function isBackendHealthySnapshot() {
+  return Boolean(backendProcess && backendApiBase && backendHealth && backendHealth.ok === true);
+}
+
+async function restartBackendAfterFailure(reason = 'backend-health-failure') {
+  if (app.isQuitting || backendRestarting) return;
+  backendRestarting = true;
+  clearBackendWatchdog();
+
+  const preferredPort = backendPort || DEFAULT_BACKEND_PORT;
+  console.warn(`[KHA Electron] Restarting backend after ${reason}...`);
+
+  try {
+    stopBackend();
+    await sleep(1000);
+    await startBackend({ preferredPort });
+    console.log(`[KHA Electron] Backend restarted successfully at ${backendApiBase}`);
+  } catch (err) {
+    console.error('[KHA Electron] Backend restart failed:', err);
+    backendPort = null;
+    backendApiBase = '';
+    backendHealth = null;
+    backendWatchdogTimer = setTimeout(() => {
+      backendRestarting = false;
+      void restartBackendAfterFailure('retry-after-failed-restart');
+    }, 5000);
+    backendWatchdogTimer.unref?.();
+    return;
+  } finally {
+    backendRestarting = false;
+  }
+}
+
+function ensureBackendWatchdog() {
+  if (backendWatchdogTimer || app.isQuitting) return;
+  backendWatchdogTimer = setInterval(() => {
+    if (app.isQuitting || backendRestarting) return;
+    if (!backendProcess || backendProcess.exitCode !== null) {
+      void restartBackendAfterFailure('process-exit');
+      return;
+    }
+    if (!isBackendHealthySnapshot()) {
+      void restartBackendAfterFailure('health-failed');
+    }
+  }, 10000);
+  backendWatchdogTimer.unref?.();
+}
 function pipeBackendLog(stream, logger) {
   stream?.on('data', chunk => {
     const text = String(chunk || '').trimEnd();
@@ -165,6 +221,8 @@ function stopBackend() {
   const child = backendProcess;
   backendProcess = null;
   backendHealth = null;
+  clearBackendWatchdog();
+  backendRestarting = false;
   try {
     if (!child.killed) child.kill();
   } catch (err) {
@@ -172,10 +230,14 @@ function stopBackend() {
   }
 }
 
-async function startBackend() {
+async function startBackend(options = {}) {
   const userData = app.getPath('userData');
   const dbPath = path.join(userData, 'phanmienoffline.db.json');
-  const port = await findAvailablePort(DEFAULT_BACKEND_PORT, BACKEND_HOST);
+  const preferredPort = normalizeStartPort(options.preferredPort || backendPort || DEFAULT_BACKEND_PORT);
+  let port = preferredPort;
+  if (!(await isPortAvailable(port, BACKEND_HOST))) {
+    port = await findAvailablePort(preferredPort, BACKEND_HOST);
+  }
   const apiBase = `http://${getBackendClientHost(BACKEND_HOST)}:${port}/api`;
   const backendEntry = getBackendEntryPath();
   const backendCwd = getBackendCwd();

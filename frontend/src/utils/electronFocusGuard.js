@@ -85,12 +85,12 @@ function requestElectronInputFocus(control, reason, options = {}) {
   });
 }
 
-export function ensureFocusableElement(target, options = {}) {
-  if (!isBrowser()) return false;
-  const control = getFocusableControl(target);
+function requestControlFocus(control, options = {}) {
   if (!control || typeof control.focus !== 'function') return false;
 
-  requestElectronInputFocus(control, options.reason || 'renderer:ensure-focusable-element', { immediate: options.immediateElectronFocus === true });
+  requestElectronInputFocus(control, options.reason || 'renderer:request-control-focus', {
+    immediate: options.immediateElectronFocus === true,
+  });
 
   const focus = () => {
     if (!control.isConnected || document.activeElement === control) return;
@@ -104,7 +104,27 @@ export function ensureFocusableElement(target, options = {}) {
   const delay = Number(options.delayMs || 0);
   if (delay > 0) window.setTimeout(focus, delay);
   else focus();
+
+  if (document.activeElement !== control) {
+    window.requestAnimationFrame(() => {
+      if (!control.isConnected || document.activeElement === control) return;
+      focus();
+    });
+  }
+
   return true;
+}
+
+export function ensureFocusableElement(target, options = {}) {
+  if (!isBrowser()) return false;
+  const control = getFocusableControl(target);
+  if (!control || typeof control.focus !== 'function') return false;
+
+  return requestControlFocus(control, {
+    reason: options.reason || 'renderer:ensure-focusable-element',
+    immediateElectronFocus: options.immediateElectronFocus === true,
+    delayMs: options.delayMs || 0,
+  });
 }
 
 export function installElectronInputFocusGuard() {
@@ -113,12 +133,12 @@ export function installElectronInputFocusGuard() {
 
   const handlePointerDown = (event) => {
     const control = getFocusableControl(event.target);
-    if (control) requestElectronInputFocus(control, 'renderer:form-control-pointerdown');
+    if (control) requestControlFocus(control, { reason: 'renderer:form-control-pointerdown' });
   };
 
   const handleFocusIn = (event) => {
     const control = getFocusableControl(event.target);
-    if (control) requestElectronInputFocus(control, 'renderer:form-control-focusin');
+    if (control) requestControlFocus(control, { reason: 'renderer:form-control-focusin' });
   };
 
   document.addEventListener('pointerdown', handlePointerDown, true);

@@ -2,12 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   authApi,
-  clearLocalApiBaseOverride,
   getApiBase,
   getApiErrorMessage,
-  getLocalApiBaseOverride,
-  normalizeApiBaseOverride,
-  persistLocalApiBaseOverride,
 } from '../utils/apiClient';
 import { MOBILE_APP_DISPLAY_NAME, MOBILE_APP_VERSION, isNativeAppRuntime } from '../utils/mobileAppRuntime';
 import {
@@ -25,7 +21,6 @@ import {
   Mail,
   Phone,
   RefreshCw,
-  Server,
   ShieldCheck,
   Store,
   User,
@@ -44,7 +39,7 @@ const initialForm = {
 
 const normalizeEmail = (email) => email.trim().toLowerCase();
 const normalizePhone = (phone) => phone.replace(/\s/g, '');
-const getInitialServerUrl = () => getApiBase() || getLocalApiBaseOverride() || '';
+const getInitialServerUrl = () => getApiBase() || '';
 
 export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const navigate = useNavigate();
@@ -73,14 +68,14 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       const data = await authApi.restoreScan();
       if (data.ok) {
         setRestoreStats(data);
-        setSuccess('Đã khôi phục dữ liệu database tốt nhất thành công!');
+        setSuccess('?? kh?i ph?c d? li?u database t?t nh?t th?nh c?ng!');
         const status = await authApi.bootstrapStatus();
         applyBootstrapStatus(status);
       } else {
-        setRestoreError(data.message || 'Không tìm thấy file database chứa dữ liệu hoặc backup.');
+        setRestoreError(data.message || 'Kh?ng t?m th?y file database ch?a d? li?u ho?c backup.');
       }
     } catch (err) {
-      setRestoreError(getApiErrorMessage(err?.data, err.message || 'Lỗi khôi phục dữ liệu.'));
+      setRestoreError(getApiErrorMessage(err?.data, err.message || 'L?i kh?i ph?c d? li?u.'));
     } finally {
       setRestoreLoading(false);
     }
@@ -106,28 +101,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     setSuccess('');
   };
 
-  const applyServerOverride = ({ allowEmpty = true } = {}) => {
-    const rawServerUrl = String(form.serverUrl || '').trim();
-    if (!rawServerUrl) {
-      if (allowEmpty) {
-        clearLocalApiBaseOverride();
-        setForm(current => ({ ...current, serverUrl: getApiBase() || '' }));
-        return true;
-      }
-      setError('Vui lòng nhập địa chỉ máy chủ API.');
-      return false;
-    }
-
-    const normalizedServerUrl = normalizeApiBaseOverride(rawServerUrl);
-    if (!normalizedServerUrl) {
-      setError('Địa chỉ máy chủ không hợp lệ. Ví dụ: https://tenmien.com/api hoặc http://192.168.1.10:3001/api');
-      return false;
-    }
-
-    persistLocalApiBaseOverride(normalizedServerUrl);
-    setForm(current => ({ ...current, serverUrl: normalizedServerUrl }));
-    return true;
-  };
+  const applyServerOverride = () => true;
 
   const checkBootstrapStatus = async () => {
     setCheckingSetup(true);
@@ -140,7 +114,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       applyBootstrapStatus(data);
     } catch (err) {
       setNeedsSetup(false);
-      setError(getApiErrorMessage(err?.data, err.message || 'Không thể kết nối server để kiểm tra trạng thái thiết lập.'));
+      setError(getApiErrorMessage(err?.data, err.message || 'Kh?ng th? k?t n?i server d? ki?m tra tr?ng th?i thi?t l?p.'));
       onBootstrapStatus?.({ ok: false, needsSetup: false, message: err.message });
     } finally {
       setCheckingSetup(false);
@@ -165,7 +139,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       } catch (err) {
         if (!mounted) return;
         setNeedsSetup(false);
-        setError(getApiErrorMessage(err?.data, err.message || 'Không thể kết nối server để kiểm tra trạng thái thiết lập.'));
+        setError(getApiErrorMessage(err?.data, err.message || 'Kh?ng th? k?t n?i server d? ki?m tra tr?ng th?i thi?t l?p.'));
         onBootstrapStatus?.({ ok: false, needsSetup: false, message: err.message });
       } finally {
         if (mounted) setCheckingSetup(false);
@@ -179,7 +153,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
   const completeLogin = async (payload) => {
     if (!payload?.token || !payload?.user) {
-      throw new Error('Server không trả đủ thông tin đăng nhập.');
+      throw new Error('Server kh?ng tr? d? th?ng tin dang nh?p.');
     }
     const result = await onLogin?.(payload);
     navigate(result?.defaultRoute || '/', { replace: true });
@@ -188,7 +162,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const validateLogin = () => {
     const input = form.email.trim();
     if (!input) {
-      setError('Vui lòng nhập email hoặc số điện thoại.');
+      setError('Vui l?ng nh?p email ho?c s? di?n tho?i.');
       return false;
     }
 
@@ -196,12 +170,12 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     const isPhone = /^0\d{9,10}$/.test(normalizePhone(input));
 
     if (!isEmail && !isPhone) {
-      setError('Email hoặc Số điện thoại không hợp lệ.');
+      setError('Email ho?c S? di?n tho?i kh?ng h?p l?.');
       return false;
     }
 
     if (!form.password) {
-      setError('Vui lòng nhập mật khẩu.');
+      setError('Vui l?ng nh?p m?t kh?u.');
       return false;
     }
 
@@ -210,32 +184,32 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
   const validateAdminForm = () => {
     if (!form.name.trim()) {
-      setError('Vui lòng nhập họ và tên quản trị viên.');
+      setError('Vui l?ng nh?p h? v? t?n qu?n tr? vi?n.');
       return false;
     }
 
     if (form.name.trim().length < 2) {
-      setError('Họ và tên phải có ít nhất 2 ký tự.');
+      setError('H? v? t?n ph?i c? ?t nh?t 2 k? t?.');
       return false;
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      setError('Email quản trị không hợp lệ.');
+      setError('Email qu?n tr? kh?ng h?p l?.');
       return false;
     }
 
     if (!/^0\d{9,10}$/.test(normalizePhone(form.phone))) {
-      setError('Số điện thoại phải bắt đầu bằng 0 và gồm 10-11 chữ số.');
+      setError('S? di?n tho?i ph?i b?t d?u b?ng 0 v? g?m 10-11 ch? s?.');
       return false;
     }
 
     if (form.password.length < 8) {
-      setError('Mật khẩu phải có ít nhất 8 ký tự.');
+      setError('M?t kh?u ph?i c? ?t nh?t 8 k? t?.');
       return false;
     }
 
     if (form.password !== form.confirmPassword) {
-      setError('Xác nhận mật khẩu không khớp.');
+      setError('X?c nh?n m?t kh?u kh?ng kh?p.');
       return false;
     }
 
@@ -251,7 +225,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       });
 
       if (!data.token || !data.user) {
-        throw new Error('Server không trả đủ thông tin đăng nhập.');
+        throw new Error('Server kh?ng tr? d? th?ng tin dang nh?p.');
       }
 
       await rememberMobileOfflineAccount({ email, password, payload: data });
@@ -275,11 +249,11 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     try {
       const data = await loginWithCredentials(form.email, form.password);
       setSuccess(data.localOnly
-        ? 'Đăng nhập cục bộ trên điện thoại thành công.'
-        : 'Đăng nhập thành công. Đang khôi phục phiên từ server...');
+        ? '?ang nh?p c?c b? tr?n di?n tho?i th?nh c?ng.'
+        : '?ang nh?p th?nh c?ng. ?ang kh?i ph?c phi?n t? server...');
       await completeLogin(data);
     } catch (err) {
-      setError(getApiErrorMessage(err?.data, err.message || 'Không thể kết nối server để đăng nhập.'));
+      setError(getApiErrorMessage(err?.data, err.message || 'Kh?ng th? k?t n?i server d? dang nh?p.'));
     } finally {
       setLoading(false);
     }
@@ -291,7 +265,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     setSuccess('');
 
     if (!needsSetup) {
-      setError('Hệ thống đã có tài khoản quản trị viên. Vui lòng đăng nhập.');
+      setError('H? th?ng d? c? t?i kho?n qu?n tr? vi?n. Vui l?ng dang nh?p.');
       return;
     }
 
@@ -310,10 +284,10 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     setLoading(true);
     try {
       const data = await authApi.bootstrapAdmin(payload);
-      setSuccess(data.message ? `${data.message}. Đang đăng nhập...` : 'Tạo tài khoản quản trị viên đầu tiên thành công. Đang đăng nhập...');
+      setSuccess(data.message ? `${data.message}. ?ang dang nh?p...` : 'T?o t?i kho?n qu?n tr? vi?n d?u ti?n th?nh c?ng. ?ang dang nh?p...');
       await completeLogin(data);
     } catch (err) {
-      setError(getApiErrorMessage(err?.data, err.message || 'Không thể kết nối server để tạo quản trị viên đầu tiên.'));
+      setError(getApiErrorMessage(err?.data, err.message || 'Kh?ng th? k?t n?i server d? t?o qu?n tr? vi?n d?u ti?n.'));
     } finally {
       setLoading(false);
     }
@@ -330,9 +304,9 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden bg-slate-50 border border-slate-100">
             <img src="./icons/app-icon-192.png" alt="POS Logo" className="w-full h-full object-cover" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">Bán Hàng Pos</h1>
+          <h1 className="text-2xl font-bold text-gray-800">B?n H?ng Pos</h1>
           <p className="text-blue-600 font-semibold mt-1">
-            {checkingSetup ? 'Đang kiểm tra hệ thống...' : showSetupForm ? 'Thiết lập lần đầu' : 'Đăng nhập hệ thống'}
+            {checkingSetup ? '?ang ki?m tra h? th?ng...' : showSetupForm ? 'Thi?t l?p l?n d?u' : '?ang nh?p h? th?ng'}
           </p>
           {isNativeAppRuntime() && (
             <div className="mt-2 text-xs font-bold text-emerald-700">{MOBILE_APP_DISPLAY_NAME} {MOBILE_APP_VERSION}</div>
@@ -342,7 +316,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
         {checkingSetup ? (
           <div className="text-center py-8 text-gray-500 text-sm">
             <RefreshCw className="animate-spin mx-auto mb-3 text-blue-600" size={28} />
-            Đang kiểm tra trạng thái thiết lập...
+            ?ang ki?m tra tr?ng th?i thi?t l?p...
           </div>
         ) : (
           <>
@@ -362,39 +336,11 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   onClick={checkBootstrapStatus}
                   className="text-xs font-semibold text-red-700 underline decoration-red-300 hover:text-red-900"
                 >
-                  Thử lại
+                  Th? l?i
                 </button>
               </div>
             )}
 
-            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                <span className="inline-flex items-center gap-1"><Server size={14} /> Kết nối máy tính / server</span>
-              </label>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                  type="text"
-                  inputMode="url"
-                  value={form.serverUrl}
-                  onChange={event => set('serverUrl', event.target.value)}
-                  placeholder="http://192.168.1.19:5174/api"
-                  className="input-field min-w-0 flex-1"
-                  autoComplete="url"
-                />
-                <button
-                  type="button"
-                  onClick={checkBootstrapStatus}
-                  disabled={loading || checkingSetup}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-200 px-3 text-sm font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <RefreshCw size={16} className={checkingSetup ? 'animate-spin' : ''} />
-                  Kiểm tra
-                </button>
-              </div>
-              <div className="mt-2 text-xs leading-relaxed text-slate-500">
-                Nếu máy tính đang mở, app sẽ kết nối để đồng bộ dữ liệu. Nếu máy tính tắt hoặc đang ở Wi-Fi khác, app vẫn có thể đăng nhập cục bộ bằng tài khoản đã lưu/default.
-              </div>
-            </div>
 
             {needsSetup && (
               <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-amber-50 p-1">
@@ -403,14 +349,14 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   onClick={() => switchAuthMode('setup')}
                   className={`rounded-lg px-3 py-2 text-sm font-bold transition ${showSetupForm ? 'bg-amber-600 text-white shadow-sm' : 'text-amber-800 hover:bg-amber-100'}`}
                 >
-                  Thiết lập máy này
+                  Thi?t l?p m?y n?y
                 </button>
                 <button
                   type="button"
                   onClick={() => switchAuthMode('login')}
                   className={`rounded-lg px-3 py-2 text-sm font-bold transition ${!showSetupForm ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-700 hover:bg-blue-50'}`}
                 >
-                  Đăng nhập tài khoản đã có
+                  ?ang nh?p t?i kho?n d? c?
                 </button>
               </div>
             )}
@@ -420,20 +366,20 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
                   <AlertTriangle size={18} className="shrink-0 mt-0.5" />
                   <div>
-                    <div className="font-semibold">Hệ thống chưa có quản trị viên.</div>
-                    <div>Vui lòng tạo tài khoản admin đầu tiên. Sau khi tạo thành công, phiên sẽ được khôi phục và đồng bộ từ server.</div>
+                    <div className="font-semibold">H? th?ng chua c? qu?n tr? vi?n.</div>
+                    <div>Vui l?ng t?o t?i kho?n admin d?u ti?n. Sau khi t?o th?nh c?ng, phi?n s? du?c kh?i ph?c v? d?ng b? t? server.</div>
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><User size={14} /> Họ và tên <span className="text-red-500">*</span></span>
+                    <span className="inline-flex items-center gap-1"><User size={14} /> H? v? t?n <span className="text-red-500">*</span></span>
                   </label>
                   <input
                     type="text"
                     value={form.name}
                     onChange={event => set('name', event.target.value)}
-                    placeholder="VD: Nguyễn Văn A"
+                    placeholder="VD: Nguy?n Van A"
                     className="input-field w-full pl-4"
                     autoComplete="name"
                     required
@@ -442,7 +388,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><Mail size={14} /> Email quản trị <span className="text-red-500">*</span></span>
+                    <span className="inline-flex items-center gap-1"><Mail size={14} /> Email qu?n tr? <span className="text-red-500">*</span></span>
                   </label>
                   <input
                     type="email"
@@ -457,7 +403,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><Phone size={14} /> Số điện thoại <span className="text-red-500">*</span></span>
+                    <span className="inline-flex items-center gap-1"><Phone size={14} /> S? di?n tho?i <span className="text-red-500">*</span></span>
                   </label>
                   <input
                     type="tel"
@@ -472,14 +418,14 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><Lock size={14} /> Mật khẩu <span className="text-red-500">*</span></span>
+                    <span className="inline-flex items-center gap-1"><Lock size={14} /> M?t kh?u <span className="text-red-500">*</span></span>
                   </label>
                   <div className="relative">
                     <input
                       type={showPass ? 'text' : 'password'}
                       value={form.password}
                       onChange={event => set('password', event.target.value)}
-                      placeholder="Tối thiểu 6 ký tự"
+                      placeholder="T?i thi?u 6 k? t?"
                       className="input-field w-full pl-4 pr-10"
                       autoComplete="new-password"
                       required
@@ -488,7 +434,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                       type="button"
                       onClick={() => setShowPass(current => !current)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      aria-label={showPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                      aria-label={showPass ? '?n m?t kh?u' : 'Hi?n m?t kh?u'}
                     >
                       {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -497,14 +443,14 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><Lock size={14} /> Xác nhận mật khẩu <span className="text-red-500">*</span></span>
+                    <span className="inline-flex items-center gap-1"><Lock size={14} /> X?c nh?n m?t kh?u <span className="text-red-500">*</span></span>
                   </label>
                   <div className="relative">
                     <input
                       type={showConfirm ? 'text' : 'password'}
                       value={form.confirmPassword}
                       onChange={event => set('confirmPassword', event.target.value)}
-                      placeholder="Nhập lại mật khẩu"
+                      placeholder="Nh?p l?i m?t kh?u"
                       className="input-field w-full pl-4 pr-10"
                       autoComplete="new-password"
                       required
@@ -513,7 +459,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                       type="button"
                       onClick={() => setShowConfirm(current => !current)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      aria-label={showConfirm ? 'Ẩn xác nhận mật khẩu' : 'Hiện xác nhận mật khẩu'}
+                      aria-label={showConfirm ? '?n x?c nh?n m?t kh?u' : 'Hi?n x?c nh?n m?t kh?u'}
                     >
                       {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -526,27 +472,27 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2"
                 >
                   {loading ? (
-                    <><RefreshCw size={20} className="animate-spin" /> Đang tạo quản trị viên...</>
+                    <><RefreshCw size={20} className="animate-spin" /> ?ang t?o qu?n tr? vi?n...</>
                   ) : (
-                    <><UserPlus size={20} /> Tạo quản trị viên đầu tiên</>
+                    <><UserPlus size={20} /> T?o qu?n tr? vi?n d?u ti?n</>
                   )}
                 </button>
 
                 <Link to="/dang-ky" className="w-full border border-amber-200 text-amber-700 hover:bg-amber-50 py-2.5 rounded-xl font-semibold transition flex items-center justify-center gap-2 text-sm">
-                  Mở trang đăng ký lần đầu riêng
+                  M? trang dang k? l?n d?u ri?ng
                 </Link>
               </form>
             ) : (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><Mail size={14} /> Email hoặc Số điện thoại</span>
+                    <span className="inline-flex items-center gap-1"><Mail size={14} /> Email ho?c S? di?n tho?i</span>
                   </label>
                   <input
                     type="text"
                     value={form.email}
                     onChange={event => set('email', event.target.value)}
-                    placeholder="nguyenvana@gmail.com hoặc 0904045075"
+                    placeholder="nguyenvana@gmail.com ho?c 0904045075"
                     className="input-field w-full pl-4"
                     autoComplete="username"
                     required
@@ -555,14 +501,14 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><Lock size={14} /> Mật khẩu</span>
+                    <span className="inline-flex items-center gap-1"><Lock size={14} /> M?t kh?u</span>
                   </label>
                   <div className="relative">
                     <input
                       type={showPass ? 'text' : 'password'}
                       value={form.password}
                       onChange={event => set('password', event.target.value)}
-                      placeholder="••••••••"
+                      placeholder="????????"
                       className="input-field w-full pl-4 pr-10"
                       autoComplete="current-password"
                       required
@@ -571,7 +517,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                       type="button"
                       onClick={() => setShowPass(current => !current)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      aria-label={showPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                      aria-label={showPass ? '?n m?t kh?u' : 'Hi?n m?t kh?u'}
                     >
                       {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -584,19 +530,19 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2"
                 >
                   {loading ? (
-                    <><RefreshCw size={20} className="animate-spin" /> Đang đăng nhập...</>
+                    <><RefreshCw size={20} className="animate-spin" /> ?ang dang nh?p...</>
                   ) : (
-                    <><LogIn size={20} /> Đăng nhập</>
+                    <><LogIn size={20} /> ?ang nh?p</>
                   )}
                 </button>
 
                 <Link to="/dang-ky" className="w-full border border-blue-200 text-blue-700 hover:bg-blue-50 py-2.5 rounded-xl font-semibold transition flex items-center justify-center gap-2 text-sm">
-                  <UserPlus size={16} /> Đăng ký tài khoản mới
+                  <UserPlus size={16} /> ?ang k? t?i kho?n m?i
                 </Link>
               </form>
             )}
 
-            {/* Khôi phục dữ liệu section */}
+            {/* Kh?i ph?c d? li?u section */}
             <div className="mt-4 pt-4 border-t border-slate-100">
               <button
                 type="button"
@@ -605,26 +551,26 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm"
               >
                 {restoreLoading ? (
-                  <><RefreshCw size={16} className="animate-spin" /> Đang khôi phục dữ liệu...</>
+                  <><RefreshCw size={16} className="animate-spin" /> ?ang kh?i ph?c d? li?u...</>
                 ) : (
-                  <>Khôi phục dữ liệu</>
+                  <>Kh?i ph?c d? li?u</>
                 )}
               </button>
               {restoreStats && (
                 <div className="mt-3 bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-xs text-emerald-800 space-y-1">
-                  <div className="font-semibold text-emerald-950">Khôi phục thành công database:</div>
+                  <div className="font-semibold text-emerald-950">Kh?i ph?c th?nh c?ng database:</div>
                   <div className="font-mono text-[10px] break-all text-emerald-900">{restoreStats.path}</div>
                   <div className="grid grid-cols-3 gap-1 pt-1.5 text-center font-semibold">
                     <div className="bg-white/80 rounded px-1.5 py-1 border border-emerald-100">
-                      <div>Sản phẩm</div>
+                      <div>S?n ph?m</div>
                       <div className="text-sm font-bold text-emerald-700">{restoreStats.productsCount}</div>
                     </div>
                     <div className="bg-white/80 rounded px-1.5 py-1 border border-emerald-100">
-                      <div>Khách hàng</div>
+                      <div>Kh?ch h?ng</div>
                       <div className="text-sm font-bold text-emerald-700">{restoreStats.customersCount}</div>
                     </div>
                     <div className="bg-white/80 rounded px-1.5 py-1 border border-emerald-100">
-                      <div>Đơn hàng</div>
+                      <div>?on h?ng</div>
                       <div className="text-sm font-bold text-emerald-700">{restoreStats.invoicesCount}</div>
                     </div>
                   </div>
@@ -640,11 +586,11 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
             <div className="mt-6 bg-blue-50 rounded-xl p-4 text-xs text-blue-700">
               {showSetupForm ? (
-                <div>Lần đầu sử dụng: tài khoản đầu tiên sẽ được server tự động cấp quyền ADMIN.</div>
+                <div>L?n d?u s? d?ng: t?i kho?n d?u ti?n s? du?c server t? d?ng c?p quy?n ADMIN.</div>
               ) : needsSetup ? (
-                <div>Server hiện tại đang trống dữ liệu. Để đăng nhập tài khoản đã có, hãy nhập đúng địa chỉ server đang lưu tài khoản rồi bấm Kiểm tra hoặc Đăng nhập.</div>
+                <div>Server hi?n t?i dang tr?ng d? li?u. ?? dang nh?p t?i kho?n d? c?, h?y nh?p d?ng d?a ch? server dang luu t?i kho?n r?i b?m Ki?m tra ho?c ?ang nh?p.</div>
               ) : (
-                <div>Tài khoản mặc định đã được điền sẵn. Bấm Đăng nhập để dùng trên điện thoại, kể cả khi chưa kết nối máy tính.</div>
+                <div>T?i kho?n m?c d?nh d? du?c di?n s?n. B?m ?ang nh?p d? d?ng tr?n di?n tho?i, k? c? khi chua k?t n?i m?y t?nh.</div>
               )}
             </div>
           </>
@@ -653,3 +599,4 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     </div>
   );
 }
+

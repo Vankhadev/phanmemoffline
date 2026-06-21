@@ -29,7 +29,7 @@ function normalizeNegativeStockProduct(product = {}) {
     ...product,
     id: product.id ?? product.product_id ?? product.variant_id ?? '',
     sku: product.sku || product.product_sku || product.variant_sku || '',
-    name: product.name || product.product_name || product.variant_name || product.sku || 'Sản phẩm',
+    name: product.name || product.product_name || product.variant_name || product.sku || 'S?n ph?m',
     stock: Number.isFinite(stock) ? stock : 0,
   };
 }
@@ -141,11 +141,11 @@ export default function Home({ user, store = {} }) {
     setStatsMessageTone('info');
 
     try {
-      const data = await apiJsonChecked('/dashboard/summary', {}, 'Không thể tải thống kê trang chủ.');
+      const data = await apiJsonChecked('/dashboard/summary', {}, 'Kh?ng th? t?i th?ng k? trang ch?.');
       let negativeStockSource = data;
       if (!hasNegativeStockFields(data)) {
         try {
-          negativeStockSource = await apiJsonChecked('/stats/summary', {}, 'Không thể tải thống kê âm kho.');
+          negativeStockSource = await apiJsonChecked('/stats/summary', {}, 'Kh?ng th? t?i th?ng k? ?m kho.');
         } catch (_) {
           negativeStockSource = data;
         }
@@ -170,10 +170,10 @@ export default function Home({ user, store = {} }) {
       setStats(EMPTY_STATS);
 
       if (error instanceof ApiError && Number(error.status) === 403) {
-        setStatsMessage('Tài khoản hiện tại chưa được cấp quyền xem thống kê. Trang chủ vẫn hiển thị đầy đủ các khu vực còn lại.');
+        setStatsMessage('T?i kho?n hi?n t?i chua du?c c?p quy?n xem th?ng k?. Trang ch? v?n hi?n th? d?y d? c?c khu v?c c?n l?i.');
         setStatsMessageTone('warning');
       } else {
-        setStatsMessage('Không thể tải thống kê lúc này. Dữ liệu sẽ tự đồng bộ lại khi kết nối ổn định.');
+        setStatsMessage('Kh?ng th? t?i th?ng k? l?c n?y. D? li?u s? t? d?ng b? l?i khi k?t n?i ?n d?nh.');
         setStatsMessageTone('info');
       }
     } finally {
@@ -200,43 +200,43 @@ export default function Home({ user, store = {} }) {
 
   const statCards = useMemo(() => ([
     {
-      title: 'Doanh thu hôm nay',
+      title: 'Doanh thu h?m nay',
       value: formatVND(stats.todayRevenue),
-      sub: 'Đã gồm các đơn hoàn tất trong ngày',
+      sub: '?? g?m c?c don ho?n t?t trong ng?y',
       icon: BarChart3,
       textColor: 'text-blue-600',
       bgColor: 'bg-blue-50',
     },
     {
-      title: 'Đơn hàng hôm nay',
+      title: '?on h?ng h?m nay',
       value: stats.todayOrders.toLocaleString('vi-VN'),
-      sub: `${stats.paidOrders.toLocaleString('vi-VN')} đã thanh toán`,
+      sub: `${stats.paidOrders.toLocaleString('vi-VN')} d? thanh to?n`,
       icon: ShoppingCart,
       textColor: 'text-green-600',
       bgColor: 'bg-green-50',
     },
     {
-      title: 'Tổng sản phẩm',
+      title: 'T?ng s?n ph?m',
       value: stats.totalProducts.toLocaleString('vi-VN'),
-      sub: `${stats.outOfStock.toLocaleString('vi-VN')} sản phẩm tồn 0`,
+      sub: `${stats.outOfStock.toLocaleString('vi-VN')} s?n ph?m t?n 0`,
       icon: Package,
       textColor: 'text-purple-600',
       bgColor: 'bg-purple-50',
     },
     {
-      title: 'Cảnh báo tồn kho',
+      title: 'C?nh b?o t?n kho',
       value: (stats.outOfStock + stats.lowStock + stats.negativeStockCount).toLocaleString('vi-VN'),
-      sub: `${stats.lowStock.toLocaleString('vi-VN')} sắp hết · ${stats.negativeStockCount.toLocaleString('vi-VN')} âm kho`,
+      sub: `${stats.lowStock.toLocaleString('vi-VN')} s?p h?t ? ${stats.negativeStockCount.toLocaleString('vi-VN')} ?m kho`,
       icon: AlertCircle,
       textColor: 'text-red-600',
       bgColor: 'bg-red-50',
     },
     {
-      title: 'Âm kho',
+      title: '?m kho',
       value: stats.negativeStockCount.toLocaleString('vi-VN'),
       sub: stats.negativeStockCount > 0
-        ? `${stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} ${negativeStockNearLimitLabel || `gần ${negativeStockLimitLabel}`} · thấp nhất ${formatStockValue(stats.lowestNegativeStock)}`
-        : `Không có sản phẩm âm kho; ngưỡng ${negativeStockLimitLabel}`,
+        ? `${stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} ${negativeStockNearLimitLabel || `g?n ${negativeStockLimitLabel}`} ? th?p nh?t ${formatStockValue(stats.lowestNegativeStock)}`
+        : `Kh?ng c? s?n ph?m ?m kho; ngu?ng ${negativeStockLimitLabel}`,
       icon: AlertCircle,
       textColor: stats.negativeStockNearLimitCount > 0 ? 'text-orange-600' : 'text-red-600',
       bgColor: stats.negativeStockNearLimitCount > 0 ? 'bg-orange-50' : 'bg-red-50',
@@ -246,7 +246,7 @@ export default function Home({ user, store = {} }) {
   const quickActions = useMemo(() => ([
     {
       to: '/san-pham',
-      label: 'Quản lý sản phẩm',
+      label: 'Qu?n l? s?n ph?m',
       icon: Layers,
       borderClass: 'border-purple-100 hover:border-purple-500 hover:bg-purple-50',
       iconWrapClass: 'bg-purple-100 group-hover:bg-purple-500',
@@ -254,7 +254,7 @@ export default function Home({ user, store = {} }) {
     },
     {
       to: '/danh-sach-don-hang',
-      label: 'Đơn hàng',
+      label: '?on h?ng',
       icon: ShoppingCart,
       borderClass: 'border-green-100 hover:border-green-500 hover:bg-green-50',
       iconWrapClass: 'bg-green-100 group-hover:bg-green-500',
@@ -262,7 +262,7 @@ export default function Home({ user, store = {} }) {
     },
     {
       to: '/thong-ke',
-      label: 'Thống kê',
+      label: 'Th?ng k?',
       icon: TrendingUp,
       borderClass: 'border-orange-100 hover:border-orange-500 hover:bg-orange-50',
       iconWrapClass: 'bg-orange-100 group-hover:bg-orange-500',
@@ -270,7 +270,7 @@ export default function Home({ user, store = {} }) {
     },
     {
       to: '/bao-cao-theo-don-hang',
-      label: 'Báo cáo đơn hàng',
+      label: 'B?o c?o don h?ng',
       icon: FileText,
       borderClass: 'border-red-100 hover:border-red-500 hover:bg-red-50',
       iconWrapClass: 'bg-red-100 group-hover:bg-red-500',
@@ -278,7 +278,7 @@ export default function Home({ user, store = {} }) {
     },
     {
       to: '/kho-hang',
-      label: 'Kho hàng',
+      label: 'Kho h?ng',
       icon: Package,
       borderClass: 'border-blue-100 hover:border-blue-500 hover:bg-blue-50',
       iconWrapClass: 'bg-blue-100 group-hover:bg-blue-500',
@@ -286,7 +286,7 @@ export default function Home({ user, store = {} }) {
     },
     {
       to: '/nha-cung-cap',
-      label: 'Nhà cung cấp',
+      label: 'Nh? cung c?p',
       icon: Store,
       borderClass: 'border-pink-100 hover:border-pink-500 hover:bg-pink-50',
       iconWrapClass: 'bg-pink-100 group-hover:bg-pink-500',
@@ -294,7 +294,7 @@ export default function Home({ user, store = {} }) {
     },
     {
       to: '/bao-cao-theo-san-pham',
-      label: 'Báo cáo sản phẩm',
+      label: 'B?o c?o s?n ph?m',
       icon: PackageSearch,
       borderClass: 'border-yellow-100 hover:border-yellow-500 hover:bg-yellow-50',
       iconWrapClass: 'bg-yellow-100 group-hover:bg-yellow-500',
@@ -321,7 +321,7 @@ export default function Home({ user, store = {} }) {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-800">Trang chủ</h1>
+              <h1 className="text-2xl font-bold text-gray-800">Trang ch?</h1>
               {store?.name ? (
                 <span className="inline-flex max-w-full items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
                   {store.name}
@@ -333,7 +333,7 @@ export default function Home({ user, store = {} }) {
               <span className="capitalize">{todayLabel}</span>
             </p>
             <p className="max-w-3xl text-sm leading-6 text-gray-500">
-              Theo dõi nhanh doanh thu, tồn kho và truy cập các khu vực làm việc quan trọng từ một màn hình tổng quan thống nhất.
+              Theo d?i nhanh doanh thu, t?n kho v? truy c?p c?c khu v?c l?m vi?c quan tr?ng t? m?t m?n h?nh t?ng quan th?ng nh?t.
             </p>
           </div>
 
@@ -343,12 +343,12 @@ export default function Home({ user, store = {} }) {
               onClick={() => setShowHelp(true)}
               className="inline-flex items-center justify-center gap-1 rounded-xl border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
             >
-              <HelpCircle size={14} /> Hướng dẫn
+              <HelpCircle size={14} /> Hu?ng d?n
             </button>
             <div className="rounded-2xl bg-gray-50 px-4 py-3 text-left sm:min-w-[220px] sm:text-right">
-              <div className="text-sm text-gray-500">Xin chào</div>
-              <div className="truncate text-base font-semibold text-gray-800">{user?.name || 'Người dùng'}</div>
-              <div className="truncate text-xs text-gray-400">{user?.email || store?.phone || 'Đang làm việc trên hệ thống bán hàng'}</div>
+              <div className="text-sm text-gray-500">Xin ch?o</div>
+              <div className="truncate text-base font-semibold text-gray-800">{user?.name || 'Ngu?i d?ng'}</div>
+              <div className="truncate text-xs text-gray-400">{user?.email || store?.phone || '?ang l?m vi?c tr?n h? th?ng b?n h?ng'}</div>
             </div>
           </div>
         </div>
@@ -362,9 +362,9 @@ export default function Home({ user, store = {} }) {
 
       {stats.negativeStockCount > 0 ? (
         <div className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${stats.negativeStockNearLimitCount > 0 ? 'border-orange-200 bg-orange-50 text-orange-900' : 'border-red-200 bg-red-50 text-red-800'}`}>
-          <div className="font-bold">⚠️ Có {stats.negativeStockCount.toLocaleString('vi-VN')} sản phẩm đang âm kho</div>
+          <div className="font-bold">?? C? {stats.negativeStockCount.toLocaleString('vi-VN')} s?n ph?m dang ?m kho</div>
           <div className="mt-1 text-xs">
-            {stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} sản phẩm {negativeStockNearLimitLabel || `gần ngưỡng ${negativeStockLimitLabel}`}; thấp nhất {formatStockValue(stats.lowestNegativeStock)}.
+            {stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} s?n ph?m {negativeStockNearLimitLabel || `g?n ngu?ng ${negativeStockLimitLabel}`}; th?p nh?t {formatStockValue(stats.lowestNegativeStock)}.
           </div>
           {stats.negativeStockProducts.length > 0 ? (
             <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -374,10 +374,10 @@ export default function Home({ user, store = {} }) {
                   <div key={`${product.id || product.sku || product.name}-${index}`} className={`rounded-xl border px-3 py-2 ${stockMeta.isNearLimit ? 'border-orange-200 bg-white/70' : 'border-red-200 bg-white/70'}`}>
                     <div className={`truncate text-xs font-semibold ${stockMeta.nameClass}`}>{product.name}</div>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
-                      <span className="text-gray-500">SKU: {product.sku || '—'}</span>
+                      <span className="text-gray-500">SKU: {product.sku || '?'}</span>
                       <span className={stockMeta.textClass}>{stockMeta.display}</span>
-                      <span className={`rounded-full px-2 py-0.5 font-bold ${stockMeta.badgeClass}`}>Âm kho</span>
-                      {stockMeta.isNearLimit ? <span className="rounded-full border border-orange-200 bg-orange-100 px-2 py-0.5 font-bold text-orange-800">{stockMeta.extraLabel || negativeStockNearLimitLabel || `Gần ${negativeStockLimitLabel}`}</span> : null}
+                      <span className={`rounded-full px-2 py-0.5 font-bold ${stockMeta.badgeClass}`}>?m kho</span>
+                      {stockMeta.isNearLimit ? <span className="rounded-full border border-orange-200 bg-orange-100 px-2 py-0.5 font-bold text-orange-800">{stockMeta.extraLabel || negativeStockNearLimitLabel || `G?n ${negativeStockLimitLabel}`}</span> : null}
                     </div>
                   </div>
                 );
@@ -390,7 +390,7 @@ export default function Home({ user, store = {} }) {
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <TrendingUp size={18} className="text-blue-500" />
-          <h2 className="text-lg font-bold text-gray-800">Tổng quan trong ngày</h2>
+          <h2 className="text-lg font-bold text-gray-800">T?ng quan trong ng?y</h2>
         </div>
 
         {loading ? (
@@ -442,7 +442,7 @@ export default function Home({ user, store = {} }) {
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-gray-800">
           <TrendingUp size={20} className="text-blue-500" />
-          Truy cập nhanh
+          Truy c?p nhanh
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
           {quickActions.map(action => {
@@ -466,42 +466,42 @@ export default function Home({ user, store = {} }) {
 
       {showHelp && (
         <HelpModal
-          title="Hướng dẫn sử dụng Trang chủ"
+          title="Hu?ng d?n s? d?ng Trang ch?"
           onClose={() => setShowHelp(false)}
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
-                <h3 className="mb-2 font-bold text-gray-800">📊 Thống kê nhanh</h3>
-                <p>4 thẻ thống kê hiển thị thông tin quan trọng nhất:</p>
+                <h3 className="mb-2 font-bold text-gray-800">?? Th?ng k? nhanh</h3>
+                <p>4 th? th?ng k? hi?n th? th?ng tin quan tr?ng nh?t:</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li><strong>Doanh thu hôm nay:</strong> Tổng tiền từ các đơn hàng đã thanh toán trong ngày</li>
-                  <li><strong>Đơn hàng hôm nay:</strong> Số lượng đơn tạo trong ngày và số đã thanh toán</li>
-                  <li><strong>Tổng sản phẩm:</strong> Tổng số sản phẩm trong kho, cả sản phẩm cha và biến thể</li>
-                  <li><strong>Cảnh báo tồn kho:</strong> Số lượng sản phẩm tồn 0, sắp hết hoặc đang âm kho</li>
-                  <li><strong>Âm kho:</strong> Sản phẩm có tồn âm, cảnh báo gần ngưỡng {negativeStockLimitLabel}</li>
+                  <li><strong>Doanh thu h?m nay:</strong> T?ng ti?n t? c?c don h?ng d? thanh to?n trong ng?y</li>
+                  <li><strong>?on h?ng h?m nay:</strong> S? lu?ng don t?o trong ng?y v? s? d? thanh to?n</li>
+                  <li><strong>T?ng s?n ph?m:</strong> T?ng s? s?n ph?m trong kho, c? s?n ph?m cha v? bi?n th?</li>
+                  <li><strong>C?nh b?o t?n kho:</strong> S? lu?ng s?n ph?m t?n 0, s?p h?t ho?c dang ?m kho</li>
+                  <li><strong>?m kho:</strong> S?n ph?m c? t?n ?m, c?nh b?o g?n ngu?ng {negativeStockLimitLabel}</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="mb-2 font-bold text-gray-800">🚀 Truy cập nhanh</h3>
-                <p>7 nút truy cập nhanh đến các chức năng chính:</p>
+                <h3 className="mb-2 font-bold text-gray-800">?? Truy c?p nhanh</h3>
+                <p>7 n?t truy c?p nhanh d?n c?c ch?c nang ch?nh:</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li><strong>Quản lý sản phẩm:</strong> Thêm, sửa, xóa sản phẩm và biến thể</li>
-                  <li><strong>Đơn hàng:</strong> Xem danh sách đơn hàng, lọc và xử lý trạng thái</li>
-                  <li><strong>Thống kê:</strong> Xem biểu đồ doanh thu theo ngày/tuần/tháng</li>
-                  <li><strong>Báo cáo đơn hàng:</strong> Xem báo cáo theo đơn hàng</li>
-                  <li><strong>Kho hàng:</strong> Theo dõi tồn kho và cảnh báo hàng hóa</li>
-                  <li><strong>Nhà cung cấp:</strong> Quản lý thông tin nhà cung cấp</li>
-                  <li><strong>Báo cáo sản phẩm:</strong> Xem báo cáo theo sản phẩm</li>
+                  <li><strong>Qu?n l? s?n ph?m:</strong> Th?m, s?a, x?a s?n ph?m v? bi?n th?</li>
+                  <li><strong>?on h?ng:</strong> Xem danh s?ch don h?ng, l?c v? x? l? tr?ng th?i</li>
+                  <li><strong>Th?ng k?:</strong> Xem bi?u d? doanh thu theo ng?y/tu?n/th?ng</li>
+                  <li><strong>B?o c?o don h?ng:</strong> Xem b?o c?o theo don h?ng</li>
+                  <li><strong>Kho h?ng:</strong> Theo d?i t?n kho v? c?nh b?o h?ng h?a</li>
+                  <li><strong>Nh? cung c?p:</strong> Qu?n l? th?ng tin nh? cung c?p</li>
+                  <li><strong>B?o c?o s?n ph?m:</strong> Xem b?o c?o theo s?n ph?m</li>
                 </ul>
               </div>
 
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-                <h3 className="mb-2 font-bold text-blue-800">💡 Mẹo</h3>
+                <h3 className="mb-2 font-bold text-blue-800">?? M?o</h3>
                 <ul className="list-disc space-y-1 pl-5 text-blue-700">
-                  <li>Kiểm tra trang chủ mỗi ngày để nắm bắt tình hình kinh doanh</li>
-                  <li>Click vào các số liệu để xem chi tiết khi tài khoản có quyền truy cập</li>
-                  <li>Dữ liệu sẽ tự cập nhật sau khi tạo đơn hoặc khi hệ thống đồng bộ thay đổi</li>
+                  <li>Ki?m tra trang ch? m?i ng?y d? n?m b?t t?nh h?nh kinh doanh</li>
+                  <li>Click v?o c?c s? li?u d? xem chi ti?t khi t?i kho?n c? quy?n truy c?p</li>
+                  <li>D? li?u s? t? c?p nh?t sau khi t?o don ho?c khi h? th?ng d?ng b? thay d?i</li>
                 </ul>
               </div>
             </div>

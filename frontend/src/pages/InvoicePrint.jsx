@@ -10,8 +10,8 @@ import { getApiErrorMessage, invoicesApi, PRINT_TEMPLATE_UPDATED_EVENT, printTem
 const PRINT_SETTINGS_KEY = 'kha.invoicePrint.settings';
 const PAPER_OPTIONS = ['K80', 'K57', 'A5', 'A4'];
 const PRINTER_MODE_OPTIONS = [
-  { value: 'office', label: 'Máy in A4/A5' },
-  { value: 'thermal', label: 'Máy in nhiệt' },
+  { value: 'office', label: 'M?y in A4/A5' },
+  { value: 'thermal', label: 'M?y in nhi?t' },
 ];
 const SCALE_PRESETS = [0.8, 0.9, 0.95, 1];
 const MIN_SCALE = 0.5;
@@ -78,7 +78,7 @@ function writePrintSettings(settings) {
   try {
     window.localStorage.setItem(PRINT_SETTINGS_KEY, JSON.stringify(settings));
   } catch (_error) {
-    // Bỏ qua nếu trình duyệt khóa localStorage.
+    // B? qua n?u tr?nh duy?t kh?a localStorage.
   }
 }
 
@@ -104,7 +104,7 @@ function isPrintTemplateApiError(error) {
     typeof data.details === 'string' ? data.details : data.details?.message,
     error?.message,
   ].filter(Boolean).join(' ');
-  return /PRINT_TEMPLATE|print[_\s-]*template|mẫu in|template_id/i.test(signature);
+  return /PRINT_TEMPLATE|print[_\s-]*template|m?u in|template_id/i.test(signature);
 }
 
 function getBackendTemplate(data) {
@@ -129,7 +129,7 @@ function buildFallbackTemplate(settings) {
   const orientation = paperSize.startsWith('K') ? 'portrait' : (settings.orientation || 'portrait');
   return {
     id: null,
-    template_name: `Mẫu ${paperSize} mặc định`,
+    template_name: `M?u ${paperSize} m?c d?nh`,
     paper_size: paperSize,
     orientation,
     settings_json: {
@@ -175,8 +175,8 @@ export default function InvoicePrint() {
   const autoPrint = searchParams.get('print') === '1';
   const templateId = searchParams.get('template_id') || searchParams.get('templateId') || '';
   const documentMode = (searchParams.get('mode') || searchParams.get('type')) === 'estimate' ? 'estimate' : 'invoice';
-  const documentLabel = documentMode === 'estimate' ? 'Tạm tính' : 'Hóa đơn';
-  const documentTitle = documentMode === 'estimate' ? 'PHIẾU TẠM TÍNH' : 'HÓA ĐƠN BÁN HÀNG';
+  const documentLabel = documentMode === 'estimate' ? 'T?m t?nh' : 'H?a don';
+  const documentTitle = documentMode === 'estimate' ? 'PHI?U T?M T?NH' : 'H?A ?ON B?N H?NG';
   const printRef = useRef(null);
   const autoPrintedRef = useRef(false);
   const [data, setData] = useState(null);
@@ -240,7 +240,7 @@ export default function InvoicePrint() {
 
   const loadInvoice = useCallback(async () => {
     if (!idOrCode) {
-      setError('Thiếu mã hoặc ID hóa đơn.');
+      setError('Thi?u m? ho?c ID h?a don.');
       setLoading(false);
       return;
     }
@@ -257,20 +257,20 @@ export default function InvoicePrint() {
         payload = await invoicesApi.printData(idOrCode, {});
         setToast({
           tone: 'warning',
-          message: `${getErrorMessage(printDataErr, 'Template được chọn không khả dụng.')} Đã tải hóa đơn bằng mẫu mặc định để tiếp tục preview/in.`,
+          message: `${getErrorMessage(printDataErr, 'Template du?c ch?n kh?ng kh? d?ng.')} ?? t?i h?a don b?ng m?u m?c d?nh d? ti?p t?c preview/in.`,
         });
       }
 
       if (!payload || typeof payload !== 'object' || !payload.invoice) {
         setData(null);
-        setError('API dữ liệu in hóa đơn trả về thiếu thông tin hóa đơn.');
+        setError('API d? li?u in h?a don tr? v? thi?u th?ng tin h?a don.');
         return;
       }
 
       let nextPayload = payload;
       const templateError = payload.metadata?.print_template_error;
       if (templateError?.message) {
-        setToast({ tone: 'warning', message: getApiErrorMessage(templateError, 'API mẫu in trả lỗi; frontend đang dùng mẫu an toàn để preview/in.') });
+        setToast({ tone: 'warning', message: getApiErrorMessage(templateError, 'API m?u in tr? l?i; frontend dang d?ng m?u an to?n d? preview/in.') });
       }
 
       if (!getBackendTemplate(payload)) {
@@ -313,17 +313,17 @@ export default function InvoicePrint() {
                 };
               }
             } catch (_defaultTemplateErr) {
-              // Giữ fallback frontend bên dưới nếu API mẫu mặc định cũng lỗi.
+              // Gi? fallback frontend b?n du?i n?u API m?u m?c d?nh cung l?i.
             }
           }
-          setToast({ tone: 'warning', message: getErrorMessage(templateErr, 'Chưa tải được mẫu in từ API /api/print-templates; đang dùng mẫu mặc định frontend để preview/in.') });
+          setToast({ tone: 'warning', message: getErrorMessage(templateErr, 'Chua t?i du?c m?u in t? API /api/print-templates; dang d?ng m?u m?c d?nh frontend d? preview/in.') });
         }
       }
 
       setData(nextPayload);
     } catch (err) {
       setData(null);
-      const message = getErrorMessage(err, 'Không thể tải dữ liệu hóa đơn.');
+      const message = getErrorMessage(err, 'Kh?ng th? t?i d? li?u h?a don.');
       setError(message);
       setToast({ tone: 'error', message });
     } finally {
@@ -341,7 +341,7 @@ export default function InvoicePrint() {
     const handleTemplateUpdated = (event) => {
       const changedTemplateId = event?.detail?.templateId;
       if (templateId && changedTemplateId && String(changedTemplateId) !== String(templateId)) return;
-      setToast({ tone: 'success', message: 'Mẫu in vừa được cập nhật. Preview đang tải lại dữ liệu mới.' });
+      setToast({ tone: 'success', message: 'M?u in v?a du?c c?p nh?t. Preview dang t?i l?i d? li?u m?i.' });
       loadInvoice();
     };
     window.addEventListener(PRINT_TEMPLATE_UPDATED_EVENT, handleTemplateUpdated);
@@ -393,7 +393,7 @@ export default function InvoicePrint() {
         openPrintDialog();
       }
     } catch (err) {
-      setPrintError(err?.message || 'Không thể mở hộp thoại in của hệ điều hành.');
+      setPrintError(err?.message || 'Kh?ng th? m? h?p tho?i in c?a h? di?u h?nh.');
     }
   }, [data, documentMode, invoiceCode]);
 
@@ -503,13 +503,13 @@ export default function InvoicePrint() {
       try {
         pdf.setLanguage?.('vi-VN');
       } catch (_languageError) {
-        // jsPDF cũ có thể không hỗ trợ setLanguage; nội dung tiếng Việt vẫn được raster ổn định từ DOM.
+        // jsPDF cu c? th? kh?ng h? tr? setLanguage; n?i dung ti?ng Vi?t v?n du?c raster ?n d?nh t? DOM.
       }
       const imgData = canvas.toDataURL('image/png', 1);
       pdf.addImage(imgData, 'PNG', 0, 0, page.width, page.height, undefined, 'FAST');
       pdf.save(`${documentMode === 'estimate' ? 'Tam_tinh' : 'Hoa_don'}_${sanitizeFileName(invoiceCode)}.pdf`);
     } catch (err) {
-      setPrintError(err?.message || 'Không thể tải PDF hóa đơn.');
+      setPrintError(err?.message || 'Kh?ng th? t?i PDF h?a don.');
     } finally {
       setPdfLoading(false);
     }
@@ -520,32 +520,32 @@ export default function InvoicePrint() {
       <div className="invoice-print-toolbar no-print">
         <div className="invoice-toolbar-left">
           <button type="button" onClick={() => navigate(-1)} className="invoice-toolbar-btn invoice-toolbar-btn-light">
-            <ArrowLeft size={16} /> Quay lại
+            <ArrowLeft size={16} /> Quay l?i
           </button>
           <div>
             <h1>In {documentLabel.toLowerCase()} {page.paperSize}</h1>
             <p>
-              {invoiceCode ? `Mã/ID: ${invoiceCode}` : 'Preview gọi dữ liệu thật từ API backend'}
-              {hasBackendTemplate ? ` · Mẫu: ${activeTemplate.template_name || activeTemplate.name || activeTemplate.id}` : ` · Mặc định ${page.paperSize}`}
+              {invoiceCode ? `M?/ID: ${invoiceCode}` : 'Preview g?i d? li?u th?t t? API backend'}
+              {hasBackendTemplate ? ` ? M?u: ${activeTemplate.template_name || activeTemplate.name || activeTemplate.id}` : ` ? M?c d?nh ${page.paperSize}`}
             </p>
           </div>
         </div>
 
         <div className="invoice-toolbar-actions">
           <label className="invoice-control-group invoice-control-wide">
-            <span>Kiểu máy</span>
+            <span>Ki?u m?y</span>
             <select value={printerMode} onChange={event => handlePrinterModeChange(event.target.value)}>
               {PRINTER_MODE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
           <label className="invoice-control-group">
-            <span>Khổ giấy</span>
+            <span>Kh? gi?y</span>
             <select value={page.paperSize} onChange={event => setPaperSize(event.target.value)}>
               {PAPER_OPTIONS.map(paperSize => <option key={paperSize} value={paperSize}>{paperSize}</option>)}
             </select>
           </label>
           <label className="invoice-control-group">
-            <span>Scale nội dung</span>
+            <span>Scale n?i dung</span>
             <select
               value={SCALE_PRESETS.includes(settings.scale) ? String(settings.scale) : 'custom'}
               onChange={event => {
@@ -555,7 +555,7 @@ export default function InvoicePrint() {
               {SCALE_PRESETS.map(scale => (
                 <option key={scale} value={scale}>{Math.round(scale * 100)}%</option>
               ))}
-              <option value="custom">Tùy chỉnh</option>
+              <option value="custom">T?y ch?nh</option>
             </select>
           </label>
           <label className="invoice-control-group invoice-control-number">
@@ -569,23 +569,23 @@ export default function InvoicePrint() {
               onChange={event => setScale(Number(event.target.value) / 100)}
             />
           </label>
-          <button type="button" onClick={() => adjustScale(-SCALE_STEP)} className="invoice-toolbar-btn invoice-toolbar-btn-light" title="Thu nhỏ">
-            <ZoomOut size={16} /> Thu nhỏ
+          <button type="button" onClick={() => adjustScale(-SCALE_STEP)} className="invoice-toolbar-btn invoice-toolbar-btn-light" title="Thu nh?">
+            <ZoomOut size={16} /> Thu nh?
           </button>
-          <button type="button" onClick={() => adjustScale(SCALE_STEP)} className="invoice-toolbar-btn invoice-toolbar-btn-light" title="Phóng to">
-            <ZoomIn size={16} /> Phóng to
+          <button type="button" onClick={() => adjustScale(SCALE_STEP)} className="invoice-toolbar-btn invoice-toolbar-btn-light" title="Ph?ng to">
+            <ZoomIn size={16} /> Ph?ng to
           </button>
           <button type="button" onClick={resetScale} className="invoice-toolbar-btn invoice-toolbar-btn-light">
             Reset 95%
           </button>
           <button type="button" onClick={toggleOrientation} className="invoice-toolbar-btn invoice-toolbar-btn-light" disabled={page.paperSize.startsWith('K')}>
-            <RotateCw size={16} /> {page.paperSize.startsWith('K') ? 'Cuộn dọc' : (page.orientation === 'landscape' ? 'Khổ ngang' : 'Khổ dọc')}
+            <RotateCw size={16} /> {page.paperSize.startsWith('K') ? 'Cu?n d?c' : (page.orientation === 'landscape' ? 'Kh? ngang' : 'Kh? d?c')}
           </button>
           <button type="button" onClick={loadInvoice} disabled={loading} className="invoice-toolbar-btn invoice-toolbar-btn-light">
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Tải lại
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> T?i l?i
           </button>
           <button type="button" onClick={handleDownloadPdf} disabled={!data || pdfLoading} className="invoice-toolbar-btn invoice-toolbar-btn-secondary">
-            {pdfLoading ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Tải PDF
+            {pdfLoading ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} T?i PDF
           </button>
           <button type="button" onClick={handlePrintInvoice} disabled={!data} className="invoice-toolbar-btn invoice-toolbar-btn-primary">
             <Printer size={16} /> In
@@ -596,7 +596,7 @@ export default function InvoicePrint() {
       {toast?.message && (
         <div className="toast-stack no-print">
           <div className={`toast-card ${toast.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : toast.tone === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-red-200 bg-red-50 text-red-700'}`}>
-            {toast.tone === 'success' ? '✅' : '⚠️'} {toast.message}
+            {toast.tone === 'success' ? '?' : '??'} {toast.message}
           </div>
         </div>
       )}
@@ -607,16 +607,16 @@ export default function InvoicePrint() {
         <div className="invoice-state-card no-print">
           <Loader size={28} className="animate-spin text-blue-500" />
           <div>
-            <b>Đang tải dữ liệu hóa đơn...</b>
-            <p>Preview chỉ hiển thị sau khi API backend trả dữ liệu thật.</p>
+            <b>?ang t?i d? li?u h?a don...</b>
+            <p>Preview ch? hi?n th? sau khi API backend tr? d? li?u th?t.</p>
           </div>
         </div>
       ) : error ? (
         <div className="invoice-state-card no-print invoice-state-error">
-          <b>Không thể mở hóa đơn</b>
+          <b>Kh?ng th? m? h?a don</b>
           <p>{error}</p>
           <button type="button" onClick={loadInvoice} className="invoice-toolbar-btn invoice-toolbar-btn-primary">
-            <RefreshCw size={16} /> Thử lại
+            <RefreshCw size={16} /> Th? l?i
           </button>
         </div>
       ) : (

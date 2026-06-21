@@ -380,7 +380,7 @@ function V2Element({ element, data, template }) {
   if (element.type === 'invoiceMeta') {
     return (
       <div className="invoice-template-v2-pairs" style={getElementCssStyle(element)}>
-        {isStyleEnabled(style, 'showOrderCode') && <InfoPair label={style.orderCodeLabel || 'Mã đơn'} value={invoiceCode} strong />}
+        {isStyleEnabled(style, 'showOrderCode') && <InfoPair label={style.orderCodeLabel || 'M? don'} value={invoiceCode} strong />}
         {isStyleEnabled(style, 'showOrderDate') && <InfoPair label={style.orderDateLabel || 'Ngày'} value={formatDateTime(invoice.created_at)} />}
         {isStyleEnabled(style, 'showSeller') && <InfoPair label={style.sellerLabelShort || 'NV'} value={metadata.user_name} />}
         {isStyleEnabled(style, 'showOrderSource', false) && <InfoPair label={style.orderSourceLabel || 'Nguồn'} value={invoice.source} />}
@@ -404,7 +404,7 @@ function V2Element({ element, data, template }) {
         {showDiscount && <MoneyLine label="Chiết khấu" value={totals.discount_amount} negative hiddenWhenZero />}
         <MoneyLine label="Phí giao hàng" value={totals.delivery_fee} hiddenWhenZero />
         {showGrandTotal && <MoneyLine label="Tổng tiền" value={totals.total ?? totals.grand_total} highlight />}
-        <MoneyLine label="Đã thanh toán" value={paidAmount} hiddenWhenZero />
+        <MoneyLine label="D? thanh to?n" value={paidAmount} hiddenWhenZero />
         {showDebt && <MoneyLine label="Công nợ" value={remainingAmount} hiddenWhenZero />}
         <MoneyLine label="Tiền thừa" value={totals.change_amount} hiddenWhenZero />
       </div>
@@ -420,11 +420,11 @@ function V2Element({ element, data, template }) {
     return (
       <div className="invoice-template-v2-signatures" style={getElementCssStyle(element, { '--invoice-signature-gap': `${style.signatureGapMm || 10}mm`, '--invoice-signature-blank': `${style.blankHeightMm || 10}mm` })}>
         <div>
-          <h3>{style.buyerLabel || signatures.buyer?.label || 'Khách hàng'}</h3>
+          <h3>{style.buyerLabel || signatures.buyer?.label || 'Kh?ch h?ng'}</h3>
           <p>{style.buyerHint || '(Ký và ghi rõ họ tên)'}</p>
         </div>
         <div>
-          <h3>{style.sellerLabel || signatures.seller?.label || 'Người bán'}</h3>
+          <h3>{style.sellerLabel || signatures.seller?.label || 'Ng??i b?n'}</h3>
           <p>{style.sellerHint || '(Ký và ghi rõ họ tên)'}</p>
         </div>
       </div>
@@ -569,6 +569,8 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
     [document, normalized.items],
   );
   const tableBottomMm = Math.max(Number(measuredTableBottomMm) || 0, tableMetrics.bottom);
+  const tablePages = useMemo(() => buildItemsTablePhysicalPages(document, normalized.items.length, normalized.items), [document, normalized.items.length, normalized.items]);
+  const tableLastPageBottomMm = Number(tablePages?.bottom) || tableBottomMm;
   const setArticleRef = useCallback((node) => {
     articleRef.current = node;
     assignForwardedRef(refProp, node);
@@ -643,9 +645,9 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
       const frame = element.frame || {};
       return Math.max(max, getElementTopMm(element) + getFlowElementHeightMm(element, measuredElementHeightsMm), getElementTopMm(element) + Number(frame.h || 0));
     }, page.height);
-    const maxContentBottom = Math.max(page.height, elementBottom, tableBottomMm + 6);
+    const maxContentBottom = Math.max(page.height, elementBottom, tableLastPageBottomMm + 6);
     return Math.ceil(maxContentBottom / page.height) * page.height;
-  }, [elements, getElementTopMm, measuredElementHeightsMm, page.height, tableBottomMm]);
+  }, [elements, getElementTopMm, measuredElementHeightsMm, page.height, tableLastPageBottomMm]);
 
   return (
     <article
@@ -825,7 +827,7 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
             <h1>{metadata.document_title || invoice.document_title || 'HÓA ĐƠN BÁN HÀNG'}</h1>
           </div>
           <section className="invoice-template-meta-grid">
-            <InfoPair label="Mã đơn" value={invoice.invoice_code || invoice.code || invoice.id || '—'} strong />
+            <InfoPair label="M? don" value={invoice.invoice_code || invoice.code || invoice.id || '-'} strong />
             <InfoPair label="Ngày giờ" value={formatDateTime(invoice.created_at)} />
             <InfoPair label="Khách hàng" value={customer.name || 'Khách lẻ'} strong />
             <InfoPair label="SĐT" value={customer.phone || '—'} />
@@ -896,11 +898,11 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
           {settings.showSignature && (
             <div className="invoice-template-signatures">
               <div>
-                <h3>{signatures.buyer?.label || 'Khách hàng'}</h3>
+                <h3>{signatures.buyer?.label || 'Kh?ch h?ng'}</h3>
                 <p>(Ký và ghi rõ họ tên)</p>
               </div>
               <div>
-                <h3>{signatures.seller?.label || 'Người bán'}</h3>
+                <h3>{signatures.seller?.label || 'Ng??i b?n'}</h3>
                 <p>(Ký và ghi rõ họ tên)</p>
               </div>
             </div>

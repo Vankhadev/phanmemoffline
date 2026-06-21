@@ -143,7 +143,7 @@ export default function useTemplateAutosave({
       } catch (error) {
         if (isRevisionConflict(error)) {
           const nextConflict = {
-            message: error?.message || 'Mẫu in đã được cập nhật ở phiên khác.',
+            message: error?.message || 'M?u in d? du?c c?p nh?t ? phi?n kh?c.',
             currentRevision: error?.data?.details?.current_revision || error?.data?.current_revision || null,
             expectedRevision: error?.data?.details?.expected_revision || error?.data?.expected_revision || revisionRef.current,
           };
@@ -196,7 +196,7 @@ export default function useTemplateAutosave({
 
   const markConflict = useCallback((nextConflict) => {
     setStatus('conflict');
-    setConflict(nextConflict || { message: 'Mẫu in đã được cập nhật ở phiên khác.' });
+    setConflict(nextConflict || { message: 'M?u in d? du?c c?p nh?t ? phi?n kh?c.' });
   }, []);
 
   const isDirty = Boolean(signature && signature !== lastSavedSignatureRef.current);

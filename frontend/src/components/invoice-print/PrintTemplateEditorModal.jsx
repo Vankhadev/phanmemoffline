@@ -67,7 +67,7 @@ function isRevisionConflict(error) {
   return Number(error?.status) === 409 || code === 'PRINT_TEMPLATE_REVISION_CONFLICT';
 }
 
-function buildConflictNotice(error, fallback = 'Mẫu in đã được cập nhật ở phiên khác.') {
+function buildConflictNotice(error, fallback = 'M?u in d? du?c c?p nh?t ? phi?n kh?c.') {
   const currentRevision = error?.data?.details?.current_revision || error?.data?.current_revision;
   const suffix = currentRevision ? ` Revision hiện tại trên server: ${currentRevision}.` : '';
   return `${getErrorMessage(error, fallback)}${suffix} Bấm “Tải lại” để lấy draft mới nhất trước khi tiếp tục.`;
@@ -173,7 +173,7 @@ export default function PrintTemplateEditorModal({
       const idOrCode = latest.invoice_code || latest.id;
       if (!idOrCode) {
         setPreviewPayload({});
-        setPreviewError('Hóa đơn mới nhất thiếu mã/ID để gọi API preview. Editor vẫn hiển thị realtime bằng dữ liệu rỗng an toàn.');
+        setPreviewError('H?a don m?i nh?t thi?u m?/ID d? g?i API preview. Editor v?n hi?n th? realtime b?ng d? li?u r?ng an to?n.');
         return;
       }
       const payload = await invoicesApi.printData(idOrCode, templateId ? { template_id: templateId } : {});
@@ -306,7 +306,7 @@ export default function PrintTemplateEditorModal({
 
   const saveDraftNow = useCallback(async () => {
     if (!activeTemplate?.id) {
-      setNotice(buildNotice('error', 'Mẫu demo chưa có trên server. Hãy cấu hình MySQL và tạo mẫu in trước khi lưu draft.'));
+      setNotice(buildNotice('error', 'M?u demo chua c? tr?n server. H?y c?u h?nh MySQL v? t?o m?u in tru?c khi luu draft.'));
       return null;
     }
     setBusy('draft');
@@ -325,11 +325,11 @@ export default function PrintTemplateEditorModal({
         autosave.markSaved(item);
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'Đã lưu draft mẫu in.'));
+      setNotice(buildNotice('success', 'D? luu draft m?u in.'));
       return item;
     } catch (error) {
       if (isRevisionConflict(error)) {
-        markRevisionConflict(error, 'Không thể lưu draft vì mẫu in đã được cập nhật ở phiên khác.');
+        markRevisionConflict(error, 'Kh?ng th? luu draft v? m?u in d? du?c c?p nh?t ? phi?n kh?c.');
       } else {
         setNotice(buildNotice('error', getErrorMessage(error, 'Không thể lưu draft mẫu in.')));
       }
@@ -341,7 +341,7 @@ export default function PrintTemplateEditorModal({
 
   const handlePublish = useCallback(async () => {
     if (!activeTemplate?.id) {
-      setNotice(buildNotice('error', 'Mẫu demo chưa có trên server. Hãy tạo mẫu in trên server trước khi publish.'));
+      setNotice(buildNotice('error', 'M?u demo chua c? tr?n server. H?y t?o m?u in tr?n server tru?c khi publish.'));
       return;
     }
     setBusy('publish');
@@ -361,10 +361,10 @@ export default function PrintTemplateEditorModal({
         autosave.markSaved(item);
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'Đã publish mẫu in. Trang in hóa đơn sẽ dùng bản published mới.'));
+      setNotice(buildNotice('success', 'D? publish m?u in. Trang in h?a don s? d?ng b?n published m?i.'));
     } catch (error) {
       if (isRevisionConflict(error)) {
-        markRevisionConflict(error, 'Không thể publish vì mẫu in đã được cập nhật ở phiên khác.');
+        markRevisionConflict(error, 'Kh?ng th? publish v? m?u in d? du?c c?p nh?t ? phi?n kh?c.');
       } else {
         setNotice(buildNotice('error', getErrorMessage(error, 'Không thể publish mẫu in.')));
       }
@@ -375,7 +375,7 @@ export default function PrintTemplateEditorModal({
 
   const handleDiscardDraft = useCallback(async () => {
     if (!activeTemplate?.id) return;
-    if (!window.confirm('Bỏ draft hiện tại và quay về bản published?')) return;
+    if (!window.confirm('B? draft hi?n t?i v? quay v? b?n published?')) return;
     setBusy('discard');
     setNotice(null);
     try {
@@ -387,10 +387,10 @@ export default function PrintTemplateEditorModal({
         autosave.resetAutosave(item.revision || editor.revision);
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'Đã bỏ draft và khôi phục bản published.'));
+      setNotice(buildNotice('success', 'D? b? draft v? kh?i ph?c b?n published.'));
     } catch (error) {
       if (isRevisionConflict(error)) {
-        markRevisionConflict(error, 'Không thể bỏ draft vì mẫu in đã được cập nhật ở phiên khác.');
+        markRevisionConflict(error, 'Kh?ng th? b? draft v? m?u in d? du?c c?p nh?t ? phi?n kh?c.');
       } else {
         setNotice(buildNotice('error', getErrorMessage(error, 'Không thể bỏ draft mẫu in.')));
       }
@@ -427,7 +427,7 @@ export default function PrintTemplateEditorModal({
         editor.setRevision(item.revision || editor.revision);
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'Đã upload logo. Layout logo vẫn bind template.logo, không nhúng binary vào JSON.'));
+      setNotice(buildNotice('success', 'D? upload logo. Layout logo v?n bind template.logo, kh?ng nh?ng binary v?o JSON.'));
     } catch (error) {
       setNotice(buildNotice('error', getErrorMessage(error, 'Không thể upload logo.')));
     } finally {
@@ -447,7 +447,7 @@ export default function PrintTemplateEditorModal({
         editor.setRevision(item.revision || editor.revision);
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'Đã xóa logo mẫu in.'));
+      setNotice(buildNotice('success', 'D? x?a logo m?u in.'));
     } catch (error) {
       setNotice(buildNotice('error', getErrorMessage(error, 'Không thể xóa logo.')));
     } finally {
@@ -586,7 +586,7 @@ export default function PrintTemplateEditorModal({
       paperSize: 'A4',
       orientation: 'portrait',
     }));
-    setNotice(buildNotice('success', 'Đã nạp mẫu đơn hàng A4 mặc định.'));
+    setNotice(buildNotice('success', 'D? n?p m?u don h?ng A4 m?c d?nh.'));
   }, []);
 
   const handleSapoReload = useCallback(async () => {
@@ -625,7 +625,7 @@ export default function PrintTemplateEditorModal({
         setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'Đã lưu mẫu in kiểu Sapo. Trang in hóa đơn sẽ dùng bản HTML mới.'));
+      setNotice(buildNotice('success', 'D? luu m?u in ki?u Sapo. Trang in h?a don s? d?ng b?n HTML m?i.'));
     } catch (error) {
       setNotice(buildNotice('error', getErrorMessage(error, 'Không thể lưu mẫu in kiểu Sapo.')));
     } finally {
@@ -641,7 +641,7 @@ export default function PrintTemplateEditorModal({
         <div className="invoice-editor-topbar">
           <div>
             <h1 id="invoice-editor-title">Chỉnh sửa mẫu in đơn hàng</h1>
-            <p>{editorMode === 'sapo' ? 'Soạn nội dung mẫu in, chèn từ khóa và xem trước A4 theo dữ liệu hóa đơn thật.' : 'Kéo thả, resize, snap grid, autosave draft theo revision và publish sang layout in thật.'}</p>
+            <p>{editorMode === 'sapo' ? 'So?n n?i dung m?u in, ch?n t? kh?a v? xem tr??c A4 theo d? li?u h?a ?n th?t.' : 'K?o th?, resize, snap grid, autosave draft theo revision v? publish sang layout in th?t.'}</p>
           </div>
           <div className="invoice-editor-topbar-actions">
             <div className="invoice-editor-mode-toggle" role="tablist" aria-label="Chế độ chỉnh sửa mẫu in">
@@ -857,7 +857,7 @@ export default function PrintTemplateEditorModal({
               {previewError && <div className="invoice-editor-preview-source invoice-editor-preview-source-warning">{previewError}</div>}
               <div className="invoice-sapo-preview-meta">
                 <span>Preview</span>
-                <code>{sapoDraft.paperSize} · {sapoDraft.orientation === 'landscape' ? 'Ngang' : 'Dọc'}</code>
+                <code>{sapoDraft.paperSize} ? {sapoDraft.orientation === 'landscape' ? 'Ngang' : 'D?c'}</code>
               </div>
               <div className="invoice-print-preview-frame invoice-sapo-preview-frame">
                 <InvoiceTemplateRenderer

@@ -3,7 +3,7 @@ const now = new Date().toISOString();
 export const mockInvoicePayload = Object.freeze({
   store: {
     name: 'CỬA HÀNG VẠN KHA',
-    address: '123 Đường Nguyễn Trãi, Phường 1, Quận 5, TP. Hồ Chí Minh',
+    address: '123 Du?ng Nguy?n Tr?i, Phu?ng 1, Qu?n 5, TP. H? Ch? Minh',
     phone: '0909 123 456',
     email: 'contact@vankha.local',
     tax_code: '0312345678',
@@ -20,7 +20,7 @@ export const mockInvoicePayload = Object.freeze({
     invoice_code: 'HD00001',
     created_at: now,
     delivery_date: '01/06/2026',
-    status: 'Đã thanh toán',
+    status: 'D? thanh to?n',
     payment_method: 'Tiền mặt',
     note: 'Hàng giao trong giờ hành chính. Vui lòng kiểm tra hàng trước khi nhận.',
   },

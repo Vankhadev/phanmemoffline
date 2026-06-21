@@ -79,7 +79,7 @@ export default function Customers() {
     return () => window.clearTimeout(timer);
   }, [showTypeForm]);
 
-  const getErrorMessage = (err, fallback = 'Thao tác thất bại.') => getApiErrorMessage(err?.data || err, err?.message || fallback);
+  const getErrorMessage = (err, fallback = 'Thao t?c th?t b?i.') => getApiErrorMessage(err?.data || err, err?.message || fallback);
 
   const fetchCustomers = async () => {
     try {
@@ -87,8 +87,8 @@ export default function Customers() {
       setCustomers(Array.isArray(data) ? data : []);
       return Array.isArray(data) ? data : [];
     } catch (err) {
-      console.error('Kh�ng th? t?i danh s�ch kh�ch h�ng:', err);
-      alert(getErrorMessage(err, 'Kh�ng th? t?i danh s�ch kh�ch h�ng.'));
+      console.error('Kh?ng th? t?i danh s?ch kh?ch h?ng:', err);
+      alert(getErrorMessage(err, 'Kh?ng th? t?i danh s?ch kh?ch h?ng.'));
       return [];
     }
   };
@@ -99,7 +99,7 @@ export default function Customers() {
       setCustomerTypes(Array.isArray(data) ? data : []);
       return Array.isArray(data) ? data : [];
     } catch (err) {
-      console.error('Kh�ng th? t?i lo?i kh�ch h�ng:', err);
+      console.error('Kh?ng th? t?i lo?i kh?ch h?ng:', err);
       return [];
     }
   };
@@ -109,11 +109,11 @@ export default function Customers() {
     return ct ? { backgroundColor: ct.color + '20', color: ct.color, border: `1px solid ${ct.color}40` } : { backgroundColor: '#f3f4f6', color: '#374151' };
   };
   const getTypeLabel = (typeId) => {
-    if (!typeId) return 'Chưa phân loại';
+    if (!typeId) return 'Chua ph?n lo?i';
     const ct = customerTypes.find(t => t.name?.toLowerCase() === String(typeId).toLowerCase());
     return ct ? ct.name : typeId;
   };
-  const defaultType = () => customerTypes[0]?.name || 'Khách lẻ';
+  const defaultType = () => customerTypes[0]?.name || 'Kh?ch l?';
   const openAdd = () => {
     setEditing(null);
     setForm({ name: '', phone: '', email: '', tax_code: '', customer_type: defaultType() });
@@ -147,24 +147,24 @@ export default function Customers() {
         });
         setShowForm(false);
         await fetchCustomers();
-        alert(editing ? '? �� c?p nh?t kh�ch h�ng!' : '? �� th�m kh�ch h�ng!');
+        alert(editing ? '? ?? c?p nh?t kh?ch h?ng!' : '? ?? th?m kh?ch h?ng!');
       }
     } catch (err) {
-      alert(getErrorMessage(err, editing ? 'Kh�ng th? c?p nh?t kh�ch h�ng.' : 'Kh�ng th? th�m kh�ch h�ng.'));
+      alert(getErrorMessage(err, editing ? 'Kh?ng th? c?p nh?t kh?ch h?ng.' : 'Kh?ng th? th?m kh?ch h?ng.'));
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Xóa khách hàng này? Dữ liệu đơn hàng liên quan sẽ được giữ nguyên.')) return;
+    if (!confirm('X?a kh?ch h?ng n?y? D? li?u don h?ng li?n quan s? du?c gi? nguy?n.')) return;
     try {
       const data = await customersApi.remove(id);
       if (data.ok) {
         setSelectedCustomerIds(prev => prev.filter(selectedId => Number(selectedId) !== Number(id)));
         await fetchCustomers();
-        alert(data.message || '✅ Đã xóa khách hàng!');
+        alert(data.message || '? ?? x?a kh?ch h?ng!');
       }
     } catch (err) {
-      alert(getErrorMessage(err, 'Không thể xóa khách hàng.'));
+      alert(getErrorMessage(err, 'Kh?ng th? x?a kh?ch h?ng.'));
     }
   };
 
@@ -179,16 +179,16 @@ export default function Customers() {
         : await customerTypesApi.create(typeForm);
       if (data.ok) { setShowTypeForm(false); fetchCustomerTypes(); }
     } catch (err) {
-      alert(getErrorMessage(err, editingType ? 'Không thể cập nhật loại khách hàng.' : 'Không thể thêm loại khách hàng.'));
+      alert(getErrorMessage(err, editingType ? 'Kh?ng th? c?p nh?t lo?i kh?ch h?ng.' : 'Kh?ng th? th?m lo?i kh?ch h?ng.'));
     }
   };
   const handleTypeDelete = async (id) => {
-    if (!confirm('Xóa loại khách này?')) return;
+    if (!confirm('X?a lo?i kh?ch n?y?')) return;
     try {
       await customerTypesApi.remove(id);
       fetchCustomerTypes();
     } catch (err) {
-      alert(getErrorMessage(err, 'Không thể xóa loại khách hàng.'));
+      alert(getErrorMessage(err, 'Kh?ng th? x?a lo?i kh?ch h?ng.'));
     }
   };
 
@@ -240,10 +240,10 @@ export default function Customers() {
     const selectedNames = customers
       .filter(c => selectedIdSet.has(String(c.id)))
       .slice(0, 5)
-      .map(c => `• ${c.name || `#${c.id}`}`)
+      .map(c => `? ${c.name || `#${c.id}`}`)
       .join('\n');
-    const moreText = selectedCustomerIds.length > 5 ? `\n... và ${selectedCustomerIds.length - 5} khách hàng khác` : '';
-    if (!confirm(`Xóa ${selectedCustomerIds.length} khách hàng đã chọn?\n\n${selectedNames}${moreText}\n\nDữ liệu đơn hàng liên quan sẽ được giữ nguyên.`)) return;
+    const moreText = selectedCustomerIds.length > 5 ? `\n... v? ${selectedCustomerIds.length - 5} kh?ch h?ng kh?c` : '';
+    if (!confirm(`X?a ${selectedCustomerIds.length} kh?ch h?ng d? ch?n?\n\n${selectedNames}${moreText}\n\nD? li?u don h?ng li?n quan s? du?c gi? nguy?n.`)) return;
 
     setIsBulkDeleting(true);
     try {
@@ -252,9 +252,9 @@ export default function Customers() {
       const skippedCount = Number(data.invalid_count || 0) + Number(data.duplicate_count || 0) + Number(data.not_found_count || 0) + Number(data.already_deleted_count || 0);
       setSelectedCustomerIds([]);
       await fetchCustomers();
-      alert(`✅ Đã xóa ${deletedCount} khách hàng.${skippedCount > 0 ? `\nĐã bỏ qua ${skippedCount} mục không cần xóa/không hợp lệ.` : ''}`);
+      alert(`? ?? x?a ${deletedCount} kh?ch h?ng.${skippedCount > 0 ? `\n?? b? qua ${skippedCount} m?c kh?ng c?n x?a/kh?ng h?p l?.` : ''}`);
     } catch (err) {
-      alert(getErrorMessage(err, 'Không thể xóa hàng loạt khách hàng.'));
+      alert(getErrorMessage(err, 'Kh?ng th? x?a h?ng lo?t kh?ch h?ng.'));
     } finally {
       setIsBulkDeleting(false);
     }
@@ -293,7 +293,7 @@ export default function Customers() {
       const workbook = XLSX.read(buffer, { type: 'array' });
       const firstSheetName = workbook.SheetNames[0];
       if (!firstSheetName) {
-        alert('File Excel không có sheet dữ liệu.');
+        alert('File Excel kh?ng c? sheet d? li?u.');
         return;
       }
 
@@ -309,13 +309,13 @@ export default function Customers() {
         }
 
         const customer = {
-          name: getExcelCellValue(row, ['Tên khách hàng', 'Tên KH', 'Họ tên', 'name']),
-          phone: getExcelCellValue(row, ['Số điện thoại', 'SĐT', 'Phone', 'phone']),
+          name: getExcelCellValue(row, ['T?n kh?ch h?ng', 'T?n KH', 'H? t?n', 'name']),
+          phone: getExcelCellValue(row, ['S? di?n tho?i', 'S?T', 'Phone', 'phone']),
           email: getExcelCellValue(row, ['Email', 'email']),
-          tax_code: getExcelCellValue(row, ['Mã số thuế', 'MST', 'tax_code']),
-          address: getExcelCellValue(row, ['Địa chỉ', 'address']),
-          customer_type: getExcelCellValue(row, ['Nhóm/Loại', 'Loại khách hàng', 'Loại KH', 'customer_type']),
-          note: getExcelCellValue(row, ['Ghi chú', 'note']),
+          tax_code: getExcelCellValue(row, ['M? s? thu?', 'MST', 'tax_code']),
+          address: getExcelCellValue(row, ['??a ch?', 'address']),
+          customer_type: getExcelCellValue(row, ['Nh?m/Lo?i', 'Lo?i kh?ch h?ng', 'Lo?i KH', 'customer_type']),
+          note: getExcelCellValue(row, ['Ghi ch?', 'note']),
         };
 
         if (!customer.name) {
@@ -329,12 +329,12 @@ export default function Customers() {
       });
 
       if (validCustomers.length === 0) {
-        alert(`Không có khách hàng hợp lệ để nhập. Lỗi/bỏ qua: ${skipped}.`);
+        alert(`Kh?ng c? kh?ch h?ng h?p l? d? nh?p. L?i/b? qua: ${skipped}.`);
         return;
       }
 
       const confirmed = confirm(
-        `Tìm thấy ${validCustomers.length} khách hàng hợp lệ. Lỗi/bỏ qua: ${skipped}.\nBạn có muốn nhập dữ liệu này không?`
+        `T?m th?y ${validCustomers.length} kh?ch h?ng h?p l?. L?i/b? qua: ${skipped}.\nB?n c? mu?n nh?p d? li?u n?y kh?ng?`
       );
       if (!confirmed) return;
 
@@ -347,16 +347,16 @@ export default function Customers() {
           await customersApi.create(customer);
           success += 1;
         } catch (err) {
-          console.error('Lỗi nhập khách hàng:', err);
+          console.error('L?i nh?p kh?ch h?ng:', err);
           failed += 1;
         }
       }
 
       await fetchCustomers();
-      alert(`Nhập Excel hoàn tất!\n- Thành công: ${success}\n- Lỗi/bỏ qua: ${skipped + failed}`);
+      alert(`Nh?p Excel ho?n t?t!\n- Th?nh c?ng: ${success}\n- L?i/b? qua: ${skipped + failed}`);
     } catch (err) {
-      console.error('Lỗi đọc file Excel:', err);
-      alert('Không thể đọc file Excel: ' + (err?.message || err));
+      console.error('L?i d?c file Excel:', err);
+      alert('Kh?ng th? d?c file Excel: ' + (err?.message || err));
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -371,22 +371,22 @@ export default function Customers() {
 
   const exportCustomersList = () => {
     if (filtered.length === 0) {
-      alert('Không có khách hàng để xuất Excel.');
+      alert('Kh?ng c? kh?ch h?ng d? xu?t Excel.');
       return;
     }
 
     const rows = filtered.map((customer, index) => ({
       'STT': index + 1,
-      'Mã khách hàng': customer.customer_code || customer.id || '',
-      'Tên khách hàng': customer.name || '',
-      'Số điện thoại': customer.phone || '',
+      'M? kh?ch h?ng': customer.customer_code || customer.id || '',
+      'T?n kh?ch h?ng': customer.name || '',
+      'S? di?n tho?i': customer.phone || '',
       'Email': customer.email || '',
-      'Mã số thuế': customer.tax_code || '',
-      'Địa chỉ': customer.address || '',
-      'Nhóm/Loại': getTypeLabel(customer.customer_type),
-      'Ghi chú': customer.note || '',
-      'Ngày tạo': formatExcelDateTime(customer.created_at),
-      'Ngày cập nhật': formatExcelDateTime(customer.updated_at),
+      'M? s? thu?': customer.tax_code || '',
+      '??a ch?': customer.address || '',
+      'Nh?m/Lo?i': getTypeLabel(customer.customer_type),
+      'Ghi ch?': customer.note || '',
+      'Ng?y t?o': formatExcelDateTime(customer.created_at),
+      'Ng?y c?p nh?t': formatExcelDateTime(customer.updated_at),
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -410,15 +410,15 @@ export default function Customers() {
       }),
     };
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Khách hàng');
+    XLSX.utils.book_append_sheet(wb, ws, 'Kh?ch h?ng');
     XLSX.writeFile(wb, `danh_sach_khach_hang_${getExportTimestamp()}.xlsx`);
   };
 
-  // ===== Xuất Excel báo cáo khách hàng =====
+  // ===== Xu?t Excel b?o c?o kh?ch h?ng =====
   const exportCustomersReport = async () => {
     const [year, month] = reportMonth.split('-');
 
-    // Lấy hóa đơn tháng đó
+    // L?y h?a don th?ng d?
     const res = await fetch(`${API}/invoices`);
     const invoices = await res.json();
 
@@ -431,15 +431,15 @@ export default function Customers() {
     monthInvoices.forEach(inv => {
       if (!inv.customer_id) return;
       if (!customerStats[inv.customer_id]) {
-        customerStats[inv.customer_id] = { name: inv.customer_name || 'Khách lẻ', phone: '', total_orders: 0, total_revenue: 0 };
+        customerStats[inv.customer_id] = { name: inv.customer_name || 'Kh?ch l?', phone: '', total_orders: 0, total_revenue: 0 };
       }
       customerStats[inv.customer_id].total_orders += 1;
       customerStats[inv.customer_id].total_revenue += inv.total || 0;
     });
 
     let csv = '\uFEFF';
-    csv += `BÁO CÁO KHÁCH HÀNG THÁNG ${month}/${year}\n`;
-    csv += `STT, Tên khách hàng, SĐT, Số đơn hàng, Tổng tiền (VND)\n`;
+    csv += `B?O C?O KH?CH H?NG TH?NG ${month}/${year}\n`;
+    csv += `STT, T?n kh?ch h?ng, S?T, S? don h?ng, T?ng ti?n (VND)\n`;
 
     let stt = 1;
     let totalRevenue = 0;
@@ -450,8 +450,8 @@ export default function Customers() {
       stt++;
     });
 
-    csv += `\nTỔNG CỘNG, ${rows.length} khách, , ${rows.reduce((s, c) => s + c.total_orders, 0)}, ${Math.round(totalRevenue)}\n`;
-    csv += `Ngày xuất: ${new Date().toLocaleString('vi-VN')}\n`;
+    csv += `\nT?NG C?NG, ${rows.length} kh?ch, , ${rows.reduce((s, c) => s + c.total_orders, 0)}, ${Math.round(totalRevenue)}\n`;
+    csv += `Ng?y xu?t: ${new Date().toLocaleString('vi-VN')}\n`;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -466,7 +466,7 @@ export default function Customers() {
     <div className="min-w-0">
       <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-center lg:justify-between">
         <h1 className="text-xl font-bold flex items-center gap-2">
-          <Users className="text-blue-600" size={24} /> Quản lý Khách hàng
+          <Users className="text-blue-600" size={24} /> Qu?n l? Kh?ch h?ng
         </h1>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -480,46 +480,46 @@ export default function Customers() {
           <button type="button" onClick={openImportFilePicker}
             disabled={importing}
             className="px-3 py-2 border border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
-            <UploadCloud size={13} /> {importing ? 'Đang nhập...' : 'Nhập Excel'}
+            <UploadCloud size={13} /> {importing ? '?ang nh?p...' : 'Nh?p Excel'}
           </button>
           <button type="button" onClick={exportCustomersList}
             className="px-3 py-2 border border-yellow-300 text-yellow-600 hover:bg-yellow-50 rounded-lg text-xs font-medium flex items-center gap-1">
-            <FileDown size={13} /> Xuất Excel
+            <FileDown size={13} /> Xu?t Excel
           </button>
           <button type="button" onClick={() => setShowTypeManager(true)}
             className="px-3 py-2 border border-purple-300 text-purple-600 hover:bg-purple-50 rounded-lg text-xs font-medium flex items-center gap-1">
-            <Tag size={13} /> Quản lý loại KH
+            <Tag size={13} /> Qu?n l? lo?i KH
           </button>
           <button type="button" onClick={openAdd} className="btn-primary flex items-center gap-1">
-            <Plus size={16} /> Thêm khách hàng
+            <Plus size={16} /> Th?m kh?ch h?ng
           </button>
         </div>
       </div>
 
-      {/* Xuất Excel */}
+      {/* Xu?t Excel */}
       <div className="card mb-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 p-4">
         <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
-          <FileDown className="text-blue-600" size={16} /> Xuất báo cáo khách hàng theo tháng
+          <FileDown className="text-blue-600" size={16} /> Xu?t b?o c?o kh?ch h?ng theo th?ng
         </h3>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <div className="sm:w-auto">
-            <label className="text-xs text-gray-500 block mb-1">Chọn tháng</label>
+            <label className="text-xs text-gray-500 block mb-1">Ch?n th?ng</label>
             <input type="month" className="input-field w-full" value={reportMonth}
               onChange={e => setReportMonth(e.target.value)} />
           </div>
           <button onClick={exportCustomersReport} className="btn-primary flex items-center gap-1">
-            <FileDown size={16} /> Xuất Excel
+            <FileDown size={16} /> Xu?t Excel
           </button>
         </div>
       </div>
 
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <input className="input-field md:flex-1" placeholder=" Tìm khách hàng theo tên, SĐT, email, mã KH, MST..." value={search} onChange={e => setSearch(e.target.value)} />
+        <input className="input-field md:flex-1" placeholder=" T?m kh?ch h?ng theo t?n, S?T, email, m? KH, MST..." value={search} onChange={e => setSearch(e.target.value)} />
         <div className="flex flex-wrap items-center gap-2">
           {selectedCustomerIds.length > 0 && (
             <button onClick={handleBulkDelete} disabled={isBulkDeleting} className="px-4 py-2 border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
               {isBulkDeleting ? <Loader size={16} className="animate-spin" /> : <Trash2 size={16} />}
-              Xóa đã chọn ({selectedCustomerIds.length})
+              X?a d? ch?n ({selectedCustomerIds.length})
             </button>
           )}
         </div>
@@ -527,14 +527,14 @@ export default function Customers() {
 
       {selectedCustomerIds.length > 0 && (
         <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <span>Đã chọn <strong>{selectedCustomerIds.length}</strong> khách hàng. Checkbox chọn tất cả áp dụng cho <strong>{filtered.length}</strong> khách hàng đang hiển thị.</span>
-          <button type="button" onClick={() => setSelectedCustomerIds([])} className="text-xs font-medium text-amber-700 underline hover:text-amber-900 self-start sm:self-auto">Bỏ chọn tất cả</button>
+          <span>?? ch?n <strong>{selectedCustomerIds.length}</strong> kh?ch h?ng. Checkbox ch?n t?t c? ?p d?ng cho <strong>{filtered.length}</strong> kh?ch h?ng dang hi?n th?.</span>
+          <button type="button" onClick={() => setSelectedCustomerIds([])} className="text-xs font-medium text-amber-700 underline hover:text-amber-900 self-start sm:self-auto">B? ch?n t?t c?</button>
         </div>
       )}
 
       <div className="md:hidden space-y-3">
-        {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> Đang tải...</div>}
-        {!loading && filtered.length === 0 && <div className="rounded-xl border-2 border-dashed bg-white p-8 text-center text-gray-400">Không có khách hàng nào</div>}
+        {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> ?ang t?i...</div>}
+        {!loading && filtered.length === 0 && <div className="rounded-xl border-2 border-dashed bg-white p-8 text-center text-gray-400">Kh?ng c? kh?ch h?ng n?o</div>}
         {!loading && filtered.length > 0 && (
           <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
             <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-gray-600">
@@ -546,7 +546,7 @@ export default function Customers() {
                 onChange={toggleSelectAllVisible}
                 disabled={visibleCustomerIds.length === 0 || isBulkDeleting}
               />
-              Chọn tất cả khách hàng đang hiển thị ({filtered.length})
+              Ch?n t?t c? kh?ch h?ng dang hi?n th? ({filtered.length})
             </label>
           </div>
         )}
@@ -561,15 +561,15 @@ export default function Customers() {
                   checked={isSelected}
                   onChange={() => toggleSelectCustomer(c.id)}
                   disabled={isBulkDeleting}
-                  aria-label={`Chọn khách hàng ${c.name || c.id}`}
+                  aria-label={`Ch?n kh?ch h?ng ${c.name || c.id}`}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-gray-900">{c.name}</div>
-                  {c.customer_code && <div className="text-[11px] text-gray-400">Mã: {c.customer_code}</div>}
+                  {c.customer_code && <div className="text-[11px] text-gray-400">M?: {c.customer_code}</div>}
                   <div className="mt-2 grid grid-cols-1 gap-1 text-sm text-gray-600">
-                    <div><span className="text-gray-400">SĐT:</span> {c.phone || '—'}</div>
-                    <div><span className="text-gray-400">Email:</span> {c.email || '—'}</div>
-                    <div><span className="text-gray-400">MST:</span> <span className="font-mono text-xs">{c.tax_code || '—'}</span></div>
+                    <div><span className="text-gray-400">S?T:</span> {c.phone || '?'}</div>
+                    <div><span className="text-gray-400">Email:</span> {c.email || '?'}</div>
+                    <div><span className="text-gray-400">MST:</span> <span className="font-mono text-xs">{c.tax_code || '?'}</span></div>
                   </div>
                   <div className="mt-2">
                     <span className="px-2 py-0.5 rounded text-xs font-medium" style={getTypeColor(c.customer_type)}>
@@ -580,13 +580,13 @@ export default function Customers() {
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
                 <button onClick={() => handleShowHistory(c.id)} disabled={isBulkDeleting} className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-700 disabled:opacity-50">
-                  <History size={12} /> Lịch sử
+                  <History size={12} /> L?ch s?
                 </button>
                 <button onClick={() => openEdit(c)} disabled={isBulkDeleting} className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 disabled:opacity-50">
-                  <Edit2 size={12} /> Sửa
+                  <Edit2 size={12} /> S?a
                 </button>
                 <button onClick={() => handleDelete(c.id)} disabled={isBulkDeleting} className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600 disabled:opacity-50">
-                  <Trash2 size={12} /> Xóa
+                  <Trash2 size={12} /> X?a
                 </button>
               </div>
             </div>
@@ -606,15 +606,15 @@ export default function Customers() {
                   ref={el => { if (el) el.indeterminate = someVisibleSelected; }}
                   onChange={toggleSelectAllVisible}
                   disabled={visibleCustomerIds.length === 0 || isBulkDeleting}
-                  title={allVisibleSelected ? 'Bỏ chọn tất cả khách hàng đang hiển thị' : 'Chọn tất cả khách hàng đang hiển thị'}
+                  title={allVisibleSelected ? 'B? ch?n t?t c? kh?ch h?ng dang hi?n th?' : 'Ch?n t?t c? kh?ch h?ng dang hi?n th?'}
                 />
               </th>
-              <th className="p-2 text-left">Tên khách hàng</th>
-              <th className="p-2 text-left">SĐT</th>
+              <th className="p-2 text-left">T?n kh?ch h?ng</th>
+              <th className="p-2 text-left">S?T</th>
               <th className="p-2 text-left">Email</th>
               <th className="p-2 text-left">MST</th>
-              <th className="p-2 text-left">Loại</th>
-              <th className="p-2 text-center">Hành động</th>
+              <th className="p-2 text-left">Lo?i</th>
+              <th className="p-2 text-center">H?nh d?ng</th>
             </tr>
           </thead>
           <tbody>
@@ -629,16 +629,16 @@ export default function Customers() {
                       checked={isSelected}
                       onChange={() => toggleSelectCustomer(c.id)}
                       disabled={isBulkDeleting}
-                      aria-label={`Chọn khách hàng ${c.name || c.id}`}
+                      aria-label={`Ch?n kh?ch h?ng ${c.name || c.id}`}
                     />
                   </td>
                   <td className="p-2 font-medium">
                     <div>{c.name}</div>
-                    {c.customer_code && <div className="text-[11px] text-gray-400 font-normal">Mã: {c.customer_code}</div>}
+                    {c.customer_code && <div className="text-[11px] text-gray-400 font-normal">M?: {c.customer_code}</div>}
                   </td>
-                  <td className="p-2">{c.phone || '—'}</td>
-                  <td className="p-2 text-gray-600">{c.email || '—'}</td>
-                  <td className="p-2 font-mono text-xs">{c.tax_code || '—'}</td>
+                  <td className="p-2">{c.phone || '?'}</td>
+                  <td className="p-2 text-gray-600">{c.email || '?'}</td>
+                  <td className="p-2 font-mono text-xs">{c.tax_code || '?'}</td>
                   <td className="p-2">
                     <span className="px-2 py-0.5 rounded text-xs font-medium" style={getTypeColor(c.customer_type)}>
                       {getTypeLabel(c.customer_type)}
@@ -646,13 +646,13 @@ export default function Customers() {
                   </td>
                   <td className="p-2 text-center">
                     <button onClick={() => handleShowHistory(c.id)} disabled={isBulkDeleting} className="text-gray-600 hover:text-gray-800 text-xs mr-2 flex items-center gap-1 inline-flex disabled:opacity-50">
-                      <History size={12} /> Lịch sử
+                      <History size={12} /> L?ch s?
                     </button>
                     <button onClick={() => openEdit(c)} disabled={isBulkDeleting} className="text-blue-600 hover:text-blue-800 text-xs mr-2 flex items-center gap-1 inline-flex disabled:opacity-50">
-                      <Edit2 size={12} /> Sửa
+                      <Edit2 size={12} /> S?a
                     </button>
                     <button onClick={() => handleDelete(c.id)} disabled={isBulkDeleting} className="text-red-500 hover:text-red-700 text-xs flex items-center gap-1 inline-flex disabled:opacity-50">
-                      <Trash2 size={12} /> Xóa
+                      <Trash2 size={12} /> X?a
                     </button>
                   </td>
                 </tr>
@@ -660,8 +660,8 @@ export default function Customers() {
             })}
           </tbody>
         </table>
-        {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> Đang tải...</div>}
-        {!loading && filtered.length === 0 && <div className="text-center text-gray-400 py-10">Không có khách hàng nào</div>}
+        {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> ?ang t?i...</div>}
+        {!loading && filtered.length === 0 && <div className="text-center text-gray-400 py-10">Kh?ng c? kh?ch h?ng n?o</div>}
       </div>
 
       {/* Form modal */}
@@ -671,51 +671,51 @@ export default function Customers() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <Users size={20} className="text-blue-600" />
-                {editing ? 'Sửa khách hàng' : 'Thêm khách hàng'}
+                {editing ? 'S?a kh?ch h?ng' : 'Th?m kh?ch h?ng'}
               </h2>
               <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
             <div className="space-y-3 mb-4">
-              <div><label className="text-xs text-gray-500">Tên KH</label><input ref={customerNameInputRef} className="input-field w-full" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Tên..." /></div>
+              <div><label className="text-xs text-gray-500">T?n KH</label><input ref={customerNameInputRef} className="input-field w-full" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="T?n..." /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-xs text-gray-500">SĐT</label><input className="input-field" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div><label className="text-xs text-gray-500">S?T</label><input className="input-field" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
                 <div><label className="text-xs text-gray-500">Email</label><input className="input-field" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-xs text-gray-500">Mã số thuế</label><input className="input-field" value={form.tax_code} onChange={e => setForm({ ...form, tax_code: e.target.value })} /></div>
-                <div><label className="text-xs text-gray-500">Loại KH</label>
+                <div><label className="text-xs text-gray-500">M? s? thu?</label><input className="input-field" value={form.tax_code} onChange={e => setForm({ ...form, tax_code: e.target.value })} /></div>
+                <div><label className="text-xs text-gray-500">Lo?i KH</label>
                   <select className="input-field" value={form.customer_type || ''} onChange={e => setForm({ ...form, customer_type: e.target.value })}>
                     {customerTypes.length > 0 ? customerTypes.map(t => (
                       <option key={t.id} value={t.name}>{t.name}</option>
                     )) : (
-                      <option value="Khách lẻ">Khách lẻ</option>
+                      <option value="Kh?ch l?">Kh?ch l?</option>
                     )}
                   </select>
                 </div>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
-              <button onClick={handleSubmit} className="btn-success flex-1">💾 Lưu</button>
-              <button onClick={() => setShowForm(false)} className="btn-danger flex-1">Hủy</button>
+              <button onClick={handleSubmit} className="btn-success flex-1">?? Luu</button>
+              <button onClick={() => setShowForm(false)} className="btn-danger flex-1">H?y</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ===== QUẢN LÝ LOẠI KHÁCH HÀNG ===== */}
+      {/* ===== QU?N L? LO?I KH?CH H?NG ===== */}
       {showTypeManager && (
         <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-purple-50 rounded-t-xl">
               <div>
                 <h2 className="text-lg font-bold text-purple-800 flex items-center gap-2">
-                  <Tag size={20} /> Quản lý loại khách hàng
+                  <Tag size={20} /> Qu?n l? lo?i kh?ch h?ng
                 </h2>
-                <p className="text-xs text-purple-500">Thêm, sửa, xóa nhóm khách hàng</p>
+                <p className="text-xs text-purple-500">Th?m, s?a, x?a nh?m kh?ch h?ng</p>
               </div>
-              <button onClick={() => setShowTypeManager(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={() => setShowTypeManager(false)} className="text-gray-400 hover:text-gray-600 text-xl">?</button>
             </div>
 
             <div className="flex-1 overflow-auto p-4 space-y-2">
@@ -727,54 +727,54 @@ export default function Customers() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm text-gray-800">{t.name}</div>
-                    <div className="text-xs text-gray-400">Mã màu: <span className="font-mono">{t.color || '#3b82f6'}</span></div>
+                    <div className="text-xs text-gray-400">M? m?u: <span className="font-mono">{t.color || '#3b82f6'}</span></div>
                   </div>
                   <div className="flex gap-1">
                     <button onClick={() => openTypeEdit(t)}
-                      className="text-blue-500 hover:text-blue-700 p-1.5 rounded border border-blue-300 hover:bg-blue-50" title="Sửa">
+                      className="text-blue-500 hover:text-blue-700 p-1.5 rounded border border-blue-300 hover:bg-blue-50" title="S?a">
                       <Edit2 size={13} />
                     </button>
                     <button onClick={() => handleTypeDelete(t.id)}
-                      className="text-red-400 hover:text-red-600 p-1.5 rounded border border-red-300 hover:bg-red-50" title="Xóa">
+                      className="text-red-400 hover:text-red-600 p-1.5 rounded border border-red-300 hover:bg-red-50" title="X?a">
                       <Trash2 size={13} />
                     </button>
                   </div>
                 </div>
               ))}
               {customerTypes.length === 0 && (
-                <div className="text-center text-gray-400 py-8">Chưa có loại khách hàng nào</div>
+                <div className="text-center text-gray-400 py-8">Chua c? lo?i kh?ch h?ng n?o</div>
               )}
             </div>
 
             <div className="px-4 py-3 border-t bg-gray-50 rounded-b-xl">
               <button onClick={openTypeAdd}
                 className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-1">
-                <Plus size={15} /> Thêm loại khách hàng
+                <Plus size={15} /> Th?m lo?i kh?ch h?ng
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ===== FORM THÊM/SỬA LOẠI KH ===== */}
+      {/* ===== FORM TH?M/S?A LO?I KH ===== */}
       {showTypeForm && (
         <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-[60] overflow-y-auto p-3 sm:p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-4 sm:p-6 max-h-[90dvh] overflow-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-purple-800">
-                {editingType ? 'Sửa loại khách' : 'Thêm loại khách hàng'}
+                {editingType ? 'S?a lo?i kh?ch' : 'Th?m lo?i kh?ch h?ng'}
               </h2>
-              <button onClick={() => setShowTypeForm(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={() => setShowTypeForm(false)} className="text-gray-400 hover:text-gray-600 text-xl">?</button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Tên loại khách hàng <span className="text-red-500">*</span></label>
+                <label className="text-xs text-gray-500 block mb-1">T?n lo?i kh?ch h?ng <span className="text-red-500">*</span></label>
                 <input ref={typeNameInputRef} className="input-field w-full" value={typeForm.name}
                   onChange={e => setTypeForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="VD: Khách gửi, Cộng tác viên, Đại lý..." />
+                  placeholder="VD: Kh?ch g?i, C?ng t?c vi?n, ??i l?..." />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Màu nhóm</label>
+                <label className="text-xs text-gray-500 block mb-1">M?u nh?m</label>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <div className="flex flex-wrap gap-2">
                     {COLOR_PRESETS.map(c => (
@@ -791,17 +791,17 @@ export default function Customers() {
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                   <div className="w-8 h-8 rounded-full border" style={{ backgroundColor: typeForm.color || '#3b82f6' }} />
-                  <span className="text-xs text-gray-500">Xem trước: <span className="font-medium px-2 py-0.5 rounded text-white text-xs" style={{ backgroundColor: typeForm.color || '#3b82f6' }}>
-                    {typeForm.name || 'Tên loại'}
+                  <span className="text-xs text-gray-500">Xem tru?c: <span className="font-medium px-2 py-0.5 rounded text-white text-xs" style={{ backgroundColor: typeForm.color || '#3b82f6' }}>
+                    {typeForm.name || 'T?n lo?i'}
                   </span></span>
                 </div>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 mt-5">
               <button onClick={() => setShowTypeForm(false)}
-                className="flex-1 py-2 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Hủy</button>
+                className="flex-1 py-2 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">H?y</button>
               <button onClick={handleTypeSubmit}
-                className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold">💾 Lưu</button>
+                className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold">?? Luu</button>
             </div>
           </div>
         </div>
@@ -811,68 +811,68 @@ export default function Customers() {
       {showHelp && (
         <HelpModal
           show={showHelp}
-          title="Hướng dẫn sử dụng Quản lý Khách hàng"
+          title="Hu?ng d?n s? d?ng Qu?n l? Kh?ch h?ng"
           onClose={() => setShowHelp(false)}
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">👥 Tổng quan</h3>
-                <p>Trang Quản lý Khách hàng giúp bạn lưu trữ thông tin khách hàng, phân loại theo nhóm, và theo dõi lịch sử mua hàng. Thông tin khách hàng sẽ xuất hiện khi tạo đơn hàng.</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? T?ng quan</h3>
+                <p>Trang Qu?n l? Kh?ch h?ng gi?p b?n luu tr? th?ng tin kh?ch h?ng, ph?n lo?i theo nh?m, v? theo d?i l?ch s? mua h?ng. Th?ng tin kh?ch h?ng s? xu?t hi?n khi t?o don h?ng.</p>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">➕ Thêm khách hàng mới</h3>
+                <h3 className="font-bold text-gray-800 mb-2">? Th?m kh?ch h?ng m?i</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nhấn nút <strong>"Thêm khách hàng"</strong> ở góc trên phải</li>
-                  <li>Điền các thông tin bắt buộc: <strong>Tên</strong></li>
-                  <li>Các thông tin tùy chọn: SĐT, Email, MST</li>
-                  <li>Chọn <strong>Loại khách hàng</strong> (nếu có)</li>
-                  <li>Nhấn "Lưu" để hoàn tất</li>
+                  <li>Nh?n n?t <strong>"Th?m kh?ch h?ng"</strong> ? g?c tr?n ph?i</li>
+                  <li>?i?n c?c th?ng tin b?t bu?c: <strong>T?n</strong></li>
+                  <li>C?c th?ng tin t?y ch?n: S?T, Email, MST</li>
+                  <li>Ch?n <strong>Lo?i kh?ch h?ng</strong> (n?u c?)</li>
+                  <li>Nh?n "Luu" d? ho?n t?t</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">✏️ Chỉnh sửa khách hàng</h3>
-                <p>Nhấn nút <strong>"Sửa"</strong> ở cột Hành động để cập nhật thông tin khách hàng. Có thể thay đổi: SĐT, Email, MST, Loại khách hàng.</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? Ch?nh s?a kh?ch h?ng</h3>
+                <p>Nh?n n?t <strong>"S?a"</strong> ? c?t H?nh d?ng d? c?p nh?t th?ng tin kh?ch h?ng. C? th? thay d?i: S?T, Email, MST, Lo?i kh?ch h?ng.</p>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">🗑️ Xóa khách hàng</h3>
-                <p>Nhấn nút <strong>"Xóa"</strong> ở cột Hành động để xóa khách hàng. <strong className="text-red-600">Lưu ý:</strong> Không thể xóa nếu khách hàng đã có đơn hàng.</p>
+                <h3 className="font-bold text-gray-800 mb-2">??? X?a kh?ch h?ng</h3>
+                <p>Nh?n n?t <strong>"X?a"</strong> ? c?t H?nh d?ng d? x?a kh?ch h?ng. <strong className="text-red-600">Luu ?:</strong> Kh?ng th? x?a n?u kh?ch h?ng d? c? don h?ng.</p>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">🏷️ Quản lý loại khách hàng</h3>
+                <h3 className="font-bold text-gray-800 mb-2">??? Qu?n l? lo?i kh?ch h?ng</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nhấn nút <strong>"Quản lý loại KH"</strong> để mở cửa sổ quản lý</li>
-                  <li><strong>Thêm loại:</strong> Nhập tên và chọn màu sắc</li>
-                  <li><strong>Sửa loại:</strong> Nhấn vào tên loại để đổi tên/màu</li>
-                  <li><strong>Xóa loại:</strong> Nhấn icon 🗑️ (chỉ xóa được nếu không có khách thuộc loại này)</li>
-                  <li>Màu loại sẽ hiển thị khi chọn khách hàng trong đơn hàng</li>
+                  <li>Nh?n n?t <strong>"Qu?n l? lo?i KH"</strong> d? m? c?a s? qu?n l?</li>
+                  <li><strong>Th?m lo?i:</strong> Nh?p t?n v? ch?n m?u s?c</li>
+                  <li><strong>S?a lo?i:</strong> Nh?n v?o t?n lo?i d? d?i t?n/m?u</li>
+                  <li><strong>X?a lo?i:</strong> Nh?n icon ??? (ch? x?a du?c n?u kh?ng c? kh?ch thu?c lo?i n?y)</li>
+                  <li>M?u lo?i s? hi?n th? khi ch?n kh?ch h?ng trong don h?ng</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">🔍 Tìm kiếm</h3>
-                <p>Nhập từ khóa vào ô tìm kiếm để lọc theo:</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? T?m ki?m</h3>
+                <p>Nh?p t? kh?a v?o ? t?m ki?m d? l?c theo:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
-                  <li>Tên khách hàng</li>
-                  <li>Số điện thoại</li>
+                  <li>T?n kh?ch h?ng</li>
+                  <li>S? di?n tho?i</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">📤 Xuất báo cáo khách hàng</h3>
-                <p>Chọn tháng và nhấn "Xuất Excel" để tải báo cáo khách hàng với thống kê số đơn hàng và tổng chi tiêu trong tháng.</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? Xu?t b?o c?o kh?ch h?ng</h3>
+                <p>Ch?n th?ng v? nh?n "Xu?t Excel" d? t?i b?o c?o kh?ch h?ng v?i th?ng k? s? don h?ng v? t?ng chi ti?u trong th?ng.</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h3 className="font-bold text-blue-800 mb-2">💡 Mẹo & Lưu ý</h3>
+                <h3 className="font-bold text-blue-800 mb-2">?? M?o & Luu ?</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
-                  <li><strong>Loại khách hàng:</strong> Dùng để phân nhóm (VIP, Sỉ, Lẻ...), mỗi loại có màu riêng</li>
-                  <li><strong>MST:</strong> Nhập đầy đủ cho khách doanh nghiệp để xuất hóa đơn</li>
-                  <li>Khách hàng sẽ hiển thị trong trang POS khi tạo đơn hàng</li>
-                  <li>Có thể thêm khách hàng trực tiếp trong trang POS nếu chưa có</li>
+                  <li><strong>Lo?i kh?ch h?ng:</strong> D?ng d? ph?n nh?m (VIP, S?, L?...), m?i lo?i c? m?u ri?ng</li>
+                  <li><strong>MST:</strong> Nh?p d?y d? cho kh?ch doanh nghi?p d? xu?t h?a don</li>
+                  <li>Kh?ch h?ng s? hi?n th? trong trang POS khi t?o don h?ng</li>
+                  <li>C? th? th?m kh?ch h?ng tr?c ti?p trong trang POS n?u chua c?</li>
                 </ul>
               </div>
             </div>

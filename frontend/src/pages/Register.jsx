@@ -42,7 +42,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
     totalUsers: 0,
     hasAdmin: false,
     nextRole: 'ADMIN',
-    message: 'Tài khoản đầu tiên sẽ được cấp quyền ADMIN',
+    message: 'T?i kho?n d?u ti?n s? du?c c?p quy?n ADMIN',
   });
 
   const nextRole = String(currentBootstrapStatus.nextRole || (currentBootstrapStatus.needsSetup ? 'ADMIN' : 'USER')).toUpperCase();
@@ -52,28 +52,28 @@ export default function Register({ onLogin, bootstrapStatus }) {
   const pageContent = useMemo(() => {
     if (checkingSetup) {
       return {
-        title: 'Đang kiểm tra hệ thống',
-        description: 'Vui lòng đợi trong giây lát trước khi đăng ký tài khoản',
+        title: '?ang ki?m tra h? th?ng',
+        description: 'Vui l?ng d?i trong gi?y l?t tru?c khi dang k? t?i kho?n',
       };
     }
 
     if (registeredData) {
       return {
-        title: 'Tạo tài khoản thành công',
-        description: 'Tài khoản của bạn đã sẵn sàng sử dụng',
+        title: 'T?o t?i kho?n th?nh c?ng',
+        description: 'T?i kho?n c?a b?n d? s?n s?ng s? d?ng',
       };
     }
 
     if (isFirstAccount) {
       return {
-        title: 'Đăng ký tài khoản ',
-        description: 'Chào Mừng Bạn Đến Hệ Thống Đăng Ký Tài Khoản Của Phần Mềm',
+        title: '?ang k? t?i kho?n ',
+        description: 'Ch?o M?ng B?n ??n H? Th?ng ?ang K? T?i Kho?n C?a Ph?n M?m',
       };
     }
 
     return {
-      title: 'Đăng ký tài khoản',
-      description: 'Chào Mừng Bạn Đến Hệ Thống Đăng Ký Tài Khoản Của Phần Mềm',
+      title: '?ang k? t?i kho?n',
+      description: 'Ch?o M?ng B?n ??n H? Th?ng ?ang K? T?i Kho?n C?a Ph?n M?m',
     };
   }, [checkingSetup, isFirstAccount, registeredData]);
 
@@ -89,13 +89,13 @@ export default function Register({ onLogin, bootstrapStatus }) {
       hasAdmin: !!data?.hasAdmin,
       needsSetup: !!data?.needsSetup,
       nextRole: String(data?.nextRole || (data?.needsSetup ? 'ADMIN' : 'USER')).toUpperCase(),
-      message: data?.message || (data?.needsSetup ? 'Tài khoản đầu tiên sẽ được cấp quyền ADMIN' : 'Tài khoản đăng ký tiếp theo sẽ là USER'),
+      message: data?.message || (data?.needsSetup ? 'T?i kho?n d?u ti?n s? du?c c?p quy?n ADMIN' : 'T?i kho?n dang k? ti?p theo s? l? USER'),
     });
   };
 
   const completeLogin = async (payload) => {
     if (!payload?.token || !payload?.user) {
-      throw new Error('Server không trả đủ thông tin đăng nhập.');
+      throw new Error('Server kh?ng tr? d? th?ng tin dang nh?p.');
     }
     const result = await onLogin?.(payload);
     navigate(result?.defaultRoute || '/', { replace: true });
@@ -110,7 +110,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
       applyBootstrapStatus(data);
     } catch (err) {
       setCurrentBootstrapStatus(current => ({ ...current, nextRole: 'USER', needsSetup: false }));
-      setError(getApiErrorMessage(err?.data, err.message || 'Không thể kết nối server để kiểm tra trạng thái hệ thống.'));
+      setError(getApiErrorMessage(err?.data, err.message || 'Kh?ng th? k?t n?i server d? ki?m tra tr?ng th?i h? th?ng.'));
     } finally {
       setCheckingSetup(false);
     }
@@ -127,57 +127,57 @@ export default function Register({ onLogin, bootstrapStatus }) {
 
   const validateForm = () => {
     if (checkingSetup) {
-      setError('Đang kiểm tra trạng thái hệ thống, vui lòng đợi trong giây lát.');
+      setError('?ang ki?m tra tr?ng th?i h? th?ng, vui l?ng d?i trong gi?y l?t.');
       return false;
     }
 
     if (!form.name.trim()) {
-      setError('Vui lòng nhập họ và tên.');
+      setError('Vui l?ng nh?p h? v? t?n.');
       return false;
     }
 
     if (form.name.trim().length < 2) {
-      setError('Họ và tên phải có ít nhất 2 ký tự.');
+      setError('H? v? t?n ph?i c? ?t nh?t 2 k? t?.');
       return false;
     }
 
     if (!form.email.trim()) {
-      setError('Vui lòng nhập email.');
+      setError('Vui l?ng nh?p email.');
       return false;
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      setError('Email không hợp lệ.');
+      setError('Email kh?ng h?p l?.');
       return false;
     }
 
     if (!form.phone.trim()) {
-      setError('Vui lòng nhập số điện thoại.');
+      setError('Vui l?ng nh?p s? di?n tho?i.');
       return false;
     }
 
     if (!/^0\d{9,10}$/.test(normalizePhone(form.phone))) {
-      setError('Số điện thoại phải bắt đầu bằng 0 và gồm 10-11 chữ số.');
+      setError('S? di?n tho?i ph?i b?t d?u b?ng 0 v? g?m 10-11 ch? s?.');
       return false;
     }
 
     if (!form.password) {
-      setError('Vui lòng nhập mật khẩu.');
+      setError('Vui l?ng nh?p m?t kh?u.');
       return false;
     }
 
     if (form.password.length < 8) {
-      setError('Mật khẩu phải có ít nhất 8 ký tự.');
+      setError('M?t kh?u ph?i c? ?t nh?t 8 k? t?.');
       return false;
     }
 
     if (!form.confirmPassword) {
-      setError('Vui lòng nhập xác nhận mật khẩu.');
+      setError('Vui l?ng nh?p x?c nh?n m?t kh?u.');
       return false;
     }
 
     if (form.password !== form.confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp.');
+      setError('M?t kh?u x?c nh?n kh?ng kh?p.');
       return false;
     }
 
@@ -201,10 +201,10 @@ export default function Register({ onLogin, bootstrapStatus }) {
     setLoading(true);
     try {
       const data = await authApi.register(payload);
-      setSuccess('Tạo tài khoản thành công');
+      setSuccess('T?o t?i kho?n th?nh c?ng');
       setRegisteredData(data);
     } catch (err) {
-      setError(getApiErrorMessage(err?.data, err.message || 'Không thể kết nối server để đăng ký tài khoản.'));
+      setError(getApiErrorMessage(err?.data, err.message || 'Kh?ng th? k?t n?i server d? dang k? t?i kho?n.'));
     } finally {
       setLoading(false);
     }
@@ -244,7 +244,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
               disabled={checkingSetup || loading}
               className="text-xs font-semibold text-red-700 underline decoration-red-300 hover:text-red-900 disabled:text-red-300 disabled:cursor-not-allowed"
             >
-              Thử lại
+              Th? l?i
             </button>
           </div>
         )}
@@ -252,14 +252,14 @@ export default function Register({ onLogin, bootstrapStatus }) {
         {checkingSetup && (
           <div className="text-center py-8 text-gray-500 text-sm">
             <RefreshCw className="animate-spin mx-auto mb-3 text-blue-600" size={28} />
-            Đang kiểm tra trạng thái đăng ký...
+            ?ang ki?m tra tr?ng th?i dang k?...
           </div>
         )}
 
         {registeredData ? (
           <div className="space-y-6 text-center py-4">
             <div className="text-gray-600 text-base font-medium">
-              Bạn có muốn đăng nhập tự động bằng tài khoản vừa tạo hay quay về trang đăng nhập?
+              B?n c? mu?n dang nh?p t? d?ng b?ng t?i kho?n v?a t?o hay quay v? trang dang nh?p?
             </div>
             
             <div className="space-y-3">
@@ -270,7 +270,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                     setLoading(true);
                     await completeLogin(registeredData);
                   } catch (err) {
-                    setError(err.message || 'Không thể tự động đăng nhập.');
+                    setError(err.message || 'Kh?ng th? t? d?ng dang nh?p.');
                     setRegisteredData(null);
                   } finally {
                     setLoading(false);
@@ -280,7 +280,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2"
               >
                 {loading ? <RefreshCw size={20} className="animate-spin" /> : null}
-                Tự động đăng nhập
+                T? d?ng dang nh?p
               </button>
               
               <button
@@ -289,7 +289,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                 disabled={loading}
                 className="w-full border border-gray-300 hover:bg-gray-50 text-gray-700 py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2"
               >
-                Chuyển tới Đăng Nhập
+                Chuy?n t?i ?ang Nh?p
               </button>
             </div>
           </div>
@@ -297,7 +297,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                <span className="inline-flex items-center gap-1"><User size={14} /> Họ và tên <span className="text-red-500">*</span></span>
+                <span className="inline-flex items-center gap-1"><User size={14} /> H? v? t?n <span className="text-red-500">*</span></span>
               </label>
               <input
                 type="text"
@@ -329,7 +329,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                <span className="inline-flex items-center gap-1"><Phone size={14} /> Số điện thoại <span className="text-red-500">*</span></span>
+                <span className="inline-flex items-center gap-1"><Phone size={14} /> S? di?n tho?i <span className="text-red-500">*</span></span>
               </label>
               <input
                 type="tel"
@@ -345,14 +345,14 @@ export default function Register({ onLogin, bootstrapStatus }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                <span className="inline-flex items-center gap-1"><Lock size={14} /> Mật khẩu <span className="text-red-500">*</span></span>
+                <span className="inline-flex items-center gap-1"><Lock size={14} /> M?t kh?u <span className="text-red-500">*</span></span>
               </label>
               <div className="relative">
                 <input
                   type={showPass ? 'text' : 'password'}
                   value={form.password}
                   onChange={event => set('password', event.target.value)}
-                  placeholder="Vui Lòng Nhập Mật Khẩu"
+                  placeholder="Vui L?ng Nh?p M?t Kh?u"
                   className="input-field w-full pl-4 pr-10"
                   autoComplete="new-password"
                   disabled={submitDisabled}
@@ -363,7 +363,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                   onClick={() => setShowPass(current => !current)}
                   disabled={submitDisabled}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
-                  aria-label={showPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  aria-label={showPass ? '?n m?t kh?u' : 'Hi?n m?t kh?u'}
                 >
                   {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -372,14 +372,14 @@ export default function Register({ onLogin, bootstrapStatus }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                <span className="inline-flex items-center gap-1"><Lock size={14} /> Xác nhận mật khẩu <span className="text-red-500">*</span></span>
+                <span className="inline-flex items-center gap-1"><Lock size={14} /> X?c nh?n m?t kh?u <span className="text-red-500">*</span></span>
               </label>
               <div className="relative">
                 <input
                   type={showConfirm ? 'text' : 'password'}
                   value={form.confirmPassword}
                   onChange={event => set('confirmPassword', event.target.value)}
-                  placeholder="Nhập Mật Khẩu Xác Nhận"
+                  placeholder="Nh?p M?t Kh?u X?c Nh?n"
                   className="input-field w-full pl-4 pr-10"
                   autoComplete="new-password"
                   disabled={submitDisabled}
@@ -390,7 +390,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                   onClick={() => setShowConfirm(current => !current)}
                   disabled={submitDisabled}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
-                  aria-label={showConfirm ? 'Ẩn xác nhận mật khẩu' : 'Hiện xác nhận mật khẩu'}
+                  aria-label={showConfirm ? '?n x?c nh?n m?t kh?u' : 'Hi?n x?c nh?n m?t kh?u'}
                 >
                   {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -403,11 +403,11 @@ export default function Register({ onLogin, bootstrapStatus }) {
               className={`${isFirstAccount ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'} w-full disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2`}
             >
               {loading ? (
-                <><RefreshCw size={20} className="animate-spin" /> Đang đăng ký...</>
+                <><RefreshCw size={20} className="animate-spin" /> ?ang dang k?...</>
               ) : isFirstAccount ? (
-                <><ShieldCheck size={20} /> Đăng ký</>
+                <><ShieldCheck size={20} /> ?ang k?</>
               ) : (
-                <><UserPlus size={20} /> Đăng ký</>
+                <><UserPlus size={20} /> ?ang k?</>
               )}
             </button>
           </form>
@@ -416,7 +416,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
         {!registeredData && (
           <div className="mt-4 text-center">
             <Link to="/" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium">
-              <ArrowLeft size={14} /> Đã có tài khoản? Đăng nhập
+              <ArrowLeft size={14} /> ?? c? t?i kho?n? ?ang nh?p
             </Link>
           </div>
         )}

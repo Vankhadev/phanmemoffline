@@ -87,7 +87,7 @@ function ProductStockValue({ stock, align = 'right', settings }) {
       <span className={`font-semibold ${meta.textClass}`}>{meta.display}</span>
       {(meta.isNegative || meta.isNearLimit || meta.isBreached) && (
         <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${meta.badgeClass}`}>
-          {meta.isBreached ? 'Vượt ngưỡng' : 'Âm kho'}
+          {meta.isBreached ? 'Vu?t ngu?ng' : '?m kho'}
         </span>
       )}
       {meta.isNearLimit && <span className="text-[10px] font-semibold text-orange-700">{meta.extraLabel || getNegativeStockNearLimitLabel(settings)}</span>}
@@ -103,7 +103,7 @@ const EMPTY_PRODUCT_FORM = Object.freeze({
   retail_price: '',
   vip_price: '',
   stock: '',
-  unit: 'cái',
+  unit: 'c?i',
   category: '',
   supplier_id: '',
 });
@@ -116,7 +116,7 @@ const EMPTY_VARIANT_FORM = Object.freeze({
   retail_price: '',
   vip_price: '',
   stock: '',
-  unit: 'cái',
+  unit: 'c?i',
 });
 
 const createProductFormInitial = (overrides = {}) => ({ ...EMPTY_PRODUCT_FORM, ...overrides });
@@ -190,7 +190,7 @@ const ProductFormModal = memo(function ProductFormModal({
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Package size={20} className="text-blue-600" />
-            {editing ? 'Sửa sản phẩm' : 'Thêm sản phẩm mới'}
+            {editing ? 'S?a s?n ph?m' : 'Th?m s?n ph?m m?i'}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={20} />
@@ -199,7 +199,7 @@ const ProductFormModal = memo(function ProductFormModal({
 
         <form onSubmit={handleSubmit} className="space-y-3 mb-4">
           <div>
-            <label className="text-xs text-gray-500">Tên sản phẩm <span className="text-red-500">*</span></label>
+            <label className="text-xs text-gray-500">T?n s?n ph?m <span className="text-red-500">*</span></label>
             <input
               ref={nameInputRef}
               className="input-field w-full"
@@ -207,22 +207,22 @@ const ProductFormModal = memo(function ProductFormModal({
               onPointerDown={e => ensureFocusableElement(e.currentTarget, { reason: 'products:parent-name-pointerdown' })}
               onFocus={e => ensureFocusableElement(e.currentTarget, { reason: 'products:parent-name-focus' })}
               onChange={e => updateField('name', e.target.value)}
-              placeholder="tên sản phẩm"
+              placeholder="t?n s?n ph?m"
               autoFocus
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="text-xs text-gray-500">Giá nhập</label><input type="number" className="input-field" value={form.import_price} onChange={e => updateField('import_price', e.target.value)} placeholder="giá nhập" /></div>
-            <div><label className="text-xs text-gray-500">Giá lẻ</label><input type="number" className="input-field" value={form.retail_price} onChange={e => updateField('retail_price', e.target.value)} placeholder="giá lẻ" /></div>
+            <div><label className="text-xs text-gray-500">Gi? nh?p</label><input type="number" className="input-field" value={form.import_price} onChange={e => updateField('import_price', e.target.value)} placeholder="gi? nh?p" /></div>
+            <div><label className="text-xs text-gray-500">Gi? l?</label><input type="number" className="input-field" value={form.retail_price} onChange={e => updateField('retail_price', e.target.value)} placeholder="gi? l?" /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="text-xs text-gray-500">Giá sỉ</label><input type="number" className="input-field" value={form.wholesale_price} onChange={e => updateField('wholesale_price', e.target.value)} placeholder="giá sỉ" /></div>
-            <div><label className="text-xs text-gray-500">Giá VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="giá VIP" /></div>
+            <div><label className="text-xs text-gray-500">Gi? s?</label><input type="number" className="input-field" value={form.wholesale_price} onChange={e => updateField('wholesale_price', e.target.value)} placeholder="gi? s?" /></div>
+            <div><label className="text-xs text-gray-500">Gi? VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="gi? VIP" /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <NegativeStockInput
               id="product-stock-input"
-              label="Số lượng tồn"
+              label="S? lu?ng t?n"
               value={form.stock}
               onChange={value => updateField('stock', value)}
               error={stockError}
@@ -231,20 +231,20 @@ const ProductFormModal = memo(function ProductFormModal({
               onLimitError={onStockLimitError}
               settings={negativeStockSettings}
             />
-            <div><label className="text-xs text-gray-500">Đơn vị tính</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="đơn vị tính" /></div>
+            <div><label className="text-xs text-gray-500">?on v? t?nh</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="don v? t?nh" /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-500">Mã sản phẩm</label>
-              <input className="input-field bg-gray-100 text-gray-500 cursor-not-allowed" value={form.sku} readOnly disabled placeholder="Tự sinh SP00001" />
-              <span className="text-[10px] text-blue-500">{editing ? 'Mã đã cấp được giữ nguyên.' : 'Hệ thống tự cấp mã sau khi lưu.'}</span>
+              <label className="text-xs text-gray-500">M? s?n ph?m</label>
+              <input className="input-field bg-gray-100 text-gray-500 cursor-not-allowed" value={form.sku} readOnly disabled placeholder="T? sinh SP00001" />
+              <span className="text-[10px] text-blue-500">{editing ? 'M? d? c?p du?c gi? nguy?n.' : 'H? th?ng t? c?p m? sau khi luu.'}</span>
             </div>
-            <div><label className="text-xs text-gray-500">Danh mục dạng text</label><input className="input-field w-full" value={form.category} onChange={e => updateField('category', e.target.value)} placeholder="nhập tên danh mục nếu cần" /></div>
+            <div><label className="text-xs text-gray-500">Danh m?c d?ng text</label><input className="input-field w-full" value={form.category} onChange={e => updateField('category', e.target.value)} placeholder="nh?p t?n danh m?c n?u c?n" /></div>
           </div>
           <div>
-            <label className="text-xs text-gray-500">Nhà cung cấp</label>
+            <label className="text-xs text-gray-500">Nh? cung c?p</label>
             <select className="input-field w-full" value={form.supplier_id} onChange={e => updateField('supplier_id', e.target.value)}>
-              <option value="">-- Chọn nhà cung cấp --</option>
+              <option value="">-- Ch?n nh? cung c?p --</option>
               {suppliers.map(s => (
                 <option key={s.id} value={s.id}>{s.name} {s.phone ? `(${s.phone})` : ''}</option>
               ))}
@@ -253,9 +253,9 @@ const ProductFormModal = memo(function ProductFormModal({
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
             <button type="submit" disabled={saving || Boolean(stockError)}
               className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-              💾 {saving ? 'Đang lưu...' : (editing ? 'Lưu thay đổi' : 'Lưu')}
+              ?? {saving ? '?ang luu...' : (editing ? 'Luu thay d?i' : 'Luu')}
             </button>
-            <button type="button" onClick={onClose} className="btn-danger flex-1">Hủy</button>
+            <button type="button" onClick={onClose} className="btn-danger flex-1">H?y</button>
           </div>
         </form>
       </div>
@@ -316,7 +316,7 @@ const VariantFormModal = memo(function VariantFormModal({
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Package size={20} className="text-green-600" />
-            {editingVariant ? 'Sửa biến thể' : `Biến thể của: ${parent?.name || ''}`}
+            {editingVariant ? 'S?a bi?n th?' : `Bi?n th? c?a: ${parent?.name || ''}`}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={20} />
@@ -325,7 +325,7 @@ const VariantFormModal = memo(function VariantFormModal({
 
         <form onSubmit={handleSubmit} className="space-y-3 mb-4">
           <div>
-            <label className="text-xs text-gray-500">Tên biến thể <span className="text-red-500">*</span></label>
+            <label className="text-xs text-gray-500">T?n bi?n th? <span className="text-red-500">*</span></label>
             <input
               ref={nameInputRef}
               className="input-field w-full"
@@ -333,20 +333,20 @@ const VariantFormModal = memo(function VariantFormModal({
               onPointerDown={e => ensureFocusableElement(e.currentTarget, { reason: 'products:variant-name-pointerdown' })}
               onFocus={e => ensureFocusableElement(e.currentTarget, { reason: 'products:variant-name-focus' })}
               onChange={e => updateField('name', e.target.value)}
-              placeholder="tên biến thể"
+              placeholder="t?n bi?n th?"
               autoFocus
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="text-xs text-gray-500">Giá nhập</label><input type="number" className="input-field" value={form.import_price} onChange={e => updateField('import_price', e.target.value)} placeholder="giá nhập" /></div>
-            <div><label className="text-xs text-gray-500">Giá lẻ</label><input type="number" className="input-field" value={form.retail_price} onChange={e => updateField('retail_price', e.target.value)} placeholder="giá lẻ" /></div>
+            <div><label className="text-xs text-gray-500">Gi? nh?p</label><input type="number" className="input-field" value={form.import_price} onChange={e => updateField('import_price', e.target.value)} placeholder="gi? nh?p" /></div>
+            <div><label className="text-xs text-gray-500">Gi? l?</label><input type="number" className="input-field" value={form.retail_price} onChange={e => updateField('retail_price', e.target.value)} placeholder="gi? l?" /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div><label className="text-xs text-gray-500">Giá sỉ</label><input type="number" className="input-field" value={form.wholesale_price} onChange={e => updateField('wholesale_price', e.target.value)} placeholder="giá sỉ" /></div>
-            <div><label className="text-xs text-gray-500">Giá VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="giá VIP" /></div>
+            <div><label className="text-xs text-gray-500">Gi? s?</label><input type="number" className="input-field" value={form.wholesale_price} onChange={e => updateField('wholesale_price', e.target.value)} placeholder="gi? s?" /></div>
+            <div><label className="text-xs text-gray-500">Gi? VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="gi? VIP" /></div>
             <NegativeStockInput
               id="variant-stock-input"
-              label="Số lượng tồn"
+              label="S? lu?ng t?n"
               value={form.stock}
               onChange={value => updateField('stock', value)}
               error={stockError}
@@ -359,17 +359,17 @@ const VariantFormModal = memo(function VariantFormModal({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-500">SKU biến thể (hệ thống tự sinh)</label>
-              <input className="input-field w-full bg-gray-100 text-gray-500 cursor-not-allowed" value={editingVariant ? (form.sku || '') : ''} readOnly disabled placeholder="Tự sinh sau khi lưu" />
-              <span className="text-[10px] text-blue-500">{editingVariant ? 'Mã đã cấp được giữ nguyên.' : 'Hệ thống tự cấp mã SP tiếp theo sau khi lưu.'}</span>
+              <label className="text-xs text-gray-500">SKU bi?n th? (h? th?ng t? sinh)</label>
+              <input className="input-field w-full bg-gray-100 text-gray-500 cursor-not-allowed" value={editingVariant ? (form.sku || '') : ''} readOnly disabled placeholder="T? sinh sau khi luu" />
+              <span className="text-[10px] text-blue-500">{editingVariant ? 'M? d? c?p du?c gi? nguy?n.' : 'H? th?ng t? c?p m? SP ti?p theo sau khi luu.'}</span>
             </div>
-            <div><label className="text-xs text-gray-500">Đơn vị tính</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="cái" /></div>
+            <div><label className="text-xs text-gray-500">?on v? t?nh</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="c?i" /></div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
             <button type="submit" disabled={saving || Boolean(stockError)} className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
-              💾 {saving ? 'Đang lưu...' : 'Lưu biến thể'}
+              ?? {saving ? '?ang luu...' : 'Luu bi?n th?'}
             </button>
-            <button type="button" onClick={onClose} className="btn-danger flex-1">Hủy</button>
+            <button type="button" onClick={onClose} className="btn-danger flex-1">H?y</button>
           </div>
         </form>
       </div>
@@ -414,7 +414,7 @@ const ProductRow = memo(function ProductRow({
         <button
           onClick={() => onToggleSelect(p.id)}
           className="w-5 h-5 flex items-center justify-center text-gray-600 hover:text-blue-600"
-          title={selected ? 'Bỏ chọn' : 'Chọn'}
+          title={selected ? 'B? ch?n' : 'Ch?n'}
         >
           {selected ? <CheckSquare size={16} /> : <Square size={16} />}
         </button>
@@ -430,46 +430,46 @@ const ProductRow = memo(function ProductRow({
           <div className="flex items-center gap-2">
             <span className={`font-medium text-sm ${!hasVariants ? parentStockMeta.nameClass : ''}`}>{p.name}</span>
             {!hasVariants && parentStockMeta.isNegative && (
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${parentStockMeta.badgeClass}`}>Âm kho</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${parentStockMeta.badgeClass}`}>?m kho</span>
             )}
             {!hasVariants && parentStockMeta.isNearLimit && (
               <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">{parentStockMeta.extraLabel || getNegativeStockNearLimitLabel(negativeStockSettings)}</span>
             )}
             {hasVariants && (
               <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
-                {variantCount} biến thể
+                {variantCount} bi?n th?
               </span>
             )}
           </div>
           <div className="text-xs text-gray-400">
-            {p.sku} · {getCategoryName(p)} · {getSupplierName(p.supplier_id)}
+            {p.sku} ? {getCategoryName(p)} ? {getSupplierName(p.supplier_id)}
           </div>
         </div>
 
         {hasVariants ? (
-          <div className="text-right text-sm w-20 text-gray-300" title="Tồn kho được quản lý ở từng biến thể">—</div>
+          <div className="text-right text-sm w-20 text-gray-300" title="T?n kho du?c qu?n l? ? t?ng bi?n th?">?</div>
         ) : (
           <div className="text-right text-sm w-24">
             <ProductStockValue stock={p.stock} settings={negativeStockSettings} />
           </div>
         )}
 
-        <div className="hidden text-right text-xs text-gray-500 w-24 md:block" title={hasVariants ? 'Giá nhập được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatVND(p.import_price)}</div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-green-600'}`} title={hasVariants ? 'Giá lẻ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatVND(p.retail_price)}</div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-red-600'}`} title={hasVariants ? 'Giá sỉ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatVND(p.wholesale_price)}</div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-blue-600'}`} title={hasVariants ? 'Giá VIP được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatVND(p.vip_price)}</div>
+        <div className="hidden text-right text-xs text-gray-500 w-24 md:block" title={hasVariants ? 'Gi? nh?p du?c qu?n l? ? t?ng bi?n th?' : undefined}>{hasVariants ? '?' : formatVND(p.import_price)}</div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-green-600'}`} title={hasVariants ? 'Gi? l? du?c qu?n l? ? t?ng bi?n th?' : undefined}>{hasVariants ? '?' : formatVND(p.retail_price)}</div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-red-600'}`} title={hasVariants ? 'Gi? s? du?c qu?n l? ? t?ng bi?n th?' : undefined}>{hasVariants ? '?' : formatVND(p.wholesale_price)}</div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-blue-600'}`} title={hasVariants ? 'Gi? VIP du?c qu?n l? ? t?ng bi?n th?' : undefined}>{hasVariants ? '?' : formatVND(p.vip_price)}</div>
 
         <div className="flex items-center gap-1 w-full justify-end border-t border-gray-100 pt-2 md:w-40 md:border-t-0 md:pt-0">
-          <button onClick={() => onAddVariant(p)} className="text-green-600 hover:text-green-800 p-1.5 rounded border border-green-300 hover:bg-green-50" title="Thêm biến thể">
+          <button onClick={() => onAddVariant(p)} className="text-green-600 hover:text-green-800 p-1.5 rounded border border-green-300 hover:bg-green-50" title="Th?m bi?n th?">
             <Plus size={14} />
           </button>
-          <button onClick={() => onShowHistory(p.id)} className="text-gray-500 hover:text-gray-700 p-1.5 rounded border border-gray-300 hover:bg-gray-50" title="Lịch sử thay đổi">
+          <button onClick={() => onShowHistory(p.id)} className="text-gray-500 hover:text-gray-700 p-1.5 rounded border border-gray-300 hover:bg-gray-50" title="L?ch s? thay d?i">
             <History size={14} />
           </button>
-          <button onClick={() => onEditProduct(p)} className="text-blue-600 hover:text-blue-800 p-1.5 rounded border border-blue-300 hover:bg-blue-50" title="Sửa">
+          <button onClick={() => onEditProduct(p)} className="text-blue-600 hover:text-blue-800 p-1.5 rounded border border-blue-300 hover:bg-blue-50" title="S?a">
             <Edit2 size={14} />
           </button>
-          <button onClick={() => onDeleteProduct(p.id)} className="text-red-500 hover:text-red-700 p-1.5 rounded border border-red-300 hover:bg-red-50" title="Xóa">
+          <button onClick={() => onDeleteProduct(p.id)} className="text-red-500 hover:text-red-700 p-1.5 rounded border border-red-300 hover:bg-red-50" title="X?a">
             <Trash2 size={14} />
           </button>
         </div>
@@ -482,7 +482,7 @@ const ProductRow = memo(function ProductRow({
           <div className="flex-1 min-w-[12rem] md:min-w-0">
             <div className={`text-sm ${variantStockMeta.nameClass || 'text-gray-700'}`}>{v.name}</div>
             <div className="text-xs text-gray-400">
-              {v.sku} · {getCategoryName(v) || getCategoryName(p)} · {getSupplierName(v.supplier_id || p.supplier_id)}
+              {v.sku} ? {getCategoryName(v) || getCategoryName(p)} ? {getSupplierName(v.supplier_id || p.supplier_id)}
             </div>
           </div>
 
@@ -496,13 +496,13 @@ const ProductRow = memo(function ProductRow({
           <div className="hidden text-right text-xs text-blue-600 font-medium w-24 md:block">{formatVND(v.vip_price)}</div>
 
           <div className="flex items-center gap-1 w-full justify-end border-t border-gray-200 pt-2 md:w-40 md:border-t-0 md:pt-0">
-            <button onClick={() => onShowHistory(v.id)} className="text-gray-500 hover:text-gray-700 p-1.5 rounded border border-gray-300 hover:bg-gray-50" title="Lịch sử thay đổi">
+            <button onClick={() => onShowHistory(v.id)} className="text-gray-500 hover:text-gray-700 p-1.5 rounded border border-gray-300 hover:bg-gray-50" title="L?ch s? thay d?i">
               <History size={13} />
             </button>
-            <button onClick={() => onEditVariant(v, p)} className="text-blue-600 hover:text-blue-800 p-1.5 rounded border border-blue-300 hover:bg-blue-50" title="Sửa">
+            <button onClick={() => onEditVariant(v, p)} className="text-blue-600 hover:text-blue-800 p-1.5 rounded border border-blue-300 hover:bg-blue-50" title="S?a">
               <Edit2 size={13} />
             </button>
-            <button onClick={() => onDeleteVariant(v.id)} className="text-red-500 hover:text-red-700 p-1.5 rounded border border-red-300 hover:bg-red-50" title="Xóa">
+            <button onClick={() => onDeleteVariant(v.id)} className="text-red-500 hover:text-red-700 p-1.5 rounded border border-red-300 hover:bg-red-50" title="X?a">
               <Trash2 size={13} />
             </button>
           </div>
@@ -545,8 +545,8 @@ export default function Products({ store }) {
   const categoryNameById = useMemo(() => new Map((categories || []).map(category => [String(category.id), category.name])), [categories]);
 
   const getSupplierName = useCallback((supplierId) => {
-    if (!supplierId) return '—';
-    return supplierNameById.get(String(supplierId)) || '—';
+    if (!supplierId) return '?';
+    return supplierNameById.get(String(supplierId)) || '?';
   }, [supplierNameById]);
 
   // Combo state
@@ -620,7 +620,7 @@ export default function Products({ store }) {
     return () => productsFetchAbortRef.current?.abort();
   }, []);
 
-  // ── Refresh khi đơn/sync làm đổi tồn kho, sản phẩm hoặc danh mục ──
+  // -- Refresh khi don/sync l?m d?i t?n kho, s?n ph?m ho?c danh m?c --
   useEffect(() => {
     const refreshProducts = () => fetchProducts();
     const onSyncUpdated = (event) => {
@@ -645,25 +645,25 @@ export default function Products({ store }) {
     };
   }, []);
 
-  const fetchCombos = () => apiJsonChecked('/combos', {}, 'Không thể tải danh sách combo.')
+  const fetchCombos = () => apiJsonChecked('/combos', {}, 'Kh?ng th? t?i danh s?ch combo.')
     .then(data => {
       const nextCombos = Array.isArray(data) ? data : [];
       setCombos(nextCombos);
       return nextCombos;
     })
     .catch(err => {
-      console.warn('[Products] Không thể tải danh sách combo:', err);
+      console.warn('[Products] Kh?ng th? t?i danh s?ch combo:', err);
       setCombos([]);
       return [];
     });
-  const fetchSuppliers = () => apiJsonChecked('/partners', {}, 'Không thể tải danh sách nhà cung cấp.')
+  const fetchSuppliers = () => apiJsonChecked('/partners', {}, 'Kh?ng th? t?i danh s?ch nh? cung c?p.')
     .then(data => {
       const nextSuppliers = Array.isArray(data) ? data : [];
       setSuppliers(nextSuppliers);
       return nextSuppliers;
     })
     .catch(err => {
-      console.warn('[Products] Không thể tải danh sách nhà cung cấp:', err);
+      console.warn('[Products] Kh?ng th? t?i danh s?ch nh? cung c?p:', err);
       setSuppliers([]);
       return [];
     });
@@ -694,12 +694,12 @@ export default function Products({ store }) {
   };
   const fetchCategories = async () => {
     try {
-      const data = await apiJsonChecked('/product-categories', {}, 'Không thể tải danh mục sản phẩm.');
+      const data = await apiJsonChecked('/product-categories', {}, 'Kh?ng th? t?i danh m?c s?n ph?m.');
       const nextCategories = extractCategoriesFromResponse(data).map(normalizeCategoryRecord).filter(Boolean);
       setCategories(nextCategories);
       return nextCategories;
     } catch (err) {
-      console.warn('[Products] Không thể tải danh mục sản phẩm:', err);
+      console.warn('[Products] Kh?ng th? t?i danh m?c s?n ph?m:', err);
       setCategories([]);
       return [];
     }
@@ -733,7 +733,7 @@ export default function Products({ store }) {
   };
   const handleCategorySubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!categoryForm.name.trim()) { alert('Vui lòng nhập tên danh mục!'); return; }
+    if (!categoryForm.name.trim()) { alert('Vui l?ng nh?p t?n danh m?c!'); return; }
 
     const method = editingCategory ? 'PUT' : 'POST';
     const url = editingCategory ? resolveApiUrl(`/product-categories/${editingCategory.id}`) : resolveApiUrl('/product-categories');
@@ -742,7 +742,7 @@ export default function Products({ store }) {
       const data = await apiJsonChecked(url, {
         method,
         body: categoryForm,
-      }, 'Không lưu được danh mục.');
+      }, 'Kh?ng luu du?c danh m?c.');
 
       const responseList = extractCategoriesFromResponse(data);
       const responseCategory = (data?.category && !Array.isArray(data.category) ? data.category : null)
@@ -769,12 +769,12 @@ export default function Products({ store }) {
         changedTables: ['product_categories', 'products'],
       });
     } catch (err) {
-      alert(`📡 Lỗi kết nối khi lưu danh mục: ${err.message}`);
+      alert(`?? L?i k?t n?i khi luu danh m?c: ${err.message}`);
     }
   };
   const handleCategoryDelete = async (category) => {
-    if (!confirm(`Vô hiệu danh mục "${category.name}"? Sản phẩm cũ vẫn giữ dữ liệu danh mục đã gán.`)) return;
-    await apiJsonChecked(resolveApiUrl(`/product-categories/${category.id}`), { method: 'DELETE' }, 'Không thể vô hiệu danh mục.');
+    if (!confirm(`V? hi?u danh m?c "${category.name}"? S?n ph?m cu v?n gi? d? li?u danh m?c d? g?n.`)) return;
+    await apiJsonChecked(resolveApiUrl(`/product-categories/${category.id}`), { method: 'DELETE' }, 'Kh?ng th? v? hi?u danh m?c.');
     setCategories(prev => prev.filter(item => String(item.id) !== String(category.id)));
     fetchProducts();
     broadcastSyncUpdate({
@@ -782,7 +782,7 @@ export default function Products({ store }) {
       changedTables: ['product_categories', 'products'],
     });
   };
-  const getCategoryName = useCallback((product) => product?.default_category?.name || categoryNameById.get(String(product?.default_category_id)) || product?.category || '—', [categoryNameById]);
+  const getCategoryName = useCallback((product) => product?.default_category?.name || categoryNameById.get(String(product?.default_category_id)) || product?.category || '?', [categoryNameById]);
   const getComboItemKey = (item) => item?.variant_id ? `variant-${item.variant_id}` : `product-${item?.product_id}`;
   const normalizeComboItemForForm = (it) => {
     const variantId = it.variant_id || null;
@@ -827,9 +827,9 @@ export default function Products({ store }) {
     setShowComboForm(true);
   };
   const handleComboSubmit = async () => {
-    if (!comboForm.name?.trim()) { alert('Vui lòng nhập tên combo!'); return; }
-    if (comboForm.retail_price === '' || comboForm.retail_price === null || comboForm.retail_price === undefined) { alert('Vui lòng nhập giá bán lẻ!'); return; }
-    if (comboForm.wholesale_price === '' || comboForm.wholesale_price === null || comboForm.wholesale_price === undefined) { alert('Vui lòng nhập giá bán sỉ!'); return; }
+    if (!comboForm.name?.trim()) { alert('Vui l?ng nh?p t?n combo!'); return; }
+    if (comboForm.retail_price === '' || comboForm.retail_price === null || comboForm.retail_price === undefined) { alert('Vui l?ng nh?p gi? b?n l?!'); return; }
+    if (comboForm.wholesale_price === '' || comboForm.wholesale_price === null || comboForm.wholesale_price === undefined) { alert('Vui l?ng nh?p gi? b?n s?!'); return; }
     let invalidQuantityItem = null;
     const payloadItems = comboItems.map(item => {
       const quantity = normalizeDecimalQuantity(item.quantity, Number.NaN);
@@ -854,7 +854,7 @@ export default function Products({ store }) {
       };
     });
     if (invalidQuantityItem) {
-      alert(`Số lượng của "${invalidQuantityItem.product_name || invalidQuantityItem.name || invalidQuantityItem.sku || 'sản phẩm'}" phải lớn hơn hoặc bằng ${MIN_QUANTITY}.`);
+      alert(`S? lu?ng c?a "${invalidQuantityItem.product_name || invalidQuantityItem.name || invalidQuantityItem.sku || 's?n ph?m'}" ph?i l?n hon ho?c b?ng ${MIN_QUANTITY}.`);
       return;
     }
     const method = editingCombo ? 'PUT' : 'POST';
@@ -862,7 +862,7 @@ export default function Products({ store }) {
     const data = await apiJsonChecked(url, {
       method,
       body: { ...comboForm, name: comboForm.name.trim(), items: payloadItems },
-    }, 'Không lưu được combo.');
+    }, 'Kh?ng luu du?c combo.');
     setShowComboForm(false);
     fetchCombos();
     const updatedAt = String(Date.now());
@@ -870,8 +870,8 @@ export default function Products({ store }) {
     window.dispatchEvent(new CustomEvent('kha-combos-changed', { detail: { updatedAt, comboId: data.combo_id || data.id || editingCombo?.id || null } }));
   };
   const handleComboDelete = async (id) => {
-    if (!confirm('Xóa combo này?')) return;
-    await apiJsonChecked(resolveApiUrl(`/combos/${id}`), { method: 'DELETE' }, 'Không thể xóa combo.');
+    if (!confirm('X?a combo n?y?')) return;
+    await apiJsonChecked(resolveApiUrl(`/combos/${id}`), { method: 'DELETE' }, 'Kh?ng th? x?a combo.');
     fetchCombos();
     const updatedAt = String(Date.now());
     localStorage.setItem('kha_combos_updated_at', updatedAt);
@@ -927,13 +927,13 @@ export default function Products({ store }) {
     try {
       const data = await apiJsonChecked('/products/all/with-variants', {
         signal: controller.signal,
-      }, 'Không thể tải danh sách sản phẩm.');
+      }, 'Kh?ng th? t?i danh s?ch s?n ph?m.');
       const nextProducts = Array.isArray(data) ? data : [];
       if (productsFetchRequestIdRef.current === requestId) setProducts(nextProducts);
       return nextProducts;
     } catch (err) {
       if (err.name !== 'AbortError') {
-        console.warn('[Products] Không thể tải danh sách sản phẩm:', err);
+        console.warn('[Products] Kh?ng th? t?i danh s?ch s?n ph?m:', err);
         if (productsFetchRequestIdRef.current === requestId) setProducts([]);
       }
       return null;
@@ -964,7 +964,7 @@ export default function Products({ store }) {
     });
   }, [clearSelectedProducts]);
 
-  // ── CHECKBOX HANDLERS ──
+  // -- CHECKBOX HANDLERS --
   const toggleSelectProduct = useCallback((productId) => {
     const productIdKey = toProductIdKey(productId);
     setSelectedProducts(prev =>
@@ -983,7 +983,7 @@ export default function Products({ store }) {
       clearSelectedProducts();
       return;
     }
-    if (!confirm(`Xóa ${idsToDelete.length} sản phẩm đã chọn? Tất cả biến thể của các sản phẩm này cũng sẽ bị xóa.`)) return;
+    if (!confirm(`X?a ${idsToDelete.length} s?n ph?m d? ch?n? T?t c? bi?n th? c?a c?c s?n ph?m n?y cung s? b? x?a.`)) return;
 
     bulkDeleteInFlightRef.current = true;
     setIsBulkDeleting(true);
@@ -1014,15 +1014,15 @@ export default function Products({ store }) {
       }
 
       if (failedResults.length === 0) {
-        alert(`✅ Đã xóa ${deletedIds.length} sản phẩm!`);
+        alert(`? ?? x?a ${deletedIds.length} s?n ph?m!`);
       } else {
         const failedReasons = failedResults
-          .map(result => result.reason?.message || 'Không rõ lỗi')
+          .map(result => result.reason?.message || 'Kh?ng r? l?i')
           .join('\n');
-        alert(`⚠️ Đã xóa ${deletedIds.length}/${idsToDelete.length} sản phẩm. Một số sản phẩm chưa xóa được:\n${failedReasons}`);
+        alert(`?? ?? x?a ${deletedIds.length}/${idsToDelete.length} s?n ph?m. M?t s? s?n ph?m chua x?a du?c:\n${failedReasons}`);
       }
     } catch (err) {
-      alert(`📡 Lỗi khi xóa: ${err.message}`);
+      alert(`?? L?i khi x?a: ${err.message}`);
     } finally {
       bulkDeleteInFlightRef.current = false;
       setIsBulkDeleting(false);
@@ -1030,28 +1030,28 @@ export default function Products({ store }) {
   }, [clearSelectedProducts, fetchProducts, removeDeletedProductsFromState, selectedProductsForBulkAction]);
 
   const requiredExcelColumns = [
-    'Loại dòng',
+    'Lo?i d?ng',
     'SKU',
     'Parent SKU',
-    'Tên sản phẩm',
-    'Tên cha',
-    'Giá nhập',
-    'Giá sỉ',
-    'Giá lẻ',
-    'Giá VIP',
-    'Tồn kho',
-    'Đơn vị',
-    'Danh mục text',
+    'T?n s?n ph?m',
+    'T?n cha',
+    'Gi? nh?p',
+    'Gi? s?',
+    'Gi? l?',
+    'Gi? VIP',
+    'T?n kho',
+    '?on v?',
+    'Danh m?c text',
     'Default category id',
     'Supplier id',
-    'Hoạt động',
+    'Ho?t d?ng',
   ];
   const referenceExcelColumns = [
     'ID',
     'Parent ID',
     'Default category name',
     'Supplier name',
-    'Ghi chú',
+    'Ghi ch?',
   ];
   const excelColumns = [...requiredExcelColumns, ...referenceExcelColumns];
 
@@ -1077,49 +1077,49 @@ export default function Products({ store }) {
   const productToExcelRow = (product, type, parent = null) => {
     const supplierId = product.supplier_id ?? parent?.supplier_id ?? '';
     return {
-      'Loại dòng': type,
+      'Lo?i d?ng': type,
       'SKU': product.sku || '',
       'Parent SKU': parent?.sku || '',
-      'Tên sản phẩm': product.name || '',
-      'Tên cha': parent?.name || '',
-      'Giá nhập': product.import_price ?? '',
-      'Giá sỉ': product.wholesale_price ?? '',
-      'Giá lẻ': product.retail_price ?? '',
-      'Giá VIP': product.vip_price ?? '',
-      'Tồn kho': product.stock ?? '',
-      'Đơn vị': product.unit || parent?.unit || 'cái',
-      'Danh mục text': getProductCategoryText(product, parent),
+      'T?n s?n ph?m': product.name || '',
+      'T?n cha': parent?.name || '',
+      'Gi? nh?p': product.import_price ?? '',
+      'Gi? s?': product.wholesale_price ?? '',
+      'Gi? l?': product.retail_price ?? '',
+      'Gi? VIP': product.vip_price ?? '',
+      'T?n kho': product.stock ?? '',
+      '?on v?': product.unit || parent?.unit || 'c?i',
+      'Danh m?c text': getProductCategoryText(product, parent),
       'Default category id': product.default_category_id ?? parent?.default_category_id ?? '',
       'Supplier id': supplierId,
-      'Hoạt động': product.active === 0 ? 'Không' : 'Có',
+      'Ho?t d?ng': product.active === 0 ? 'Kh?ng' : 'C?',
       'ID': product.id ?? '',
       'Parent ID': parent?.id ?? product.parent_id ?? '',
       'Default category name': getDefaultCategoryDisplayName(product, parent),
       'Supplier name': getSupplierDisplayName(supplierId),
-      'Ghi chú': type === 'VARIANT'
-        ? 'Biến thể: mã riêng; Parent SKU là mã sản phẩm cha dùng để giữ quan hệ'
-        : 'Sản phẩm cha: để trống Parent SKU',
+      'Ghi ch?': type === 'VARIANT'
+        ? 'Bi?n th?: m? ri?ng; Parent SKU l? m? s?n ph?m cha d?ng d? gi? quan h?'
+        : 'S?n ph?m cha: d? tr?ng Parent SKU',
     };
   };
 
   const appendExcelGuideSheet = (wb) => {
     const guideRows = [
-      ['Cột', 'Bắt buộc', 'Ý nghĩa / cách nhập'],
-      ['Loại dòng', 'Khuyến nghị', 'Nhập PARENT cho sản phẩm cha, VARIANT cho biến thể. Có thể bỏ trống để backend tự suy luận: có Parent SKU là VARIANT, không có Parent SKU là PARENT.'],
-      ['SKU', 'Có với PARENT/import', 'Dùng để đối chiếu khi import/cập nhật. Với bản ghi mới, backend cấp mã SP riêng và không cần nhập thủ công trên giao diện.'],
-      ['Parent SKU', 'Có với VARIANT', 'SKU của sản phẩm cha. Parent SKU phải tồn tại trong cùng file hoặc đã có trong hệ thống. Dòng PARENT phải để trống cột này.'],
-      ['Tên sản phẩm', 'Có với SKU mới', 'Tên sản phẩm cha hoặc tên biến thể. Với biến thể, tên biến thể là dữ liệu phân biệt để cập nhật đúng dòng trong cùng sản phẩm cha.'],
-      ['Tên cha', 'Tham khảo', 'Chỉ giúp người dùng đọc file; backend liên kết bằng Parent SKU.'],
-      ['Giá nhập / Giá sỉ / Giá lẻ / Giá VIP', 'Không', 'Nhập số không âm. Có thể dùng định dạng 100000, 100.000 hoặc 100,000.'],
-      ['Tồn kho', 'Không', `Có thể âm đến ${negativeStockLimitLabel}. Nếu thấp hơn ${negativeStockLimitLabel}, backend sẽ chặn ghi dữ liệu.`],
-      ['Đơn vị', 'Không', 'Ví dụ: cái, bộ, hộp. Biến thể bỏ trống sẽ lấy theo sản phẩm cha khi thêm mới.'],
-      ['Danh mục text', 'Không', 'Tên/nhóm/từ khóa danh mục. Backend có thể tự khớp danh mục mặc định nếu đã cấu hình.'],
-      ['Default category id', 'Không', 'ID danh mục mặc định nếu biết chính xác. Nếu không biết thì để trống và dùng Danh mục text.'],
-      ['Supplier id', 'Không', 'ID nhà cung cấp nếu biết chính xác.'],
-      ['Hoạt động', 'Không', 'Nhập Có/Không, 1/0 hoặc để trống. Bỏ trống sẽ mặc định là Có khi import.'],
-      ['ID / Parent ID / Default category name / Supplier name / Ghi chú', 'Không', 'Cột tham khảo khi xuất file từ hệ thống; backend bỏ qua khi import.'],
-      ['Alias được hỗ trợ', 'Không', 'Có thể dùng các cột phổ biến như Mã SKU, Ma SKU, Mã sản phẩm, Tên, SL hàng, So luong, Giá vốn, Giá bán, ĐVT, Danh mục, ParentSKU, SKU cha, Mã cha, Hoạt động, Trạng thái.'],
-      ['Lưu ý', 'Có', 'Import validate toàn bộ file trước khi ghi để tránh mất quan hệ cha - con. Nếu có lỗi, dữ liệu chưa được ghi.'],
+      ['C?t', 'B?t bu?c', '? nghia / c?ch nh?p'],
+      ['Lo?i d?ng', 'Khuy?n ngh?', 'Nh?p PARENT cho s?n ph?m cha, VARIANT cho bi?n th?. C? th? b? tr?ng d? backend t? suy lu?n: c? Parent SKU l? VARIANT, kh?ng c? Parent SKU l? PARENT.'],
+      ['SKU', 'C? v?i PARENT/import', 'D?ng d? d?i chi?u khi import/c?p nh?t. V?i b?n ghi m?i, backend c?p m? SP ri?ng v? kh?ng c?n nh?p th? c?ng tr?n giao di?n.'],
+      ['Parent SKU', 'C? v?i VARIANT', 'SKU c?a s?n ph?m cha. Parent SKU ph?i t?n t?i trong c?ng file ho?c d? c? trong h? th?ng. D?ng PARENT ph?i d? tr?ng c?t n?y.'],
+      ['T?n s?n ph?m', 'C? v?i SKU m?i', 'T?n s?n ph?m cha ho?c t?n bi?n th?. V?i bi?n th?, t?n bi?n th? l? d? li?u ph?n bi?t d? c?p nh?t d?ng d?ng trong c?ng s?n ph?m cha.'],
+      ['T?n cha', 'Tham kh?o', 'Ch? gi?p ngu?i d?ng d?c file; backend li?n k?t b?ng Parent SKU.'],
+      ['Gi? nh?p / Gi? s? / Gi? l? / Gi? VIP', 'Kh?ng', 'Nh?p s? kh?ng ?m. C? th? d?ng d?nh d?ng 100000, 100.000 ho?c 100,000.'],
+      ['T?n kho', 'Kh?ng', `C? th? ?m d?n ${negativeStockLimitLabel}. N?u th?p hon ${negativeStockLimitLabel}, backend s? ch?n ghi d? li?u.`],
+      ['?on v?', 'Kh?ng', 'V? d?: c?i, b?, h?p. Bi?n th? b? tr?ng s? l?y theo s?n ph?m cha khi th?m m?i.'],
+      ['Danh m?c text', 'Kh?ng', 'T?n/nh?m/t? kh?a danh m?c. Backend c? th? t? kh?p danh m?c m?c d?nh n?u d? c?u h?nh.'],
+      ['Default category id', 'Kh?ng', 'ID danh m?c m?c d?nh n?u bi?t ch?nh x?c. N?u kh?ng bi?t th? d? tr?ng v? d?ng Danh m?c text.'],
+      ['Supplier id', 'Kh?ng', 'ID nh? cung c?p n?u bi?t ch?nh x?c.'],
+      ['Ho?t d?ng', 'Kh?ng', 'Nh?p C?/Kh?ng, 1/0 ho?c d? tr?ng. B? tr?ng s? m?c d?nh l? C? khi import.'],
+      ['ID / Parent ID / Default category name / Supplier name / Ghi ch?', 'Kh?ng', 'C?t tham kh?o khi xu?t file t? h? th?ng; backend b? qua khi import.'],
+      ['Alias du?c h? tr?', 'Kh?ng', 'C? th? d?ng c?c c?t ph? bi?n nhu M? SKU, Ma SKU, M? s?n ph?m, T?n, SL h?ng, So luong, Gi? v?n, Gi? b?n, ?VT, Danh m?c, ParentSKU, SKU cha, M? cha, Ho?t d?ng, Tr?ng th?i.'],
+      ['Luu ?', 'C?', 'Import validate to?n b? file tru?c khi ghi d? tr?nh m?t quan h? cha - con. N?u c? l?i, d? li?u chua du?c ghi.'],
     ];
     const guideWs = XLSX.utils.aoa_to_sheet(guideRows);
     guideWs['!cols'] = [
@@ -1127,7 +1127,7 @@ export default function Products({ store }) {
       { wch: 14 },
       { wch: 110 },
     ];
-    XLSX.utils.book_append_sheet(wb, guideWs, 'Hướng dẫn');
+    XLSX.utils.book_append_sheet(wb, guideWs, 'Hu?ng d?n');
   };
 
   const buildProductsWorkbook = (rows) => {
@@ -1140,12 +1140,12 @@ export default function Products({ store }) {
       }),
     };
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Sản phẩm');
+    XLSX.utils.book_append_sheet(wb, ws, 'S?n ph?m');
     appendExcelGuideSheet(wb);
     return wb;
   };
 
-  // ── XUẤT Excel ──
+  // -- XU?T Excel --
   const handleExportExcel = () => {
     const rows = [];
     products.forEach(parent => {
@@ -1162,92 +1162,92 @@ export default function Products({ store }) {
   const handleDownloadExcelTemplate = () => {
     const sampleRows = [
       {
-        'Loại dòng': 'PARENT',
+        'Lo?i d?ng': 'PARENT',
         'SKU': 'SP00001',
         'Parent SKU': '',
-        'Tên sản phẩm': 'Áo thun cotton',
-        'Tên cha': '',
-        'Giá nhập': 80000,
-        'Giá sỉ': 110000,
-        'Giá lẻ': 150000,
-        'Giá VIP': 130000,
-        'Tồn kho': 0,
-        'Đơn vị': 'cái',
-        'Danh mục text': 'Áo thun',
+        'T?n s?n ph?m': '?o thun cotton',
+        'T?n cha': '',
+        'Gi? nh?p': 80000,
+        'Gi? s?': 110000,
+        'Gi? l?': 150000,
+        'Gi? VIP': 130000,
+        'T?n kho': 0,
+        '?on v?': 'c?i',
+        'Danh m?c text': '?o thun',
         'Default category id': '',
         'Supplier id': '',
-        'Hoạt động': 'Có',
+        'Ho?t d?ng': 'C?',
         'ID': '',
         'Parent ID': '',
         'Default category name': '',
         'Supplier name': '',
-        'Ghi chú': 'Dòng cha: Parent SKU để trống',
+        'Ghi ch?': 'D?ng cha: Parent SKU d? tr?ng',
       },
       {
-        'Loại dòng': 'VARIANT',
+        'Lo?i d?ng': 'VARIANT',
         'SKU': 'SP00002',
         'Parent SKU': 'SP00001',
-        'Tên sản phẩm': 'Màu đỏ / Size S',
-        'Tên cha': 'Áo thun cotton',
-        'Giá nhập': 80000,
-        'Giá sỉ': 110000,
-        'Giá lẻ': 150000,
-        'Giá VIP': 130000,
-        'Tồn kho': 12,
-        'Đơn vị': 'cái',
-        'Danh mục text': 'Áo thun',
+        'T?n s?n ph?m': 'M?u d? / Size S',
+        'T?n cha': '?o thun cotton',
+        'Gi? nh?p': 80000,
+        'Gi? s?': 110000,
+        'Gi? l?': 150000,
+        'Gi? VIP': 130000,
+        'T?n kho': 12,
+        '?on v?': 'c?i',
+        'Danh m?c text': '?o thun',
         'Default category id': '',
         'Supplier id': '',
-        'Hoạt động': 'Có',
+        'Ho?t d?ng': 'C?',
         'ID': '',
         'Parent ID': '',
         'Default category name': '',
         'Supplier name': '',
-        'Ghi chú': 'Dòng biến thể: mã riêng do hệ thống cấp khi tạo mới',
+        'Ghi ch?': 'D?ng bi?n th?: m? ri?ng do h? th?ng c?p khi t?o m?i',
       },
       {
-        'Loại dòng': 'VARIANT',
+        'Lo?i d?ng': 'VARIANT',
         'SKU': 'SP00003',
         'Parent SKU': 'SP00001',
-        'Tên sản phẩm': 'Màu xanh / Size M',
-        'Tên cha': 'Áo thun cotton',
-        'Giá nhập': 82000,
-        'Giá sỉ': 115000,
-        'Giá lẻ': 155000,
-        'Giá VIP': 135000,
-        'Tồn kho': 8,
-        'Đơn vị': 'cái',
-        'Danh mục text': 'Áo thun',
+        'T?n s?n ph?m': 'M?u xanh / Size M',
+        'T?n cha': '?o thun cotton',
+        'Gi? nh?p': 82000,
+        'Gi? s?': 115000,
+        'Gi? l?': 155000,
+        'Gi? VIP': 135000,
+        'T?n kho': 8,
+        '?on v?': 'c?i',
+        'Danh m?c text': '?o thun',
         'Default category id': '',
         'Supplier id': '',
-        'Hoạt động': 'Có',
+        'Ho?t d?ng': 'C?',
         'ID': '',
         'Parent ID': '',
         'Default category name': '',
         'Supplier name': '',
-        'Ghi chú': 'Có thể bỏ Loại dòng, backend vẫn suy luận là VARIANT vì có Parent SKU; SKU biến thể nên là mã riêng duy nhất',
+        'Ghi ch?': 'C? th? b? Lo?i d?ng, backend v?n suy lu?n l? VARIANT v? c? Parent SKU; SKU bi?n th? n?n l? m? ri?ng duy nh?t',
       },
       {
-        'Loại dòng': 'PARENT',
+        'Lo?i d?ng': 'PARENT',
         'SKU': 'SP00004',
         'Parent SKU': '',
-        'Tên sản phẩm': 'Bình giữ nhiệt 500ml',
-        'Tên cha': '',
-        'Giá nhập': 50000,
-        'Giá sỉ': 70000,
-        'Giá lẻ': 99000,
-        'Giá VIP': 89000,
-        'Tồn kho': 25,
-        'Đơn vị': 'cái',
-        'Danh mục text': 'Gia dụng',
+        'T?n s?n ph?m': 'B?nh gi? nhi?t 500ml',
+        'T?n cha': '',
+        'Gi? nh?p': 50000,
+        'Gi? s?': 70000,
+        'Gi? l?': 99000,
+        'Gi? VIP': 89000,
+        'T?n kho': 25,
+        '?on v?': 'c?i',
+        'Danh m?c text': 'Gia d?ng',
         'Default category id': '',
         'Supplier id': '',
-        'Hoạt động': 'Có',
+        'Ho?t d?ng': 'C?',
         'ID': '',
         'Parent ID': '',
         'Default category name': '',
         'Supplier name': '',
-        'Ghi chú': 'Sản phẩm cha không có biến thể',
+        'Ghi ch?': 'S?n ph?m cha kh?ng c? bi?n th?',
       },
     ];
     const wb = buildProductsWorkbook(sampleRows);
@@ -1297,9 +1297,9 @@ export default function Products({ store }) {
     if (typeof err === 'string') return err;
     const line = err.line || err.row || err.rowNumber;
     const field = err.field || err.column || err.col;
-    const lineText = line ? `Dòng ${line}` : 'Dòng ?';
-    const fieldText = field ? ` · Cột ${field}` : '';
-    return `${lineText}${fieldText}: ${err.message || err.error || err.detail || 'Lỗi không xác định'}`;
+    const lineText = line ? `D?ng ${line}` : 'D?ng ?';
+    const fieldText = field ? ` ? C?t ${field}` : '';
+    return `${lineText}${fieldText}: ${err.message || err.error || err.detail || 'L?i kh?ng x?c d?nh'}`;
   }).join('\n');
 
   const formatColumnList = (columns = []) => columns.filter(Boolean).slice(0, 24).join(', ') + (columns.length > 24 ? ', ...' : '');
@@ -1318,23 +1318,23 @@ export default function Products({ store }) {
     const errors = Array.isArray(data.errors) ? data.errors : [];
     const expectedColumns = Array.isArray(data.expectedColumns) ? data.expectedColumns : requiredExcelColumns;
     const backendReceivedColumns = Array.isArray(data.receivedColumns) && data.receivedColumns.length > 0 ? data.receivedColumns : receivedColumns;
-    const title = data.error || (!response?.ok ? `API trả về HTTP ${response?.status || '?'}` : '') || data.detail || 'File không hợp lệ';
-    const lines = [`⚠️ Import Excel thất bại: ${title}`];
+    const title = data.error || (!response?.ok ? `API tr? v? HTTP ${response?.status || '?'}` : '') || data.detail || 'File kh?ng h?p l?';
+    const lines = [`?? Import Excel th?t b?i: ${title}`];
 
-    if (data.detail && data.detail !== title) lines.push(`Chi tiết: ${data.detail}`);
+    if (data.detail && data.detail !== title) lines.push(`Chi ti?t: ${data.detail}`);
     if (response) lines.push(`HTTP: ${response.status} ${response.statusText || ''}`.trim());
-    if (sheetName) lines.push(`Sheet đã đọc: ${sheetName}`);
-    if (backendReceivedColumns.length > 0) lines.push(`Cột nhận được: ${formatColumnList(backendReceivedColumns)}`);
-    if (expectedColumns.length > 0) lines.push(`Cột chuẩn gợi ý: ${formatColumnList(expectedColumns)}`);
+    if (sheetName) lines.push(`Sheet d? d?c: ${sheetName}`);
+    if (backendReceivedColumns.length > 0) lines.push(`C?t nh?n du?c: ${formatColumnList(backendReceivedColumns)}`);
+    if (expectedColumns.length > 0) lines.push(`C?t chu?n g?i ?: ${formatColumnList(expectedColumns)}`);
     if (errors.length > 0) {
-      lines.push(`Một số lỗi đầu tiên (${Math.min(errors.length, 12)}/${errors.length}):`);
+      lines.push(`M?t s? l?i d?u ti?n (${Math.min(errors.length, 12)}/${errors.length}):`);
       lines.push(formatImportErrors(errors));
     }
     if (responseText && Object.keys(data).length === 0) {
-      lines.push(`Phản hồi không phải JSON: ${responseText.slice(0, 500)}`);
+      lines.push(`Ph?n h?i kh?ng ph?i JSON: ${responseText.slice(0, 500)}`);
     }
     if (!response || response.status >= 500 || Object.keys(data).length === 0) {
-      lines.push(`Gợi ý: kiểm tra backend đã chạy và endpoint ${endpoint} truy cập được.`);
+      lines.push(`G?i ?: ki?m tra backend d? ch?y v? endpoint ${endpoint} truy c?p du?c.`);
     }
     return lines.join('\n');
   };
@@ -1343,21 +1343,21 @@ export default function Products({ store }) {
     const summary = data.summary || data.results || {};
     const skipped = summary.skipped ?? summary.skippedRows ?? summary.ignoredRows ?? 0;
     return [
-      '✅ Nhập Excel thành công!',
-      data.detail ? `Chi tiết: ${data.detail}` : '',
-      `Tổng dòng có dữ liệu: ${summary.totalRows ?? 0}`,
-      `Dòng hợp lệ: ${summary.validRows ?? summary.totalRows ?? 0}`,
-      `Tạo mới sản phẩm cha: ${summary.createdParents ?? 0}`,
-      `Cập nhật sản phẩm cha: ${summary.updatedParents ?? 0}`,
-      `Tạo mới biến thể: ${summary.createdVariants ?? 0}`,
-      `Cập nhật biến thể: ${summary.updatedVariants ?? 0}`,
-      `Đánh lại SKU biến thể: ${summary.reassignedVariantSkus ?? summary.syncedVariantSkus ?? 0}`,
-      `Bỏ qua: ${skipped}`,
-      `Số lỗi: ${summary.errors ?? 0}`,
+      '? Nh?p Excel th?nh c?ng!',
+      data.detail ? `Chi ti?t: ${data.detail}` : '',
+      `T?ng d?ng c? d? li?u: ${summary.totalRows ?? 0}`,
+      `D?ng h?p l?: ${summary.validRows ?? summary.totalRows ?? 0}`,
+      `T?o m?i s?n ph?m cha: ${summary.createdParents ?? 0}`,
+      `C?p nh?t s?n ph?m cha: ${summary.updatedParents ?? 0}`,
+      `T?o m?i bi?n th?: ${summary.createdVariants ?? 0}`,
+      `C?p nh?t bi?n th?: ${summary.updatedVariants ?? 0}`,
+      `??nh l?i SKU bi?n th?: ${summary.reassignedVariantSkus ?? summary.syncedVariantSkus ?? 0}`,
+      `B? qua: ${skipped}`,
+      `S? l?i: ${summary.errors ?? 0}`,
     ].filter(Boolean).join('\n');
   };
 
-  // ── NHẬP Excel ──
+  // -- NH?P Excel --
   const handleImportExcel = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1365,13 +1365,13 @@ export default function Products({ store }) {
     const reader = new FileReader();
 
     reader.onerror = () => {
-      alert(`⚠️ Không đọc được file "${file.name}". Vui lòng đóng file nếu đang mở và thử lại.`);
+      alert(`?? Kh?ng d?c du?c file "${file.name}". Vui l?ng d?ng file n?u dang m? v? th? l?i.`);
     };
 
     reader.onload = async (evt) => {
       const fileContent = evt.target?.result;
       if (!fileContent) {
-        alert(`⚠️ File "${file.name}" không có nội dung đọc được.`);
+        alert(`?? File "${file.name}" kh?ng c? n?i dung d?c du?c.`);
         return;
       }
 
@@ -1379,19 +1379,19 @@ export default function Products({ store }) {
       try {
         workbook = XLSX.read(fileContent, { type: 'array', raw: false });
       } catch (err) {
-        alert(`⚠️ Không đọc được workbook Excel "${file.name}": ${err.message}`);
+        alert(`?? Kh?ng d?c du?c workbook Excel "${file.name}": ${err.message}`);
         return;
       }
 
       if (!workbook?.SheetNames?.length) {
-        alert(`⚠️ File "${file.name}" không có sheet nào. Vui lòng dùng file .xlsx/.xls hợp lệ hoặc tải file mẫu.`);
+        alert(`?? File "${file.name}" kh?ng c? sheet n?o. Vui l?ng d?ng file .xlsx/.xls h?p l? ho?c t?i file m?u.`);
         return;
       }
 
-      const sheetName = workbook.SheetNames.includes('Sản phẩm') ? 'Sản phẩm' : workbook.SheetNames[0];
+      const sheetName = workbook.SheetNames.includes('S?n ph?m') ? 'S?n ph?m' : workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       if (!sheet || !sheet['!ref']) {
-        alert(`⚠️ Sheet "${sheetName}" trống hoặc không đọc được dữ liệu.`);
+        alert(`?? Sheet "${sheetName}" tr?ng ho?c kh?ng d?c du?c d? li?u.`);
         return;
       }
 
@@ -1400,17 +1400,17 @@ export default function Products({ store }) {
       const receivedColumns = collectExcelReceivedColumns(rows);
       const displayColumns = receivedColumns.length > 0 ? receivedColumns : headerColumns;
       if (displayColumns.length === 0) {
-        alert(`⚠️ Sheet "${sheetName}" không có hàng tiêu đề cột. Vui lòng dùng sheet "Sản phẩm" trong file mẫu.`);
+        alert(`?? Sheet "${sheetName}" kh?ng c? h?ng ti?u d? c?t. Vui l?ng d?ng sheet "S?n ph?m" trong file m?u.`);
         return;
       }
 
       const importRows = normalizeExcelImportRows(rows);
       if (importRows.length === 0) {
-        alert(`⚠️ Sheet "${sheetName}" có tiêu đề nhưng không có dòng dữ liệu.\nCột nhận được: ${formatColumnList(displayColumns)}`);
+        alert(`?? Sheet "${sheetName}" c? ti?u d? nhung kh?ng c? d?ng d? li?u.\nC?t nh?n du?c: ${formatColumnList(displayColumns)}`);
         return;
       }
 
-      if (!confirm(`Tìm thấy ${importRows.length} dòng dữ liệu trong sheet "${sheetName}".\nCột nhận được: ${formatColumnList(displayColumns)}\n\nImport sẽ dùng SKU trong file để đối chiếu/cập nhật; bản ghi mới được backend cấp mã SP. Biến thể liên kết theo Parent SKU. Nếu thiếu "Loại dòng", backend sẽ tự suy luận theo Parent SKU. Dữ liệu chỉ ghi khi toàn bộ file hợp lệ. Tiếp tục?`)) return;
+      if (!confirm(`T?m th?y ${importRows.length} d?ng d? li?u trong sheet "${sheetName}".\nC?t nh?n du?c: ${formatColumnList(displayColumns)}\n\nImport s? d?ng SKU trong file d? d?i chi?u/c?p nh?t; b?n ghi m?i du?c backend c?p m? SP. Bi?n th? li?n k?t theo Parent SKU. N?u thi?u "Lo?i d?ng", backend s? t? suy lu?n theo Parent SKU. D? li?u ch? ghi khi to?n b? file h?p l?. Ti?p t?c?`)) return;
 
       try {
         const controller = new AbortController();
@@ -1437,13 +1437,13 @@ export default function Products({ store }) {
         });
       } catch (err) {
         const detail = err.name === 'AbortError'
-          ? 'Backend không phản hồi sau 30 giây.'
+          ? 'Backend kh?ng ph?n h?i sau 30 gi?y.'
           : err.message;
         alert([
-          '📡 Không thể gửi dữ liệu import Excel tới backend.',
+          '?? Kh?ng th? g?i d? li?u import Excel t?i backend.',
           `Endpoint: ${endpoint}`,
-          `Chi tiết: ${detail}`,
-          'Gợi ý: kiểm tra backend đã chạy, đúng cổng API và không bị chặn kết nối.',
+          `Chi ti?t: ${detail}`,
+          'G?i ?: ki?m tra backend d? ch?y, d?ng c?ng API v? kh?ng b? ch?n k?t n?i.',
         ].join('\n'));
       }
     };
@@ -1482,7 +1482,7 @@ export default function Products({ store }) {
       retail_price: p.retail_price || '',
       vip_price: p.vip_price || '',
       stock: p.stock ?? '',
-      unit: p.unit || 'cái',
+      unit: p.unit || 'c?i',
       category: p.category || '',
       supplier_id: p.supplier_id || '',
     }));
@@ -1490,7 +1490,7 @@ export default function Products({ store }) {
   }, []);
 
   const handleProductSubmit = useCallback(async (nextForm) => {
-    if (!nextForm.name?.trim()) { alert('Vui lòng nhập tên sản phẩm!'); return; }
+    if (!nextForm.name?.trim()) { alert('Vui l?ng nh?p t?n s?n ph?m!'); return; }
     const stockError = getNegativeStockInputError(nextForm.stock);
     if (stockError) { showStockLimitToast(stockError); return; }
     const currentEditing = editing;
@@ -1511,9 +1511,9 @@ export default function Products({ store }) {
         method,
         body: payload,
         signal: controller.signal,
-      }, currentEditing ? 'Không thể cập nhật sản phẩm.' : 'Không thể tạo sản phẩm.');
+      }, currentEditing ? 'Kh?ng th? c?p nh?t s?n ph?m.' : 'Kh?ng th? t?o s?n ph?m.');
       clearTimeout(timer);
-      alert(currentEditing ? '✅ Đã cập nhật sản phẩm!' : `✅ Tạo sản phẩm thành công!\nMã: ${data.sku || 'hệ thống tự sinh'}`);
+      alert(currentEditing ? '? ?? c?p nh?t s?n ph?m!' : `? T?o s?n ph?m th?nh c?ng!\nM?: ${data.sku || 'h? th?ng t? sinh'}`);
       closeProductForm();
       setProductFormInitial(createProductFormInitial());
       fetchProducts();
@@ -1522,29 +1522,29 @@ export default function Products({ store }) {
         changedTables: ['products'],
       });
     } catch (err) {
-      if (err.name === 'AbortError') alert('⏱️ Server không phản hồi sau 10 giây.');
-      else alert(`📡 Lỗi kết nối: ${err.message}`);
+      if (err.name === 'AbortError') alert('?? Server kh?ng ph?n h?i sau 10 gi?y.');
+      else alert(`?? L?i k?t n?i: ${err.message}`);
     } finally {
       setSaving(false);
     }
   }, [closeProductForm, editing, fetchProducts, showStockLimitToast]);
 
   const handleDelete = useCallback(async (id) => {
-    if (!confirm('Xóa sản phẩm này? Tất cả biến thể sẽ bị xóa.')) return;
+    if (!confirm('X?a s?n ph?m n?y? T?t c? bi?n th? s? b? x?a.')) return;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
     try {
-      await apiJsonChecked(resolveApiUrl(`/products/${id}`), { method: 'DELETE', signal: controller.signal }, 'Không thể xóa sản phẩm.');
+      await apiJsonChecked(resolveApiUrl(`/products/${id}`), { method: 'DELETE', signal: controller.signal }, 'Kh?ng th? x?a s?n ph?m.');
       removeDeletedProductsFromState(new Set([toProductIdKey(id)]));
-      alert('✅ Đã xóa sản phẩm!');
+      alert('? ?? x?a s?n ph?m!');
       void fetchProducts();
       broadcastSyncUpdate({
         reason: 'product-deleted',
         changedTables: ['products'],
       });
     } catch (err) {
-      if (err.name === 'AbortError') alert('⏱️ Server không phản hồi.');
-      else alert(`📡 Lỗi kết nối: ${err.message}`);
+      if (err.name === 'AbortError') alert('?? Server kh?ng ph?n h?i.');
+      else alert(`?? L?i k?t n?i: ${err.message}`);
     } finally {
       clearTimeout(timer);
     }
@@ -1556,7 +1556,7 @@ export default function Products({ store }) {
     setEditing(null);
     setVariantParent(parent);
     setEditingVariant(null);
-    setVariantFormInitial(createVariantFormInitial({ unit: parent.unit || 'cái' }));
+    setVariantFormInitial(createVariantFormInitial({ unit: parent.unit || 'c?i' }));
     setShowVariantModal(true);
   }, []);
 
@@ -1573,16 +1573,16 @@ export default function Products({ store }) {
       retail_price: variant.retail_price || '',
       vip_price: variant.vip_price || '',
       stock: variant.stock ?? '',
-      unit: variant.unit || 'cái',
+      unit: variant.unit || 'c?i',
     }));
     setShowVariantModal(true);
   }, []);
 
   const handleVariantSubmit = useCallback(async (nextVariantForm) => {
-    if (!nextVariantForm.name?.trim()) { alert('Vui lòng nhập tên biến thể!'); return; }
+    if (!nextVariantForm.name?.trim()) { alert('Vui l?ng nh?p t?n bi?n th?!'); return; }
     const stockError = getNegativeStockInputError(nextVariantForm.stock);
     if (stockError) { showStockLimitToast(stockError); return; }
-    if (!variantParent || !variantParent.id) { alert('Lỗi: Không tìm thấy sản phẩm cha!'); return; }
+    if (!variantParent || !variantParent.id) { alert('L?i: Kh?ng t?m th?y s?n ph?m cha!'); return; }
     setSaving(true);
     try {
       const currentEditingVariant = editingVariant;
@@ -1602,9 +1602,9 @@ export default function Products({ store }) {
         method,
         body: variantPayload,
         signal: controller.signal,
-      }, currentEditingVariant ? 'Không thể cập nhật biến thể.' : 'Không thể tạo biến thể.');
+      }, currentEditingVariant ? 'Kh?ng th? c?p nh?t bi?n th?.' : 'Kh?ng th? t?o bi?n th?.');
       clearTimeout(timer);
-      alert(currentEditingVariant ? '✅ Đã cập nhật biến thể!' : `✅ Tạo biến thể thành công!\nSKU: ${data.sku || 'hệ thống tự sinh'}`);
+      alert(currentEditingVariant ? '? ?? c?p nh?t bi?n th?!' : `? T?o bi?n th? th?nh c?ng!\nSKU: ${data.sku || 'h? th?ng t? sinh'}`);
       closeVariantForm();
       setVariantFormInitial(createVariantFormInitial());
       fetchProducts();
@@ -1613,29 +1613,29 @@ export default function Products({ store }) {
         changedTables: ['products'],
       });
     } catch (err) {
-      if (err.name === 'AbortError') alert('⏱️ Server không phản hồi!');
-      else alert(`📡 Lỗi kết nối: ${err.message}`);
+      if (err.name === 'AbortError') alert('?? Server kh?ng ph?n h?i!');
+      else alert(`?? L?i k?t n?i: ${err.message}`);
     } finally {
       setSaving(false);
     }
   }, [closeVariantForm, editingVariant, fetchProducts, showStockLimitToast, variantParent]);
 
   const handleDeleteVariant = useCallback(async (variantId) => {
-    if (!confirm('Xóa biến thể này?')) return;
+    if (!confirm('X?a bi?n th? n?y?')) return;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
     try {
-      await apiJsonChecked(resolveApiUrl(`/products/variants/${variantId}`), { method: 'DELETE', signal: controller.signal }, 'Không thể xóa biến thể.');
+      await apiJsonChecked(resolveApiUrl(`/products/variants/${variantId}`), { method: 'DELETE', signal: controller.signal }, 'Kh?ng th? x?a bi?n th?.');
       removeDeletedProductsFromState(new Set([toProductIdKey(variantId)]));
-      alert('✅ Đã xóa biến thể!');
+      alert('? ?? x?a bi?n th?!');
       void fetchProducts();
       broadcastSyncUpdate({
         reason: 'product-variant-deleted',
         changedTables: ['products'],
       });
     } catch (err) {
-      if (err.name === 'AbortError') alert('⏱️ Server không phản hồi.');
-      else alert(`📡 Lỗi kết nối: ${err.message}`);
+      if (err.name === 'AbortError') alert('?? Server kh?ng ph?n h?i.');
+      else alert(`?? L?i k?t n?i: ${err.message}`);
     } finally {
       clearTimeout(timer);
     }
@@ -1770,13 +1770,13 @@ export default function Products({ store }) {
       {stockToast && (
         <div className="toast-stack">
           <div className="toast-card border-red-200 bg-red-50 text-red-700">
-            ⚠️ {stockToast.message}
+            ?? {stockToast.message}
           </div>
         </div>
       )}
       <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-center lg:justify-between">
         <h1 className="text-xl font-bold flex items-center gap-2">
-          <Package className="text-blue-600" size={24} /> Quản lý Sản phẩm
+          <Package className="text-blue-600" size={24} /> Qu?n l? S?n ph?m
         </h1>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setShowComboSection(s => !s)}
@@ -1786,21 +1786,21 @@ export default function Products({ store }) {
           </button>
           <button onClick={() => setShowExcelImport(s => !s)}
             className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 border transition ${showExcelImport ? 'bg-green-600 text-white border-green-600' : 'border-green-300 bg-white text-green-700 hover:bg-green-50'}`}>
-            <Upload size={16} /> Nhập Excel
+            <Upload size={16} /> Nh?p Excel
           </button>
           <input ref={excelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportExcel} />
           <button onClick={handleExportExcel}
             className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 border border-orange-300 bg-white text-orange-700 hover:bg-orange-50 transition">
-            <Download size={16} /> Xuất Excel
+            <Download size={16} /> Xu?t Excel
           </button>
           {selectedProductsForBulkAction.length > 0 && (
             <button onClick={handleBulkDelete} disabled={isBulkDeleting}
               className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition disabled:opacity-50">
-              <Trash2 size={16} /> {isBulkDeleting ? 'Đang xóa...' : `Xóa (${selectedProductsForBulkAction.length})`}
+              <Trash2 size={16} /> {isBulkDeleting ? '?ang x?a...' : `X?a (${selectedProductsForBulkAction.length})`}
             </button>
           )}
           <button onClick={openAdd} className="btn-primary flex items-center gap-1">
-            <Plus size={16} /> Thêm sản phẩm
+            <Plus size={16} /> Th?m s?n ph?m
           </button>
         </div>
       </div>
@@ -1809,8 +1809,8 @@ export default function Products({ store }) {
         <div className="mb-6">
           <ExcelImportPanel
             dataType="products"
-            title="Import sản phẩm và biến thể từ Excel/CSV"
-            description="Preview/validate sản phẩm cha và biến thể bằng backend trước khi commit; hỗ trợ mapping cột, dòng lỗi/cảnh báo và refresh danh sách sau import."
+            title="Import s?n ph?m v? bi?n th? t? Excel/CSV"
+            description="Preview/validate s?n ph?m cha v? bi?n th? b?ng backend tru?c khi commit; h? tr? mapping c?t, d?ng l?i/c?nh b?o v? refresh danh s?ch sau import."
             onCommitted={async () => {
               await Promise.all([fetchProducts(), fetchCategories(), fetchSuppliers()]);
             }}
@@ -1824,40 +1824,40 @@ export default function Products({ store }) {
         <div className="mb-6 border rounded-xl bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-teal-700 flex items-center gap-2">
-              <Tag size={20} /> Danh mục mặc định sản phẩm
+              <Tag size={20} /> Danh m?c m?c d?nh s?n ph?m
             </h2>
             <button onClick={openCategoryAdd} className="px-3 py-1.5 border border-teal-300 text-teal-700 hover:bg-teal-50 rounded-lg text-xs font-medium">
-              + Tạo mới
+              + T?o m?i
             </button>
           </div>
           <form onSubmit={handleCategorySubmit} className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-4">
-            <input className="input-field text-sm" placeholder="Tên: vòng led" value={categoryForm.name} onChange={e => setCategoryForm(f => ({ ...f, name: e.target.value }))} />
-            <input className="input-field text-sm" placeholder="Nhóm: vòng" value={categoryForm.group_name} onChange={e => setCategoryForm(f => ({ ...f, group_name: e.target.value }))} />
-            <input className="input-field text-sm md:col-span-2" placeholder="Từ khóa: vòng, led, dẻo" value={categoryForm.keywords} onChange={e => setCategoryForm(f => ({ ...f, keywords: e.target.value }))} />
+            <input className="input-field text-sm" placeholder="T?n: v?ng led" value={categoryForm.name} onChange={e => setCategoryForm(f => ({ ...f, name: e.target.value }))} />
+            <input className="input-field text-sm" placeholder="Nh?m: v?ng" value={categoryForm.group_name} onChange={e => setCategoryForm(f => ({ ...f, group_name: e.target.value }))} />
+            <input className="input-field text-sm md:col-span-2" placeholder="T? kh?a: v?ng, led, d?o" value={categoryForm.keywords} onChange={e => setCategoryForm(f => ({ ...f, keywords: e.target.value }))} />
             <input className="input-field text-sm" placeholder="Alias: vong led" value={categoryForm.aliases} onChange={e => setCategoryForm(f => ({ ...f, aliases: e.target.value }))} />
-            <button type="submit" className="btn-success text-sm">{editingCategory ? 'Lưu danh mục' : 'Thêm danh mục'}</button>
+            <button type="submit" className="btn-success text-sm">{editingCategory ? 'Luu danh m?c' : 'Th?m danh m?c'}</button>
             {editingCategory && (
-              <button type="button" onClick={openCategoryAdd} className="md:col-span-6 text-xs text-gray-500 hover:text-gray-700 text-left">Hủy sửa danh mục đang chọn</button>
+              <button type="button" onClick={openCategoryAdd} className="md:col-span-6 text-xs text-gray-500 hover:text-gray-700 text-left">H?y s?a danh m?c dang ch?n</button>
             )}
           </form>
           <div className="mb-2 text-xs text-gray-500">
-            Danh sách xem lại {activeCategories.length} danh mục đã tạo trong dữ liệu hiện tại.
+            Danh s?ch xem l?i {activeCategories.length} danh m?c d? t?o trong d? li?u hi?n t?i.
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
             {activeCategories.map(category => (
               <div key={category.id} className="border rounded-lg p-3 bg-gray-50 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="font-semibold text-sm text-gray-800 truncate">{category.name}</div>
-                  <div className="text-xs text-gray-500 truncate">Nhóm: {category.group_name || '—'}</div>
-                  <div className="text-[11px] text-teal-600 truncate">{[...(category.keywords || []), ...(category.aliases || [])].join(', ') || 'Chưa có từ khóa'}</div>
+                  <div className="text-xs text-gray-500 truncate">Nh?m: {category.group_name || '?'}</div>
+                  <div className="text-[11px] text-teal-600 truncate">{[...(category.keywords || []), ...(category.aliases || [])].join(', ') || 'Chua c? t? kh?a'}</div>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <button onClick={() => openCategoryEdit(category)} className="text-blue-600 hover:text-blue-800 p-1 border border-blue-200 rounded" title="Sửa danh mục"><Edit2 size={12} /></button>
-                  <button onClick={() => handleCategoryDelete(category)} className="text-red-500 hover:text-red-700 p-1 border border-red-200 rounded" title="Vô hiệu danh mục"><Trash2 size={12} /></button>
+                  <button onClick={() => openCategoryEdit(category)} className="text-blue-600 hover:text-blue-800 p-1 border border-blue-200 rounded" title="S?a danh m?c"><Edit2 size={12} /></button>
+                  <button onClick={() => handleCategoryDelete(category)} className="text-red-500 hover:text-red-700 p-1 border border-red-200 rounded" title="V? hi?u danh m?c"><Trash2 size={12} /></button>
                 </div>
               </div>
             ))}
-            {activeCategories.length === 0 && <div className="text-sm text-gray-400 border-2 border-dashed rounded-lg p-6 text-center md:col-span-2 xl:col-span-4">Chưa có danh mục mặc định</div>}
+            {activeCategories.length === 0 && <div className="text-sm text-gray-400 border-2 border-dashed rounded-lg p-6 text-center md:col-span-2 xl:col-span-4">Chua c? danh m?c m?c d?nh</div>}
           </div>
         </div>
       )}
@@ -1867,17 +1867,17 @@ export default function Products({ store }) {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-purple-700 flex items-center gap-2">
-              <Layers size={20} /> Danh sách Combo
+              <Layers size={20} /> Danh s?ch Combo
             </h2>
             <button onClick={openComboAdd}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium flex items-center gap-1">
-              <Plus size={14} /> Tạo Combo
+              <Plus size={14} /> T?o Combo
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {combos.length === 0 && (
               <div className="md:col-span-2 xl:col-span-3 text-center text-gray-400 py-10 border-2 border-dashed rounded-xl">
-                Chưa có combo nào — nhấn "Tạo Combo" để bắt đầu
+                Chua c? combo n?o ? nh?n "T?o Combo" d? b?t d?u
               </div>
             )}
             {combos.map(c => (
@@ -1885,13 +1885,13 @@ export default function Products({ store }) {
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-base text-gray-800 truncate">{c.name}</div>
-                    <div className="text-xs text-gray-400">SKU: {c.sku || '—'}</div>
+                    <div className="text-xs text-gray-400">SKU: {c.sku || '?'}</div>
                   </div>
                   <div className="flex gap-1 ml-2">
-                    <button onClick={() => openComboEdit(c)} className="text-blue-500 hover:text-blue-700 p-1.5 rounded border border-blue-300 hover:bg-blue-50" title="Sửa">
+                    <button onClick={() => openComboEdit(c)} className="text-blue-500 hover:text-blue-700 p-1.5 rounded border border-blue-300 hover:bg-blue-50" title="S?a">
                       <Edit2 size={13} />
                     </button>
-                    <button onClick={() => handleComboDelete(c.id)} className="text-red-400 hover:text-red-600 p-1.5 rounded border border-red-300 hover:bg-red-50" title="Xóa">
+                    <button onClick={() => handleComboDelete(c.id)} className="text-red-400 hover:text-red-600 p-1.5 rounded border border-red-300 hover:bg-red-50" title="X?a">
                       <Trash2 size={13} />
                     </button>
                   </div>
@@ -1901,32 +1901,32 @@ export default function Products({ store }) {
                 <div className="mb-3 space-y-1">
                   {(c.items || []).map((it, idx) => (
                     <div key={it.id || idx} className="text-xs text-gray-600 flex items-center gap-1.5 bg-gray-50 rounded px-2 py-1">
-                      <span className="font-semibold text-purple-600">{it.quantity}×</span>
+                      <span className="font-semibold text-purple-600">{it.quantity}?</span>
                       <span className="truncate">{it.product_name}{it.variant_name ? ` / ${it.variant_name}` : ''}</span>
                     </div>
                   ))}
                   {(c.items || []).length === 0 && (
-                    <div className="text-xs text-gray-400 italic">Chưa thêm sản phẩm nào</div>
+                    <div className="text-xs text-gray-400 italic">Chua th?m s?n ph?m n?o</div>
                   )}
                 </div>
 
                 {/* Prices */}
                 <div className="grid grid-cols-3 gap-2 text-center border-t pt-2">
                   <div>
-                    <div className="text-[10px] text-gray-400">Lẻ</div>
-                    <div className="text-xs font-bold text-blue-600">{c.retail_price ? formatVND(c.retail_price) : '—'}</div>
+                    <div className="text-[10px] text-gray-400">L?</div>
+                    <div className="text-xs font-bold text-blue-600">{c.retail_price ? formatVND(c.retail_price) : '?'}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-gray-400">Sỉ</div>
-                    <div className="text-xs font-bold text-orange-600">{c.wholesale_price ? formatVND(c.wholesale_price) : '—'}</div>
+                    <div className="text-[10px] text-gray-400">S?</div>
+                    <div className="text-xs font-bold text-orange-600">{c.wholesale_price ? formatVND(c.wholesale_price) : '?'}</div>
                   </div>
                   <div>
                     <div className="text-[10px] text-gray-400">VIP</div>
-                    <div className="text-xs font-bold text-purple-600">{c.vip_price ? formatVND(c.vip_price) : '—'}</div>
+                    <div className="text-xs font-bold text-purple-600">{c.vip_price ? formatVND(c.vip_price) : '?'}</div>
                   </div>
                 </div>
                 {!c.retail_price && !c.wholesale_price && !c.vip_price && (
-                  <div className="text-xs text-red-400 italic mt-1">Chưa đặt giá</div>
+                  <div className="text-xs text-red-400 italic mt-1">Chua d?t gi?</div>
                 )}
               </div>
             ))}
@@ -1934,15 +1934,15 @@ export default function Products({ store }) {
         </div>
       )}
 
-      <input className="input-field mb-3" placeholder=" 🔍 Tìm tên, SKU, danh mục, nhóm, màu, size... VD: vòng led, dẻo 10cm, xanh nhạt" value={search} onChange={e => setSearch(e.target.value)} />
+      <input className="input-field mb-3" placeholder=" ?? T?m t?n, SKU, danh m?c, nh?m, m?u, size... VD: v?ng led, d?o 10cm, xanh nh?t" value={search} onChange={e => setSearch(e.target.value)} />
 
       <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-xs text-gray-500">
         <div>
           {displayedProducts.length === 0
-            ? 'Không có sản phẩm phù hợp'
-            : `Hiển thị ${pageStartIndex + 1}-${pageEndIndex} / ${displayedProducts.length} sản phẩm cha`}
-          {searchFilteringPending && <span className="ml-2 text-blue-500">Đang cập nhật kết quả tìm kiếm...</span>}
-          {displayedProducts.length > PRODUCTS_PAGE_SIZE && <span className="ml-2 text-gray-400">Render theo trang {PRODUCTS_PAGE_SIZE} dòng để UI phản hồi nhanh.</span>}
+            ? 'Kh?ng c? s?n ph?m ph? h?p'
+            : `Hi?n th? ${pageStartIndex + 1}-${pageEndIndex} / ${displayedProducts.length} s?n ph?m cha`}
+          {searchFilteringPending && <span className="ml-2 text-blue-500">?ang c?p nh?t k?t qu? t?m ki?m...</span>}
+          {displayedProducts.length > PRODUCTS_PAGE_SIZE && <span className="ml-2 text-gray-400">Render theo trang {PRODUCTS_PAGE_SIZE} d?ng d? UI ph?n h?i nhanh.</span>}
         </div>
         {totalProductPages > 1 && (
           <div className="flex flex-wrap items-center gap-1">
@@ -1952,7 +1952,7 @@ export default function Products({ store }) {
               disabled={safeCurrentPage === 1}
               className="px-2.5 py-1 border rounded-md bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Trước
+              Tru?c
             </button>
             {paginationItems.map(item => typeof item === 'number' ? (
               <button
@@ -1980,25 +1980,25 @@ export default function Products({ store }) {
 
       {/* Products + Variants Table */}
       <div className="card overflow-hidden p-0">
-        {/* Header row - LUÔN HIỂN THỊ */}
+        {/* Header row - LU?N HI?N TH? */}
         <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-xs text-gray-600 font-semibold border-b sticky top-0 z-10">
           <button
             onClick={toggleSelectAll}
             disabled={filteredProductIds.length === 0}
             className="w-5 h-5 flex items-center justify-center text-gray-600 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
-            title={allFilteredSelected ? 'Bỏ chọn tất cả kết quả đang lọc' : 'Chọn tất cả kết quả đang lọc'}
+            title={allFilteredSelected ? 'B? ch?n t?t c? k?t qu? dang l?c' : 'Ch?n t?t c? k?t qu? dang l?c'}
           >
             {allFilteredSelected ? <CheckSquare size={16} /> : <Square size={16} />}
           </button>
-          <div className="flex-1">Tên sản phẩm</div>
+          <div className="flex-1">T?n s?n ph?m</div>
           <div className="w-20 flex items-center justify-end gap-1">
-            <span>Tồn kho</span>
+            <span>T?n kho</span>
             <span className="inline-flex items-center gap-0.5">
               <button
                 type="button"
                 onClick={() => setStockSortDirection('desc')}
                 className={stockSortButtonClass('desc')}
-                title="Sắp xếp tồn kho từ nhiều nhất đến ít nhất"
+                title="S?p x?p t?n kho t? nhi?u nh?t d?n ?t nh?t"
                 aria-pressed={stockSortDirection === 'desc'}
               >
                 <ArrowUp size={14} />
@@ -2007,22 +2007,22 @@ export default function Products({ store }) {
                 type="button"
                 onClick={() => setStockSortDirection('asc')}
                 className={stockSortButtonClass('asc')}
-                title="Sắp xếp tồn kho từ ít nhất đến nhiều nhất"
+                title="S?p x?p t?n kho t? ?t nh?t d?n nhi?u nh?t"
                 aria-pressed={stockSortDirection === 'asc'}
               >
                 <ArrowDown size={14} />
               </button>
             </span>
           </div>
-          <div className="hidden w-24 text-right md:block">Giá nhập</div>
-          <div className="hidden w-24 text-right md:block">Giá lẻ</div>
-          <div className="hidden w-24 text-right md:block">Giá sỉ</div>
-          <div className="hidden w-24 text-right md:block">Giá ký gửi</div>
-          <div className="w-40 text-right">Hành động</div>
+          <div className="hidden w-24 text-right md:block">Gi? nh?p</div>
+          <div className="hidden w-24 text-right md:block">Gi? l?</div>
+          <div className="hidden w-24 text-right md:block">Gi? s?</div>
+          <div className="hidden w-24 text-right md:block">Gi? k? g?i</div>
+          <div className="w-40 text-right">H?nh d?ng</div>
         </div>
 
         {displayedProducts.length === 0 && (
-          <div className="text-center text-gray-400 py-10">Không có sản phẩm nào</div>
+          <div className="text-center text-gray-400 py-10">Kh?ng c? s?n ph?m n?o</div>
         )}
 
         {visibleProducts.map(p => (
@@ -2047,7 +2047,7 @@ export default function Products({ store }) {
         ))}
       </div>
 
-      {/* Form Modal - Sản phẩm cha */}
+      {/* Form Modal - S?n ph?m cha */}
       {showForm && !variantParent && (
         <ProductFormModal
           editing={editing}
@@ -2061,7 +2061,7 @@ export default function Products({ store }) {
         />
       )}
 
-      {/* Form Modal - Biến thể */}
+      {/* Form Modal - Bi?n th? */}
       {showVariantModal && variantParent && (
         <VariantFormModal
           editingVariant={editingVariant}
@@ -2083,21 +2083,21 @@ export default function Products({ store }) {
               <div>
                 <h2 className="text-lg font-bold text-purple-800 flex items-center gap-2">
                   <Layers size={20} />
-                  {editingCombo ? 'Sửa Combo' : 'Tạo Combo mới'}
+                  {editingCombo ? 'S?a Combo' : 'T?o Combo m?i'}
                 </h2>
-                <p className="text-xs text-purple-500">{editingCombo ? `Combo: ${editingCombo.name}` : 'Gộp nhiều sản phẩm thành 1 gói'}</p>
+                <p className="text-xs text-purple-500">{editingCombo ? `Combo: ${editingCombo.name}` : 'G?p nhi?u s?n ph?m th?nh 1 g?i'}</p>
               </div>
-              <button onClick={() => setShowComboForm(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={() => setShowComboForm(false)} className="text-gray-400 hover:text-gray-600 text-xl">?</button>
             </div>
 
             <div className="flex-1 overflow-auto p-5 space-y-4">
               {/* Combo info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
-                  <label className="text-xs text-gray-500 block mb-1">Tên Combo <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-gray-500 block mb-1">T?n Combo <span className="text-red-500">*</span></label>
                   <input className="input-field w-full" value={comboForm.name}
                     onChange={e => setComboForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="VD: Bộ combo kệ sách 3 tầng" />
+                    placeholder="VD: B? combo k? s?ch 3 t?ng" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">SKU</label>
@@ -2109,17 +2109,17 @@ export default function Products({ store }) {
               {/* Prices */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Giá lẻ <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-gray-500 block mb-1">Gi? l? <span className="text-red-500">*</span></label>
                   <input type="number" className="input-field w-full" value={comboForm.retail_price}
                     onChange={e => setComboForm(f => ({ ...f, retail_price: e.target.value }))} placeholder="0" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Giá sỉ <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-gray-500 block mb-1">Gi? s? <span className="text-red-500">*</span></label>
                   <input type="number" className="input-field w-full" value={comboForm.wholesale_price}
                     onChange={e => setComboForm(f => ({ ...f, wholesale_price: e.target.value }))} placeholder="0" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Giá ký gửi</label>
+                  <label className="text-xs text-gray-500 block mb-1">Gi? k? g?i</label>
                   <input type="number" className="input-field w-full" value={comboForm.vip_price}
                     onChange={e => setComboForm(f => ({ ...f, vip_price: e.target.value }))} placeholder="0" />
                 </div>
@@ -2129,12 +2129,12 @@ export default function Products({ store }) {
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-gray-100 px-4 py-2 flex items-center justify-between gap-3">
                   <div>
-                    <span className="text-sm font-semibold text-gray-700">Sản phẩm trong combo</span>
-                    <div className="text-[11px] text-gray-500">Chọn từ {comboProductOptionCount} sản phẩm cha/biến thể hiện có</div>
+                    <span className="text-sm font-semibold text-gray-700">S?n ph?m trong combo</span>
+                    <div className="text-[11px] text-gray-500">Ch?n t? {comboProductOptionCount} s?n ph?m cha/bi?n th? hi?n c?</div>
                   </div>
                   <button type="button" onClick={addComboItem}
                     className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium flex items-center gap-1">
-                    <Plus size={13} /> Thêm sản phẩm
+                    <Plus size={13} /> Th?m s?n ph?m
                   </button>
                 </div>
 
@@ -2142,19 +2142,19 @@ export default function Products({ store }) {
                   <div className="p-3 border-b bg-blue-50/60">
                     <div className="flex flex-col gap-2 mb-2 sm:flex-row sm:items-center">
                       <input className="input-field flex-1 text-sm" autoFocus
-                        placeholder="🔍 Tìm theo tên, SKU sản phẩm cha hoặc biến thể..."
+                        placeholder="?? T?m theo t?n, SKU s?n ph?m cha ho?c bi?n th?..."
                         value={comboProductSearch}
                         onChange={e => setComboProductSearch(e.target.value)} />
                       <button type="button" onClick={() => setShowComboProductSearch(false)}
                         className="px-3 py-2 border border-gray-300 text-gray-600 hover:bg-white rounded-lg text-xs font-medium">
-                        Đóng
+                        ??ng
                       </button>
                     </div>
-                    {comboSearchPending && <div className="text-[11px] text-blue-500 mb-1">Đang cập nhật kết quả...</div>}
+                    {comboSearchPending && <div className="text-[11px] text-blue-500 mb-1">?ang c?p nh?t k?t qu?...</div>}
                     <div className="max-h-64 overflow-auto space-y-1">
                       {filteredComboProductOptions.length === 0 && (
                         <div className="text-center text-gray-400 text-sm py-5 bg-white rounded-lg border border-dashed">
-                          Không tìm thấy sản phẩm phù hợp
+                          Kh?ng t?m th?y s?n ph?m ph? h?p
                         </div>
                       )}
                       {filteredComboProductOptions.map(option => (
@@ -2164,20 +2164,20 @@ export default function Products({ store }) {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${option.item_type === 'variant' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                                  {option.item_type === 'variant' ? 'Biến thể' : 'Sản phẩm cha'}
+                                  {option.item_type === 'variant' ? 'Bi?n th?' : 'S?n ph?m cha'}
                                 </span>
                                 <span className="font-semibold text-sm text-gray-800 truncate">
                                   {option.item_type === 'variant' ? `${option.parent_name} / ${option.name}` : option.name}
                                 </span>
                               </div>
                               <div className="text-xs text-gray-500 mt-0.5">
-                                SKU: {option.sku || '—'}{option.parent_sku ? ` · SKU cha: ${option.parent_sku}` : ''} · Tồn: {option.stock ?? 0}
+                                SKU: {option.sku || '?'}{option.parent_sku ? ` ? SKU cha: ${option.parent_sku}` : ''} ? T?n: {option.stock ?? 0}
                               </div>
                             </div>
                             <div className="text-right shrink-0">
                               <div className="text-xs font-bold text-green-600">{formatVND(option.retail_price)}</div>
-                              <div className="text-[11px] text-orange-600">Sỉ: {formatVND(option.wholesale_price)}</div>
-                              {option.selected && <div className="text-[10px] text-purple-600 font-semibold">Đã chọn · bấm để +1 SL</div>}
+                              <div className="text-[11px] text-orange-600">S?: {formatVND(option.wholesale_price)}</div>
+                              {option.selected && <div className="text-[10px] text-purple-600 font-semibold">?? ch?n ? b?m d? +1 SL</div>}
                             </div>
                           </div>
                         </button>
@@ -2189,7 +2189,7 @@ export default function Products({ store }) {
                 <div className="p-3 space-y-2 max-h-72 overflow-auto">
                   {comboItems.length === 0 && (
                     <div className="text-center text-gray-400 text-sm py-6 border-2 border-dashed rounded-lg">
-                      Nhấn "Thêm sản phẩm" để tìm và chọn sản phẩm cha hoặc biến thể
+                      Nh?n "Th?m s?n ph?m" d? t?m v? ch?n s?n ph?m cha ho?c bi?n th?
                     </div>
                   )}
                   {comboItems.map((item, idx) => (
@@ -2197,25 +2197,25 @@ export default function Products({ store }) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${item.variant_id ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {item.variant_id ? 'Biến thể' : 'Sản phẩm cha'}
+                            {item.variant_id ? 'Bi?n th?' : 'S?n ph?m cha'}
                           </span>
                           <span className="font-semibold text-sm text-gray-800 truncate">
-                            {item.variant_id ? `${item.product_name || item.parent_name || 'Sản phẩm'} / ${item.variant_name || item.name || 'Biến thể'}` : (item.product_name || item.name || 'Sản phẩm')}
+                            {item.variant_id ? `${item.product_name || item.parent_name || 'S?n ph?m'} / ${item.variant_name || item.name || 'Bi?n th?'}` : (item.product_name || item.name || 'S?n ph?m')}
                           </span>
                         </div>
                         <div className="text-xs text-gray-500">
-                          SKU: {item.sku || '—'} · Tồn: {item.stock ?? 0} · Giá lẻ: {formatVND(item.retail_price || item.unit_price || 0)} · Giá sỉ: {formatVND(item.wholesale_price || 0)}
+                          SKU: {item.sku || '?'} ? T?n: {item.stock ?? 0} ? Gi? l?: {formatVND(item.retail_price || item.unit_price || 0)} ? Gi? s?: {formatVND(item.wholesale_price || 0)}
                         </div>
                       </div>
                       <div className="w-24">
-                        <label className="text-[10px] text-gray-500 block mb-1 text-center">Số lượng</label>
+                        <label className="text-[10px] text-gray-500 block mb-1 text-center">S? lu?ng</label>
                         <input type="number" min={MIN_QUANTITY} step={QUANTITY_STEP} inputMode="decimal"
                           className="w-full text-center border rounded px-2 py-1.5 text-sm font-semibold"
                           value={item.quantity}
                           onChange={e => updateComboItem(idx, 'quantity', e.target.value)}
-                          title="Số lượng" />
+                          title="S? lu?ng" />
                       </div>
-                      <button type="button" onClick={() => removeComboItem(idx)} className="text-red-400 hover:text-red-600 p-1.5" title="Xóa khỏi combo">
+                      <button type="button" onClick={() => removeComboItem(idx)} className="text-red-400 hover:text-red-600 p-1.5" title="X?a kh?i combo">
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -2228,11 +2228,11 @@ export default function Products({ store }) {
             <div className="px-5 py-4 border-t bg-gray-50 rounded-b-xl flex flex-col sm:flex-row gap-2">
               <button onClick={() => setShowComboForm(false)}
                 className="flex-1 py-2.5 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">
-                Hủy
+                H?y
               </button>
               <button onClick={handleComboSubmit}
                 className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-1">
-                💾 {editingCombo ? 'Lưu thay đổi' : 'Tạo Combo'}
+                ?? {editingCombo ? 'Luu thay d?i' : 'T?o Combo'}
               </button>
             </div>
           </div>
@@ -2246,7 +2246,7 @@ export default function Products({ store }) {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <HelpCircle size={20} className="text-blue-600" />
-                Hướng dẫn quản lý Sản phẩm
+                Hu?ng d?n qu?n l? S?n ph?m
               </h2>
               <button onClick={() => setShowHelp(false)} className="text-gray-400 hover:text-gray-600">
                 <svg size={20} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2257,76 +2257,76 @@ export default function Products({ store }) {
 
             <div className="space-y-4 text-sm text-gray-700">
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">📦 Sản phẩm cha & Biến thể</h3>
+                <h3 className="font-bold text-gray-800 mb-2">?? S?n ph?m cha & Bi?n th?</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li><strong>Sản phẩm cha:</strong> Sản phẩm chính, không có parent_id</li>
-                  <li><strong>Biến thể:</strong> Các phiên bản cụ thể của sản phẩm cha (màu sắc, size...)</li>
-                  <li>Nhấn vào tên sản phẩm cha có biến thể để mở rộng xem danh sách</li>
-                  <li>Khi sản phẩm cha có biến thể, bảng ẩn tồn kho/giá của dòng cha và chỉ hiển thị ở từng biến thể; khi không còn biến thể thì dòng cha hiển thị lại như ban đầu</li>
+                  <li><strong>S?n ph?m cha:</strong> S?n ph?m ch?nh, kh?ng c? parent_id</li>
+                  <li><strong>Bi?n th?:</strong> C?c phi?n b?n c? th? c?a s?n ph?m cha (m?u s?c, size...)</li>
+                  <li>Nh?n v?o t?n s?n ph?m cha c? bi?n th? d? m? r?ng xem danh s?ch</li>
+                  <li>Khi s?n ph?m cha c? bi?n th?, b?ng ?n t?n kho/gi? c?a d?ng cha v? ch? hi?n th? ? t?ng bi?n th?; khi kh?ng c?n bi?n th? th? d?ng cha hi?n th? l?i nhu ban d?u</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">➕ Thêm sản phẩm mới</h3>
+                <h3 className="font-bold text-gray-800 mb-2">? Th?m s?n ph?m m?i</h3>
                 <ol className="list-decimal pl-5 space-y-1">
-                  <li>Nhấn nút <strong>"Thêm sản phẩm"</strong></li>
-                  <li>Điền đầy đủ thông tin: Tên, SKU (tự động), giá các loại, tồn kho, đơn vị, danh mục, nhà cung cấp</li>
-                  <li>Mã sản phẩm được backend tự cấp theo dạng SP00001, SP00002... và được giữ nguyên sau khi tạo</li>
-                  <li>Nhấn "Lưu" để hoàn tất</li>
+                  <li>Nh?n n?t <strong>"Th?m s?n ph?m"</strong></li>
+                  <li>?i?n d?y d? th?ng tin: T?n, SKU (t? d?ng), gi? c?c lo?i, t?n kho, don v?, danh m?c, nh? cung c?p</li>
+                  <li>M? s?n ph?m du?c backend t? c?p theo d?ng SP00001, SP00002... v? du?c gi? nguy?n sau khi t?o</li>
+                  <li>Nh?n "Luu" d? ho?n t?t</li>
                 </ol>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">➕ Thêm biến thể</h3>
+                <h3 className="font-bold text-gray-800 mb-2">? Th?m bi?n th?</h3>
                 <ol className="list-decimal pl-5 space-y-1">
-                  <li>Nhấn nút <strong>+</strong> ở cột hành động của sản phẩm cha</li>
-                  <li>Nhập tên biến thể (VD: "Màu Đỏ", "Size L")</li>
-                  <li>Mã biến thể cũng được backend tự cấp theo cùng bộ đếm SP, không cần nhập thủ công</li>
-                  <li>Điền giá và tồn kho cho biến thể này</li>
+                  <li>Nh?n n?t <strong>+</strong> ? c?t h?nh d?ng c?a s?n ph?m cha</li>
+                  <li>Nh?p t?n bi?n th? (VD: "M?u ??", "Size L")</li>
+                  <li>M? bi?n th? cung du?c backend t? c?p theo c?ng b? d?m SP, kh?ng c?n nh?p th? c?ng</li>
+                  <li>?i?n gi? v? t?n kho cho bi?n th? n?y</li>
                 </ol>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">📥 Nhập/Xuất Excel sản phẩm</h3>
+                <h3 className="font-bold text-gray-800 mb-2">?? Nh?p/Xu?t Excel s?n ph?m</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nên dùng <strong>"Tải mẫu Excel"</strong> hoặc <strong>"Xuất Excel"</strong> từ hệ thống rồi chỉnh sửa và nhập lại.</li>
-                  <li>Sheet chuẩn là <strong>"Sản phẩm"</strong>; nếu file không có sheet này, hệ thống sẽ đọc sheet đầu tiên.</li>
-                  <li>Cột chuẩn: <strong>Loại dòng</strong>, <strong>SKU</strong>, <strong>Parent SKU</strong>, <strong>Tên sản phẩm</strong>, các cột giá, <strong>Tồn kho</strong>, <strong>Đơn vị</strong>, <strong>Danh mục text</strong>, <strong>Default category id</strong>, <strong>Supplier id</strong>, <strong>Hoạt động</strong>.</li>
-                  <li><strong>Loại dòng</strong>: nhập <strong>PARENT</strong> cho sản phẩm cha, <strong>VARIANT</strong> cho biến thể. Nếu bỏ trống, backend tự suy luận: có Parent SKU là VARIANT, không có Parent SKU là PARENT.</li>
-                  <li><strong>Parent SKU</strong> là khóa giữ quan hệ cha-con; SKU này phải trùng SKU của dòng sản phẩm cha trong file hoặc sản phẩm cha đã có trong hệ thống. Khi tạo mới, backend cấp mã SP tiếp theo.</li>
-                  <li>Có thể nhập file có alias phổ biến như <strong>Mã SKU</strong>, <strong>Ma SKU</strong>, <strong>Mã sản phẩm</strong>, <strong>Tên</strong>, <strong>SL hàng</strong>, <strong>So luong</strong>, <strong>Giá vốn</strong>, <strong>Giá bán</strong>, <strong>ĐVT</strong>, <strong>Danh mục</strong>, <strong>ParentSKU</strong>, <strong>SKU cha</strong>, <strong>Mã cha</strong>.</li>
-                  <li><strong>Tồn kho</strong> có thể âm đến <strong>{negativeStockLimitLabel}</strong>; hệ thống cảnh báo “Âm kho” và backend sẽ chặn mọi tồn kho thấp hơn ngưỡng này.</li>
-                  <li>Import sẽ validate toàn bộ file trước khi ghi. Nếu có lỗi, thông báo sẽ chỉ rõ dòng/cột và dữ liệu chưa được cập nhật.</li>
-                  <li>Các cột <strong>ID</strong>, <strong>Parent ID</strong>, <strong>Default category name</strong>, <strong>Supplier name</strong>, <strong>Ghi chú</strong> chỉ để tham khảo khi xuất file; backend bỏ qua khi import.</li>
+                  <li>N?n d?ng <strong>"T?i m?u Excel"</strong> ho?c <strong>"Xu?t Excel"</strong> t? h? th?ng r?i ch?nh s?a v? nh?p l?i.</li>
+                  <li>Sheet chu?n l? <strong>"S?n ph?m"</strong>; n?u file kh?ng c? sheet n?y, h? th?ng s? d?c sheet d?u ti?n.</li>
+                  <li>C?t chu?n: <strong>Lo?i d?ng</strong>, <strong>SKU</strong>, <strong>Parent SKU</strong>, <strong>T?n s?n ph?m</strong>, c?c c?t gi?, <strong>T?n kho</strong>, <strong>?on v?</strong>, <strong>Danh m?c text</strong>, <strong>Default category id</strong>, <strong>Supplier id</strong>, <strong>Ho?t d?ng</strong>.</li>
+                  <li><strong>Lo?i d?ng</strong>: nh?p <strong>PARENT</strong> cho s?n ph?m cha, <strong>VARIANT</strong> cho bi?n th?. N?u b? tr?ng, backend t? suy lu?n: c? Parent SKU l? VARIANT, kh?ng c? Parent SKU l? PARENT.</li>
+                  <li><strong>Parent SKU</strong> l? kh?a gi? quan h? cha-con; SKU n?y ph?i tr?ng SKU c?a d?ng s?n ph?m cha trong file ho?c s?n ph?m cha d? c? trong h? th?ng. Khi t?o m?i, backend c?p m? SP ti?p theo.</li>
+                  <li>C? th? nh?p file c? alias ph? bi?n nhu <strong>M? SKU</strong>, <strong>Ma SKU</strong>, <strong>M? s?n ph?m</strong>, <strong>T?n</strong>, <strong>SL h?ng</strong>, <strong>So luong</strong>, <strong>Gi? v?n</strong>, <strong>Gi? b?n</strong>, <strong>?VT</strong>, <strong>Danh m?c</strong>, <strong>ParentSKU</strong>, <strong>SKU cha</strong>, <strong>M? cha</strong>.</li>
+                  <li><strong>T?n kho</strong> c? th? ?m d?n <strong>{negativeStockLimitLabel}</strong>; h? th?ng c?nh b?o ??m kho? v? backend s? ch?n m?i t?n kho th?p hon ngu?ng n?y.</li>
+                  <li>Import s? validate to?n b? file tru?c khi ghi. N?u c? l?i, th?ng b?o s? ch? r? d?ng/c?t v? d? li?u chua du?c c?p nh?t.</li>
+                  <li>C?c c?t <strong>ID</strong>, <strong>Parent ID</strong>, <strong>Default category name</strong>, <strong>Supplier name</strong>, <strong>Ghi ch?</strong> ch? d? tham kh?o khi xu?t file; backend b? qua khi import.</li>
                 </ul>
                 <div className="mt-3 flex gap-2">
                   <button onClick={handleDownloadExcelTemplate} className="px-3 py-2 rounded-lg text-xs font-medium border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1.5">
-                    <Download size={14} /> Tải mẫu Excel
+                    <Download size={14} /> T?i m?u Excel
                   </button>
                   <button onClick={handleExportExcel} className="px-3 py-2 rounded-lg text-xs font-medium border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 flex items-center gap-1.5">
-                    <Download size={14} /> Xuất danh sách hiện có
+                    <Download size={14} /> Xu?t danh s?ch hi?n c?
                   </button>
                 </div>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">🗑️ Xóa sản phẩm</h3>
-                <p>Nhấn icon 🗑️ để xóa. Nếu là sản phẩm cha, tất cả biến thể con cũng sẽ bị xóa (soft delete).</p>
+                <h3 className="font-bold text-gray-800 mb-2">??? X?a s?n ph?m</h3>
+                <p>Nh?n icon ??? d? x?a. N?u l? s?n ph?m cha, t?t c? bi?n th? con cung s? b? x?a (soft delete).</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h3 className="font-bold text-blue-800 mb-2">💡 Mẹo</h3>
+                <h3 className="font-bold text-blue-800 mb-2">?? M?o</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
-                  <li>Dùng checkbox để chọn nhiều sản phẩm và xóa hàng loạt</li>
-                  <li>Nhà cung cấp sẽ hiển thị bên dưới mã SKU</li>
-                  <li>Combo là gói sản phẩm, có thể bán với giá khác</li>
+                  <li>D?ng checkbox d? ch?n nhi?u s?n ph?m v? x?a h?ng lo?t</li>
+                  <li>Nh? cung c?p s? hi?n th? b?n du?i m? SKU</li>
+                  <li>Combo l? g?i s?n ph?m, c? th? b?n v?i gi? kh?c</li>
                 </ul>
               </div>
             </div>
 
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowHelp(false)} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
-                Đã hiểu
+                ?? hi?u
               </button>
             </div>
           </div>

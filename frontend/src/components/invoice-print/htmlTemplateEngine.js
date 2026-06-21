@@ -237,13 +237,13 @@ export const SAPO_TEMPLATE_VARIABLE_GROUPS = Object.freeze([
       { label: 'Tên cửa hàng', token: '{{store.name}}' },
       { label: 'Địa chỉ', token: '{{store.address}}' },
       { label: 'Số điện thoại', token: '{{store.phone}}' },
-      { label: 'Mã số thuế', token: '{{store.tax_code}}' },
+      { label: 'M? s? thu?', token: '{{store.tax_code}}' },
     ],
   },
   {
     group: 'Đơn hàng',
     variables: [
-      { label: 'Mã đơn', token: '{{invoice.code}}' },
+      { label: 'M? don', token: '{{invoice.code}}' },
       { label: 'Ngày tạo', token: '{{invoice.created_at_text}}' },
       { label: 'Nhân viên', token: '{{metadata.user_name}}' },
       { label: 'Ghi chú', token: '{{invoice.note}}' },
@@ -264,7 +264,7 @@ export const SAPO_TEMPLATE_VARIABLE_GROUPS = Object.freeze([
       { label: 'Tổng hàng', token: '{{totals.subtotal_text}}' },
       { label: 'Giảm giá', token: '{{totals.discount_amount_text}}' },
       { label: 'Phải trả', token: '{{totals.total_text}}' },
-      { label: 'Đã trả', token: '{{totals.paid_amount_text}}' },
+      { label: 'D? tr?', token: '{{totals.paid_amount_text}}' },
       { label: 'Còn nợ', token: '{{totals.remaining_amount_text}}' },
     ],
   },
@@ -287,7 +287,7 @@ export const DEFAULT_SAPO_TEMPLATE_HTML = `
     </div>
     <div class="sapo-title">
       <h1>HÓA ĐƠN BÁN HÀNG</h1>
-      <p>Mã đơn: <strong>{{invoice.code}}</strong></p>
+      <p>M? don: <strong>{{invoice.code}}</strong></p>
       <p>Ngày: {{invoice.created_at_text}}</p>
     </div>
   </header>
@@ -306,7 +306,7 @@ export const DEFAULT_SAPO_TEMPLATE_HTML = `
     <div><span>Giảm giá</span><strong>{{totals.discount_amount_text}}</strong></div>
     <div><span>Phí giao hàng</span><strong>{{totals.delivery_fee_text}}</strong></div>
     <div class="grand-total"><span>Khách phải trả</span><strong>{{totals.total_text}}</strong></div>
-    <div><span>Khách đã trả</span><strong>{{totals.paid_amount_text}}</strong></div>
+    <div><span>Kh?ch d? tr?</span><strong>{{totals.paid_amount_text}}</strong></div>
     <div><span>Còn nợ</span><strong>{{totals.remaining_amount_text}}</strong></div>
   </section>
 

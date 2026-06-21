@@ -377,7 +377,7 @@ export default function CreateOrder({ user, store }) {
       setCustomerSearch('');
       setShowCustomerForm(false);
       setNewCustomer({ name: '', phone: '', email: '', tax_code: '', customer_type: 'Khách lẻ' });
-      alert(`📡 Server offline — Khách hàng đã được lưu cục bộ.\nTên: ${newCustomer.name}\nMã tạm: ${offlineId}\n\nSẽ đồng bộ khi server trở lại.`);
+      alert(`?? Server offline - Kh?ch h?ng d? du?c luu c?c b?.\nT?n: ${newCustomer.name}\nM? t?m: ${offlineId}\n\nS? d?ng b? khi server tr? l?i.`);
     }
   };
 
@@ -580,7 +580,7 @@ export default function CreateOrder({ user, store }) {
 
   const subtotal = cart.reduce((s, i) => s + (Number(i.line_total) || 0), 0);
 
-  // Lấy giá đúng theo loại khách hàng đã chọn
+  // L?y gi? d?ng theo lo?i kh?ch h?ng d? ch?n
   const getPrice = (product) => {
     const activePriceType = selectedCustomer
       ? customerTypeToPriceType(selectedCustomer.customer_type)
@@ -1253,7 +1253,7 @@ export default function CreateOrder({ user, store }) {
             )}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm font-semibold text-sky-700">
-                Bạn đã chọn {productPickerSelections.length.toLocaleString('vi-VN')} sản phẩm
+                B?n d? ch?n {productPickerSelections.length.toLocaleString('vi-VN')} s?n ph?m
               </div>
               <div className="flex items-center justify-end gap-3">
                 <button
@@ -1525,7 +1525,7 @@ export default function CreateOrder({ user, store }) {
         reason: 'product-created-from-order',
         changedTables: ['products'],
       });
-      alert('✅ Đã thêm sản phẩm mới vào đơn hàng!');
+      alert('? D? th?m s?n ph?m m?i v?o don h?ng!');
     } catch (err) {
       alert(err?.name === 'AbortError' ? '⏱️ Server không phản hồi khi tạo sản phẩm.' : getApiErrorMessage(err?.data, err?.message || 'Lỗi kết nối khi tạo sản phẩm.'));
     }
@@ -1536,7 +1536,7 @@ export default function CreateOrder({ user, store }) {
     if (!guardServiceLinesBeforeSubmit()) return;
     const missingProductLine = findMissingOrderProductLine();
     if (missingProductLine) {
-      alert(`Sản phẩm "${missingProductLine.product_name || missingProductLine.name || 'đã chọn'}" không tồn tại trong hệ thống. Vui lòng chọn lại sản phẩm từ danh sách.`);
+      alert(`S?n ph?m "${missingProductLine.product_name || missingProductLine.name || 'd? ch?n'}" kh?ng t?n t?i trong h? th?ng. Vui l?ng ch?n l?i s?n ph?m t? danh s?ch.`);
       return;
     }
     if (!guardCartStockBeforeSubmit()) return;
@@ -1675,7 +1675,7 @@ export default function CreateOrder({ user, store }) {
     if (!guardServiceLinesBeforeSubmit()) return;
     const missingProductLine = findMissingOrderProductLine();
     if (missingProductLine) {
-      alert(`Sản phẩm "${missingProductLine.product_name || missingProductLine.name || 'đã chọn'}" không tồn tại trong hệ thống. Vui lòng chọn lại sản phẩm từ danh sách.`);
+      alert(`S?n ph?m "${missingProductLine.product_name || missingProductLine.name || 'd? ch?n'}" kh?ng t?n t?i trong h? th?ng. Vui l?ng ch?n l?i s?n ph?m t? danh s?ch.`);
       return;
     }
     if (!guardCartStockBeforeSubmit()) return;
@@ -1743,7 +1743,7 @@ export default function CreateOrder({ user, store }) {
         reason: 'order-updated',
         changedTables: ['invoices', 'invoice_details', 'products'],
       });
-      alert('✅ Đã lưu thay đổi đơn hàng!');
+      alert('? D? luu thay d?i don h?ng!');
     } catch (err) {
       setCreating(false);
       alert(getApiErrorMessage(err?.data, err?.message || 'Lỗi khi cập nhật đơn hàng'));
@@ -1864,7 +1864,7 @@ export default function CreateOrder({ user, store }) {
                 <div className="relative flex-1">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input className="input-field pl-9 w-full text-sm"
-                    placeholder="Tìm theo tên, SĐT, mã khách hàng ... (F4)"
+                    placeholder="T?m theo t?n, SDT, m? kh?ch h?ng ... (F4)"
                     value={customerSearch}
                     onFocus={() => setShowCustomerDropdown(true)}
                     onChange={e => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }} />
@@ -2067,7 +2067,7 @@ export default function CreateOrder({ user, store }) {
                             {isVariant && <span className="text-gray-300 shrink-0">⊙</span>}
                             <div className={`flex-1 min-w-0 ${stockMeta.isNegative || stockMeta.isNearLimit ? stockMeta.nameClass : (isVariant ? 'text-blue-600' : 'text-gray-800')}`}>
                               <div className="text-xs font-medium flex items-center gap-2">
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${isVariant ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{isVariant ? 'Variant' : 'Sản phẩm'}</span>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${isVariant ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{isVariant ? 'Variant' : 'S?n ph?m'}</span>
                                 <span className="min-w-0">{displayName}</span>
                               </div>
                               {isVariant && parent?.name && <div className="text-[10px] text-blue-500 truncate">Thuộc: {parent.name}</div>}
@@ -2178,7 +2178,7 @@ export default function CreateOrder({ user, store }) {
                                 <span className="pos-product-name-wrap">{getProductDisplayName(item)}</span>
                               )}
                             </div>
-                            <div className="text-[10px] text-gray-400">{isService ? 'Dịch vụ khác' : 'Sản phẩm đã chọn'}</div>
+                            <div className="text-[10px] text-gray-400">{isService ? 'D?ch v? kh?c' : 'S?n ph?m ? ch?n'}</div>
                             {isCombo && (
                               <div className="text-[10px] text-purple-500 mt-0.5 truncate max-w-xs">{getComboItemSummary(item)}</div>
                             )}
@@ -2355,7 +2355,7 @@ export default function CreateOrder({ user, store }) {
                             {isVariant && <span className="text-gray-300 shrink-0">⊙</span>}
                             <div className={`flex-1 min-w-0 ${stockMeta.isNegative || stockMeta.isNearLimit ? stockMeta.nameClass : (isVariant ? 'text-blue-600' : 'text-gray-800')}`}>
                               <div className="text-xs font-medium truncate flex items-center gap-2">
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${isVariant ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{isVariant ? 'Variant' : 'Sản phẩm'}</span>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${isVariant ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{isVariant ? 'Variant' : 'S?n ph?m'}</span>
                                 <span className="truncate">{displayName}</span>
                                 <button
                                   type="button"
@@ -2449,8 +2449,8 @@ export default function CreateOrder({ user, store }) {
                   className="w-24 text-right border rounded px-2 py-0.5 text-xs" />
               </div>
               <div className="flex justify-between items-center text-gray-500 text-xs">
-                <span>Mã giảm giá</span>
-                <input className="w-28 text-right border rounded px-2 py-0.5 text-xs" placeholder="Nhập mã..." disabled />
+                <span>M? gi?m gi?</span>
+                <input className="w-28 text-right border rounded px-2 py-0.5 text-xs" placeholder="Nh?p m?..." disabled />
               </div>
               <div className="border-t pt-2 mt-1">
                 <div className="flex justify-between items-center font-bold text-base">
@@ -2459,7 +2459,7 @@ export default function CreateOrder({ user, store }) {
                 </div>
               </div>
               <div className="flex justify-between items-center text-gray-600">
-                <span>Khách đã thanh toán</span>
+                <span>Kh?ch d? thanh to?n</span>
                 <input type="number" min="0" value={paidAmount}
                   onChange={e => setPaidAmount(+e.target.value)}
                   className="w-28 text-right border rounded px-2 py-0.5 text-sm font-medium" />
@@ -2534,7 +2534,7 @@ export default function CreateOrder({ user, store }) {
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Trạng thái đơn</label>
                 <div className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
-                  <span className="text-xs font-medium text-orange-700">{editingInvoiceId ? 'Đang chỉnh sửa' : 'Chờ xác nhận'}</span>
+                  <span className="text-xs font-medium text-orange-700">{editingInvoiceId ? 'ang ch?nh s?a' : 'Ch? x?c nh?n'}</span>
                   <span className="text-[10px] font-bold text-orange-600">{editingInvoiceId ? 'EDITING' : 'PENDING'}</span>
                 </div>
               </div>
@@ -2558,7 +2558,7 @@ export default function CreateOrder({ user, store }) {
             <div className="p-5 overflow-auto space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                 <div className="rounded-lg border p-3 bg-gray-50">
-                  <div className="text-xs text-gray-500">Mã đơn</div>
+                  <div className="text-xs text-gray-500">M? don</div>
                   <div className="font-bold text-gray-800">{lastInvoice.invoice_code}</div>
                 </div>
                 <div className="rounded-lg border p-3 bg-gray-50">
@@ -2694,7 +2694,7 @@ export default function CreateOrder({ user, store }) {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Mã sản phẩm</label>
+                    <label className="text-xs text-gray-500 block mb-1">M? s?n ph?m</label>
                     <input className="input-field w-full bg-gray-100 text-gray-500 cursor-not-allowed" value={newProduct.sku} readOnly disabled placeholder="Tự sinh SP00001" />
                   </div>
                 </div>

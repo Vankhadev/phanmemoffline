@@ -22,7 +22,7 @@ const STATUS_LABELS = {
   pending: { text: 'Chờ xác nhận', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500', icon: '⏳' },
   processing: { text: 'Đang xử lý', color: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500', icon: '🔄' },
   completed: { text: 'Hoàn thành', color: 'bg-green-100 text-green-700', dot: 'bg-green-500', icon: '✅' },
-  cancelled: { text: 'Đã hủy', color: 'bg-red-100 text-red-600', dot: 'bg-red-500', icon: '❌' },
+  cancelled: { text: 'D? h?y', color: 'bg-red-100 text-red-600', dot: 'bg-red-500', icon: '?' },
 };
 const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
 const SOURCE_BADGES = {
@@ -40,7 +40,7 @@ function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
 }
 
-// Chuyển mã đơn hàng thành định dạng "DH000001"
+// Chuy?n m? don h?ng th?nh d?nh d?ng "DH000001"
 function displayOrderCode(code) {
   if (!code) return '—';
   const raw = String(code).trim();
@@ -86,7 +86,7 @@ function formatDate(d) {
   return new Date(d).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-const CANCELLED_ORDER_STATUS_VALUES = new Set(['cancelled', 'canceled', 'da_huy', 'da huy', 'đã hủy', 'dã hủy', 'huy', 'hủy']);
+const CANCELLED_ORDER_STATUS_VALUES = new Set(['cancelled', 'canceled', 'da_huy', 'da huy', 'd? h?y', 'da~ hu?y', 'huy', 'h?y']);
 const CANCELLED_ORDER_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 function normalizeStatusValue(value) {
@@ -239,6 +239,7 @@ export default function OrderList() {
   const [editProductsState, setEditProductsState] = useState('idle');
   const [editBaselineDetails, setEditBaselineDetails] = useState([]);
   const [editProductSearch, setEditProductSearch] = useState('');
+  const [editCustomerSearch, setEditCustomerSearch] = useState('');
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [stockToast, setStockToast] = useState(null);
@@ -428,7 +429,7 @@ export default function OrderList() {
     { key: 'pending', label: 'Chờ xác nhận', count: displayOrders.filter(inv => inv.status === 'pending').length },
     { key: 'processing', label: 'Đang xử lý', count: displayOrders.filter(inv => inv.status === 'processing').length },
     { key: 'completed', label: 'Hoàn thành', count: displayOrders.filter(inv => inv.status === 'completed').length },
-    { key: 'cancelled', label: 'Đã hủy', count: displayOrders.filter(inv => isCancelledOrderStatus(inv.status)).length },
+    { key: 'cancelled', label: 'D? h?y', count: displayOrders.filter(inv => isCancelledOrderStatus(inv.status)).length },
     { key: 'offline', label: 'Offline', count: displayOrders.filter(inv => inv._isOffline).length },
   ];
 
@@ -463,7 +464,7 @@ export default function OrderList() {
 
   const handleBulkDelete = async () => {
     if (selectedOrders.length === 0) return;
-    if (!confirm(`Hủy ${selectedOrders.length} đơn hàng đã chọn?\n\nHàng sẽ được hoàn về kho.`)) return;
+    if (!confirm(`H?y ${selectedOrders.length} don h?ng d? ch?n?\n\nH?ng s? du?c ho?n v? kho.`)) return;
 
     setIsBulkDeleting(true);
     try {
@@ -487,7 +488,7 @@ export default function OrderList() {
       }
 
       const totalAffected = successCount + offlineOrders.length;
-      alert(`✅ Đã hủy ${totalAffected} đơn hàng! Đơn đã hủy sẽ tự động xóa sau 24 giờ.`);
+      alert(`? D? h?y ${totalAffected} don h?ng! Don d? h?y s? t? d?ng x?a sau 24 gi?.`);
       setSelectedOrders([]);
       // Refresh data - cancelled online orders remain visible for 24h before automatic cleanup.
       notifyOrderChanged({ reason: 'orders-cancelled' });
@@ -606,7 +607,19 @@ export default function OrderList() {
     });
   }, [customers, repriceEditDetailsForCustomer]);
 
-  const editProductsStateLabel = { loading: '�ang t?i d? li?u s?n ph?m...', loaded: '', empty: 'Kh�ng c� d? li?u s?n ph?m d? ki?m tra t?n kho.', error: 'Kh�ng t?i du?c d? li?u s?n ph?m, v?n cho ph�p luu.' }[editProductsState] || '';
+  const editProductsStateLabel = { loading: '?ang t?i d? li?u s?n ph?m...', loaded: '', empty: 'Kh?ng c? d? li?u s?n ph?m d? ki?m tra t?n kho.', error: 'Kh?ng t?i du?c d? li?u s?n ph?m, v?n cho ph?p luu.' }[editProductsState] || '';
+
+  const filteredEditCustomers = useMemo(() => {
+    const query = String(editCustomerSearch || '').trim().toLowerCase();
+    if (!query) return [];
+    const phoneQuery = query.replace(/\\D+/g, '');
+    return customers.filter(customer => {
+      const haystack = [customer.name, customer.phone, customer.code, customer.email, customer.customer_type].filter(Boolean).join(' ').toLowerCase();
+      if (haystack.includes(query)) return true;
+      const phone = String(customer.phone || '').replace(/\\D+/g, '');
+      return Boolean(phoneQuery && phone.includes(phoneQuery));
+    }).slice(0, 8);
+  }, [customers, editCustomerSearch]);
 
 
   useEffect(() => {
@@ -906,7 +919,7 @@ export default function OrderList() {
         ));
         setShowEdit(null);
         setEditBaselineDetails([]);
-        alert('✅ Đơn offline đã được cập nhật!');
+        alert('? Don offline d? du?c c?p nh?t!');
       } catch {
         alert('⚠️ Lỗi khi lưu đơn offline!');
       } finally {
@@ -980,7 +993,7 @@ export default function OrderList() {
         // Refresh product stock
         await fetchInvoices();
         apiJson('/products/all/with-variants').catch(() => { });
-        alert('✅ Đã hủy đơn hàng! Đơn sẽ tự động xóa sau 24 giờ.');
+        alert('? D? h?y don h?ng! Don s? t? d?ng x?a sau 24 gi?.');
       }
     } catch {
       alert('📡 Không thể kết nối server!');
@@ -989,7 +1002,7 @@ export default function OrderList() {
 
   // Xác nhận thanh toán (chuyển trạng thái sang completed)
   const handleMarkAsPaid = async (inv) => {
-    if (!confirm(`Xác nhận đơn hàng ${inv.invoice_code} đã thanh toán?`)) return;
+    if (!confirm(`X?c nh?n don h?ng ${inv.invoice_code} d? thanh to?n?`)) return;
     try {
       if (inv._isOffline) {
         // Cập nhật offline order trong localStorage
@@ -1004,11 +1017,11 @@ export default function OrderList() {
             sameOrderIdentity(o, inv) ? { ...o, status: 'completed', _isOffline: true } : o
           ));
         }
-        alert('✅ Đã cập nhật trạng thái đơn offline thành "Đã thanh toán"!');
+        alert('? D? c?p nh?t tr?ng th?i don offline th?nh "D? thanh to?n"!');
       } else {
         // Gọi API xác nhận đơn hàng (PATCH /invoices/:id/confirm)
         await apiJsonChecked(`/invoices/${inv.id}/confirm`, { method: 'PATCH' }, 'Không thể xác nhận thanh toán.');
-        alert('✅ Đã xác nhận thanh toán!');
+        alert('? D? x?c nh?n thanh to?n!');
         notifyOrderChanged({ reason: 'order-paid', invoice_id: inv.id || null, invoice_code: inv.invoice_code || '' });
         await fetchInvoices();
         apiJson('/products/all/with-variants').catch(() => { });
@@ -1073,7 +1086,7 @@ export default function OrderList() {
                   disabled={isBulkDeleting}
                   className="px-3.5 py-2 rounded-xl bg-red-500 hover:bg-red-400 disabled:bg-white/20 text-sm font-semibold flex items-center gap-2"
                 >
-                  <Trash2 size={15} /> Hủy đã chọn ({selectedOrders.length})
+                  <Trash2 size={15} /> H?y d? ch?n ({selectedOrders.length})
                 </button>
               )}
             </div>
@@ -1106,7 +1119,7 @@ export default function OrderList() {
         <ExcelImportPanel
           dataType="invoices"
           title="Import hóa đơn/đơn hàng từ Excel/CSV"
-          description={`Preview/validate đơn hàng và chi tiết sản phẩm trước khi commit; cho phép bán khi tồn 0/âm nếu tồn dự kiến không thấp hơn ${negativeStockLimitLabel}, một đơn nhiều dòng được gom theo mã đơn.`}
+          description={`Preview/validate don h?ng v? chi ti?t s?n ph?m tru?c khi commit; cho ph?p b?n khi t?n 0/?m n?u t?n d? ki?n kh?ng th?p hon ${negativeStockLimitLabel}, m?t don nhi?u d?ng du?c gom theo m? don.`}
           negativeStockSettings={negativeStockSettings}
           onCommitted={async () => {
             setLoading(true);
@@ -1146,7 +1159,7 @@ export default function OrderList() {
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 className="input-field w-full pl-9"
-                placeholder="Tìm theo mã đơn, DH XXXXX, tên khách hàng..."
+                placeholder="T?m theo m? don, DH XXXXX, t?n kh?ch h?ng..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
@@ -1156,7 +1169,7 @@ export default function OrderList() {
               <option value="pending">⏳ Chờ xác nhận</option>
               <option value="processing">🔄 Đang xử lý</option>
               <option value="completed">✅ Hoàn thành</option>
-              <option value="cancelled">❌ Đã hủy</option>
+              <option value="cancelled">? D? h?y</option>
               <option value="offline">📡 Offline</option>
             </select>
             <select className="input-field" value={filterSource} onChange={e => setFilterSource(e.target.value)}>
@@ -1170,14 +1183,14 @@ export default function OrderList() {
             <div className="flex flex-wrap items-center gap-2 text-gray-500">
               <span className="rounded-full bg-blue-50 text-blue-700 px-3 py-1 font-medium">Hiển thị {filtered.length} đơn</span>
               {selectedOrders.length > 0 && (
-                <span className="rounded-full bg-amber-50 text-amber-700 px-3 py-1 font-medium">Đã chọn {selectedOrders.length} đơn</span>
+                <span className="rounded-full bg-amber-50 text-amber-700 px-3 py-1 font-medium">D? ch?n {selectedOrders.length} don</span>
               )}
               {!serverOnline && (
                 <span className="rounded-full bg-red-50 text-red-600 px-3 py-1 font-medium">Đang ở chế độ offline</span>
               )}
             </div>
             <div className="text-xs text-gray-400">
-              Ưu tiên dữ liệu server khi trùng mã đơn, vẫn giữ đơn local để thao tác tiếp.
+              Uu ti?n d? li?u server khi tr?ng m? don, v?n gi? don local d? thao t?c ti?p.
             </div>
           </div>
         </div>
@@ -1218,7 +1231,7 @@ export default function OrderList() {
                   title={selectedAll ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
                 >
                   {selectedAll ? <CheckSquare size={16} /> : <Square size={16} />}
-                  <span>{selectedAll ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</span>
+                  <span>{selectedAll ? 'B? ch?n t?t c?' : 'Ch?n t?t c?'}</span>
                 </button>
                 <span className="text-xs text-gray-400">{filtered.length} đơn</span>
               </div>
@@ -1264,7 +1277,7 @@ export default function OrderList() {
                               <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`}></span>
                               {st.text}
                             </span>
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">{isUnpaid ? 'Chưa thanh toán' : formatPaymentMethod(inv.payment_method)}</span>
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">{isUnpaid ? 'Ch?a thanh to?n' : formatPaymentMethod(inv.payment_method)}</span>
                           </div>
                           {isCancelled && cancelRemainingText && (
                             <div className="mt-1 inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">
@@ -1619,14 +1632,38 @@ export default function OrderList() {
               {/* Thông tin chung */}
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                 <div>
+                <div className="relative">
                   <label className="text-xs text-gray-500 block mb-1">Khách hàng</label>
-                  <select className="input-field w-full text-sm" value={editForm.customer_id || ''}
-                    onChange={e => applyEditCustomer(e.target.value)}>
-                    <option value="">-- Khách lẻ --</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
-                  </select>
+                  <input
+                    className="input-field w-full text-sm"
+                    value={editCustomerSearch}
+                    placeholder="T?m kh?ch h?ng theo t?n, SDT, m?..."
+                    onFocus={() => setEditCustomerSearch(editForm.customer_name || "")}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setEditCustomerSearch(value);
+                      if (!value.trim()) applyEditCustomer("");
+                    }}
+                  />
+                  {editCustomerSearch.trim() && filteredEditCustomers.length > 0 && (
+                    <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 max-h-60 overflow-auto rounded-xl border border-gray-200 bg-white shadow-xl">
+                      {filteredEditCustomers.map(customer => (
+                        <button
+                          key={customer.id}
+                          type="button"
+                          className="w-full border-b border-gray-100 px-3 py-2 text-left text-sm hover:bg-blue-50 last:border-b-0"
+                          onClick={() => {
+                            setEditCustomerSearch(customer.name + (customer.phone ? " (" + customer.phone + ")" : ""));
+                            applyEditCustomer(customer.id);
+                          }}
+                        >
+                          <div className="font-semibold text-gray-800">{customer.name}</div>
+                          <div className="text-xs text-gray-500">{customer.phone || ""}{customer.customer_type ? " ? " + customer.customer_type : ""}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div>
                   <label className="text-xs text-gray-500 block mb-1">Thanh toán</label>
                   <select className="input-field w-full text-sm" value={editForm.payment_method}
                     onChange={e => setEditForm({ ...editForm, payment_method: e.target.value })}>
@@ -1647,7 +1684,7 @@ export default function OrderList() {
                     <option value="pending">⏳ Chờ xác nhận</option>
                     <option value="processing">🔄 Đang xử lý</option>
                     <option value="completed">✅ Hoàn thành</option>
-                    <option value="cancelled">❌ Đã hủy</option>
+                    <option value="cancelled">? D? h?y</option>
                   </select>
                 </div>
                 <div>
@@ -1799,7 +1836,7 @@ export default function OrderList() {
               </button>
               {showEdit && !editProductsReady && (
                 <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                  {editProductsStateLabel || '�ang t?i d? li?u s?n ph?m...'}
+                  {editProductsStateLabel || '?ang t?i d? li?u s?n ph?m...'}
                 </div>
               )}
               <button onClick={handleSaveEdit}
@@ -1824,7 +1861,7 @@ export default function OrderList() {
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input className="input-field pl-9 w-full text-sm"
-                  placeholder="Tìm theo tên, mã SKU..."
+                  placeholder="T?m theo t?n, m? SKU..."
                   value={editProductSearch}
                   onChange={e => setEditProductSearch(e.target.value)} autoFocus />
               </div>
@@ -1947,8 +1984,8 @@ export default function OrderList() {
                 <ul className="list-disc pl-5 space-y-1">
                   <li><span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">⏳ Chờ xác nhận</span> - Đơn mới tạo, chờ duyệt</li>
                   <li><span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">🔄 Đang xử lý</span> - Đang chuẩn bị hàng</li>
-                  <li><span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">✅ Hoàn thành</span> - Đã thanh toán và giao hàng</li>
-                  <li><span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">❌ Đã hủy</span> - Đơn bị hủy</li>
+                  <li><span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">? Ho?n th?nh</span> - D? thanh to?n v? giao h?ng</li>
+                  <li><span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">? D? h?y</span> - Don b? h?y</li>
                   <li><span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">📡 Offline</span> - Đơn tạo khi server offline</li>
                 </ul>
               </div>
@@ -1956,7 +1993,7 @@ export default function OrderList() {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">🔍 Lọc & Tìm kiếm</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Tìm kiếm theo mã đơn (DH XXXXX) hoặc tên khách hàng</li>
+                  <li>T?m ki?m theo m? don (DH XXXXX) ho?c t?n kh?ch h?ng</li>
                   <li>Lọc theo trạng thái từ dropdown</li>
                   <li>Kết hợp cả hai để tìm nhanh</li>
                 </ul>
@@ -1975,7 +2012,7 @@ export default function OrderList() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">✅ Xác nhận thanh toán</h3>
-                <p>Nhấn icon <CheckSquare size={14} className="inline" /> để đánh dấu đơn đã thanh toán. Trạng thái sẽ chuyển sang "Hoàn thành" và hiển thị phương thức thanh toán.</p>
+                <p>Nh?n icon <CheckSquare size={14} className="inline" /> d? d?nh d?u don d? thanh to?n. Tr?ng th?i s? chuy?n sang "Ho?n th?nh" v? hi?n th? phuong th?c thanh to?n.</p>
               </div>
 
               <div>
@@ -1999,7 +2036,7 @@ export default function OrderList() {
 
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowHelp(false)} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
-                Đã hiểu
+                D? hi?u
               </button>
             </div>
           </div>
@@ -2008,3 +2045,4 @@ export default function OrderList() {
     </div>
   );
 }
+

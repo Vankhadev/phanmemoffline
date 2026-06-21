@@ -33,7 +33,7 @@ export default function ChangeHistoryModal({ isOpen, onClose, tableName, recordI
   };
 
   const handleRestore = async (historyId) => {
-    if (!confirm('Bạn có chắc chắn muốn khôi phục bản ghi về phiên bản này không?')) return;
+    if (!confirm('B?n c? ch?c ch?n mu?n kh?i ph?c b?n ghi v? phi?n b?n n?y kh?ng?')) return;
     
     setRestoringId(historyId);
     try {
@@ -213,7 +213,7 @@ export default function ChangeHistoryModal({ isOpen, onClose, tableName, recordI
                               .map(([k, v]) => (
                                 <div key={k} className="flex justify-between border-b last:border-0 border-gray-200 py-1">
                                   <span className="text-gray-400 uppercase font-mono text-[10px]">{k}:</span>
-                                  <span className="font-medium text-gray-800">{String(v ?? '—')}</span>
+                                  <span className="font-medium text-gray-800">{String(v ?? '')}</span>
                                 </div>
                               ))}
                           </div>

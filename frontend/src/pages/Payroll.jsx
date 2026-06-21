@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiJson, apiJsonChecked } from '../utils/apiClient';
-import { Calculator, Edit2, Filter, Loader, Plus, RefreshCcw, Search, Trash2, Wallet, X } from 'lucide-react';
+import HelpModal from '../components/HelpModal';
+import { Calculator, Edit2, Filter, HelpCircle, Loader, Plus, RefreshCcw, Search, Trash2, Wallet, X } from 'lucide-react';
 
 const currentDate = new Date();
 const currentMonth = currentDate.getMonth() + 1;
@@ -95,6 +96,7 @@ export default function Payroll() {
   const [notice, setNotice] = useState('');
   const [toast, setToast] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [filters, setFilters] = useState({
@@ -176,8 +178,8 @@ export default function Payroll() {
     try {
       const query = buildQuery(sourceFilters);
       const [listData, summaryData] = await Promise.all([
-        apiJson(`/payrolls${query ? `?${query}` : ''}`, {}, 'Không tải được danh sách bảng lương'),
-        apiJson(`/payrolls/summary${query ? `?${query}` : ''}`, {}, 'Không tải được tổng hợp bảng lương'),
+        apiJson(`/payrolls${query ? `?${query}` : ''}`, {}, 'Kh?ng t?i du?c danh s?ch b?ng luong'),
+        apiJson(`/payrolls/summary${query ? `?${query}` : ''}`, {}, 'Kh?ng t?i du?c t?ng h?p b?ng luong'),
       ]);
 
       setPayrolls(Array.isArray(listData) ? sortPayrollRows(listData) : []);
@@ -185,7 +187,7 @@ export default function Payroll() {
     } catch (err) {
       setPayrolls([]);
       setSummary(null);
-      setError(err.message || 'Lỗi kết nối khi tải bảng lương');
+      setError(err.message || 'L?i k?t n?i khi t?i b?ng luong');
     } finally {
       setLoading(false);
     }
@@ -210,32 +212,32 @@ export default function Payroll() {
   };
 
   const validateForm = () => {
-    if (!form.employee_name.trim()) return 'Vui lòng nhập tên nhân viên';
+    if (!form.employee_name.trim()) return 'Vui l?ng nh?p t?n nh?n vi?n';
     const month = Number.parseInt(form.month, 10);
-    if (!Number.isInteger(month) || month < 1 || month > 12) return 'Tháng lương phải từ 1 đến 12';
+    if (!Number.isInteger(month) || month < 1 || month > 12) return 'Th?ng luong ph?i t? 1 d?n 12';
     const year = Number.parseInt(form.year, 10);
-    if (!Number.isInteger(year) || year < 1900 || year > 3000) return 'Năm lương không hợp lệ';
+    if (!Number.isInteger(year) || year < 1900 || year > 3000) return 'Nam luong kh?ng h?p l?';
 
     const labels = {
-      daily_wage: 'Lương/ngày',
-      working_days: 'Số ngày đi làm',
-      leave_days: 'Số ngày nghỉ',
-      advance_amount: 'Tiền ứng trước',
-      overtime_amount: 'Tiền tăng ca',
-      extra_bonus: 'Tiền thưởng thêm',
-      holiday_bonus: 'Thưởng lễ',
-      tet_bonus: 'Thưởng Tết',
+      daily_wage: 'Luong/ng?y',
+      working_days: 'S? ng?y di l?m',
+      leave_days: 'S? ng?y ngh?',
+      advance_amount: 'Ti?n ?ng tru?c',
+      overtime_amount: 'Ti?n tang ca',
+      extra_bonus: 'Ti?n thu?ng th?m',
+      holiday_bonus: 'Thu?ng l?',
+      tet_bonus: 'Thu?ng T?t',
     };
 
-    if (isBlank(form.daily_wage)) return 'Vui lòng nhập lương/ngày';
-    if (isBlank(form.working_days)) return 'Vui lòng nhập số ngày đi làm';
-    if (!isValidNumberInput(form.daily_wage)) return 'Lương/ngày phải là số hợp lệ';
-    if (!isValidNumberInput(form.working_days)) return 'Số ngày đi làm phải là số hợp lệ';
+    if (isBlank(form.daily_wage)) return 'Vui l?ng nh?p luong/ng?y';
+    if (isBlank(form.working_days)) return 'Vui l?ng nh?p s? ng?y di l?m';
+    if (!isValidNumberInput(form.daily_wage)) return 'Luong/ng?y ph?i l? s? h?p l?';
+    if (!isValidNumberInput(form.working_days)) return 'S? ng?y di l?m ph?i l? s? h?p l?';
 
     for (const field of numberFields) {
-      if (!isValidNumberInput(form[field])) return `${labels[field] || field} phải là số hợp lệ`;
+      if (!isValidNumberInput(form[field])) return `${labels[field] || field} ph?i l? s? h?p l?`;
       const value = toNumber(form[field]);
-      if (value < 0) return `${labels[field] || field} không được âm`;
+      if (value < 0) return `${labels[field] || field} kh?ng du?c ?m`;
     }
     return '';
   };
@@ -273,7 +275,7 @@ export default function Payroll() {
       const data = await apiJsonChecked(url, {
         method,
         body: payload,
-      }, 'Không lưu được bảng lương');
+      }, 'Kh?ng luu du?c b?ng luong');
       const savedPayroll = data?.payroll || data?.record || buildPayrollRecord(payload, data?.id || editing?.id);
 
       const nextFilters = {
@@ -291,27 +293,27 @@ export default function Payroll() {
       setShowForm(false);
       setEditing(null);
       setForm({ ...emptyForm, month: nextFilters.month, year: nextFilters.year });
-      showToast('success', editing ? 'Đã cập nhật bảng lương thành công' : 'Đã thêm bảng lương thành công');
+      showToast('success', editing ? '?? c?p nh?t b?ng luong th?nh c?ng' : '?? th?m b?ng luong th?nh c?ng');
       fetchPayrolls(nextFilters).catch(() => {});
     } catch (err) {
-      showToast('error', err.message || 'Lỗi server khi lưu bảng lương');
+      showToast('error', err.message || 'L?i server khi luu b?ng luong');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (payroll) => {
-    if (!confirm(`Xóa bảng lương của ${payroll.employee_name}?`)) return;
+    if (!confirm(`X?a b?ng luong c?a ${payroll.employee_name}?`)) return;
     setError('');
     try {
-      await apiJsonChecked(`/payrolls/${payroll.id}`, { method: 'DELETE' }, 'Không xóa được bảng lương');
+      await apiJsonChecked(`/payrolls/${payroll.id}`, { method: 'DELETE' }, 'Kh?ng x?a du?c b?ng luong');
 
       setPayrolls(prev => prev.filter(row => Number(row.id) !== Number(payroll.id)));
       setSummary(null);
-      showToast('success', 'Đã xóa bảng lương thành công');
+      showToast('success', '?? x?a b?ng luong th?nh c?ng');
       fetchPayrolls().catch(() => {});
     } catch (err) {
-      showToast('error', err.message || 'Lỗi server khi xóa bảng lương');
+      showToast('error', err.message || 'L?i server khi x?a b?ng luong');
     }
   };
 
@@ -323,15 +325,15 @@ export default function Payroll() {
     try {
       const query = new URLSearchParams({ month: String(defaultFilters.month), year: String(defaultFilters.year) }).toString();
       const [listData, summaryData] = await Promise.all([
-        apiJson(`/payrolls?${query}`, {}, 'Không tải được danh sách bảng lương'),
-        apiJson(`/payrolls/summary?${query}`, {}, 'Không tải được tổng hợp bảng lương'),
+        apiJson(`/payrolls?${query}`, {}, 'Kh?ng t?i du?c danh s?ch b?ng luong'),
+        apiJson(`/payrolls/summary?${query}`, {}, 'Kh?ng t?i du?c t?ng h?p b?ng luong'),
       ]);
       setPayrolls(Array.isArray(listData) ? sortPayrollRows(listData) : []);
       setSummary(summaryData || null);
     } catch (err) {
       setPayrolls([]);
       setSummary(null);
-      setError(err.message || 'Lỗi kết nối khi tải bảng lương');
+      setError(err.message || 'L?i k?t n?i khi t?i b?ng luong');
     } finally {
       setLoading(false);
     }
@@ -356,39 +358,66 @@ export default function Payroll() {
     <div className="min-w-0">
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h1 className="text-xl font-bold flex items-center gap-2">
-          <Wallet className="text-blue-600" size={24} /> Bảng lương nhân viên
+          <Wallet className="text-blue-600" size={24} /> B?ng luong nh?n vi?n
         </h1>
         <button onClick={openAdd} className="btn-primary flex items-center gap-1">
-          <Plus size={16} /> Thêm bảng lương
+          <Plus size={16} /> Th?m b?ng luong
         </button>
       </div>
 
+      {showHelp && (
+        <HelpModal
+          show={showHelp}
+          onClose={() => setShowHelp(false)}
+          title="Hu?ng d?n b?ng luong nh?n vi?n"
+          content={
+            <div className="space-y-4 text-sm text-gray-700">
+              <div>
+                <h3 className="font-bold text-gray-800 mb-2">Quy tr?nh s? d?ng</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Nh?n Th?m b?ng luong d? t?o k? luong m?i.</li>
+                  <li>Nh?p ng?y l?m, ng?y ngh?, thu?ng v? t?m ?ng.</li>
+                  <li>L?c theo th?ng ho?c nam d? xem danh s?ch d? luu.</li>
+                  <li>D?ng n?t S?a ho?c X?a tr?n t?ng d?ng khi c?n ch?nh.</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>T?ng luong v? th?c nh?n du?c t?nh t? d?ng t? d? li?u nh?p.</li>
+                </ul>
+              </div>
+            </div>
+          }
+        />
+      )}
+
       {notice && (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 px-4 py-3 text-sm">
-          ✅ {notice}
+          ? {notice}
         </div>
       )}
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
-          ⚠️ {error}
+          ?? {error}
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
         <div className="card border-t-4 border-blue-500">
-          <div className="text-xs text-gray-500 mb-1">TỔNG LƯƠNG THÁNG</div>
+          <div className="text-xs text-gray-500 mb-1">T?NG LUONG TH?NG</div>
           <div className="text-xl font-bold text-blue-600">{formatVND(totals.total_salary_month)}</div>
         </div>
         <div className="card border-t-4 border-orange-500">
-          <div className="text-xs text-gray-500 mb-1">TỔNG TIỀN ỨNG</div>
+          <div className="text-xs text-gray-500 mb-1">T?NG TI?N ?NG</div>
           <div className="text-xl font-bold text-orange-600">{formatVND(totals.total_advance_amount)}</div>
         </div>
         <div className="card border-t-4 border-purple-500">
-          <div className="text-xs text-gray-500 mb-1">TỔNG THƯỞNG THÊM / TĂNG CA</div>
+          <div className="text-xs text-gray-500 mb-1">T?NG THU?NG TH?M / TANG CA</div>
           <div className="text-xl font-bold text-purple-600">{formatVND(totals.total_bonus)}</div>
         </div>
         <div className="card border-t-4 border-emerald-500">
-          <div className="text-xs text-gray-500 mb-1">TỔNG LƯƠNG</div>
+          <div className="text-xs text-gray-500 mb-1">T?NG LUONG</div>
           <div className="text-xl font-bold text-emerald-600">{formatVND(totals.total_net_salary)}</div>
         </div>
       </div>
@@ -396,7 +425,7 @@ export default function Payroll() {
       <div className="card mb-4 bg-gray-50">
         <div className="flex items-end gap-3 flex-wrap">
           <div className="flex-1 min-w-[220px]">
-            <label className="text-xs text-gray-500 block mb-1">Tìm kiếm</label>
+            <label className="text-xs text-gray-500 block mb-1">T?m ki?m</label>
             <div className="relative">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
               <input
@@ -404,25 +433,25 @@ export default function Payroll() {
                 value={filters.search}
                 onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
                 onKeyDown={e => { if (e.key === 'Enter') fetchPayrolls(); }}
-                placeholder="Tên nhân viên hoặc số điện thoại..."
+                placeholder="T?n nh?n vi?n ho?c s? di?n tho?i..."
               />
             </div>
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Tháng</label>
+            <label className="text-xs text-gray-500 block mb-1">Th?ng</label>
             <select className="input-field w-28" value={filters.month} onChange={e => setFilters(prev => ({ ...prev, month: e.target.value }))}>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map(month => <option key={month} value={month}>Tháng {month}</option>)}
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(month => <option key={month} value={month}>Th?ng {month}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Năm</label>
+            <label className="text-xs text-gray-500 block mb-1">Nam</label>
             <input type="number" className="input-field w-28" min="1900" max="3000" value={filters.year} onChange={e => setFilters(prev => ({ ...prev, year: e.target.value }))} />
           </div>
           <button onClick={fetchPayrolls} className="px-4 py-2 bg-blue-600 text-white rounded text-sm flex items-center gap-1">
-            <Filter size={14} /> Lọc
+            <Filter size={14} /> L?c
           </button>
           <button onClick={clearFilters} className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded text-sm flex items-center gap-1">
-            <RefreshCcw size={14} /> Mặc định
+            <RefreshCcw size={14} /> M?c d?nh
           </button>
         </div>
       </div>
@@ -449,34 +478,34 @@ export default function Payroll() {
           </colgroup>
           <thead>
             <tr>
-              <th className="p-2 text-left">Kỳ lương</th>
-              <th className="p-2 text-left">Tên nhân viên</th>
-              <th className="p-2 text-left">Số điện thoại</th>
-              <th className="p-2 text-right">Lương/ngày</th>
-              <th className="p-2 text-right">Ngày làm</th>
-              <th className="p-2 text-right">Ngày nghỉ</th>
-              <th className="p-2 text-right">Lương tháng</th>
-              <th className="p-2 text-right">Ứng trước</th>
-              <th className="p-2 text-right">Tăng ca</th>
-              <th className="p-2 text-right">Thưởng thêm</th>
-              <th className="p-2 text-right">Thưởng lễ</th>
-              <th className="p-2 text-right">Thưởng Tết</th>
-              <th className="p-2 text-right">Tổng thu nhập</th>
-              <th className="p-2 text-right">Thực nhận</th>
-              <th className="p-2 text-left">Ghi chú</th>
-              <th className="p-2 text-center">Hành động</th>
+              <th className="p-2 text-left">K? luong</th>
+              <th className="p-2 text-left">T?n nh?n vi?n</th>
+              <th className="p-2 text-left">S? di?n tho?i</th>
+              <th className="p-2 text-right">Luong/ng?y</th>
+              <th className="p-2 text-right">Ng?y l?m</th>
+              <th className="p-2 text-right">Ng?y ngh?</th>
+              <th className="p-2 text-right">Luong th?ng</th>
+              <th className="p-2 text-right">?ng tru?c</th>
+              <th className="p-2 text-right">Tang ca</th>
+              <th className="p-2 text-right">Thu?ng th?m</th>
+              <th className="p-2 text-right">Thu?ng l?</th>
+              <th className="p-2 text-right">Thu?ng T?t</th>
+              <th className="p-2 text-right">T?ng thu nh?p</th>
+              <th className="p-2 text-right">Th?c nh?n</th>
+              <th className="p-2 text-left">Ghi ch?</th>
+              <th className="p-2 text-center">H?nh d?ng</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={16} className="text-center text-gray-400 py-10"><Loader size={16} className="inline animate-spin mr-2" />Đang tải bảng lương...</td></tr>
+              <tr><td colSpan={16} className="text-center text-gray-400 py-10"><Loader size={16} className="inline animate-spin mr-2" />?ang t?i b?ng luong...</td></tr>
             ) : payrolls.length === 0 ? (
-              <tr><td colSpan={16} className="text-center text-gray-400 py-10">Chưa có bảng lương phù hợp</td></tr>
+              <tr><td colSpan={16} className="text-center text-gray-400 py-10">Chua c? b?ng luong ph? h?p</td></tr>
             ) : payrolls.map(row => (
               <tr key={`${row.id}-${row.month}-${row.year}`} className="border-b hover:bg-gray-50">
                 <td className="p-2 font-medium">{String(row.month).padStart(2, '0')}/{row.year}</td>
                 <td className="p-2 font-semibold text-gray-800">{row.employee_name}</td>
-                <td className="p-2 text-gray-600">{row.employee_phone || '—'}</td>
+                <td className="p-2 text-gray-600">{row.employee_phone || '?'}</td>
                 <td className="p-2 text-right">{formatVND(row.daily_wage)}</td>
                 <td className="p-2 text-right">{row.working_days}</td>
                 <td className="p-2 text-right">{row.leave_days}</td>
@@ -488,14 +517,14 @@ export default function Payroll() {
                 <td className="p-2 text-right">{formatVND(row.tet_bonus)}</td>
                 <td className="p-2 text-right font-semibold text-purple-600">{formatVND(row.total_income)}</td>
                 <td className="p-2 text-right font-bold text-emerald-600">{formatVND(row.net_salary)}</td>
-                <td className="p-2 text-gray-500 max-w-[220px] truncate" title={row.note || ''}>{row.note || '—'}</td>
+                <td className="p-2 text-gray-500 max-w-[220px] truncate" title={row.note || ''}>{row.note || '?'}</td>
                 <td className="p-2 text-center">
                   <div className="flex items-center justify-center gap-2">
                     <button onClick={() => openEdit(row)} className="order-table-action-btn border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">
-                      <Edit2 size={12} /> Sửa
+                      <Edit2 size={12} /> S?a
                     </button>
                     <button onClick={() => handleDelete(row)} className="order-table-action-btn border border-red-200 bg-red-50 text-red-600 hover:bg-red-100">
-                      <Trash2 size={12} /> Xóa
+                      <Trash2 size={12} /> X?a
                     </button>
                   </div>
                 </td>
@@ -505,7 +534,7 @@ export default function Payroll() {
           {payrolls.length > 0 && (
             <tfoot>
               <tr className="bg-blue-50 text-gray-800 font-bold border-t-2 border-blue-200">
-                <td colSpan={6} className="p-2 text-right">Tổng cộng ({totals.count} bảng lương)</td>
+                <td colSpan={6} className="p-2 text-right">T?ng c?ng ({totals.count} b?ng luong)</td>
                 <td className="p-2 text-right text-blue-700">{formatVND(totals.total_salary_month)}</td>
                 <td className="p-2 text-right text-orange-700">{formatVND(totals.total_advance_amount)}</td>
                 <td className="p-2 text-right">{formatVND(totals.total_overtime_amount)}</td>
@@ -526,7 +555,7 @@ export default function Payroll() {
           <div className="bg-white rounded-xl shadow-2xl w-[920px] max-w-full max-h-[92vh] overflow-auto">
             <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between rounded-t-xl">
               <h2 className="text-lg font-bold flex items-center gap-2">
-                <Wallet size={20} className="text-blue-600" /> {editing ? 'Sửa bảng lương' : 'Thêm bảng lương nhân viên'}
+                <Wallet size={20} className="text-blue-600" /> {editing ? 'S?a b?ng luong' : 'Th?m b?ng luong nh?n vi?n'}
               </h2>
               <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
@@ -534,76 +563,76 @@ export default function Payroll() {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Tên nhân viên <span className="text-red-500">*</span></label>
-                  <input className="input-field w-full" value={form.employee_name} onChange={e => updateForm('employee_name', e.target.value)} placeholder="VD: Nguyễn Văn A" autoFocus />
+                  <label className="text-xs text-gray-500 block mb-1">T?n nh?n vi?n <span className="text-red-500">*</span></label>
+                  <input className="input-field w-full" value={form.employee_name} onChange={e => updateForm('employee_name', e.target.value)} placeholder="VD: Nguy?n Van A" autoFocus />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Số điện thoại</label>
+                  <label className="text-xs text-gray-500 block mb-1">S? di?n tho?i</label>
                   <input className="input-field w-full" value={form.employee_phone} onChange={e => updateForm('employee_phone', e.target.value)} placeholder="VD: 09xxxxxxxx" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Tháng <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-gray-500 block mb-1">Th?ng <span className="text-red-500">*</span></label>
                   <select className="input-field w-full" value={form.month} onChange={e => updateForm('month', e.target.value)}>
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(month => <option key={month} value={month}>Tháng {month}</option>)}
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(month => <option key={month} value={month}>Th?ng {month}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Năm <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-gray-500 block mb-1">Nam <span className="text-red-500">*</span></label>
                   <input type="number" min="1900" max="3000" className="input-field w-full" value={form.year} onChange={e => updateForm('year', e.target.value)} />
                 </div>
-                {renderNumberInput('working_days', 'Số ngày đi làm', '0', '0.5')}
-                {renderNumberInput('leave_days', 'Số ngày nghỉ', '0', '0.5')}
+                {renderNumberInput('working_days', 'S? ng?y di l?m', '0', '0.5')}
+                {renderNumberInput('leave_days', 'S? ng?y ngh?', '0', '0.5')}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {renderNumberInput('daily_wage', 'Lương 1 ngày công')}
-                {renderNumberInput('advance_amount', 'Tiền ứng trước')}
-                {renderNumberInput('overtime_amount', 'Tiền tăng ca')}
-                {renderNumberInput('extra_bonus', 'Tiền thưởng thêm')}
-                {renderNumberInput('holiday_bonus', 'Thưởng lễ')}
-                {renderNumberInput('tet_bonus', 'Thưởng Tết')}
+                {renderNumberInput('daily_wage', 'Luong 1 ng?y c?ng')}
+                {renderNumberInput('advance_amount', 'Ti?n ?ng tru?c')}
+                {renderNumberInput('overtime_amount', 'Ti?n tang ca')}
+                {renderNumberInput('extra_bonus', 'Ti?n thu?ng th?m')}
+                {renderNumberInput('holiday_bonus', 'Thu?ng l?')}
+                {renderNumberInput('tet_bonus', 'Thu?ng T?t')}
               </div>
 
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Ghi chú</label>
-                <textarea className="input-field w-full" rows={3} value={form.note} onChange={e => updateForm('note', e.target.value)} placeholder="Ghi chú thêm nếu cần..." />
+                <label className="text-xs text-gray-500 block mb-1">Ghi ch?</label>
+                <textarea className="input-field w-full" rows={3} value={form.note} onChange={e => updateForm('note', e.target.value)} placeholder="Ghi ch? th?m n?u c?n..." />
               </div>
 
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                Tổng thu nhập được tính từ lương tháng, tăng ca, thưởng thêm, thưởng lễ và thưởng Tết; thực nhận trừ tiền ứng trước.
+                T?ng thu nh?p du?c t?nh t? luong th?ng, tang ca, thu?ng th?m, thu?ng l? v? thu?ng T?t; th?c nh?n tr? ti?n ?ng tru?c.
               </div>
 
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
                 <div className="flex items-center gap-2 text-blue-800 font-semibold mb-3">
-                  <Calculator size={18} /> Tự động tính lương
+                  <Calculator size={18} /> T? d?ng t?nh luong
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                   <div className="bg-white rounded-lg p-3 border">
-                    <div className="text-xs text-gray-500">Lương tháng</div>
+                    <div className="text-xs text-gray-500">Luong th?ng</div>
                     <div className="text-lg font-bold text-blue-600">{formatVND(preview.salaryMonth)}</div>
-                    <div className="text-xs text-gray-400">Lương/ngày × ngày làm</div>
+                    <div className="text-xs text-gray-400">Luong/ng?y ? ng?y l?m</div>
                   </div>
                   <div className="bg-white rounded-lg p-3 border">
-                    <div className="text-xs text-gray-500">Tổng thu nhập</div>
+                    <div className="text-xs text-gray-500">T?ng thu nh?p</div>
                     <div className="text-lg font-bold text-purple-600">{formatVND(preview.totalIncome)}</div>
-                    <div className="text-xs text-gray-400">Lương tháng + tăng ca + các khoản thưởng</div>
+                    <div className="text-xs text-gray-400">Luong th?ng + tang ca + c?c kho?n thu?ng</div>
                   </div>
                   <div className="bg-white rounded-lg p-3 border">
-                    <div className="text-xs text-gray-500">Lương thực nhận</div>
+                    <div className="text-xs text-gray-500">Luong th?c nh?n</div>
                     <div className="text-lg font-bold text-emerald-600">{formatVND(preview.netSalary)}</div>
-                    <div className="text-xs text-gray-400">Tổng thu nhập - ứng trước</div>
+                    <div className="text-xs text-gray-400">T?ng thu nh?p - ?ng tru?c</div>
                   </div>
                 </div>
               </div>
 
               <div className="flex gap-2 pt-2">
                 <button type="submit" disabled={saving} className="btn-success flex-1 disabled:opacity-50">
-                   {saving ? 'Đang lưu...' : 'Lưu bảng lương'}
+                   {saving ? '?ang luu...' : 'Luu b?ng luong'}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-danger flex-1">Hủy</button>
+                <button type="button" onClick={() => setShowForm(false)} className="btn-danger flex-1">H?y</button>
               </div>
             </form>
           </div>
@@ -613,7 +642,7 @@ export default function Payroll() {
       {toast && (
         <div className="toast-stack">
           <div className={`toast-card ${toast.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
-            {toast.type === 'success' ? '✅' : '⚠️'} {toast.message}
+            {toast.type === 'success' ? '?' : '??'} {toast.message}
           </div>
         </div>
       )}

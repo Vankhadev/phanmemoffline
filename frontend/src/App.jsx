@@ -21,7 +21,7 @@ import AccountingDashboard from './pages/AccountingDashboard';
 import TaxReport from './pages/TaxReport';
 import InventoryReport from './pages/InventoryReport';
 import AccountingLogs from './pages/AccountingLogs';
-import MarketplaceManager from './pages/MarketplaceManager';
+import HelpModal from './components/HelpModal';
 import {
   BadgeDollarSign,
   BarChart3,
@@ -33,6 +33,7 @@ import {
   Download,
   FileClock,
   FileText,
+  HelpCircle,
   Home as HomeIcon,
   LogOut,
   Menu,
@@ -44,7 +45,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Sliders,
-  Store,
+
   Truck,
   Users,
   Wallet,
@@ -76,8 +77,6 @@ const ROUTE_ALIASES = {
   '/orders': '/danh-sach-don-hang',
   '/products': '/san-pham',
   '/customers': '/khach-hang',
-  '/marketplaces': '/san-thuong-mai-dien-tu',
-  '/san-tmdt': '/san-thuong-mai-dien-tu',
 };
 
 const HOME_ROUTE = '/';
@@ -111,7 +110,7 @@ function NavMenuIcon({ icon: Icon, className = NAV_ICON_CLASS }) {
 }
 
 function getInitials(name) {
-  if (!name) return '👤';
+  if (!name) return 'KH';
   const parts = name.trim().split(' ');
   if (parts.length === 1) return parts[0][0].toUpperCase();
   return (parts[parts.length - 1][0] || parts[0][0]).toUpperCase();
@@ -152,7 +151,7 @@ const ROUTE_PERMISSIONS = {
   '/bang-luong-nhan-vien': ['payrolls.read'],
   '/bao-cao-theo-don-hang': ['invoices.read'],
   '/bao-cao-theo-san-pham': ['stats.read'],
-  '/san-thuong-mai-dien-tu': ['settings.read', 'invoices.read'],
+
   '/cai-dat': ['settings.read', 'settings.manage', 'store.read', 'store.manage', 'users.read', 'users.manage', 'customers.read', 'customers.manage', 'updates.read', 'updates.manage', 'print_templates.read', 'print_templates.manage'],
 };
 
@@ -351,6 +350,134 @@ function MobileBottomNavigation({ items, currentPath, activePanel, onTogglePanel
   );
 }
 
+function buildScreenGuide(navGroups, currentPath) {
+  const path = normalizeRoutePath(currentPath);
+  const routeGuide = {
+    '/': [
+      'Xem nhanh doanh thu, đơn hàng, khách hàng và các cảnh báo ngay trên trang chủ.',
+      'Chọn đúng menu bên trái để vào màn hình cần thao tác.',
+      'Bấm nút Hướng dẫn ở góc phải để xem cách dùng của màn hình hiện tại.',
+    ],
+    '/tao-don-hang': [
+      'Chọn khách hàng hoặc tạo khách hàng mới nếu chưa có.',
+      'Tìm sản phẩm bằng ô tìm kiếm, rồi bấm Thêm để đưa vào đơn.',
+      'Nhập số lượng, kiểm tra đơn giá, thành tiền và tổng đơn.',
+      'Áp dụng giảm giá, phí vận chuyển hoặc công nợ nếu cần.',
+      'Kiểm tra thanh toán, lưu đơn và in hóa đơn sau khi hoàn tất.',
+    ],
+    '/san-pham': [
+      'Bấm Thêm để tạo sản phẩm mới.',
+      'Điền tên, SKU, danh mục, giá nhập, giá bán và tồn ban đầu.',
+      'Bấm Sửa để cập nhật thông tin sản phẩm khi có thay đổi.',
+      'Dùng Import Excel để thêm nhiều sản phẩm cùng lúc.',
+      'Dùng Export Excel để tải danh sách ra file kiểm tra.',
+    ],
+    '/khach-hang': [
+      'Bấm Thêm để tạo hồ sơ khách hàng mới.',
+      'Nhập tên, số điện thoại, email và địa chỉ nếu có.',
+      'Bấm Sửa để cập nhật thông tin khi khách đổi liên hệ.',
+      'M? l?ch s? mua h?ng d? xem c?c don d? ph?t sinh.',
+    ],
+    '/kho-hang': [
+      'Xem tồn kho theo kho hoặc theo nhóm hàng.',
+      'D?ng t?m ki?m d? ki?m tra nhanh m?, t?n ho?c SKU.',
+      'Theo dõi cảnh báo sắp hết hàng, hết hàng và âm kho.',
+      'Dùng kiểm kê để đối chiếu số liệu thực tế với hệ thống.',
+    ],
+    '/thong-ke': [
+      'Chọn khoảng thời gian cần xem báo cáo.',
+      'Đọc biểu đồ để nắm doanh thu, lợi nhuận và xu hướng bán hàng.',
+      'Mở từng khối thống kê để xem chi tiết khi cần đối soát.',
+    ],
+    '/cai-dat': [
+      'Dùng các tab cài đặt để cấu hình cửa hàng, người dùng và hệ thống.',
+      'Kiểm tra mẫu in, backup và restore trước khi phát hành.',
+      'Lưu thay đổi sau khi chỉnh để hệ thống áp dụng ngay.',
+    ],
+    '/so-quy': [
+      'Chọn loại thu hoặc chi trước khi tạo giao dịch mới.',
+      'Nhập số tiền, nội dung và ngày phát sinh giao dịch.',
+      'Kiểm tra số dư sau khi lưu để tránh lệch quỹ.',
+      'Dùng bộ lọc để xem lại lịch sử theo khoảng ngày mong muốn.',
+    ],
+    '/nhap-hang': [
+      'Ch?n nh? cung c?p v? m? phi?u nh?p n?u c?n.',
+      'Thêm từng sản phẩm vào phiếu, nhập số lượng và giá nhập.',
+      'Kiểm tra tổng tiền, chiết khấu và trạng thái thanh toán.',
+      'Bấm lưu để cập nhật tồn kho hoặc lưu tạm khi chưa hoàn tất.',
+    ],
+    '/nha-cung-cap': [
+      'Bấm Thêm để tạo nhà cung cấp mới.',
+      'Điền tên, điện thoại, email, thuế và địa chỉ liên hệ.',
+      'Bấm Sửa để cập nhật thông tin đối tác khi có thay đổi.',
+      'Kiểm tra công nợ và lịch sử nhập hàng của nhà cung cấp.',
+    ],
+    '/danh-sach-don-hang': [
+      'D?ng b? l?c d? t?m don theo m?, kh?ch h?ng, tr?ng th?i ho?c th?i gian.',
+      'Bấm Xem để mở chi tiết từng đơn hàng.',
+      'Bấm In để in hóa đơn hoặc bấm PDF để lưu file.',
+      'Kiểm tra trạng thái đơn trước khi thực hiện thao tác tiếp theo.',
+    ],
+    '/ke-toan': [
+      'Chọn khoảng ngày để xem tổng doanh thu, số hóa đơn, giá vốn và lợi nhuận.',
+      'Bấm vào thẻ báo cáo để mở báo cáo thuế, tồn kho hoặc nhật ký.',
+      'So sánh số liệu giữa các kỳ để phát hiện chênh lệch sớm.',
+      'Mở từng báo cáo chi tiết để đối chiếu theo hóa đơn, sản phẩm hoặc giao dịch.',
+    ],
+    '/ke-toan/bao-cao-thue': [
+      'Chọn tháng hoặc khoảng thời gian cần lập báo cáo thuế.',
+      'Bấm Xem báo cáo để hệ thống nạp dữ liệu đầu ra và đầu vào.',
+      'Kiểm tra số thuế phải nộp trước khi chốt kỳ.',
+      'Lưu snapshot nếu cần giữ lại trạng thái báo cáo hiện tại.',
+    ],
+    '/ke-toan/bao-cao-ton-kho': [
+      'Chọn kỳ báo cáo và ngưỡng cảnh báo tồn kho.',
+      'Kiểm tra các mặt hàng sắp hết, hết hàng hoặc âm kho.',
+      'Dùng sắp xếp và lọc để tập trung vào nhóm cần xử lý trước.',
+      'Đối chiếu giá vốn, số lượng và giá trị tồn kho theo từng mặt hàng.',
+    ],
+    '/ke-toan/nhat-ky': [
+      'Chọn khoảng ngày để tra cứu nhật ký thay đổi.',
+      'Nhập action hoặc từ khóa nếu muốn lọc sâu hơn.',
+      'Bấm Xem ở từng dòng để mở dữ liệu trước và sau khi thay đổi.',
+      'Dùng phân trang để xem các log cũ hơn mà không cần tải lại trang.',
+    ],
+    '/bang-luong-nhan-vien': [
+      'Chọn tháng cần xem bảng lương.',
+      'Kiểm tra doanh thu, hoa hồng, thưởng và trạng thái chi trả.',
+      'C?p nh?t tr?ng th?i d? thanh to?n khi ho?n t?t chi tr?.',
+      'Xuất file nếu cần lưu hoặc gửi cho kế toán.',
+    ],
+    '/bao-cao-theo-don-hang': [
+      'Chọn khách hàng và khoảng thời gian cần xem.',
+      'Bấm tạo báo cáo để hệ thống thống kê toàn bộ đơn của khách đó.',
+      'Xem tổng doanh thu, số đơn, tổng sản phẩm và đơn gần nhất.',
+      'Bấm Xem chi tiết hoặc in/PDF khi cần đối chiếu.',
+    ],
+    '/bao-cao-theo-san-pham': [
+      'Chọn kỳ báo cáo và trạng thái đơn hàng cần tính.',
+      'Bấm Tạo báo cáo để thống kê doanh thu theo sản phẩm.',
+      'Kiểm tra số lượng bán, tồn kho và biến động theo từng mặt hàng.',
+      'Xuất Excel nếu cần gửi báo cáo cho quản lý.',
+    ],
+  };
+  const matchedRoute = Object.keys(routeGuide).find(route => path === route || path.startsWith(`${route}/`)) || path;
+  const readableRouteName = matchedRoute === HOME_ROUTE
+    ? 'Trang chủ'
+    : matchedRoute
+      .replace(/^\//, '')
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, char => char.toUpperCase());
+
+  return {
+    title: `Hướng dẫn ${readableRouteName}`,
+    steps: routeGuide[matchedRoute] || [
+      'Bấm nút Hướng dẫn ở góc phải để xem các bước của màn hình này.',
+      'Dùng đúng nút thao tác trên màn hình để hoàn tất công việc.',
+    ],
+  };
+}
+
 function MobileActionSheet({ activePanel, moreGroups, user, currentPath, onClose, onLogout }) {
   if (!activePanel) return null;
 
@@ -458,7 +585,7 @@ function AppLayout({
     don_hang: location.pathname.startsWith('/tao-don-hang') || location.pathname.startsWith('/danh-sach-don-hang'),
     danh_muc: location.pathname.startsWith('/san-pham') || location.pathname.startsWith('/kho-hang') || location.pathname.startsWith('/khach-hang') || location.pathname.startsWith('/nhap-hang') || location.pathname.startsWith('/nha-cung-cap'),
     ke_toan: location.pathname.startsWith('/ke-toan'),
-    quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/san-thuong-mai-dien-tu') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat'),
+    quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat'),
   }));
   const [updateToast, setUpdateToast] = useState(null);
   const [updateToastVisible, setUpdateToastVisible] = useState(false);
@@ -466,6 +593,7 @@ function AppLayout({
   const [compactSidebarVisible, setCompactSidebarVisible] = useState(() => isCompactSidebarViewport());
   const [compactSidebarAnimating, setCompactSidebarAnimating] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null);
+  const [showScreenGuide, setShowScreenGuide] = useState(false);
   const user = authState.user;
   const permissions = authState.permissions;
   const canAccess = useCallback((route) => canAccessRoute(route, user, permissions), [permissions, user]);
@@ -534,7 +662,7 @@ function AppLayout({
         don_hang: ['/tao-don-hang', '/danh-sach-don-hang'],
         danh_muc: ['/san-pham', '/kho-hang', '/khach-hang', '/nhap-hang', '/nha-cung-cap'],
         ke_toan: ['/ke-toan'],
-        quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/san-thuong-mai-dien-tu', '/bang-luong-nhan-vien', '/cai-dat'],
+        quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/bang-luong-nhan-vien', '/cai-dat'],
       };
 
       Object.entries(autoOpenMatchers).forEach(([key, routes]) => {
@@ -564,7 +692,7 @@ function AppLayout({
       { to: HOME_ROUTE, label: 'Trang chủ', icon: HomeIcon },
       {
         key: 'don_hang',
-        label: 'Đơn hàng',
+        label: 'Đơn hàng', 
         icon: ClipboardList,
         items: [
           { to: '/tao-don-hang', label: 'Tạo đơn hàng', icon: PlusCircle },
@@ -585,7 +713,7 @@ function AppLayout({
       },
       {
         key: 'ke_toan',
-        label: 'Kế toán',
+        label: 'Kế toán', 
         icon: Scale,
         items: [
           { to: '/ke-toan', label: 'Doanh thu/lợi nhuận', icon: BarChart3 },
@@ -596,21 +724,20 @@ function AppLayout({
       },
       {
         key: 'quan_ly',
-        label: 'Quản lý',
+        label: 'Quản lý', 
         icon: Sliders,
         items: [
           { to: '/thong-ke', label: 'Thống kê', icon: BarChart3 },
           { to: '/so-quy', label: 'Sổ quỹ', icon: Wallet },
           { to: '/bao-cao-theo-don-hang', label: 'Báo cáo theo đơn hàng', icon: FileText },
           { to: '/bao-cao-theo-san-pham', label: 'Báo cáo sản phẩm', icon: Boxes },
-          { to: '/san-thuong-mai-dien-tu', label: 'Sàn TMĐT', icon: Store },
           { to: '/bang-luong-nhan-vien', label: 'Bảng lương nhân viên', icon: BadgeDollarSign },
           { to: '/cai-dat', label: 'Cài đặt', icon: SettingsIcon },
         ],
       },
     ];
 
-    return groups.filter(group => !group.items || group.items.some(item => canAccess(item.to)) || canAccess(group.to));
+    return groups.filter(group => !group.items || group.items.some(item => canAccess(item.to)) || (group.to && canAccess(group.to)));
   }, [canAccess]);
 
   const mobileMoreGroups = useMemo(() => {
@@ -624,7 +751,7 @@ function AppLayout({
         if (!group.to || MOBILE_PINNED_ROUTES.has(group.to) || !canAccess(group.to)) return null;
         return {
           key: group.key || group.to,
-          label: 'Chức năng',
+          label: 'Chức năng', 
           icon: group.icon,
           items: [group],
         };
@@ -641,6 +768,8 @@ function AppLayout({
     ].filter(item => item.type !== 'route' || canAccess(item.to));
   }, [canAccess, mobileMoreGroups.length]);
 
+  const screenGuide = useMemo(() => buildScreenGuide(navGroups, location.pathname), [location.pathname, navGroups]);
+
   return (
     <div className="mobile-app-shell h-screen overflow-hidden bg-gray-100">
       <div className="flex h-full min-h-0">
@@ -656,6 +785,7 @@ function AppLayout({
               const accessibleItems = group.items?.filter(item => canAccess(item.to)) || [];
 
               if (accessibleItems.length === 0) {
+                if (!group.to) return null;
                 return (
                   <NavLink
                     key={group.key || group.to}
@@ -718,6 +848,15 @@ function AppLayout({
           </nav>
         </aside>
         <div className="app-main-scroll flex-1 min-h-0 min-w-0 overflow-x-auto overflow-y-auto p-3 sm:p-4">
+          <div className="mb-3 flex items-center justify-end no-print">
+            <button
+              type="button"
+              onClick={() => setShowScreenGuide(true)}
+              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+            >
+              <HelpCircle size={16} /> Hướng dẫn
+            </button>
+          </div>
           <Routes>
             <Route path={HOME_ROUTE} element={<Home user={user} store={store} />} />
             <Route path="/tao-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/tao-don-hang"><CreateOrder user={user} store={store} /></ProtectedRoute>} />
@@ -737,7 +876,7 @@ function AppLayout({
             <Route path="/bang-luong-nhan-vien" element={<ProtectedRoute user={user} permissions={permissions} path="/bang-luong-nhan-vien"><Payroll /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><CustomerOrderReport /></ProtectedRoute>} />
             <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ProductReport /></ProtectedRoute>} />
-            <Route path="/san-thuong-mai-dien-tu" element={<ProtectedRoute user={user} permissions={permissions} path="/san-thuong-mai-dien-tu"><MarketplaceManager /></ProtectedRoute>} />
+
             <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><Settings store={store} onStoreChange={onStoreChange} permissions={permissions} user={user} /></ProtectedRoute>} />
             <Route path={LOGIN_REGISTER_ROUTE} element={<Navigate to={firstAccessibleRoute(user, permissions)} replace />} />
             {Object.entries(ROUTE_ALIASES).map(([from, to]) => (
@@ -761,6 +900,23 @@ function AppLayout({
         activePanel={mobilePanel}
         onTogglePanel={toggleMobilePanel}
       />
+      {showScreenGuide && (
+        <HelpModal
+          show={showScreenGuide}
+          title={screenGuide.title}
+          onClose={() => setShowScreenGuide(false)}
+          content={
+            <div className="space-y-4 text-sm text-gray-700">
+              <div>
+                <h3 className="mb-2 font-bold text-gray-800">Các bước chính</h3>
+                <ol className="list-decimal space-y-1 pl-5">
+                  {screenGuide.steps.map(step => <li key={step}>{step}</li>)}
+                </ol>
+              </div>
+            </div>
+          }
+        />
+      )}
       {upgradeToast && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-200">
@@ -895,7 +1051,7 @@ function DesktopApp() {
         let payload = await authApi.profile();
 
         if (!mounted) return;
-        // Profile đã trả về đầy đủ user + permissions + syncVersions
+        // Profile d? tr? v? d?y d? user + permissions + syncVersions
         await applyServerPayload(payload, { persistMode: 'snapshot', redirect: true, sync: true });
         setBootstrapStatus(null);
       } catch (err) {
@@ -1077,7 +1233,7 @@ function DesktopApp() {
       try {
         await authApi.logout();
       } catch (_) {
-        // Nếu token đã hết hạn, apiClient đã cleanup và phát sự kiện 401.
+        // N?u token d? h?t h?n, apiClient d? cleanup v? ph?t s? ki?n 401.
       }
     }
     clearAuthSession({ clearVolatile: true, includePending: true });
@@ -1086,7 +1242,7 @@ function DesktopApp() {
   }, [loadBootstrapStatus, resetAuthState]);
 
   if (initializing) {
-    return <FullScreenLoading message="Đang Loading Lại Trang ..." />;
+    return <FullScreenLoading message="Đang tải lại trang ..." />;
   }
 
   return (
@@ -1117,3 +1273,4 @@ function DesktopApp() {
 export default function App() {
   return <DesktopApp />;
 }
+

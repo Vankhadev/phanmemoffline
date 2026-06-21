@@ -426,14 +426,17 @@ function serializePrintTemplate(row) {
 function serializePrintTemplateForInvoice(row) {
   const item = serializePrintTemplate(row);
   if (!item) return null;
+  const activeDocument = item.editor_document?.draft || item.editor_document?.published || null;
   const publishedDocument = {
     schema_version: 2,
     revision: item.revision,
     has_draft: false,
     active: 'published',
-    published: item.editor_document.published,
+    published: activeDocument,
     draft: null,
   };
+  const activeLayout = activeDocument?.layout_json || item.layout_json;
+  const activeSettings = activeDocument?.settings_json || item.settings_json;
   return {
     id: item.id,
     code: item.code,
@@ -448,12 +451,12 @@ function serializePrintTemplateForInvoice(row) {
     css_style: item.css_style,
     template_schema_version: item.template_schema_version,
     schema_version: item.template_schema_version,
-    layout_json: item.layout_json,
-    settings_json: item.settings_json,
-    layout_v2: item.layout_v2,
-    settings_v2: item.settings_v2,
+    layout_json: activeLayout,
+    settings_json: activeSettings,
+    layout_v2: activeLayout,
+    settings_v2: activeSettings,
     editor_document: publishedDocument,
-    settings: Object.keys(item.settings_json || {}).length > 0 ? item.settings_json : item.layout_json,
+    settings: Object.keys(activeSettings || {}).length > 0 ? activeSettings : activeLayout,
     header_logo: item.header_logo,
     logo_url: item.logo_url,
     logo_url_resolved: item.logo_url || item.header_logo,

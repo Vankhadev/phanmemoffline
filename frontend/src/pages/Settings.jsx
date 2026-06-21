@@ -47,11 +47,11 @@ const INITIAL_EMP_FORM = Object.freeze({
 });
 
 const USER_ROLE_OPTIONS = Object.freeze([
-  { value: 'admin', label: 'Admin', description: 'Toàn quyền hệ thống và kế toán.' },
-  { value: 'accountant', label: 'Kế toán', description: 'Đầy đủ module kế toán, thuế, tồn kho, công nợ và nhật ký.' },
-  { value: 'cashier', label: 'Thu ngân', description: 'Chỉ xem doanh thu trong module kế toán.' },
-  { value: 'employee', label: 'Nhân viên', description: 'Không có quyền module kế toán.' },
-  { value: 'user', label: 'User cũ', description: 'Vai trò legacy được giữ tương thích.' },
+  { value: 'admin', label: 'Admin', description: 'To?n quy?n h? th?ng v? k? to?n.' },
+  { value: 'accountant', label: 'K? to?n', description: '??y d? module k? to?n, thu?, t?n kho, c?ng n? v? nh?t k?.' },
+  { value: 'cashier', label: 'Thu ng?n', description: 'Ch? xem doanh thu trong module k? to?n.' },
+  { value: 'employee', label: 'Nh?n vi?n', description: 'Kh?ng c? quy?n module k? to?n.' },
+  { value: 'user', label: 'User cu', description: 'Vai tr? legacy du?c gi? tuong th?ch.' },
 ]);
 
 const INITIAL_TYPE_FORM = Object.freeze({
@@ -86,8 +86,8 @@ const INITIAL_PRINT_TEMPLATE_FORM = Object.freeze({
   tableBorderWidthMm: DEFAULT_INVOICE_TEMPLATE_SETTINGS.tableBorderWidthMm,
 });
 
-const NEGATIVE_STOCK_FEATURE_NAME = 'Xuất âm tồn kho';
-const NEGATIVE_STOCK_FEATURE_DESCRIPTION = 'Admin có thể chỉnh số lượng tồn âm tối đa trực tiếp từ giao diện.';
+const NEGATIVE_STOCK_FEATURE_NAME = 'Xu?t ?m t?n kho';
+const NEGATIVE_STOCK_FEATURE_DESCRIPTION = 'Admin c? th? ch?nh s? lu?ng t?n ?m t?i da tr?c ti?p t? giao di?n.';
 const RELEASE_VERSION = '1.3.8';
 const RELEASE_DOWNLOAD_BASE_URL = 'https://github.com/Vankhadev/phanmemoffline/releases/latest/download/';
 const WINDOWS_INSTALLERS = Object.freeze([
@@ -95,19 +95,19 @@ const WINDOWS_INSTALLERS = Object.freeze([
     arch: 'x64',
     label: 'Windows 64-bit (x64)',
     fileName: `banhangoffline-setup-v${RELEASE_VERSION}-x64.exe`,
-    recommendedFor: 'Hầu hết máy tính Windows 10/11 hiện nay.',
+    recommendedFor: 'H?u h?t m?y t?nh Windows 10/11 hi?n nay.',
   },
   {
     arch: 'ia32',
     label: 'Windows 32-bit (ia32)',
     fileName: `banhangoffline-setup-v${RELEASE_VERSION}-ia32.exe`,
-    recommendedFor: 'Máy Windows 32-bit hoặc máy báo không chạy được bản x64.',
+    recommendedFor: 'M?y Windows 32-bit ho?c m?y b?o kh?ng ch?y du?c b?n x64.',
   },
 ]);
 
 function formatBytes(value) {
   const bytes = Number(value) || 0;
-  if (!bytes) return 'Không rõ dung lượng';
+  if (!bytes) return 'Kh?ng r? dung lu?ng';
   const units = ['B', 'KB', 'MB', 'GB'];
   let size = bytes;
   let unitIndex = 0;
@@ -119,9 +119,9 @@ function formatBytes(value) {
 }
 
 function formatDateTime(value) {
-  if (!value) return '—';
+  if (!value) return '?';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return '?';
   return date.toLocaleString('vi-VN', {
     day: '2-digit',
     month: '2-digit',
@@ -150,80 +150,80 @@ function getRecommendedInstaller(runtimeArch) {
 
 function getUpdateStatusLabel(status) {
   const labels = {
-    idle: 'Sẵn sàng',
-    checking: 'Đang kiểm tra...',
-    'no-update': 'Không có bản mới',
-    'update-available': 'Có bản cập nhật',
-    downloading: 'Đang tải cập nhật...',
-    downloaded: 'Đã tải xong',
-    installing: 'Đang cập nhật...',
-    cancelled: 'Đã hủy tải',
-    error: 'Có lỗi',
+    idle: 'S?n s?ng',
+    checking: '?ang ki?m tra...',
+    'no-update': 'Kh?ng c? b?n m?i',
+    'update-available': 'C? b?n c?p nh?t',
+    downloading: '?ang t?i c?p nh?t...',
+    downloaded: '?? t?i xong',
+    installing: '?ang c?p nh?t...',
+    cancelled: '?? h?y t?i',
+    error: 'C? l?i',
   };
-  return labels[status] || 'Chưa kiểm tra';
+  return labels[status] || 'Chua ki?m tra';
 }
 
 function getUpdateErrorMessage(error) {
   if (!error) return '';
   const messages = {
-    MANIFEST_URL_MISSING: 'Chưa xác định được URL cập nhật. Mặc định ứng dụng dùng GitHub Releases latest.yml.',
-    CONFIG_INVALID: 'File cấu hình cập nhật không hợp lệ.',
-    URL_INVALID: 'URL cập nhật hoặc installer không hợp lệ.',
-    DEV_UPDATER_DISABLED: 'Auto-update bị tắt khi chạy development/unpacked. Hãy test trên bản đã cài bằng NSIS hoặc bật KHA_ENABLE_ELECTRON_UPDATER=1 có chủ đích.',
-    WINDOW_NOT_READY: 'Chỉ kiểm tra cập nhật sau khi cửa sổ chính đã sẵn sàng.',
-    ELECTRON_UPDATER_ERROR: 'electron-updater báo lỗi trong quá trình kiểm tra/tải cập nhật.',
-    CHECK_FAILED: 'Kiểm tra cập nhật thất bại.',
-    UPDATE_GITHUB_ATOM_FEED_NOT_AVAILABLE: 'Endpoint GitHub releases.atom không phù hợp hoặc không khả dụng. Bản mới sẽ đọc trực tiếp latest.yml public thay vì phụ thuộc Atom feed.',
-    UPDATE_REPOSITORY_NOT_ACCESSIBLE: 'Không truy cập được GitHub Releases/latest. Repo có thể private, owner/repo sai, URL feed sai hoặc chưa có release latest public.',
-    UPDATE_FEED_UNAUTHORIZED_OR_PRIVATE: 'GitHub Release/feed yêu cầu xác thực, token sai/thiếu quyền hoặc repo đang private. Client Electron không được nhúng token nên không thể tự cập nhật từ asset private.',
-    UPDATE_FEED_METADATA_NOT_FOUND: 'Không tìm thấy latest.yml trong GitHub Release latest hoặc release latest không public.',
-    UPDATE_METADATA_INVALID: 'Metadata cập nhật trên GitHub Release không hợp lệ hoặc rỗng.',
-    UPDATE_RUNTIME_ARCH_UNSUPPORTED: 'Máy Windows hiện tại chưa có bộ cài phù hợp. Hãy tải đúng bản x64 hoặc ia32 từ GitHub Release.',
-    UPDATE_METADATA_MISSING_RUNTIME_INSTALLER: 'GitHub Release chưa có installer riêng cho kiến trúc máy này. Cần upload asset có hậu tố -x64.exe hoặc -ia32.exe và cập nhật latest.yml.',
-    UPDATE_METADATA_SELECTED_INSTALLER_MISMATCH: 'Metadata cập nhật đang chọn installer không khớp kiến trúc máy. Không tải để tránh lỗi Windows không chạy được ứng dụng.',
-    UPDATE_ASSET_NOT_ACCESSIBLE_OR_PRIVATE: 'Không tải được installer/blockmap. Asset có thể thiếu, tên không khớp latest.yml hoặc repo private trả 404.',
-    UPDATE_RELEASE_NOT_PUBLISHED: 'Chưa có production release đã publish để electron-updater chọn làm latest.',
-    UPDATE_FEED_RATE_LIMITED: 'GitHub đang giới hạn truy cập feed cập nhật, vui lòng thử lại sau.',
-    UPDATE_NETWORK_ERROR: 'Không kết nối được tới GitHub Releases. Vui lòng kiểm tra Internet, DNS, proxy/firewall.',
-    NETWORK_ERROR: 'Không thể kết nối tới máy chủ cập nhật. Vui lòng kiểm tra mạng.',
-    NETWORK_TIMEOUT: 'Kết nối tới máy chủ cập nhật quá thời gian chờ.',
-    MANIFEST_HTTP_ERROR: 'Máy chủ không trả metadata cập nhật hợp lệ.',
-    MANIFEST_INVALID_JSON: 'Metadata cập nhật không phải JSON/YAML hợp lệ.',
-    MANIFEST_INVALID: 'Metadata cập nhật thiếu hoặc sai cấu trúc.',
-    MANIFEST_INVALID_VERSION: 'Metadata thiếu version SemVer hợp lệ.',
-    MANIFEST_INVALID_URL: 'Metadata thiếu URL gói cập nhật hợp lệ.',
-    MANIFEST_INVALID_SHA256: 'Metadata thiếu checksum hợp lệ.',
-    MANIFEST_INVALID_RELEASE_DATE: 'Metadata thiếu releaseDate.',
-    UPDATE_NOT_AVAILABLE: 'Không có bản cập nhật mới để tải.',
-    DOWNLOAD_IN_PROGRESS: 'Một lượt tải cập nhật đang chạy.',
-    DOWNLOAD_HTTP_ERROR: 'Không tải được gói cập nhật từ máy chủ.',
-    DOWNLOAD_FAILED: 'Tải gói cập nhật thất bại.',
-    DOWNLOAD_CANCELLED: 'Người dùng đã hủy tải cập nhật.',
-    CHECKSUM_MISMATCH: 'Checksum không khớp. Gói cập nhật đã bị xóa và sẽ không được chạy.',
-    INSTALLER_NOT_DOWNLOADED: 'Chưa tải gói cập nhật.',
-    UPDATE_NOT_DOWNLOADED: 'Chưa có bản cập nhật đã tải xong để cài đặt.',
-    INSTALLER_NOT_FOUND: 'Không tìm thấy installer đã tải. Vui lòng tải lại.',
-    INSTALL_IN_PROGRESS: 'Ứng dụng đang chuẩn bị cài đặt bản cập nhật.',
-    SPAWN_INSTALLER_FAILED: 'Không thể chạy installer cập nhật.',
+    MANIFEST_URL_MISSING: 'Chua x?c d?nh du?c URL c?p nh?t. M?c d?nh ?ng d?ng d?ng GitHub Releases latest.yml.',
+    CONFIG_INVALID: 'File c?u h?nh c?p nh?t kh?ng h?p l?.',
+    URL_INVALID: 'URL c?p nh?t ho?c installer kh?ng h?p l?.',
+    DEV_UPDATER_DISABLED: 'Auto-update b? t?t khi ch?y development/unpacked. H?y test tr?n b?n d? c?i b?ng NSIS ho?c b?t KHA_ENABLE_ELECTRON_UPDATER=1 c? ch? d?ch.',
+    WINDOW_NOT_READY: 'Ch? ki?m tra c?p nh?t sau khi c?a s? ch?nh d? s?n s?ng.',
+    ELECTRON_UPDATER_ERROR: 'electron-updater b?o l?i trong qu? tr?nh ki?m tra/t?i c?p nh?t.',
+    CHECK_FAILED: 'Ki?m tra c?p nh?t th?t b?i.',
+    UPDATE_GITHUB_ATOM_FEED_NOT_AVAILABLE: 'Endpoint GitHub releases.atom kh?ng ph? h?p ho?c kh?ng kh? d?ng. B?n m?i s? d?c tr?c ti?p latest.yml public thay v? ph? thu?c Atom feed.',
+    UPDATE_REPOSITORY_NOT_ACCESSIBLE: 'Kh?ng truy c?p du?c GitHub Releases/latest. Repo c? th? private, owner/repo sai, URL feed sai ho?c chua c? release latest public.',
+    UPDATE_FEED_UNAUTHORIZED_OR_PRIVATE: 'GitHub Release/feed y?u c?u x?c th?c, token sai/thi?u quy?n ho?c repo dang private. Client Electron kh?ng du?c nh?ng token n?n kh?ng th? t? c?p nh?t t? asset private.',
+    UPDATE_FEED_METADATA_NOT_FOUND: 'Kh?ng t?m th?y latest.yml trong GitHub Release latest ho?c release latest kh?ng public.',
+    UPDATE_METADATA_INVALID: 'Metadata c?p nh?t tr?n GitHub Release kh?ng h?p l? ho?c r?ng.',
+    UPDATE_RUNTIME_ARCH_UNSUPPORTED: 'M?y Windows hi?n t?i chua c? b? c?i ph? h?p. H?y t?i d?ng b?n x64 ho?c ia32 t? GitHub Release.',
+    UPDATE_METADATA_MISSING_RUNTIME_INSTALLER: 'GitHub Release chua c? installer ri?ng cho ki?n tr?c m?y n?y. C?n upload asset c? h?u t? -x64.exe ho?c -ia32.exe v? c?p nh?t latest.yml.',
+    UPDATE_METADATA_SELECTED_INSTALLER_MISMATCH: 'Metadata c?p nh?t dang ch?n installer kh?ng kh?p ki?n tr?c m?y. Kh?ng t?i d? tr?nh l?i Windows kh?ng ch?y du?c ?ng d?ng.',
+    UPDATE_ASSET_NOT_ACCESSIBLE_OR_PRIVATE: 'Kh?ng t?i du?c installer/blockmap. Asset c? th? thi?u, t?n kh?ng kh?p latest.yml ho?c repo private tr? 404.',
+    UPDATE_RELEASE_NOT_PUBLISHED: 'Chua c? production release d? publish d? electron-updater ch?n l?m latest.',
+    UPDATE_FEED_RATE_LIMITED: 'GitHub dang gi?i h?n truy c?p feed c?p nh?t, vui l?ng th? l?i sau.',
+    UPDATE_NETWORK_ERROR: 'Kh?ng k?t n?i du?c t?i GitHub Releases. Vui l?ng ki?m tra Internet, DNS, proxy/firewall.',
+    NETWORK_ERROR: 'Kh?ng th? k?t n?i t?i m?y ch? c?p nh?t. Vui l?ng ki?m tra m?ng.',
+    NETWORK_TIMEOUT: 'K?t n?i t?i m?y ch? c?p nh?t qu? th?i gian ch?.',
+    MANIFEST_HTTP_ERROR: 'M?y ch? kh?ng tr? metadata c?p nh?t h?p l?.',
+    MANIFEST_INVALID_JSON: 'Metadata c?p nh?t kh?ng ph?i JSON/YAML h?p l?.',
+    MANIFEST_INVALID: 'Metadata c?p nh?t thi?u ho?c sai c?u tr?c.',
+    MANIFEST_INVALID_VERSION: 'Metadata thi?u version SemVer h?p l?.',
+    MANIFEST_INVALID_URL: 'Metadata thi?u URL g?i c?p nh?t h?p l?.',
+    MANIFEST_INVALID_SHA256: 'Metadata thi?u checksum h?p l?.',
+    MANIFEST_INVALID_RELEASE_DATE: 'Metadata thi?u releaseDate.',
+    UPDATE_NOT_AVAILABLE: 'Kh?ng c? b?n c?p nh?t m?i d? t?i.',
+    DOWNLOAD_IN_PROGRESS: 'M?t lu?t t?i c?p nh?t dang ch?y.',
+    DOWNLOAD_HTTP_ERROR: 'Kh?ng t?i du?c g?i c?p nh?t t? m?y ch?.',
+    DOWNLOAD_FAILED: 'T?i g?i c?p nh?t th?t b?i.',
+    DOWNLOAD_CANCELLED: 'Ngu?i d?ng d? h?y t?i c?p nh?t.',
+    CHECKSUM_MISMATCH: 'Checksum kh?ng kh?p. G?i c?p nh?t d? b? x?a v? s? kh?ng du?c ch?y.',
+    INSTALLER_NOT_DOWNLOADED: 'Chua t?i g?i c?p nh?t.',
+    UPDATE_NOT_DOWNLOADED: 'Chua c? b?n c?p nh?t d? t?i xong d? c?i d?t.',
+    INSTALLER_NOT_FOUND: 'Kh?ng t?m th?y installer d? t?i. Vui l?ng t?i l?i.',
+    INSTALL_IN_PROGRESS: '?ng d?ng dang chu?n b? c?i d?t b?n c?p nh?t.',
+    SPAWN_INSTALLER_FAILED: 'Kh?ng th? ch?y installer c?p nh?t.',
   };
-  return messages[error.code] || error.message || 'Đã xảy ra lỗi cập nhật.';
+  return messages[error.code] || error.message || '?? x?y ra l?i c?p nh?t.';
 }
 
 function getManifestSourceLabel(updateState) {
-  if (!updateState) return 'Chưa nạp cấu hình cập nhật';
+  if (!updateState) return 'Chua n?p c?u h?nh c?p nh?t';
   if (updateState.updateEngine === 'electron-updater') {
     if (updateState.feedProvider === 'generic') {
       return updateState.feedSource === 'package.build.publish.generic'
-        ? 'GitHub Release latest.yml trực tiếp (package.json build.publish generic)'
-        : 'GitHub Release latest.yml trực tiếp';
+        ? 'GitHub Release latest.yml tr?c ti?p (package.json build.publish generic)'
+        : 'GitHub Release latest.yml tr?c ti?p';
     }
     return updateState.feedSource === 'package.build.publish'
       ? 'GitHub Releases/electron-updater (package.json build.publish)'
       : 'GitHub Releases/electron-updater';
   }
-  if (updateState.manifestUrlDefault) return 'GitHub Release mặc định';
-  if (updateState.manifestUrlConfigured) return `Override nội bộ: ${updateState.manifestSource || 'env/config file'}`;
-  return updateState.manifestSource || 'GitHub Release mặc định';
+  if (updateState.manifestUrlDefault) return 'GitHub Release m?c d?nh';
+  if (updateState.manifestUrlConfigured) return `Override n?i b?: ${updateState.manifestSource || 'env/config file'}`;
+  return updateState.manifestSource || 'GitHub Release m?c d?nh';
 }
 
 function formatUpdateErrorDetails(details) {
@@ -449,10 +449,10 @@ function normalizeNegativeStockLimitInput(value) {
 
 function getNegativeStockLimitInputError(value) {
   const text = String(value ?? '').trim();
-  if (!text) return 'Vui lòng nhập số lượng âm tối đa cho phép.';
-  if (!/^\d+$/.test(text)) return 'Số lượng âm tối đa phải là số nguyên không âm.';
+  if (!text) return 'Vui l?ng nh?p s? lu?ng ?m t?i da cho ph?p.';
+  if (!/^\d+$/.test(text)) return 'S? lu?ng ?m t?i da ph?i l? s? nguy?n kh?ng ?m.';
   const number = Number(text);
-  if (!Number.isInteger(number) || number < 0) return 'Số lượng âm tối đa phải là số nguyên không âm.';
+  if (!Number.isInteger(number) || number < 0) return 'S? lu?ng ?m t?i da ph?i l? s? nguy?n kh?ng ?m.';
   return '';
 }
 
@@ -599,7 +599,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const [restoringBackup, setRestoringBackup] = useState('');
 
   const getErrorMessage = useCallback(
-    (error, fallback = 'Thao tác thất bại.') => getApiErrorMessage(error?.data || error, error?.message || fallback),
+    (error, fallback = 'Thao t?c th?t b?i.') => getApiErrorMessage(error?.data || error, error?.message || fallback),
     [],
   );
 
@@ -635,7 +635,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       if (mountedRef.current) setNegativeStockNotice(null);
       return applyNegativeStockSettings(data);
     } catch (error) {
-      const message = getErrorMessage(error, 'Không thể tải cấu hình xuất âm tồn kho từ API /api/settings/negative-stock.');
+      const message = getErrorMessage(error, 'Kh?ng th? t?i c?u h?nh xu?t ?m t?n kho t? API /api/settings/negative-stock.');
       const fallbackSettings = normalizeNegativeStockSettings();
       if (mountedRef.current) {
         setNegativeStockSettings(fallbackSettings);
@@ -673,7 +673,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   }, [loadNegativeStockSettings]);
 
   const loadStore = useCallback(async () => {
-    const data = await apiJson('/store', {}, 'Không thể tải thông tin cửa hàng.');
+    const data = await apiJson('/store', {}, 'Kh?ng th? t?i th?ng tin c?a h?ng.');
     const nextStore = normalizeStorePayload(data);
     if (!mountedRef.current) return nextStore;
     setStoreForm(nextStore);
@@ -715,7 +715,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       }
       return items;
     } catch (error) {
-      const message = getErrorMessage(error, 'API mẫu in hóa đơn đang ở trạng thái an toàn; chưa tải được danh sách mẫu in từ /api/print-templates.');
+      const message = getErrorMessage(error, 'API m?u in h?a don dang ? tr?ng th?i an to?n; chua t?i du?c danh s?ch m?u in t? /api/print-templates.');
       if (mountedRef.current) {
         setPrintTemplates([]);
         setTimedNotice('print-templates', setPrintTemplatesNotice, { tone: 'info', message });
@@ -740,7 +740,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       setBackupNotice(null);
       return statusData;
     } catch (error) {
-      const message = getErrorMessage(error, 'Không thể tải trạng thái backup.');
+      const message = getErrorMessage(error, 'Kh?ng th? t?i tr?ng th?i backup.');
       if (mountedRef.current) setBackupNotice({ tone: 'error', message });
       return null;
     } finally {
@@ -759,11 +759,11 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     const initialize = async () => {
       if (mountedRef.current) setInitialLoading(true);
       const sections = [
-        ...(canViewStore ? [{ label: 'cửa hàng', promise: loadStore() }] : []),
-        ...(canViewEmployees ? [{ label: 'nhân viên', promise: loadEmployees() }] : []),
-        ...(canViewCustomerTypes ? [{ label: 'loại khách hàng', promise: loadCustomerTypes() }] : []),
-        ...(canViewNegativeStock ? [{ label: 'xuất âm tồn kho', promise: loadNegativeStockSettings() }] : []),
-        ...(canViewPrintTemplates ? [{ label: 'mẫu in hóa đơn', promise: loadPrintTemplates() }] : []),
+        ...(canViewStore ? [{ label: 'c?a h?ng', promise: loadStore() }] : []),
+        ...(canViewEmployees ? [{ label: 'nh?n vi?n', promise: loadEmployees() }] : []),
+        ...(canViewCustomerTypes ? [{ label: 'lo?i kh?ch h?ng', promise: loadCustomerTypes() }] : []),
+        ...(canViewNegativeStock ? [{ label: 'xu?t ?m t?n kho', promise: loadNegativeStockSettings() }] : []),
+        ...(canViewPrintTemplates ? [{ label: 'm?u in h?a don', promise: loadPrintTemplates() }] : []),
         ...(canAccessSection(['settings.read', 'settings.manage']) ? [{ label: 'backup', promise: loadBackups() }] : []),
       ];
 
@@ -778,14 +778,14 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       const failures = results
         .map((result, index) => {
           if (result.status !== 'rejected') return '';
-          return `${sections[index].label}: ${getErrorMessage(result.reason, `Không thể tải ${sections[index].label}.`)}`;
+          return `${sections[index].label}: ${getErrorMessage(result.reason, `Kh?ng th? t?i ${sections[index].label}.`)}`;
         })
         .filter(Boolean);
 
       if (failures.length > 0) {
         setTimedNotice('page', setPageNotice, {
           tone: 'error',
-          message: `Một số dữ liệu cài đặt chưa tải được. ${failures.join(' | ')}`,
+          message: `M?t s? d? li?u c?i d?t chua t?i du?c. ${failures.join(' | ')}`,
         }, 8000);
       }
 
@@ -825,11 +825,11 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       setUpdateState(payload?.state || null);
       if (payload?.type === 'update-available') {
         const version = payload.updateInfo?.version || payload.state?.updateInfo?.version;
-        setUpdateNotice(version ? `Có bản cập nhật ${version}.` : 'Có bản cập nhật mới.');
+        setUpdateNotice(version ? `C? b?n c?p nh?t ${version}.` : 'C? b?n c?p nh?t m?i.');
       }
-      if (payload?.type === 'downloaded') setUpdateNotice('Đã tải và xác thực gói cập nhật. Chọn Cập nhật ngay hoặc Để sau.');
-      if (payload?.type === 'install-deferred') setUpdateNotice('Đã chọn để sau. Ứng dụng tiếp tục chạy bình thường.');
-      if (payload?.type === 'cancelled') setUpdateNotice('Đã hủy tải cập nhật.');
+      if (payload?.type === 'downloaded') setUpdateNotice('?? t?i v? x?c th?c g?i c?p nh?t. Ch?n C?p nh?t ngay ho?c ?? sau.');
+      if (payload?.type === 'install-deferred') setUpdateNotice('?? ch?n d? sau. ?ng d?ng ti?p t?c ch?y b?nh thu?ng.');
+      if (payload?.type === 'cancelled') setUpdateNotice('?? h?y t?i c?p nh?t.');
       if (payload?.type === 'error') setUpdateNotice(getUpdateErrorMessage(payload.error || payload.state?.lastError));
     });
 
@@ -875,7 +875,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     if (payload.email && !isValidEmail(payload.email)) {
       setTimedNotice('store', setStoreNotice, {
         tone: 'error',
-        message: 'Email cửa hàng không hợp lệ.',
+        message: 'Email c?a h?ng kh?ng h?p l?.',
       }, 5000);
       return;
     }
@@ -886,7 +886,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       const data = await apiJson('/store', {
         method: 'PUT',
         body: payload,
-      }, 'Không thể lưu thông tin cửa hàng.');
+      }, 'Kh?ng th? luu th?ng tin c?a h?ng.');
 
       if (data?.ok) {
         setStoreForm(payload);
@@ -894,13 +894,13 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
         onStoreChange?.(payload);
         setTimedNotice('store', setStoreNotice, {
           tone: 'success',
-          message: 'Đã lưu thông tin cửa hàng.',
+          message: '?? luu th?ng tin c?a h?ng.',
         }, 3000);
       }
     } catch (error) {
       setTimedNotice('store', setStoreNotice, {
         tone: 'error',
-        message: getErrorMessage(error, 'Không thể lưu thông tin cửa hàng.'),
+        message: getErrorMessage(error, 'Kh?ng th? luu th?ng tin c?a h?ng.'),
       });
     } finally {
       if (mountedRef.current) setStoreSaving(false);
@@ -922,22 +922,22 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   };
 
   const handleDeleteEmp = async (id) => {
-    if (!window.confirm('Xóa nhân viên này?')) return;
+    if (!window.confirm('X?a nh?n vi?n n?y?')) return;
 
     setEmployeesNotice(null);
     try {
       const data = await apiJson(`/users/${encodeURIComponent(id)}`, {
         method: 'DELETE',
-      }, 'Không thể xóa nhân viên.');
+      }, 'Kh?ng th? x?a nh?n vi?n.');
       await loadEmployees();
       setTimedNotice('employees', setEmployeesNotice, {
         tone: 'success',
-        message: data?.message || 'Đã xóa nhân viên.',
+        message: data?.message || '?? x?a nh?n vi?n.',
       }, 3000);
     } catch (error) {
       setTimedNotice('employees', setEmployeesNotice, {
         tone: 'error',
-        message: getErrorMessage(error, 'Không thể xóa nhân viên.'),
+        message: getErrorMessage(error, 'Kh?ng th? x?a nh?n vi?n.'),
       });
     }
   };
@@ -947,19 +947,19 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     const isCreating = !empEdit;
 
     if (!payload.name || !payload.email || !payload.phone) {
-      setEmpNotice({ tone: 'error', message: 'Vui lòng điền đầy đủ họ tên, email và số điện thoại.' });
+      setEmpNotice({ tone: 'error', message: 'Vui l?ng di?n d?y d? h? t?n, email v? s? di?n tho?i.' });
       return;
     }
     if (!isValidEmail(payload.email)) {
-      setEmpNotice({ tone: 'error', message: 'Email nhân viên không hợp lệ.' });
+      setEmpNotice({ tone: 'error', message: 'Email nh?n vi?n kh?ng h?p l?.' });
       return;
     }
     if (isCreating && !payload.password) {
-      setEmpNotice({ tone: 'error', message: 'Vui lòng nhập mật khẩu cho nhân viên mới.' });
+      setEmpNotice({ tone: 'error', message: 'Vui l?ng nh?p m?t kh?u cho nh?n vi?n m?i.' });
       return;
     }
     if (payload.password && String(payload.password).length < 8) {
-      setEmpNotice({ tone: 'error', message: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+      setEmpNotice({ tone: 'error', message: 'M?t kh?u ph?i c? ?t nh?t 8 k? t?.' });
       return;
     }
 
@@ -972,7 +972,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
         const created = await apiJson('/users/register', {
           method: 'POST',
           body: payload,
-        }, 'Không thể tạo nhân viên mới.');
+        }, 'Kh?ng th? t?o nh?n vi?n m?i.');
         const createdId = created?.user?.id || created?.id;
         if (createdId && payload.role && payload.role !== 'user') {
           await usersApi.update(createdId, { role: payload.role });
@@ -983,12 +983,12 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       closeEmpModal();
       setTimedNotice('employees', setEmployeesNotice, {
         tone: 'success',
-        message: empEdit ? 'Đã cập nhật nhân viên.' : 'Đã thêm nhân viên mới.',
+        message: empEdit ? '?? c?p nh?t nh?n vi?n.' : '?? th?m nh?n vi?n m?i.',
       }, 3000);
     } catch (error) {
       setEmpNotice({
         tone: 'error',
-        message: getErrorMessage(error, empEdit ? 'Không thể cập nhật nhân viên.' : 'Không thể tạo nhân viên mới.'),
+        message: getErrorMessage(error, empEdit ? 'Kh?ng th? c?p nh?t nh?n vi?n.' : 'Kh?ng th? t?o nh?n vi?n m?i.'),
       });
     } finally {
       if (mountedRef.current) setEmpSaving(false);
@@ -1012,7 +1012,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const handleSaveType = async () => {
     const payload = sanitizeTypePayload(typeForm);
     if (!payload.name) {
-      setTypeNotice({ tone: 'error', message: 'Vui lòng nhập tên loại khách hàng.' });
+      setTypeNotice({ tone: 'error', message: 'Vui l?ng nh?p t?n lo?i kh?ch h?ng.' });
       return;
     }
 
@@ -1026,12 +1026,12 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       closeTypeModal();
       setTimedNotice('customer-types', setCustomerTypesNotice, {
         tone: 'success',
-        message: typeEdit ? 'Đã cập nhật loại khách hàng.' : 'Đã thêm loại khách hàng mới.',
+        message: typeEdit ? '?? c?p nh?t lo?i kh?ch h?ng.' : '?? th?m lo?i kh?ch h?ng m?i.',
       }, 3000);
     } catch (error) {
       setTypeNotice({
         tone: 'error',
-        message: getErrorMessage(error, typeEdit ? 'Không thể cập nhật loại khách hàng.' : 'Không thể tạo loại khách hàng.'),
+        message: getErrorMessage(error, typeEdit ? 'Kh?ng th? c?p nh?t lo?i kh?ch h?ng.' : 'Kh?ng th? t?o lo?i kh?ch h?ng.'),
       });
     } finally {
       if (mountedRef.current) setTypeSaving(false);
@@ -1039,7 +1039,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   };
 
   const handleDeleteType = async (id) => {
-    if (!window.confirm('Xóa loại khách này?')) return;
+    if (!window.confirm('X?a lo?i kh?ch n?y?')) return;
 
     setCustomerTypesNotice(null);
     try {
@@ -1047,12 +1047,12 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       await loadCustomerTypes();
       setTimedNotice('customer-types', setCustomerTypesNotice, {
         tone: 'success',
-        message: 'Đã xóa loại khách hàng.',
+        message: '?? x?a lo?i kh?ch h?ng.',
       }, 3000);
     } catch (error) {
       setTimedNotice('customer-types', setCustomerTypesNotice, {
         tone: 'error',
-        message: getErrorMessage(error, 'Không thể xóa loại khách hàng.'),
+        message: getErrorMessage(error, 'Kh?ng th? x?a lo?i kh?ch h?ng.'),
       });
     }
   };
@@ -1071,8 +1071,8 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     setPrintTemplatesNotice(null);
     try {
       const data = await printTemplatesApi.create({
-        template_name: `Mẫu in hóa đơn ${printTemplates.length + 1}`,
-        description: 'Thiết kế bằng editor mẫu in Canva-like.',
+        template_name: `M?u in h?a don ${printTemplates.length + 1}`,
+        description: 'Thi?t k? b?ng editor m?u in Canva-like.',
         shop_name: storeForm.name,
         shop_address: storeForm.address,
         shop_phone: storeForm.phone,
@@ -1087,12 +1087,12 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       setShowPrintTemplateModal(true);
       setTimedNotice('print-templates', setPrintTemplatesNotice, {
         tone: 'success',
-        message: 'Đã tạo mẫu in mới. Editor đang mở để thiết kế và autosave draft.',
+        message: '?? t?o m?u in m?i. Editor dang m? d? thi?t k? v? autosave draft.',
       }, 3000);
     } catch (error) {
       setTimedNotice('print-templates', setPrintTemplatesNotice, {
         tone: 'error',
-        message: getErrorMessage(error, 'Không thể tạo mẫu in hóa đơn.'),
+        message: getErrorMessage(error, 'Kh?ng th? t?o m?u in h?a don.'),
       });
     } finally {
       if (mountedRef.current) setPrintTemplateSaving(false);
@@ -1102,8 +1102,8 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const openDemoPrintTemplateEditor = () => {
     const demo = normalizePrintTemplate({
       id: null,
-      template_name: 'Mẫu thiết kế thử',
-      description: 'Bản demo local để thiết kế kéo thả khi chưa có MySQL mẫu in.',
+      template_name: 'M?u thi?t k? th?',
+      description: 'B?n demo local d? thi?t k? k?o th? khi chua c? MySQL m?u in.',
       shop_name: storeForm.name,
       shop_address: storeForm.address,
       shop_phone: storeForm.phone,
@@ -1118,7 +1118,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     setShowPrintTemplateModal(true);
     setTimedNotice('print-templates', setPrintTemplatesNotice, {
       tone: 'info',
-      message: 'Đang mở editor demo local. Để lưu/publish thật, hãy cấu hình MySQL và tạo mẫu in trên server.',
+      message: '?ang m? editor demo local. ?? luu/publish th?t, h?y c?u h?nh MySQL v? t?o m?u in tr?n server.',
     }, 5000);
   };
 
@@ -1151,7 +1151,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
   const handleRemovePrintTemplateLogo = async () => {
     if (printTemplateEdit?.id && !printTemplateLogoPreviewUrl && printTemplateForm.logo_url) {
-      if (!window.confirm('Xóa logo đang lưu trên mẫu in này?')) return;
+      if (!window.confirm('X?a logo dang luu tr?n m?u in n?y?')) return;
       setPrintTemplateSaving(true);
       setPrintTemplateNotice(null);
       try {
@@ -1160,9 +1160,9 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
         setPrintTemplateEdit(item);
         setPrintTemplateForm(current => ({ ...normalizePrintTemplateForm(item, storeForm), logo_url: '' }));
         await loadPrintTemplates();
-        setPrintTemplateNotice({ tone: 'success', message: 'Đã xóa logo mẫu in.' });
+        setPrintTemplateNotice({ tone: 'success', message: '?? x?a logo m?u in.' });
       } catch (error) {
-        setPrintTemplateNotice({ tone: 'error', message: getErrorMessage(error, 'Không thể xóa logo mẫu in.') });
+        setPrintTemplateNotice({ tone: 'error', message: getErrorMessage(error, 'Kh?ng th? x?a logo m?u in.') });
       } finally {
         if (mountedRef.current) setPrintTemplateSaving(false);
       }
@@ -1180,7 +1180,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const handleSavePrintTemplate = async () => {
     const payload = sanitizePrintTemplatePayload(printTemplateForm);
     if (!payload.template_name) {
-      setPrintTemplateNotice({ tone: 'error', message: 'Vui lòng nhập tên mẫu in hóa đơn.' });
+      setPrintTemplateNotice({ tone: 'error', message: 'Vui l?ng nh?p t?n m?u in h?a don.' });
       return;
     }
 
@@ -1201,12 +1201,12 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       closePrintTemplateModal();
       setTimedNotice('print-templates', setPrintTemplatesNotice, {
         tone: 'success',
-        message: printTemplateEdit?.id ? 'Đã cập nhật mẫu in hóa đơn.' : 'Đã tạo mẫu in hóa đơn mới.',
+        message: printTemplateEdit?.id ? '?? c?p nh?t m?u in h?a don.' : '?? t?o m?u in h?a don m?i.',
       }, 3000);
     } catch (error) {
       setPrintTemplateNotice({
         tone: 'error',
-        message: getErrorMessage(error, printTemplateEdit?.id ? 'Không thể cập nhật mẫu in hóa đơn.' : 'Không thể tạo mẫu in hóa đơn.'),
+        message: getErrorMessage(error, printTemplateEdit?.id ? 'Kh?ng th? c?p nh?t m?u in h?a don.' : 'Kh?ng th? t?o m?u in h?a don.'),
       });
     } finally {
       if (mountedRef.current) setPrintTemplateSaving(false);
@@ -1214,19 +1214,19 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   };
 
   const handleDeletePrintTemplate = async (template) => {
-    if (!window.confirm(`Xóa mẫu in "${template.template_name || template.name || ''}"?`)) return;
+    if (!window.confirm(`X?a m?u in "${template.template_name || template.name || ''}"?`)) return;
     setPrintTemplatesNotice(null);
     try {
       await printTemplatesApi.remove(template.id);
       await loadPrintTemplates();
       setTimedNotice('print-templates', setPrintTemplatesNotice, {
         tone: 'success',
-        message: 'Đã xóa mẫu in hóa đơn.',
+        message: '?? x?a m?u in h?a don.',
       }, 3000);
     } catch (error) {
       setTimedNotice('print-templates', setPrintTemplatesNotice, {
         tone: 'error',
-        message: getErrorMessage(error, 'Không thể xóa mẫu in hóa đơn.'),
+        message: getErrorMessage(error, 'Kh?ng th? x?a m?u in h?a don.'),
       });
     }
   };
@@ -1238,12 +1238,12 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       await loadPrintTemplates();
       setTimedNotice('print-templates', setPrintTemplatesNotice, {
         tone: 'success',
-        message: 'Đã đặt mẫu in mặc định.',
+        message: '?? d?t m?u in m?c d?nh.',
       }, 3000);
     } catch (error) {
       setTimedNotice('print-templates', setPrintTemplatesNotice, {
         tone: 'error',
-        message: getErrorMessage(error, 'Không thể đặt mẫu in mặc định.'),
+        message: getErrorMessage(error, 'Kh?ng th? d?t m?u in m?c d?nh.'),
       });
     }
   };
@@ -1253,7 +1253,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     [printTemplateEdit, printTemplateForm, printTemplateLogoPreviewUrl],
   );
 
-  const saveNegativeStockSettings = async ({ enabled = negativeStockSettings.enabled, limitInput = negativeStockLimitInput, successMessage = 'Lưu cài đặt thành công' } = {}) => {
+  const saveNegativeStockSettings = async ({ enabled = negativeStockSettings.enabled, limitInput = negativeStockLimitInput, successMessage = 'Luu c?i d?t th?nh c?ng' } = {}) => {
     let limit = 0;
     if (enabled) {
       const inputError = getNegativeStockLimitInputError(limitInput);
@@ -1304,7 +1304,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     } catch (error) {
       setTimedNotice('negative-stock', setNegativeStockNotice, {
         tone: 'error',
-        message: getErrorMessage(error, 'Không thể lưu cấu hình xuất âm tồn kho qua API /api/settings/negative-stock.'),
+        message: getErrorMessage(error, 'Kh?ng th? luu c?u h?nh xu?t ?m t?n kho qua API /api/settings/negative-stock.'),
       });
       return null;
     } finally {
@@ -1322,7 +1322,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     return saveNegativeStockSettings({
       enabled: nextEnabled,
       limitInput: nextLimitInput,
-      successMessage: nextEnabled ? 'Đã bật chế độ xuất âm' : 'Đã tắt chế độ xuất âm',
+      successMessage: nextEnabled ? '?? b?t ch? d? xu?t ?m' : '?? t?t ch? d? xu?t ?m',
     });
   };
 
@@ -1357,7 +1357,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       saveNegativeStockSettings({
         enabled: negativeStockSettings.enabled,
         limitInput: String(limit),
-        successMessage: 'Lưu cài đặt thành công',
+        successMessage: 'Luu c?i d?t th?nh c?ng',
       });
     }, 700);
 
@@ -1371,7 +1371,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
   const runUpdateAction = async (busyKey, action) => {
     if (!window.khaDesktop?.updates) {
-      setUpdateNotice('Tính năng cập nhật chỉ khả dụng trong ứng dụng Electron Windows.');
+      setUpdateNotice('T?nh nang c?p nh?t ch? kh? d?ng trong ?ng d?ng Electron Windows.');
       return null;
     }
 
@@ -1385,17 +1385,17 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       if (!result?.ok) {
         setUpdateNotice(getUpdateErrorMessage(result?.error));
       } else if (busyKey === 'checking') {
-        setUpdateNotice(result.updateAvailable ? `Có bản cập nhật ${result.updateInfo?.version}.` : 'Ứng dụng đang ở phiên bản mới nhất.');
+        setUpdateNotice(result.updateAvailable ? `C? b?n c?p nh?t ${result.updateInfo?.version}.` : '?ng d?ng dang ? phi?n b?n m?i nh?t.');
       } else if (busyKey === 'downloading') {
-        setUpdateNotice('Đã tải và xác thực gói cập nhật. Chọn Cập nhật ngay hoặc Để sau.');
+        setUpdateNotice('?? t?i v? x?c th?c g?i c?p nh?t. Ch?n C?p nh?t ngay ho?c ?? sau.');
       } else if (busyKey === 'installing') {
-        setUpdateNotice('Đang cài đặt cập nhật. Ứng dụng sẽ restart theo electron-updater.');
+        setUpdateNotice('?ang c?i d?t c?p nh?t. ?ng d?ng s? restart theo electron-updater.');
       }
       return result;
     } catch (error) {
       const nextError = {
         code: error?.code || 'UNKNOWN_ERROR',
-        message: error?.message || 'Đã xảy ra lỗi cập nhật.',
+        message: error?.message || '?? x?y ra l?i c?p nh?t.',
       };
       setUpdateResult({ ok: false, error: nextError });
       setUpdateNotice(getUpdateErrorMessage(nextError));
@@ -1409,46 +1409,46 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const handleDownloadUpdate = () => runUpdateAction('downloading', updates => updates.download());
   const handleCancelUpdate = () => runUpdateAction('cancelling', updates => updates.cancel());
   const handleInstallUpdate = () => {
-    if (!window.confirm('Ứng dụng sẽ tạo backup database rồi cài đặt và khởi động lại. Tiếp tục?')) return null;
+    if (!window.confirm('?ng d?ng s? t?o backup database r?i c?i d?t v? kh?i d?ng l?i. Ti?p t?c?')) return null;
     return runUpdateAction('installing', updates => updates.install());
   };
 
   const handleOpenInstallerDownload = async (installer) => {
     const url = buildReleaseDownloadUrl(installer.fileName);
-    setUpdateNotice(`Đang kiểm tra link tải ${installer.label} trước khi mở trình duyệt...`);
+    setUpdateNotice(`?ang ki?m tra link t?i ${installer.label} tru?c khi m? tr?nh duy?t...`);
 
     try {
       let verified = null;
       if (window.khaDesktop?.verifyDownloadUrl) {
         verified = await window.khaDesktop.verifyDownloadUrl(url);
-        if (!verified?.ok) throw new Error(verified?.error?.message || 'Link tải không vượt qua kiểm tra an toàn.');
+        if (!verified?.ok) throw new Error(verified?.error?.message || 'Link t?i kh?ng vu?t qua ki?m tra an to?n.');
       }
 
       const detail = verified?.contentLength
-        ? `HTTP ${verified.statusCode}, ${formatBytes(verified.contentLength)}, ${verified.contentType || 'Content-Type không rõ'}`
-        : 'Đã kiểm tra định dạng tên file và HTTP.';
-      setUpdateNotice(`Link tải ${installer.label} hợp lệ (${detail}). Đang mở trình duyệt mặc định. Nếu SmartScreen/antivirus cảnh báo, chỉ tiếp tục khi file đúng tên ${installer.fileName} và URL thuộc github.com/Vankhadev/phanmemoffline.`);
+        ? `HTTP ${verified.statusCode}, ${formatBytes(verified.contentLength)}, ${verified.contentType || 'Content-Type kh?ng r?'}`
+        : '?? ki?m tra d?nh d?ng t?n file v? HTTP.';
+      setUpdateNotice(`Link t?i ${installer.label} h?p l? (${detail}). ?ang m? tr?nh duy?t m?c d?nh. N?u SmartScreen/antivirus c?nh b?o, ch? ti?p t?c khi file d?ng t?n ${installer.fileName} v? URL thu?c github.com/Vankhadev/phanmemoffline.`);
 
       if (window.khaDesktop?.openExternal) {
         const opened = await window.khaDesktop.openExternal(url);
-        if (!opened?.ok) throw new Error(opened?.error?.message || 'Không mở được link tải bằng trình duyệt mặc định.');
+        if (!opened?.ok) throw new Error(opened?.error?.message || 'Kh?ng m? du?c link t?i b?ng tr?nh duy?t m?c d?nh.');
       } else {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      setUpdateNotice(`Không mở link tải vì kiểm tra thất bại: ${error?.message || 'không rõ'}. Hãy kiểm tra mạng, GitHub Release public và đảm bảo không tải nhầm file rỗng/trang HTML. URL: ${url}`);
+      setUpdateNotice(`Kh?ng m? link t?i v? ki?m tra th?t b?i: ${error?.message || 'kh?ng r?'}. H?y ki?m tra m?ng, GitHub Release public v? d?m b?o kh?ng t?i nh?m file r?ng/trang HTML. URL: ${url}`);
     }
   };
 
   const tabs = useMemo(() => {
     const nextTabs = [];
-    if (canViewStore) nextTabs.push({ key: 'store', label: 'Cửa hàng', icon: <Store size={16} /> });
-    if (canViewEmployees) nextTabs.push({ key: 'employees', label: 'Nhân viên', icon: <Users size={16} /> });
-    if (canViewCustomerTypes) nextTabs.push({ key: 'customer-types', label: 'Loại khách', icon: <Tag size={16} /> });
-    if (canViewNegativeStock) nextTabs.push({ key: 'negative-stock', label: 'Xuất âm', icon: <Package size={16} /> });
-    if (canViewPrintTemplates) nextTabs.push({ key: 'print-templates', label: 'Mẫu in hóa đơn', icon: <FileText size={16} /> });
+    if (canViewStore) nextTabs.push({ key: 'store', label: 'C?a h?ng', icon: <Store size={16} /> });
+    if (canViewEmployees) nextTabs.push({ key: 'employees', label: 'Nh?n vi?n', icon: <Users size={16} /> });
+    if (canViewCustomerTypes) nextTabs.push({ key: 'customer-types', label: 'Lo?i kh?ch', icon: <Tag size={16} /> });
+    if (canViewNegativeStock) nextTabs.push({ key: 'negative-stock', label: 'Xu?t ?m', icon: <Package size={16} /> });
+    if (canViewPrintTemplates) nextTabs.push({ key: 'print-templates', label: 'M?u in h?a don', icon: <FileText size={16} /> });
     if (canAccessSection(['settings.read', 'settings.manage'])) nextTabs.push({ key: 'backup', label: 'Backup', icon: <Image size={16} /> });
-    if (canViewUpdates) nextTabs.push({ key: 'updates', label: 'Cập nhật', icon: <Settings2 size={16} /> });
+    if (canViewUpdates) nextTabs.push({ key: 'updates', label: 'C?p nh?t', icon: <Settings2 size={16} /> });
     return nextTabs;
   }, [canAccessSection, canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewPrintTemplates, canViewStore, canViewUpdates]);
 
@@ -1462,7 +1462,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const runtimeCompatibility = updateState?.runtimeCompatibility || appInfo?.runtimeCompatibility || null;
   const runtimeArch = normalizeRuntimeArch(runtimeCompatibility?.arch || appInfo?.arch || window.khaDesktop?.arch || '');
   const recommendedInstaller = getRecommendedInstaller(runtimeArch);
-  const currentVersion = appInfo?.version || updateState?.currentVersion || 'Không rõ';
+  const currentVersion = appInfo?.version || updateState?.currentVersion || 'Kh?ng r?';
   const updateInfo = updateState?.updateInfo || null;
   const progress = updateState?.progress || null;
   const progressPercent = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
@@ -1492,9 +1492,9 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <Settings2 className="text-blue-600" size={28} />
           </div>
           <div>
-            <h1 className="text-xl font-bold">Cài đặt hệ thống</h1>
+            <h1 className="text-xl font-bold">C?i d?t h? th?ng</h1>
             <p className="text-sm text-gray-500">
-              Quản lý cửa hàng, nhân viên, loại khách hàng, xuất âm tồn kho và cập nhật ứng dụng.
+              Qu?n l? c?a h?ng, nh?n vi?n, lo?i kh?ch h?ng, xu?t ?m t?n kho v? c?p nh?t ?ng d?ng.
             </p>
           </div>
         </div>
@@ -1504,7 +1504,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           onClick={() => setShowHelp(true)}
           className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
-          <HelpCircle size={16} /> Hướng dẫn
+          <HelpCircle size={16} /> Hu?ng d?n
         </button>
       </div>
 
@@ -1530,7 +1530,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
         <div className="card flex min-h-[260px] items-center justify-center">
           <div className="flex items-center gap-3 text-gray-600">
             <Loader2 size={20} className="animate-spin" />
-            <span>Đang tải dữ liệu cài đặt...</span>
+            <span>?ang t?i d? li?u c?i d?t...</span>
           </div>
         </div>
       ) : null}
@@ -1539,7 +1539,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
         <div className="card space-y-4">
           <div className="flex items-center gap-2">
             <Store size={18} />
-            <h2 className="font-bold">Thông tin cửa hàng</h2>
+            <h2 className="font-bold">Th?ng tin c?a h?ng</h2>
           </div>
 
           <SectionNotice notice={storeNotice} />
@@ -1547,14 +1547,14 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <InputField
               id="store-name"
-              label="Tên cửa hàng"
+              label="T?n c?a h?ng"
               value={storeForm.name}
               onChange={event => updateStoreField('name', event.target.value)}
-              placeholder="Ví dụ: Cửa hàng Vạn Kha"
+              placeholder="V? d?: C?a h?ng V?n Kha"
             />
             <InputField
               id="store-phone"
-              label="Số điện thoại"
+              label="S? di?n tho?i"
               value={storeForm.phone}
               onChange={event => updateStoreField('phone', event.target.value)}
               placeholder="0987..."
@@ -1569,7 +1569,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             />
             <InputField
               id="store-tax-code"
-              label="Mã số thuế"
+              label="M? s? thu?"
               value={storeForm.tax_code}
               onChange={event => updateStoreField('tax_code', event.target.value)}
             />
@@ -1583,10 +1583,10 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               className="btn-success inline-flex min-h-10 items-center gap-2 disabled:opacity-60"
             >
               {storeSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-              {storeSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+              {storeSaving ? '?ang luu...' : 'Luu thay d?i'}
             </button>
             <span className="text-xs text-gray-500">
-              Các thay đổi này ảnh hưởng trực tiếp đến thông tin hiển thị trên hóa đơn và các trang dùng dữ liệu cửa hàng.
+              C?c thay d?i n?y ?nh hu?ng tr?c ti?p d?n th?ng tin hi?n th? tr?n h?a don v? c?c trang d?ng d? li?u c?a h?ng.
             </span>
           </div>
         </div>
@@ -1596,7 +1596,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
         <div className="card space-y-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <h2 className="font-bold flex items-center gap-2">
-              <Users size={18} /> Nhân viên ({employees.length})
+              <Users size={18} /> Nh?n vi?n ({employees.length})
             </h2>
             {canManageEmployees && (
               <button
@@ -1604,7 +1604,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 onClick={openAddEmp}
                 className="btn-primary inline-flex min-h-10 items-center gap-2 text-sm"
               >
-                <Plus size={14} /> Thêm nhân viên mới
+                <Plus size={14} /> Th?m nh?n vi?n m?i
               </button>
             )}
           </div>
@@ -1615,38 +1615,38 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
               <div className="inline-flex items-center gap-2">
                 <Loader2 size={16} className="animate-spin" />
-                Đang tải danh sách nhân viên...
+                ?ang t?i danh s?ch nh?n vi?n...
               </div>
             </div>
           ) : employees.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
-              Chưa có nhân viên nào.
+              Chua c? nh?n vi?n n?o.
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600">
                   <tr>
-                    <th className="px-3 py-3 text-left">Họ tên</th>
+                    <th className="px-3 py-3 text-left">H? t?n</th>
                     <th className="px-3 py-3 text-left">Email</th>
-                    <th className="px-3 py-3 text-left">SĐT</th>
-                    <th className="px-3 py-3 text-left">Vai trò</th>
-                    <th className="px-3 py-3 text-left">Đăng nhập gần nhất</th>
-                    <th className="px-3 py-3 text-center">Hành động</th>
+                    <th className="px-3 py-3 text-left">S?T</th>
+                    <th className="px-3 py-3 text-left">Vai tr?</th>
+                    <th className="px-3 py-3 text-left">?ang nh?p g?n nh?t</th>
+                    <th className="px-3 py-3 text-center">H?nh d?ng</th>
                   </tr>
                 </thead>
                 <tbody>
                   {employees.map(employee => (
                     <tr key={employee.id} className="border-t hover:bg-gray-50">
-                      <td className="px-3 py-3 font-medium text-gray-800">{employee.name || '—'}</td>
-                      <td className="px-3 py-3 text-gray-600">{employee.email || '—'}</td>
-                      <td className="px-3 py-3">{employee.phone || '—'}</td>
+                      <td className="px-3 py-3 font-medium text-gray-800">{employee.name || '?'}</td>
+                      <td className="px-3 py-3 text-gray-600">{employee.email || '?'}</td>
+                      <td className="px-3 py-3">{employee.phone || '?'}</td>
                       <td className="px-3 py-3">
                         <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getRoleBadgeClass(employee.role)}`}>
                           {getRoleOption(employee.role).label}
                         </span>
                         {normalizeRoleValue(employee.role) === 'user' && (
-                          <div className="mt-1 text-[11px] text-gray-400">Legacy tương thích</div>
+                          <div className="mt-1 text-[11px] text-gray-400">Legacy tuong th?ch</div>
                         )}
                       </td>
                       <td className="px-3 py-3 text-gray-600">{formatDateTime(employee.last_login)}</td>
@@ -1658,7 +1658,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                               onClick={() => openEditEmp(employee)}
                               className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
                             >
-                              <Edit2 size={12} /> Sửa
+                              <Edit2 size={12} /> S?a
                             </button>
                             {employee.role !== 'admin' && (
                               <button
@@ -1666,12 +1666,12 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                                 onClick={() => handleDeleteEmp(employee.id)}
                                 className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-100"
                               >
-                                <Trash2 size={12} /> Xóa
+                                <Trash2 size={12} /> X?a
                               </button>
                             )}
                           </div>
                         ) : (
-                          <span className="block text-center text-xs text-gray-400">—</span>
+                          <span className="block text-center text-xs text-gray-400">?</span>
                         )}
                       </td>
                     </tr>
@@ -1687,7 +1687,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
         <div className="card space-y-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <h2 className="font-bold flex items-center gap-2">
-              <Tag size={18} /> Loại khách hàng ({customerTypes.length})
+              <Tag size={18} /> Lo?i kh?ch h?ng ({customerTypes.length})
             </h2>
             {canManageCustomerTypes && (
               <button
@@ -1695,7 +1695,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 onClick={openAddType}
                 className="btn-primary inline-flex min-h-10 items-center gap-2 text-sm"
               >
-                <Plus size={14} /> Thêm loại khách
+                <Plus size={14} /> Th?m lo?i kh?ch
               </button>
             )}
           </div>
@@ -1706,12 +1706,12 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
               <div className="inline-flex items-center gap-2">
                 <Loader2 size={16} className="animate-spin" />
-                Đang tải loại khách hàng...
+                ?ang t?i lo?i kh?ch h?ng...
               </div>
             </div>
           ) : customerTypes.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
-              Chưa có loại khách hàng nào.
+              Chua c? lo?i kh?ch h?ng n?o.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -1732,7 +1732,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                           type="button"
                           onClick={() => openEditType(type)}
                           className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-blue-700 hover:bg-blue-100"
-                          title="Sửa loại khách"
+                          title="S?a lo?i kh?ch"
                         >
                           <Edit2 size={14} />
                         </button>
@@ -1740,13 +1740,13 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                           type="button"
                           onClick={() => handleDeleteType(type.id)}
                           className="rounded-lg border border-red-200 bg-red-50 p-2 text-red-600 hover:bg-red-100"
-                          title="Xóa loại khách"
+                          title="X?a lo?i kh?ch"
                         >
                           <Trash2 size={14} />
                         </button>
                       </>
                     ) : (
-                      <span className="text-xs text-gray-400">—</span>
+                      <span className="text-xs text-gray-400">?</span>
                     )}
                   </div>
                 </div>
@@ -1764,12 +1764,12 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 <Package size={18} /> {NEGATIVE_STOCK_FEATURE_NAME}
               </h2>
               <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-                Quản lý việc cho phép xuất vượt tồn kho hiện có. {NEGATIVE_STOCK_FEATURE_DESCRIPTION}
+                Qu?n l? vi?c cho ph?p xu?t vu?t t?n kho hi?n c?. {NEGATIVE_STOCK_FEATURE_DESCRIPTION}
               </p>
             </div>
             <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${negativeStockSettings.enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200' : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'}`}>
               <span className={`h-2 w-2 rounded-full ${negativeStockSettings.enabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-              {negativeStockSettings.enabled ? 'Đang bật' : 'Đang tắt'}
+              {negativeStockSettings.enabled ? '?ang b?t' : '?ang t?t'}
             </span>
           </div>
 
@@ -1778,9 +1778,9 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           <div className="rounded-3xl border border-white/70 bg-white/70 p-4 shadow-xl shadow-emerald-900/10 backdrop-blur-md dark:border-slate-700/70 dark:bg-slate-900/70">
             <div className="space-y-5">
               <div className="space-y-2">
-                <div className="font-semibold text-gray-800 dark:text-slate-100">Cho phép xuất âm tồn kho sản phẩm</div>
+                <div className="font-semibold text-gray-800 dark:text-slate-100">Cho ph?p xu?t ?m t?n kho s?n ph?m</div>
                 <p className="text-sm text-gray-600 dark:text-slate-300">
-                  Khi bật, hệ thống cho phép xuất vượt tồn kho hiện có theo số lượng âm tối đa admin nhập. Khi tắt, hệ thống chặn mọi trường hợp làm tồn kho nhỏ hơn <strong>0</strong>.
+                  Khi b?t, h? th?ng cho ph?p xu?t vu?t t?n kho hi?n c? theo s? lu?ng ?m t?i da admin nh?p. Khi t?t, h? th?ng ch?n m?i tru?ng h?p l?m t?n kho nh? hon <strong>0</strong>.
                 </p>
               </div>
 
@@ -1788,7 +1788,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 type="button"
                 role="switch"
                 aria-checked={negativeStockSettings.enabled}
-                aria-label={negativeStockSettings.enabled ? 'Tắt cho phép xuất âm tồn kho' : 'Bật cho phép xuất âm tồn kho'}
+                aria-label={negativeStockSettings.enabled ? 'T?t cho ph?p xu?t ?m t?n kho' : 'B?t cho ph?p xu?t ?m t?n kho'}
                 aria-busy={negativeStockSaving}
                 onClick={handleToggleNegativeStock}
                 disabled={negativeStockSaving || !canManageNegativeStock || (negativeStockSettings.enabled && Boolean(negativeStockLimitInputError))}
@@ -1797,14 +1797,14 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="text-sm font-semibold">
-                      {negativeStockSettings.enabled ? 'Đang bật' : 'Đang tắt'}
+                      {negativeStockSettings.enabled ? '?ang b?t' : '?ang t?t'}
                     </span>
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${negativeStockSettings.enabled ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'}`}>
                       {negativeStockSettings.enabled ? 'ON' : 'OFF'}
                     </span>
                   </span>
                   <span className="mt-1 block text-xs font-medium opacity-80">
-                    {negativeStockSaving ? 'Đang lưu thay đổi...' : 'Chạm để bật/tắt nhanh'}
+                    {negativeStockSaving ? '?ang luu thay d?i...' : 'Ch?m d? b?t/t?t nhanh'}
                   </span>
                 </span>
 
@@ -1820,7 +1820,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label htmlFor="negative-stock-limit" className="space-y-1">
-                  <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Số lượng âm tối đa cho phép</span>
+                  <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">S? lu?ng ?m t?i da cho ph?p</span>
                   <input
                     id="negative-stock-limit"
                     type="number"
@@ -1831,7 +1831,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                     value={negativeStockLimitInput}
                     onChange={handleNegativeStockLimitChange}
                     onBlur={handleNegativeStockLimitBlur}
-                    placeholder="Ví dụ: 10"
+                    placeholder="V? d?: 10"
                     disabled={negativeStockSaving || !canManageNegativeStock}
                     aria-invalid={Boolean(negativeStockLimitInputError)}
                     className={`input-field w-full rounded-xl ${negativeStockLimitInputError ? 'border-red-300 bg-red-50 text-red-700 focus:border-red-500 focus:ring-red-500/20' : 'dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100'}`}
@@ -1839,13 +1839,13 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   {negativeStockLimitInputError ? (
                     <span className="block text-xs font-medium text-red-600">{negativeStockLimitInputError}</span>
                   ) : (
-                    <span className="block text-xs text-gray-500 dark:text-slate-400">Nhập 10 nghĩa là tồn tối thiểu -10. Giá trị hiện tại: {negativeStockAdminLimitLabel}; runtime dùng tồn tối thiểu {negativeStockRuntimeLimitLabel}.</span>
+                    <span className="block text-xs text-gray-500 dark:text-slate-400">Nh?p 10 nghia l? t?n t?i thi?u -10. Gi? tr? hi?n t?i: {negativeStockAdminLimitLabel}; runtime d?ng t?n t?i thi?u {negativeStockRuntimeLimitLabel}.</span>
                   )}
                 </label>
 
                 <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
-                  <div className="text-xs font-semibold uppercase tracking-wide opacity-80">Giới hạn hiện tại</div>
-                  <div className="mt-1 text-lg font-bold">{negativeStockAdminLimitLabel} → tồn tối thiểu {negativeStockRuntimeLimitLabel}</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide opacity-80">Gi?i h?n hi?n t?i</div>
+                  <div className="mt-1 text-lg font-bold">{negativeStockAdminLimitLabel} ? t?n t?i thi?u {negativeStockRuntimeLimitLabel}</div>
                   <div className="mt-1 text-xs">{negativeStockRuntimeSummary}</div>
                 </div>
               </div>
@@ -1860,7 +1860,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   className="btn-success inline-flex min-h-10 items-center justify-center gap-2 disabled:opacity-60"
                 >
                   {negativeStockSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                  {negativeStockSaving ? 'Đang lưu...' : 'Lưu giới hạn'}
+                  {negativeStockSaving ? '?ang luu...' : 'Luu gi?i h?n'}
                 </button>
                 <button
                   type="button"
@@ -1868,25 +1868,25 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   disabled={negativeStockSaving}
                   className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
                 >
-                  Tải lại từ API
+                  T?i l?i t? API
                 </button>
               </div>
             )}
           </div>
 
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
-            <div className="font-semibold">Nguyên tắc áp dụng</div>
+            <div className="font-semibold">Nguy?n t?c ?p d?ng</div>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>Khi tắt: backend không cho xuất nếu tồn dự kiến nhỏ hơn 0.</li>
-              <li>Khi bật: admin nhập {negativeStockAdminLimitLabel}, backend cho phép tồn sau xuất giảm tối đa đến {negativeStockRuntimeLimitLabel}.</li>
-              <li>Nếu vượt giới hạn, backend trả lỗi rõ tên sản phẩm, tồn hiện tại, số lượng xuất và giới hạn tối thiểu.</li>
-              <li>Frontend đọc/ghi trực tiếp qua API /api/settings/negative-stock và không còn dùng giới hạn hard-code.</li>
+              <li>Khi t?t: backend kh?ng cho xu?t n?u t?n d? ki?n nh? hon 0.</li>
+              <li>Khi b?t: admin nh?p {negativeStockAdminLimitLabel}, backend cho ph?p t?n sau xu?t gi?m t?i da d?n {negativeStockRuntimeLimitLabel}.</li>
+              <li>N?u vu?t gi?i h?n, backend tr? l?i r? t?n s?n ph?m, t?n hi?n t?i, s? lu?ng xu?t v? gi?i h?n t?i thi?u.</li>
+              <li>Frontend d?c/ghi tr?c ti?p qua API /api/settings/negative-stock v? kh?ng c?n d?ng gi?i h?n hard-code.</li>
             </ul>
           </div>
 
           {!canManageNegativeStock && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              Tài khoản hiện tại chỉ có quyền xem trạng thái xuất âm tồn kho và không thể thay đổi cấu hình này.
+              T?i kho?n hi?n t?i ch? c? quy?n xem tr?ng th?i xu?t ?m t?n kho v? kh?ng th? thay d?i c?u h?nh n?y.
             </div>
           )}
         </div>
@@ -1897,10 +1897,10 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <h2 className="font-bold flex items-center gap-2">
-                <FileText size={18} /> Mẫu in hóa đơn ({printTemplates.length})
+                <FileText size={18} /> M?u in h?a don ({printTemplates.length})
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Quản lý mẫu in dùng cho hóa đơn thật qua API /api/print-templates, editor Canva-like autosave draft theo revision và preview bằng hóa đơn thật.
+                Qu?n l? m?u in d?ng cho h?a don th?t qua API /api/print-templates, editor Canva-like autosave draft theo revision v? preview b?ng h?a don th?t.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1910,11 +1910,11 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 disabled={printTemplatesLoading}
                 className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
               >
-                <Loader2 size={14} className={printTemplatesLoading ? 'animate-spin' : ''} /> Tải lại
+                <Loader2 size={14} className={printTemplatesLoading ? 'animate-spin' : ''} /> T?i l?i
               </button>
               {canManagePrintTemplates && (
                 <button type="button" onClick={openAddPrintTemplate} disabled={printTemplateSaving} className="btn-primary inline-flex min-h-10 items-center gap-2 text-sm disabled:opacity-60">
-                  {printTemplateSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Thêm mẫu in
+                  {printTemplateSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Th?m m?u in
                 </button>
               )}
             </div>
@@ -1925,7 +1925,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           {printTemplatesLoading ? (
             <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
               <div className="inline-flex items-center gap-2">
-                <Loader2 size={16} className="animate-spin" /> Đang tải danh sách mẫu in...
+                <Loader2 size={16} className="animate-spin" /> ?ang t?i danh s?ch m?u in...
               </div>
             </div>
           ) : printTemplates.length === 0 ? (
@@ -1933,11 +1933,11 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               {canManagePrintTemplates && (
                 <div className="mb-4 flex flex-wrap justify-center gap-2">
                   <button type="button" onClick={openDemoPrintTemplateEditor} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">
-                    <Edit2 size={14} /> Thiết kế thử
+                    <Edit2 size={14} /> Thi?t k? th?
                   </button>
                 </div>
               )}
-              Chưa có mẫu in hóa đơn. Nhấn “Thêm mẫu in” để tạo mẫu đầu tiên.
+              Chua c? m?u in h?a don. Nh?n ?Th?m m?u in? d? t?o m?u d?u ti?n.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -1946,20 +1946,20 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-bold text-gray-900">{template.template_name || template.name || 'Mẫu in hóa đơn'}</h3>
-                        {template.is_default && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700"><Star size={12} /> Mặc định</span>}
-                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{template.paper_size} · {template.orientation === 'landscape' ? 'Ngang' : 'Dọc'}</span>
+                        <h3 className="font-bold text-gray-900">{template.template_name || template.name || 'M?u in h?a don'}</h3>
+                        {template.is_default && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700"><Star size={12} /> M?c d?nh</span>}
+                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{template.paper_size} ? {template.orientation === 'landscape' ? 'Ngang' : 'D?c'}</span>
                       </div>
-                      <p className="mt-1 text-sm text-gray-600">{template.description || template.shop_name || 'Không có mô tả.'}</p>
+                      <p className="mt-1 text-sm text-gray-600">{template.description || template.shop_name || 'Kh?ng c? m? t?.'}</p>
                       <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
                         <span>Font {template.settings.fontSize}pt</span>
                         <span>Scale {Math.round(template.settings.scale * 100)}%</span>
                         <span>Padding {template.settings.paddingMm}mm</span>
-                        <span>Bảng {template.settings.tableWidthPercent}%</span>
+                        <span>B?ng {template.settings.tableWidthPercent}%</span>
                       </div>
                     </div>
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-slate-50 text-slate-400">
-                      {template.logo_url ? <img src={template.logo_url} alt="Logo mẫu in" className="h-full w-full object-contain" /> : <Image size={20} />}
+                      {template.logo_url ? <img src={template.logo_url} alt="Logo m?u in" className="h-full w-full object-contain" /> : <Image size={20} />}
                     </div>
                   </div>
 
@@ -1967,19 +1967,19 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                     {canManagePrintTemplates ? (
                       <>
                         <button type="button" onClick={() => openEditPrintTemplate(template)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100">
-                          <Edit2 size={12} /> Mở editor
+                          <Edit2 size={12} /> M? editor
                         </button>
                         {!template.is_default && (
                           <button type="button" onClick={() => handleSetDefaultPrintTemplate(template)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-100">
-                            <Star size={12} /> Đặt mặc định
+                            <Star size={12} /> ??t m?c d?nh
                           </button>
                         )}
                         <button type="button" onClick={() => handleDeletePrintTemplate(template)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-100">
-                          <Trash2 size={12} /> Xóa
+                          <Trash2 size={12} /> X?a
                         </button>
                       </>
                     ) : (
-                      <span className="text-xs text-gray-400">Tài khoản chỉ có quyền xem mẫu in.</span>
+                      <span className="text-xs text-gray-400">T?i kho?n ch? c? quy?n xem m?u in.</span>
                     )}
                   </div>
                 </div>
@@ -1995,17 +1995,17 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
                 <h2 className="font-bold flex items-center gap-2">
-                  <Image size={18} /> Quản lý Backup
+                  <Image size={18} /> Qu?n l? Backup
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Backup định kỳ mỗi 72 giờ, giữ tối đa 30 bản gần nhất, nén ZIP và lưu lịch sử vào bảng system_backups / backup_logs.
+                  Backup d?nh k? m?i 72 gi?, gi? t?i da 30 b?n g?n nh?t, n?n ZIP v? luu l?ch s? v?o b?ng system_backups / backup_logs.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={loadBackups} disabled={backupLoading} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60">
-                  <Loader2 size={16} className={backupLoading ? 'animate-spin' : ''} /> Tải lại
+                  <Loader2 size={16} className={backupLoading ? 'animate-spin' : ''} /> T?i l?i
                 </button>
-                <button type="button" onClick={async () => { setBackupNotice(null); try { await dataGuardianApi.backupNow(); await loadBackups(); setBackupNotice({ tone: 'success', message: 'Đã tạo backup thủ công.' }); } catch (error) { setBackupNotice({ tone: 'error', message: getErrorMessage(error, 'Không thể tạo backup thủ công.') }); } }} disabled={backupLoading} className="btn-success inline-flex min-h-10 items-center gap-2 disabled:opacity-60">
+                <button type="button" onClick={async () => { setBackupNotice(null); try { await dataGuardianApi.backupNow(); await loadBackups(); setBackupNotice({ tone: 'success', message: '?? t?o backup th? c?ng.' }); } catch (error) { setBackupNotice({ tone: 'error', message: getErrorMessage(error, 'Kh?ng th? t?o backup th? c?ng.') }); } }} disabled={backupLoading} className="btn-success inline-flex min-h-10 items-center gap-2 disabled:opacity-60">
                   <CheckCircle size={16} /> Backup ngay
                 </button>
               </div>
@@ -2014,45 +2014,45 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <SectionNotice notice={backupNotice} />
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Lần backup gần nhất</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.lastBackupAt || 'Chưa có'}</div></div>
-              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Lần backup kế tiếp</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.nextBackupAt || 'Chưa xác định'}</div></div>
-              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Tổng số file</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.totalBackups ?? backupItems.length}</div></div>
-              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Trạng thái</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.scheduleRunning ? 'Đang chạy' : 'Đang dừng'}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">L?n backup g?n nh?t</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.lastBackupAt || 'Chua c?'}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">L?n backup k? ti?p</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.nextBackupAt || 'Chua x?c d?nh'}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">T?ng s? file</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.totalBackups ?? backupItems.length}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Tr?ng th?i</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.scheduleRunning ? '?ang ch?y' : '?ang d?ng'}</div></div>
             </div>
           </div>
 
           <div className="card space-y-4">
-            <h3 className="font-bold">Danh sách backup</h3>
+            <h3 className="font-bold">Danh s?ch backup</h3>
             <div className="overflow-auto rounded-xl border">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
                   <tr>
-                    <th className="px-4 py-3">Tên file</th>
-                    <th className="px-4 py-3">Ngày tạo</th>
-                    <th className="px-4 py-3">Kích thước</th>
-                    <th className="px-4 py-3">Loại</th>
-                    <th className="px-4 py-3">Trạng thái</th>
-                    <th className="px-4 py-3 text-right">Thao tác</th>
+                    <th className="px-4 py-3">T?n file</th>
+                    <th className="px-4 py-3">Ng?y t?o</th>
+                    <th className="px-4 py-3">K?ch thu?c</th>
+                    <th className="px-4 py-3">Lo?i</th>
+                    <th className="px-4 py-3">Tr?ng th?i</th>
+                    <th className="px-4 py-3 text-right">Thao t?c</th>
                   </tr>
                 </thead>
                 <tbody>
                   {backupItems.map(item => (
                     <tr key={item.path || item.file} className="border-t">
-                      <td className="px-4 py-3 font-medium text-gray-800">{item.file || item.backup_name || '—'}</td>
+                      <td className="px-4 py-3 font-medium text-gray-800">{item.file || item.backup_name || '?'}</td>
                       <td className="px-4 py-3 text-gray-600">{formatDateTime(item.mtime || item.created_at)}</td>
                       <td className="px-4 py-3 text-gray-600">{formatBytes(item.size || item.file_size)}</td>
                       <td className="px-4 py-3 text-gray-600">{item.tier || item.backup_type || 'scheduled'}</td>
                       <td className="px-4 py-3 text-gray-600">{item.status || 'success'}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-wrap justify-end gap-2">
-                          <button type="button" className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium hover:bg-gray-50" onClick={() => window.open(resolveApiUrl(`/data-guardian/download?path=${encodeURIComponent(item.path || '')}`), '_blank')}>Tải xuống</button>
-                          <button type="button" className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-100" onClick={async () => { if (!window.confirm(`Khôi phục từ backup ${item.file || item.backup_name}?`)) return; setRestoringBackup(item.path); try { await dataGuardianApi.restore({ path: item.path }); setBackupNotice({ tone: 'success', message: 'Đã khôi phục backup.' }); await loadBackups(); } catch (error) { setBackupNotice({ tone: 'error', message: getErrorMessage(error, 'Không thể khôi phục backup.') }); } finally { setRestoringBackup(''); } }} disabled={restoringBackup === item.path}>Khôi phục</button>
+                          <button type="button" className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium hover:bg-gray-50" onClick={() => window.open(resolveApiUrl(`/data-guardian/download?path=${encodeURIComponent(item.path || '')}`), '_blank')}>T?i xu?ng</button>
+                          <button type="button" className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-100" onClick={async () => { if (!window.confirm(`Kh?i ph?c t? backup ${item.file || item.backup_name}?`)) return; setRestoringBackup(item.path); try { await dataGuardianApi.restore({ path: item.path }); setBackupNotice({ tone: 'success', message: '?? kh?i ph?c backup.' }); await loadBackups(); } catch (error) { setBackupNotice({ tone: 'error', message: getErrorMessage(error, 'Kh?ng th? kh?i ph?c backup.') }); } finally { setRestoringBackup(''); } }} disabled={restoringBackup === item.path}>Kh?i ph?c</button>
                         </div>
                       </td>
                     </tr>
                   ))}
                   {!backupItems.length && (
-                    <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">Chưa có backup nào.</td></tr>
+                    <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">Chua c? backup n?o.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -2064,11 +2064,11 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div className="space-y-2 text-sm">
               {backupLogs.slice(0, 10).map(log => (
                 <div key={log.id || `${log.created_at}-${log.backup_file}`} className="rounded-lg border bg-gray-50 px-4 py-3">
-                  <div className="font-medium text-gray-800">{log.backup_file || '—'} · {log.status || 'success'}</div>
-                  <div className="text-xs text-gray-500">{formatDateTime(log.created_at)} · {formatBytes(log.file_size)} · {log.detail || ''}</div>
+                  <div className="font-medium text-gray-800">{log.backup_file || '?'} ? {log.status || 'success'}</div>
+                  <div className="text-xs text-gray-500">{formatDateTime(log.created_at)} ? {formatBytes(log.file_size)} ? {log.detail || ''}</div>
                 </div>
               ))}
-              {!backupLogs.length && <div className="text-gray-500">Chưa có log backup.</div>}
+              {!backupLogs.length && <div className="text-gray-500">Chua c? log backup.</div>}
             </div>
           </div>
         </div>
@@ -2080,10 +2080,10 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
                 <h2 className="font-bold flex items-center gap-2">
-                  <Settings2 size={18} /> Cập nhật ứng dụng
+                  <Settings2 size={18} /> C?p nh?t ?ng d?ng
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Ứng dụng Electron có thể tự kiểm tra, tự tải và chỉ cài đặt khi bạn xác nhận cập nhật.
+                  ?ng d?ng Electron c? th? t? ki?m tra, t? t?i v? ch? c?i d?t khi b?n x?c nh?n c?p nh?t.
                 </p>
               </div>
               <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${updateState?.status === 'error' ? 'bg-red-100 text-red-700' : hasUpdate ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -2093,19 +2093,19 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
             <div className="mt-4 grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
               <div className="rounded-xl border bg-gray-50 p-4">
-                <div className="text-gray-500">Phiên bản hiện tại</div>
+                <div className="text-gray-500">Phi?n b?n hi?n t?i</div>
                 <div className="mt-1 text-2xl font-bold text-gray-800">{currentVersion}</div>
                 <div className="mt-2 text-xs text-gray-500">
-                  Nền tảng: {appInfo?.platform || window.khaDesktop?.platform || 'web'} · Kiến trúc: {appInfo?.arch || 'unknown'}
+                  N?n t?ng: {appInfo?.platform || window.khaDesktop?.platform || 'web'} ? Ki?n tr?c: {appInfo?.arch || 'unknown'}
                 </div>
               </div>
               <div className="rounded-xl border bg-gray-50 p-4">
-                <div className="text-gray-500">Feed cập nhật</div>
-                <div className="mt-1 break-all font-medium text-gray-800">{manifestUrl || 'Chưa nạp URL feed'}</div>
-                <div className="mt-2 text-xs text-gray-500">Nguồn: {manifestSourceLabel}</div>
+                <div className="text-gray-500">Feed c?p nh?t</div>
+                <div className="mt-1 break-all font-medium text-gray-800">{manifestUrl || 'Chua n?p URL feed'}</div>
+                <div className="mt-2 text-xs text-gray-500">Ngu?n: {manifestSourceLabel}</div>
                 {updateState?.manifestUrlDefault && (
                   <div className="mt-2 inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
-                    Đang dùng GitHub Release feed mặc định
+                    ?ang d?ng GitHub Release feed m?c d?nh
                   </div>
                 )}
               </div>
@@ -2113,36 +2113,36 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
             {updateLogPath && (
               <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
-                <div className="font-semibold text-gray-700">Log cập nhật</div>
+                <div className="font-semibold text-gray-700">Log c?p nh?t</div>
                 <div className="mt-1 break-all">{updateLogPath}</div>
-                <div className="mt-1">Log này dùng để debug check/download/cài đặt và không chứa token hay mật khẩu.</div>
+                <div className="mt-1">Log n?y d?ng d? debug check/download/c?i d?t v? kh?ng ch?a token hay m?t kh?u.</div>
               </div>
             )}
 
             {runtimeDiagnostics && (
               <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
-                <div className="font-semibold text-gray-700">Chẩn đoán runtime updater</div>
+                <div className="font-semibold text-gray-700">Ch?n do?n runtime updater</div>
                 <div className="mt-1 grid grid-cols-1 gap-x-4 gap-y-1 md:grid-cols-2">
-                  <div>Đã đóng gói: {runtimeDiagnostics.isPackaged ? 'Có' : 'Không'}</div>
-                  <div>app-update.yml: {runtimeDiagnostics.appUpdateYmlExists ? 'Có' : 'Không thấy'}</div>
-                  <div>Kiến trúc runtime: {runtimeArch || 'unknown'}</div>
-                  <div>Tương thích: {runtimeCompatibility?.supported === false ? 'Không' : 'Có'}</div>
-                  <div className="break-all md:col-span-2">Đường dẫn app-update.yml: {runtimeDiagnostics.appUpdateYmlPath || 'Không xác định'}</div>
+                  <div>?? d?ng g?i: {runtimeDiagnostics.isPackaged ? 'C?' : 'Kh?ng'}</div>
+                  <div>app-update.yml: {runtimeDiagnostics.appUpdateYmlExists ? 'C?' : 'Kh?ng th?y'}</div>
+                  <div>Ki?n tr?c runtime: {runtimeArch || 'unknown'}</div>
+                  <div>Tuong th?ch: {runtimeCompatibility?.supported === false ? 'Kh?ng' : 'C?'}</div>
+                  <div className="break-all md:col-span-2">?u?ng d?n app-update.yml: {runtimeDiagnostics.appUpdateYmlPath || 'Kh?ng x?c d?nh'}</div>
                 </div>
               </div>
             )}
 
             {runtimeCompatibility && (
               <div className={`mt-4 rounded-lg border px-4 py-3 text-sm ${runtimeCompatibility.supported === false ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
-                <div className="font-semibold">Tương thích máy Windows</div>
+                <div className="font-semibold">Tuong th?ch m?y Windows</div>
                 <div className="mt-1">{runtimeCompatibility.message}</div>
-                <div className="mt-1 text-xs">Bộ cài khuyến nghị: {recommendedInstaller?.label || 'Windows x64'}.</div>
+                <div className="mt-1 text-xs">B? c?i khuy?n ngh?: {recommendedInstaller?.label || 'Windows x64'}.</div>
               </div>
             )}
 
             {!desktopAvailable && (
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Tính năng cập nhật chỉ hoạt động trong ứng dụng Electron đã cài trên Windows. Khi chạy frontend web độc lập, API cập nhật sẽ không khả dụng.
+                T?nh nang c?p nh?t ch? ho?t d?ng trong ?ng d?ng Electron d? c?i tr?n Windows. Khi ch?y frontend web d?c l?p, API c?p nh?t s? kh?ng kh? d?ng.
               </div>
             )}
 
@@ -2154,7 +2154,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
             {updateError && (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                <div className="font-semibold">Không thể hoàn tất thao tác cập nhật</div>
+                <div className="font-semibold">Kh?ng th? ho?n t?t thao t?c c?p nh?t</div>
                 <div>{getUpdateErrorMessage(updateError)}</div>
                 {updateError.details && (
                   <pre className="mt-2 whitespace-pre-wrap rounded bg-white/70 p-2 text-xs">
@@ -2168,19 +2168,19 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <div className="mt-4 rounded-xl border bg-white p-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <div className="text-sm text-gray-500">Bản mới</div>
+                    <div className="text-sm text-gray-500">B?n m?i</div>
                     <div className="text-xl font-bold text-green-700">{updateInfo.version}</div>
                   </div>
                   <div className="text-xs text-gray-500 md:text-right">
-                    <div>Ngày phát hành: {formatDateTime(updateInfo.releaseDate)}</div>
-                    <div>Dung lượng: {formatBytes(updateInfo.size)}</div>
-                    {updateInfo.mandatory && <div className="font-semibold text-red-600">Bản cập nhật bắt buộc</div>}
+                    <div>Ng?y ph?t h?nh: {formatDateTime(updateInfo.releaseDate)}</div>
+                    <div>Dung lu?ng: {formatBytes(updateInfo.size)}</div>
+                    {updateInfo.mandatory && <div className="font-semibold text-red-600">B?n c?p nh?t b?t bu?c</div>}
                   </div>
                 </div>
                 <div className="mt-3 text-sm">
-                  <div className="mb-1 font-semibold text-gray-700">Ghi chú phát hành</div>
+                  <div className="mb-1 font-semibold text-gray-700">Ghi ch? ph?t h?nh</div>
                   <pre className="whitespace-pre-wrap rounded-lg border bg-gray-50 p-3 text-sm text-gray-700">
-                    {updateInfo.releaseNotes || 'Không có ghi chú phát hành.'}
+                    {updateInfo.releaseNotes || 'Kh?ng c? ghi ch? ph?t h?nh.'}
                   </pre>
                 </div>
                 <div className="mt-3 break-all text-xs text-gray-500">
@@ -2192,14 +2192,14 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
             {updateState?.status === 'no-update' && updateState?.lastCheckedAt && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                Ứng dụng đang ở phiên bản mới nhất. Lần kiểm tra: {formatDateTime(updateState.lastCheckedAt)}.
+                ?ng d?ng dang ? phi?n b?n m?i nh?t. L?n ki?m tra: {formatDateTime(updateState.lastCheckedAt)}.
               </div>
             )}
 
             {updateState?.status === 'downloading' && (
               <div className="mt-4">
                 <div className="mb-1 flex items-center justify-between text-sm">
-                  <span>Tiến trình tải</span>
+                  <span>Ti?n tr?nh t?i</span>
                   <span>{progressPercent}%</span>
                 </div>
                 <div className="h-3 overflow-hidden rounded-full bg-gray-100">
@@ -2213,7 +2213,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
             {downloaded && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                electron-updater đã tải và xác thực gói cập nhật thành công. Khi bấm Cập nhật ngay, ứng dụng sẽ sao lưu database trước khi cài đặt và khởi động lại.
+                electron-updater d? t?i v? x?c th?c g?i c?p nh?t th?nh c?ng. Khi b?m C?p nh?t ngay, ?ng d?ng s? sao luu database tru?c khi c?i d?t v? kh?i d?ng l?i.
               </div>
             )}
 
@@ -2224,7 +2224,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 disabled={!desktopAvailable || updateBusy === 'checking' || updateState?.status === 'downloading'}
                 className="btn-primary disabled:opacity-60"
               >
-                {updateBusy === 'checking' ? 'Đang kiểm tra...' : 'Kiểm tra cập nhật'}
+                {updateBusy === 'checking' ? '?ang ki?m tra...' : 'Ki?m tra c?p nh?t'}
               </button>
               <button
                 type="button"
@@ -2232,7 +2232,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 disabled={!desktopAvailable || !hasUpdate || downloaded || updateState?.status === 'downloading'}
                 className="btn-success disabled:opacity-60"
               >
-                {updateBusy === 'downloading' ? 'Đang tải...' : 'Tải bản cập nhật'}
+                {updateBusy === 'downloading' ? '?ang t?i...' : 'T?i b?n c?p nh?t'}
               </button>
               {updateState?.status === 'downloading' && (
                 <button
@@ -2241,7 +2241,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   disabled={updateBusy === 'cancelling'}
                   className="btn-danger disabled:opacity-60"
                 >
-                  {updateBusy === 'cancelling' ? 'Đang hủy...' : 'Hủy tải'}
+                  {updateBusy === 'cancelling' ? '?ang h?y...' : 'H?y t?i'}
                 </button>
               )}
               <button
@@ -2250,15 +2250,15 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 disabled={!desktopAvailable || !downloaded || updateBusy === 'installing'}
                 className="btn-danger disabled:opacity-60"
               >
-                {updateBusy === 'installing' ? 'Đang cập nhật...' : 'Cập nhật ngay'}
+                {updateBusy === 'installing' ? '?ang c?p nh?t...' : 'C?p nh?t ngay'}
               </button>
             </div>
           </div>
 
           <div className="card border-emerald-100 bg-emerald-50 text-sm text-emerald-800">
-            <h3 className="mb-3 font-bold">Tải bộ cài thủ công đúng kiến trúc</h3>
+            <h3 className="mb-3 font-bold">T?i b? c?i th? c?ng d?ng ki?n tr?c</h3>
             <div className="mb-3 rounded-lg border border-emerald-200 bg-white/70 px-3 py-2 text-xs">
-              Luôn tải từ GitHub Release chính thức và chọn đúng file có hậu tố kiến trúc. Nếu Windows báo “Ứng dụng này không thể chạy trên PC của bạn”, hãy thử bản ia32 cho Windows 32-bit hoặc kiểm tra máy có hỗ trợ x64 không.
+              Lu?n t?i t? GitHub Release ch?nh th?c v? ch?n d?ng file c? h?u t? ki?n tr?c. N?u Windows b?o ??ng d?ng n?y kh?ng th? ch?y tr?n PC c?a b?n?, h?y th? b?n ia32 cho Windows 32-bit ho?c ki?m tra m?y c? h? tr? x64 kh?ng.
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               {WINDOWS_INSTALLERS.map(installer => {
@@ -2268,7 +2268,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   <div key={installer.arch} className="rounded-xl border border-emerald-200 bg-white p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="font-semibold text-gray-800">{installer.label}</div>
-                      {recommended && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Khuyến nghị cho máy này</span>}
+                      {recommended && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Khuy?n ngh? cho m?y n?y</span>}
                     </div>
                     <div className="mt-1 text-xs text-gray-500">{installer.recommendedFor}</div>
                     <div className="mt-2 break-all rounded bg-gray-50 p-2 text-xs text-gray-600">{installer.fileName}</div>
@@ -2277,7 +2277,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                       onClick={() => handleOpenInstallerDownload(installer)}
                       className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
                     >
-                      Tải {installer.arch}
+                      T?i {installer.arch}
                     </button>
                     <div className="mt-2 break-all text-[11px] text-gray-500">{url}</div>
                   </div>
@@ -2287,13 +2287,13 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           </div>
 
           <div className="card border-blue-100 bg-blue-50 text-sm text-blue-800">
-            <h3 className="mb-2 font-bold">Ghi chú update feed</h3>
+            <h3 className="mb-2 font-bold">Ghi ch? update feed</h3>
             <ul className="list-disc space-y-1 pl-5">
-              <li>Mặc định app dùng provider generic để đọc trực tiếp latest.yml từ GitHub Release latest.</li>
-              <li>Release production cần có installer x64 và ia32, mỗi file .exe có .exe.blockmap tương ứng và tên asset rõ kiến trúc.</li>
-              <li>latest.yml và update-manifest.json phải cùng version, URL, sha256/sha512 và size với asset đã upload.</li>
-              <li>Khi repo hoặc release asset đang private, client Electron không thể tự cập nhật nếu không có feed public phù hợp.</li>
-              <li>Trước khi cài đặt, ứng dụng sẽ sao lưu file database trong thư mục userData/backups.</li>
+              <li>M?c d?nh app d?ng provider generic d? d?c tr?c ti?p latest.yml t? GitHub Release latest.</li>
+              <li>Release production c?n c? installer x64 v? ia32, m?i file .exe c? .exe.blockmap tuong ?ng v? t?n asset r? ki?n tr?c.</li>
+              <li>latest.yml v? update-manifest.json ph?i c?ng version, URL, sha256/sha512 v? size v?i asset d? upload.</li>
+              <li>Khi repo ho?c release asset dang private, client Electron kh?ng th? t? c?p nh?t n?u kh?ng c? feed public ph? h?p.</li>
+              <li>Tru?c khi c?i d?t, ?ng d?ng s? sao luu file database trong thu m?c userData/backups.</li>
             </ul>
           </div>
         </div>
@@ -2304,7 +2304,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="employee-modal-title">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 id="employee-modal-title" className="text-lg font-bold">
-                {empEdit ? 'Sửa nhân viên' : 'Thêm nhân viên'}
+                {empEdit ? 'S?a nh?n vi?n' : 'Th?m nh?n vi?n'}
               </h2>
               <button type="button" onClick={closeEmpModal} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
@@ -2317,7 +2317,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <div className="space-y-3">
                 <InputField
                   id="emp-name"
-                  label="Họ tên"
+                  label="H? t?n"
                   value={empForm.name}
                   onChange={event => setEmpForm(current => ({ ...current, name: event.target.value }))}
                 />
@@ -2330,20 +2330,20 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 />
                 <InputField
                   id="emp-phone"
-                  label="Số điện thoại"
+                  label="S? di?n tho?i"
                   value={empForm.phone}
                   onChange={event => setEmpForm(current => ({ ...current, phone: event.target.value }))}
                 />
                 <InputField
                   id="emp-password"
-                  label={empEdit ? 'Mật khẩu mới (để trống nếu không đổi)' : 'Mật khẩu'}
+                  label={empEdit ? 'M?t kh?u m?i (d? tr?ng n?u kh?ng d?i)' : 'M?t kh?u'}
                   type="password"
                   autoComplete="new-password"
                   value={empForm.password}
                   onChange={event => setEmpForm(current => ({ ...current, password: event.target.value }))}
                 />
                 <div>
-                  <label htmlFor="emp-role" className="text-sm font-medium text-gray-700">Vai trò</label>
+                  <label htmlFor="emp-role" className="text-sm font-medium text-gray-700">Vai tr?</label>
                   <select
                     id="emp-role"
                     className="input-field mt-1 w-full"
@@ -2361,7 +2361,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               </div>
 
               <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                Vai trò hỗ trợ: admin, kế toán, thu ngân, nhân viên và user cũ. Khi tạo mới, backend vẫn tự cấp role ban đầu theo cơ chế cũ; client sẽ cập nhật lại role đã chọn ngay sau khi tạo nếu có quyền quản lý người dùng.
+                Vai tr? h? tr?: admin, k? to?n, thu ng?n, nh?n vi?n v? user cu. Khi t?o m?i, backend v?n t? c?p role ban d?u theo co ch? cu; client s? c?p nh?t l?i role d? ch?n ngay sau khi t?o n?u c? quy?n qu?n l? ngu?i d?ng.
               </div>
             </div>
 
@@ -2372,10 +2372,10 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 disabled={empSaving}
                 className="btn-success flex-1 disabled:opacity-60"
               >
-                {empSaving ? 'Đang lưu...' : 'Lưu'}
+                {empSaving ? '?ang luu...' : 'Luu'}
               </button>
               <button type="button" onClick={closeEmpModal} disabled={empSaving} className="btn-danger flex-1 disabled:opacity-60">
-                Hủy
+                H?y
               </button>
             </div>
           </div>
@@ -2387,7 +2387,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="customer-type-modal-title">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 id="customer-type-modal-title" className="text-lg font-bold">
-                {typeEdit ? 'Sửa loại khách' : 'Thêm loại khách'}
+                {typeEdit ? 'S?a lo?i kh?ch' : 'Th?m lo?i kh?ch'}
               </h2>
               <button type="button" onClick={closeTypeModal} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
@@ -2398,15 +2398,15 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <SectionNotice notice={typeNotice} />
               <InputField
                 id="customer-type-name"
-                label="Tên loại khách"
+                label="T?n lo?i kh?ch"
                 value={typeForm.name}
                 onChange={event => setTypeForm(current => ({ ...current, name: event.target.value }))}
-                placeholder="Ví dụ: Khách VIP"
+                placeholder="V? d?: Kh?ch VIP"
               />
 
               <div>
                 <label htmlFor="customer-type-color" className="text-sm font-medium text-gray-700">
-                  Màu sắc
+                  M?u s?c
                 </label>
                 <div className="mt-1 flex items-center gap-3">
                   <input
@@ -2428,10 +2428,10 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 disabled={typeSaving}
                 className="btn-success flex-1 disabled:opacity-60"
               >
-                {typeSaving ? 'Đang lưu...' : 'Lưu'}
+                {typeSaving ? '?ang luu...' : 'Luu'}
               </button>
               <button type="button" onClick={closeTypeModal} disabled={typeSaving} className="btn-danger flex-1 disabled:opacity-60">
-                Hủy
+                H?y
               </button>
             </div>
           </div>
@@ -2450,69 +2450,69 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
       <HelpModal
         show={showHelp}
-        title="Hướng dẫn sử dụng Cài đặt hệ thống"
+        title="Hu?ng d?n s? d?ng C?i d?t h? th?ng"
         onClose={() => setShowHelp(false)}
         content={(
           <div className="space-y-4 text-sm text-gray-700">
             <div>
-              <h3 className="mb-2 font-bold text-gray-800">Tổng quan</h3>
+              <h3 className="mb-2 font-bold text-gray-800">T?ng quan</h3>
               <p>
-                Trang Cài đặt cho phép cấu hình thông tin cửa hàng, quản lý nhân viên, loại khách hàng, bật/tắt xuất âm tồn kho, mẫu in hóa đơn và cập nhật ứng dụng Electron.
+                Trang C?i d?t cho ph?p c?u h?nh th?ng tin c?a h?ng, qu?n l? nh?n vi?n, lo?i kh?ch h?ng, b?t/t?t xu?t ?m t?n kho, m?u in h?a don v? c?p nh?t ?ng d?ng Electron.
               </p>
             </div>
 
             <div>
-              <h3 className="mb-2 font-bold text-gray-800">Tab Cửa hàng</h3>
+              <h3 className="mb-2 font-bold text-gray-800">Tab C?a h?ng</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Cập nhật tên cửa hàng, địa chỉ, số điện thoại, email, mã số thuế và thông tin ngân hàng.</li>
-                <li>Phần logo, ghi chú và slogan dùng cho nhận diện cửa hàng trong hệ thống.</li>
-                <li>Sau khi chỉnh sửa, nhấn <strong>Lưu thay đổi</strong> để ghi xuống backend.</li>
+                <li>C?p nh?t t?n c?a h?ng, d?a ch?, s? di?n tho?i, email, m? s? thu? v? th?ng tin ng?n h?ng.</li>
+                <li>Ph?n logo, ghi ch? v? slogan d?ng cho nh?n di?n c?a h?ng trong h? th?ng.</li>
+                <li>Sau khi ch?nh s?a, nh?n <strong>Luu thay d?i</strong> d? ghi xu?ng backend.</li>
               </ul>
             </div>
 
             <div>
-              <h3 className="mb-2 font-bold text-gray-800">Tab Nhân viên</h3>
+              <h3 className="mb-2 font-bold text-gray-800">Tab Nh?n vi?n</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Thêm, sửa hoặc vô hiệu tài khoản nhân viên.</li>
-                <li>Có thể chọn role Admin, Kế toán, Thu ngân, Nhân viên hoặc User cũ để giữ tương thích dữ liệu legacy.</li>
-                <li>Admin toàn quyền; kế toán truy cập module kế toán; thu ngân chỉ xem doanh thu; nhân viên/user cũ không vào module kế toán.</li>
-                <li>Khi sửa nhân viên, có thể để trống mật khẩu nếu không muốn đổi.</li>
+                <li>Th?m, s?a ho?c v? hi?u t?i kho?n nh?n vi?n.</li>
+                <li>C? th? ch?n role Admin, K? to?n, Thu ng?n, Nh?n vi?n ho?c User cu d? gi? tuong th?ch d? li?u legacy.</li>
+                <li>Admin to?n quy?n; k? to?n truy c?p module k? to?n; thu ng?n ch? xem doanh thu; nh?n vi?n/user cu kh?ng v?o module k? to?n.</li>
+                <li>Khi s?a nh?n vi?n, c? th? d? tr?ng m?t kh?u n?u kh?ng mu?n d?i.</li>
               </ul>
             </div>
 
             <div>
-              <h3 className="mb-2 font-bold text-gray-800">Tab Loại khách</h3>
+              <h3 className="mb-2 font-bold text-gray-800">Tab Lo?i kh?ch</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Tạo và chỉnh màu cho từng nhóm khách hàng.</li>
-                <li>Xóa loại khách là thao tác soft-delete trên backend.</li>
+                <li>T?o v? ch?nh m?u cho t?ng nh?m kh?ch h?ng.</li>
+                <li>X?a lo?i kh?ch l? thao t?c soft-delete tr?n backend.</li>
               </ul>
             </div>
 
             <div>
-              <h3 className="mb-2 font-bold text-gray-800">Tab Xuất âm</h3>
+              <h3 className="mb-2 font-bold text-gray-800">Tab Xu?t ?m</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Dùng để bật/tắt cho phép xuất âm tồn kho sản phẩm.</li>
-                <li>Khi bật, admin nhập số lượng âm tối đa; ví dụ nhập {negativeStockAdminLimitLabel} thì tồn tối thiểu runtime là {negativeStockRuntimeLimitLabel}.</li>
-                <li>Khi tắt, mọi thao tác làm tồn kho nhỏ hơn 0 sẽ bị backend từ chối.</li>
-                <li>Ô giới hạn lưu qua API /api/settings/negative-stock và được các màn hình bán hàng/kho dùng làm runtime settings.</li>
+                <li>D?ng d? b?t/t?t cho ph?p xu?t ?m t?n kho s?n ph?m.</li>
+                <li>Khi b?t, admin nh?p s? lu?ng ?m t?i da; v? d? nh?p {negativeStockAdminLimitLabel} th? t?n t?i thi?u runtime l? {negativeStockRuntimeLimitLabel}.</li>
+                <li>Khi t?t, m?i thao t?c l?m t?n kho nh? hon 0 s? b? backend t? ch?i.</li>
+                <li>? gi?i h?n luu qua API /api/settings/negative-stock v? du?c c?c m?n h?nh b?n h?ng/kho d?ng l?m runtime settings.</li>
               </ul>
             </div>
 
             <div>
-              <h3 className="mb-2 font-bold text-gray-800">Tab Mẫu in hóa đơn</h3>
+              <h3 className="mb-2 font-bold text-gray-800">Tab M?u in h?a don</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Danh sách mẫu in lấy từ API thật <strong>/api/print-templates</strong>, không dùng mock cho CRUD hoặc editor chính thức.</li>
-                <li>Editor Canva-like hỗ trợ kéo thả, resize, zoom, grid, snap, autosave draft theo revision, publish và discard draft.</li>
-                <li>Preview editor và renderer in dùng dữ liệu hóa đơn thật từ API <strong>/api/invoices/:idOrCode/print</strong>; logo upload/xóa qua asset endpoint riêng.</li>
+                <li>Danh s?ch m?u in l?y t? API th?t <strong>/api/print-templates</strong>, kh?ng d?ng mock cho CRUD ho?c editor ch?nh th?c.</li>
+                <li>Editor Canva-like h? tr? k?o th?, resize, zoom, grid, snap, autosave draft theo revision, publish v? discard draft.</li>
+                <li>Preview editor v? renderer in d?ng d? li?u h?a don th?t t? API <strong>/api/invoices/:idOrCode/print</strong>; logo upload/x?a qua asset endpoint ri?ng.</li>
               </ul>
             </div>
 
             <div>
-              <h3 className="mb-2 font-bold text-gray-800">Tab Cập nhật</h3>
+              <h3 className="mb-2 font-bold text-gray-800">Tab C?p nh?t</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Chỉ hoạt động khi chạy bản Electron đã đóng gói.</li>
-                <li>App chỉ cài đặt sau khi người dùng xác nhận và sẽ sao lưu database trước khi cập nhật.</li>
-                <li>Khi cần debug, có thể xem đường dẫn file update.log được hiển thị trong trang.</li>
+                <li>Ch? ho?t d?ng khi ch?y b?n Electron d? d?ng g?i.</li>
+                <li>App ch? c?i d?t sau khi ngu?i d?ng x?c nh?n v? s? sao luu database tru?c khi c?p nh?t.</li>
+                <li>Khi c?n debug, c? th? xem du?ng d?n file update.log du?c hi?n th? trong trang.</li>
               </ul>
             </div>
           </div>

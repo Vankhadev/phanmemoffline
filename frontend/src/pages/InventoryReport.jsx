@@ -9,26 +9,28 @@ import {
   Loader2,
   PackageX,
   RefreshCw,
+  HelpCircle,
   Search,
   WalletCards,
 } from 'lucide-react';
 import { getApiErrorMessage, inventoryApi, SYNC_UPDATED_EVENT } from '../utils/apiClient';
+import HelpModal from '../components/HelpModal';
 
 const PAGE_SIZE = 20;
 
 const STATUS_OPTIONS = [
-  { value: 'all', label: 'Tất cả trạng thái' },
-  { value: 'in_stock', label: 'Còn hàng' },
-  { value: 'low', label: 'Sắp hết hàng' },
-  { value: 'out', label: 'Hết hàng' },
-  { value: 'negative', label: 'Âm kho' },
+  { value: 'all', label: 'T?t c? tr?ng th?i' },
+  { value: 'in_stock', label: 'C?n h?ng' },
+  { value: 'low', label: 'S?p h?t h?ng' },
+  { value: 'out', label: 'H?t h?ng' },
+  { value: 'negative', label: '?m kho' },
 ];
 
 const STATUS_META = {
-  in_stock: { label: 'Còn hàng', className: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: CircleCheck },
-  low: { label: 'Sắp hết hàng', className: 'border-amber-200 bg-amber-50 text-amber-700', icon: AlertTriangle },
-  out: { label: 'Hết hàng', className: 'border-red-200 bg-red-50 text-red-700', icon: PackageX },
-  negative: { label: 'Âm kho', className: 'border-rose-300 bg-rose-600 text-white', icon: AlertOctagon },
+  in_stock: { label: 'C?n h?ng', className: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: CircleCheck },
+  low: { label: 'S?p h?t h?ng', className: 'border-amber-200 bg-amber-50 text-amber-700', icon: AlertTriangle },
+  out: { label: 'H?t h?ng', className: 'border-red-200 bg-red-50 text-red-700', icon: PackageX },
+  negative: { label: '?m kho', className: 'border-rose-300 bg-rose-600 text-white', icon: AlertOctagon },
 };
 
 function formatVND(value) {
@@ -103,6 +105,7 @@ export default function InventoryReport() {
   const [data, setData] = useState(() => normalizeResponse());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
 
   const rows = data.items;
   const summary = data.summary;
@@ -128,7 +131,7 @@ export default function InventoryReport() {
       setData(normalizeResponse(response));
     } catch (requestError) {
       setData(normalizeResponse());
-      setError(getApiErrorMessage(requestError?.data || requestError, requestError?.message || 'Không thể tải báo cáo tồn kho.'));
+      setError(getApiErrorMessage(requestError?.data || requestError, requestError?.message || 'Kh?ng th? t?i b?o c?o t?n kho.'));
     } finally {
       setLoading(false);
     }
@@ -179,72 +182,72 @@ export default function InventoryReport() {
           <div className="flex items-start gap-3">
             <div className="rounded-2xl border border-white/20 bg-white/15 p-3"><Boxes size={27} /></div>
             <div>
-              <div className="text-xs font-bold uppercase tracking-[0.22em] text-orange-50/80">Kho hàng · Báo cáo</div>
-              <h1 className="mt-1 text-2xl font-bold">Báo cáo tồn kho</h1>
-              <p className="mt-1 max-w-3xl text-sm text-white/85">Theo dõi số lượng tồn, giá vốn, giá trị tồn kho và các cảnh báo sắp hết, hết hàng hoặc âm kho.</p>
+              <div className="text-xs font-bold uppercase tracking-[0.22em] text-orange-50/80">Kho h?ng ? B?o c?o</div>
+              <h1 className="mt-1 text-2xl font-bold">B?o c?o t?n kho</h1>
+              <p className="mt-1 max-w-3xl text-sm text-white/85">Theo d?i s? lu?ng t?n, gi? v?n, gi? tr? t?n kho v? c?c c?nh b?o s?p h?t, h?t h?ng ho?c ?m kho.</p>
             </div>
           </div>
           <button type="button" onClick={() => loadReport()} disabled={loading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-white/15 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/25 disabled:opacity-60">
-            <RefreshCw size={17} className={loading ? 'animate-spin' : ''} /> Làm mới
+            <RefreshCw size={17} className={loading ? 'animate-spin' : ''} /> L?m m?i
           </button>
         </div>
       </section>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        <SummaryCard icon={Boxes} label="Mặt hàng" value={summary.total_items} tone="blue" />
-        <SummaryCard icon={CircleCheck} label="Còn hàng" value={summary.in_stock_count} tone="emerald" />
-        <SummaryCard icon={AlertTriangle} label="Sắp hết" value={summary.low_stock_count} tone="amber" />
-        <SummaryCard icon={PackageX} label="Hết hàng" value={summary.out_of_stock_count} tone="red" />
-        <SummaryCard icon={AlertOctagon} label="Âm kho" value={summary.negative_stock_count} tone="rose" />
-        <SummaryCard icon={WalletCards} label="Giá trị tồn" value={summary.total_inventory_value} tone="violet" money />
+        <SummaryCard icon={Boxes} label="M?t h?ng" value={summary.total_items} tone="blue" />
+        <SummaryCard icon={CircleCheck} label="C?n h?ng" value={summary.in_stock_count} tone="emerald" />
+        <SummaryCard icon={AlertTriangle} label="S?p h?t" value={summary.low_stock_count} tone="amber" />
+        <SummaryCard icon={PackageX} label="H?t h?ng" value={summary.out_of_stock_count} tone="red" />
+        <SummaryCard icon={AlertOctagon} label="?m kho" value={summary.negative_stock_count} tone="rose" />
+        <SummaryCard icon={WalletCards} label="Gi? tr? t?n" value={summary.total_inventory_value} tone="violet" money />
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <form onSubmit={applySearch} className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_180px_170px_120px_130px_auto]">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-500">Tìm sản phẩm</label>
+            <label className="mb-1 block text-xs font-semibold text-gray-500">T?m s?n ph?m</label>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input className="input-field pl-9" value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="Tên, mã sản phẩm hoặc SKU..." />
+              <input className="input-field pl-9" value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="T?n, m? s?n ph?m ho?c SKU..." />
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-500">Trạng thái</label>
+            <label className="mb-1 block text-xs font-semibold text-gray-500">Tr?ng th?i</label>
             <select className="input-field" value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}>
               {STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-500">Sắp xếp theo</label>
+            <label className="mb-1 block text-xs font-semibold text-gray-500">S?p x?p theo</label>
             <select className="input-field" value={sort} onChange={event => { setSort(event.target.value); setPage(1); }}>
-              <option value="product_name">Tên sản phẩm</option>
-              <option value="stock">Tồn kho</option>
-              <option value="cost_price">Giá vốn</option>
-              <option value="inventory_value">Giá trị tồn</option>
-              <option value="status">Trạng thái</option>
+              <option value="product_name">T?n s?n ph?m</option>
+              <option value="stock">T?n kho</option>
+              <option value="cost_price">Gi? v?n</option>
+              <option value="inventory_value">Gi? tr? t?n</option>
+              <option value="status">Tr?ng th?i</option>
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-500">Thứ tự</label>
+            <label className="mb-1 block text-xs font-semibold text-gray-500">Th? t?</label>
             <select className="input-field" value={order} onChange={event => { setOrder(event.target.value); setPage(1); }}>
-              <option value="asc">Tăng dần</option>
-              <option value="desc">Giảm dần</option>
+              <option value="asc">Tang d?n</option>
+              <option value="desc">Gi?m d?n</option>
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-500">Ngưỡng sắp hết</label>
+            <label className="mb-1 block text-xs font-semibold text-gray-500">Ngu?ng s?p h?t</label>
             <input type="number" min="0" step="1" className="input-field" value={threshold} onChange={event => { setThreshold(Math.max(0, Number(event.target.value) || 0)); setPage(1); }} />
           </div>
           <div className="flex items-end gap-2">
-            <button type="submit" disabled={loading} className="btn-primary min-h-11 flex-1 xl:flex-none"><Search size={16} /> Lọc</button>
-            <button type="button" onClick={resetFilters} disabled={loading} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50" title="Đặt lại bộ lọc"><RefreshCw size={16} /></button>
+            <button type="submit" disabled={loading} className="btn-primary min-h-11 flex-1 xl:flex-none"><Search size={16} /> L?c</button>
+            <button type="button" onClick={resetFilters} disabled={loading} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50" title="??t l?i b? l?c"><RefreshCw size={16} /></button>
           </div>
         </form>
         <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
-          <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">Tổng tồn: <strong>{formatNumber(summary.total_stock)}</strong></span>
-          <span className="rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-amber-700">Ngưỡng cảnh báo: ≤ <strong>{threshold}</strong></span>
-          {appliedSearch && <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">Từ khóa: “{appliedSearch}”</span>}
-          {data.generated_at && <span>Cập nhật: {new Date(data.generated_at).toLocaleString('vi-VN')}</span>}
+          <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">T?ng t?n: <strong>{formatNumber(summary.total_stock)}</strong></span>
+          <span className="rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-amber-700">Ngu?ng c?nh b?o: = <strong>{threshold}</strong></span>
+          {appliedSearch && <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">T? kh?a: ?{appliedSearch}?</span>}
+          {data.generated_at && <span>C?p nh?t: {new Date(data.generated_at).toLocaleString('vi-VN')}</span>}
         </div>
         {error && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
       </section>
@@ -252,8 +255,8 @@ export default function InventoryReport() {
       <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-1 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-bold text-gray-800">Chi tiết tồn kho</h2>
-            <p className="text-xs text-gray-500">Hiển thị {rows.length.toLocaleString('vi-VN')} / {pagination.total.toLocaleString('vi-VN')} dòng phù hợp.</p>
+            <h2 className="font-bold text-gray-800">Chi ti?t t?n kho</h2>
+            <p className="text-xs text-gray-500">Hi?n th? {rows.length.toLocaleString('vi-VN')} / {pagination.total.toLocaleString('vi-VN')} d?ng ph? h?p.</p>
           </div>
           <div className="text-xs font-semibold text-gray-500">Trang {pagination.page}/{Math.max(1, pagination.total_pages)}</div>
         </div>
@@ -261,29 +264,29 @@ export default function InventoryReport() {
           <table className="w-full min-w-[1000px] text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-3 text-left">Mã / SKU</th>
-                <th className="px-4 py-3 text-left">Tên sản phẩm</th>
-                <th className="px-4 py-3 text-left">Kho / danh mục</th>
-                <th className="px-4 py-3 text-right">Tồn kho</th>
-                <th className="px-4 py-3 text-right">Giá vốn</th>
-                <th className="px-4 py-3 text-right">Giá trị tồn</th>
-                <th className="px-4 py-3 text-center">Cảnh báo</th>
+                <th className="px-4 py-3 text-left">M? / SKU</th>
+                <th className="px-4 py-3 text-left">T?n s?n ph?m</th>
+                <th className="px-4 py-3 text-left">Kho / danh m?c</th>
+                <th className="px-4 py-3 text-right">T?n kho</th>
+                <th className="px-4 py-3 text-right">Gi? v?n</th>
+                <th className="px-4 py-3 text-right">Gi? tr? t?n</th>
+                <th className="px-4 py-3 text-center">C?nh b?o</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row, index) => (
                 <tr key={`${row.id || row.product_id || index}-${row.sku || ''}`} className={`border-t border-gray-100 align-top ${row.status === 'negative' ? 'bg-rose-50/70 hover:bg-rose-100/70' : row.status === 'out' ? 'bg-red-50/40 hover:bg-red-50' : 'hover:bg-gray-50'}`}>
                   <td className="px-4 py-3">
-                    <div className="font-semibold text-gray-800">{row.product_code || row.code || '—'}</div>
-                    <div className="mt-0.5 text-xs text-gray-400">SKU: {row.sku || row.product_sku || '—'}</div>
+                    <div className="font-semibold text-gray-800">{row.product_code || row.code || '?'}</div>
+                    <div className="mt-0.5 text-xs text-gray-400">SKU: {row.sku || row.product_sku || '?'}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="font-semibold text-gray-900">{row.product_name || row.name || 'Sản phẩm'}</div>
-                    {row.is_variant && <div className="mt-0.5 text-xs text-blue-600">Biến thể của: {row.parent_name || 'Sản phẩm cha'}</div>}
+                    <div className="font-semibold text-gray-900">{row.product_name || row.name || 'S?n ph?m'}</div>
+                    {row.is_variant && <div className="mt-0.5 text-xs text-blue-600">Bi?n th? c?a: {row.parent_name || 'S?n ph?m cha'}</div>}
                   </td>
                   <td className="px-4 py-3 text-gray-600">
-                    <div>{row.warehouse_name || row.warehouse || 'Kho mặc định'}</div>
-                    <div className="mt-0.5 text-xs text-gray-400">{row.category_name || row.category || 'Chưa phân loại'}</div>
+                    <div>{row.warehouse_name || row.warehouse || 'Kho m?c d?nh'}</div>
+                    <div className="mt-0.5 text-xs text-gray-400">{row.category_name || row.category || 'Chua ph?n lo?i'}</div>
                   </td>
                   <td className={`px-4 py-3 text-right text-base font-extrabold ${Number(row.stock) < 0 ? 'text-rose-700' : Number(row.stock) === 0 ? 'text-red-600' : Number(row.stock) <= threshold ? 'text-amber-700' : 'text-emerald-700'}`}>{formatNumber(row.stock)}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{formatVND(row.cost_price ?? row.import_price)}</td>
@@ -296,19 +299,19 @@ export default function InventoryReport() {
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-2 border-t border-gray-100 py-14 text-gray-500"><Loader2 size={30} className="animate-spin text-orange-500" /><span className="font-semibold">Đang tải báo cáo tồn kho...</span></div>
+          <div className="flex flex-col items-center justify-center gap-2 border-t border-gray-100 py-14 text-gray-500"><Loader2 size={30} className="animate-spin text-orange-500" /><span className="font-semibold">?ang t?i b?o c?o t?n kho...</span></div>
         ) : rows.length === 0 ? (
           <div className="border-t border-gray-100 px-4 py-14 text-center text-gray-400">
-            <div className="mb-2 text-4xl opacity-30">📦</div>
-            <div className="font-semibold text-gray-500">Không có sản phẩm phù hợp</div>
-            <div className="mt-1 text-sm">Hãy đổi từ khóa, trạng thái hoặc ngưỡng cảnh báo.</div>
+            <div className="mb-2 text-4xl opacity-30">??</div>
+            <div className="font-semibold text-gray-500">Kh?ng c? s?n ph?m ph? h?p</div>
+            <div className="mt-1 text-sm">H?y d?i t? kh?a, tr?ng th?i ho?c ngu?ng c?nh b?o.</div>
           </div>
         ) : null}
 
         <div className="flex flex-col gap-3 border-t border-gray-100 bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-gray-500">Tổng <strong className="text-gray-700">{pagination.total.toLocaleString('vi-VN')}</strong> dòng</div>
+          <div className="text-sm text-gray-500">T?ng <strong className="text-gray-700">{pagination.total.toLocaleString('vi-VN')}</strong> d?ng</div>
           <div className="flex items-center gap-2">
-            <button type="button" disabled={loading || !pagination.has_prev} onClick={() => setPage(current => Math.max(1, current - 1))} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16} /> Trước</button>
+            <button type="button" disabled={loading || !pagination.has_prev} onClick={() => setPage(current => Math.max(1, current - 1))} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16} /> Tru?c</button>
             <span className="min-w-20 text-center text-sm font-bold text-gray-700">{pagination.page}/{Math.max(1, pagination.total_pages)}</span>
             <button type="button" disabled={loading || !pagination.has_next} onClick={() => setPage(current => current + 1)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40">Sau <ChevronRight size={16} /></button>
           </div>

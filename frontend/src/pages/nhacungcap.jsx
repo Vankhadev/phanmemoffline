@@ -16,14 +16,14 @@ const toPaymentNumber = (value, fallback = 0) => {
 
 const normalizePaymentStatus = (status) => {
   const value = String(status || '').trim().toLowerCase();
-  if (['paid', 'da_thanh_toan', 'đã thanh toán', 'da thanh toan'].includes(value)) return 'paid';
-  if (['unpaid', 'chua_thanh_toan', 'chưa thanh toán', 'chua thanh toan'].includes(value)) return 'unpaid';
+  if (['paid', 'da_thanh_toan', 'd? thanh to?n', 'da thanh toan'].includes(value)) return 'paid';
+  if (['unpaid', 'chua_thanh_toan', 'chua thanh to?n', 'chua thanh toan'].includes(value)) return 'unpaid';
   return '';
 };
 
 const getSupplierIdKey = (value) => (hasPaymentValue(value) ? String(value).trim() : '');
 
-const formatPaymentMoney = (value) => `${toPaymentNumber(value, 0).toLocaleString('vi-VN')}đ`;
+const formatPaymentMoney = (value) => `${toPaymentNumber(value, 0).toLocaleString('vi-VN')}d`;
 
 const getImportPaymentAmounts = (imp = {}) => {
   const total = toPaymentNumber(imp.total, 0);
@@ -128,10 +128,10 @@ export default function NhaCungCap() {
   const fetchSuppliers = async () => {
     setLoading(true);
     try {
-      const data = await apiJson('/partners', {}, 'Không thể tải danh sách nhà cung cấp.');
+      const data = await apiJson('/partners', {}, 'Kh?ng th? t?i danh s?ch nh? cung c?p.');
       setSuppliers(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Lỗi tải nhà cung cấp:', err);
+      console.error('L?i t?i nh? cung c?p:', err);
     } finally {
       setLoading(false);
     }
@@ -140,7 +140,7 @@ export default function NhaCungCap() {
   const fetchSupplierPaymentSummaries = async () => {
     setPaymentLoading(true);
     try {
-      const data = await apiJson('/imports', {}, 'Không thể tải lịch sử nhập hàng để tổng hợp thanh toán');
+      const data = await apiJson('/imports', {}, 'Kh?ng th? t?i l?ch s? nh?p h?ng d? t?ng h?p thanh to?n');
       const summaries = {};
 
       (Array.isArray(data) ? data : []).forEach(imp => {
@@ -175,7 +175,7 @@ export default function NhaCungCap() {
       setPaymentBySupplier(summaries);
       setPaymentLoaded(true);
     } catch (err) {
-      console.error('Lỗi tải tổng hợp thanh toán nhà cung cấp:', err);
+      console.error('L?i t?i t?ng h?p thanh to?n nh? cung c?p:', err);
       setPaymentBySupplier({});
       setPaymentLoaded(false);
     } finally {
@@ -212,7 +212,7 @@ export default function NhaCungCap() {
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!form.name.trim()) {
-      alert('Vui lòng nhập tên nhà cung cấp!');
+      alert('Vui l?ng nh?p t?n nh? cung c?p!');
       return;
     }
     setSaving(true);
@@ -222,25 +222,25 @@ export default function NhaCungCap() {
       await apiJsonChecked(url, {
         method,
         body: form,
-      }, editing ? 'Không thể cập nhật nhà cung cấp.' : 'Không thể thêm nhà cung cấp.');
-      alert(editing ? '✅ Đã cập nhật nhà cung cấp!' : '✅ Đã thêm nhà cung cấp thành công!');
+      }, editing ? 'Kh?ng th? c?p nh?t nh? cung c?p.' : 'Kh?ng th? th?m nh? cung c?p.');
+      alert(editing ? '? ?? c?p nh?t nh? cung c?p!' : '? ?? th?m nh? cung c?p th?nh c?ng!');
       setShowForm(false);
       fetchSuppliers();
     } catch (err) {
-      alert('Lỗi kết nối: ' + err.message);
+      alert('L?i k?t n?i: ' + err.message);
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Xóa nhà cung cấp này?')) return;
+    if (!confirm('X?a nh? cung c?p n?y?')) return;
     try {
-      await apiJsonChecked(resolveApiUrl(`/partners/${id}`), { method: 'DELETE' }, 'Không thể xóa nhà cung cấp.');
-      alert('✅ Đã xóa nhà cung cấp!');
+      await apiJsonChecked(resolveApiUrl(`/partners/${id}`), { method: 'DELETE' }, 'Kh?ng th? x?a nh? cung c?p.');
+      alert('? ?? x?a nh? cung c?p!');
       fetchSuppliers();
     } catch (err) {
-      alert('Lỗi kết nối: ' + err.message);
+      alert('L?i k?t n?i: ' + err.message);
     }
   };
 
@@ -249,7 +249,7 @@ export default function NhaCungCap() {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
+    .replace(/d/g, 'd')
     .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ');
 
@@ -288,7 +288,7 @@ export default function NhaCungCap() {
       const workbook = XLSX.read(buffer, { type: 'array' });
       const firstSheetName = workbook.SheetNames[0];
       if (!firstSheetName) {
-        alert('File Excel không có sheet dữ liệu.');
+        alert('File Excel kh?ng c? sheet d? li?u.');
         return;
       }
 
@@ -304,12 +304,12 @@ export default function NhaCungCap() {
         }
 
         const supplier = {
-          name: getCellValue(row, ['Tên NCC', 'Tên nhà cung cấp', 'name']),
-          phone: getCellValue(row, ['Số điện thoại', 'SĐT', 'phone']),
-          tax_code: getCellValue(row, ['Mã số thuế', 'MST', 'tax_code']),
+          name: getCellValue(row, ['T?n NCC', 'T?n nh? cung c?p', 'name']),
+          phone: getCellValue(row, ['S? di?n tho?i', 'S?T', 'phone']),
+          tax_code: getCellValue(row, ['M? s? thu?', 'MST', 'tax_code']),
           email: getCellValue(row, ['Email', 'email']),
-          address: getCellValue(row, ['Địa chỉ', 'address']),
-          invoice_type: normalizeInvoiceType(getCellValue(row, ['Loại hóa đơn', 'invoice_type'])),
+          address: getCellValue(row, ['??a ch?', 'address']),
+          invoice_type: normalizeInvoiceType(getCellValue(row, ['Lo?i h?a don', 'invoice_type'])),
         };
 
         if (!supplier.name) {
@@ -321,12 +321,12 @@ export default function NhaCungCap() {
       });
 
       if (validSuppliers.length === 0) {
-        alert(`Không có nhà cung cấp hợp lệ để nhập. Lỗi/bỏ qua: ${skipped}.`);
+        alert(`Kh?ng c? nh? cung c?p h?p l? d? nh?p. L?i/b? qua: ${skipped}.`);
         return;
       }
 
       const confirmed = confirm(
-        `Tìm thấy ${validSuppliers.length} nhà cung cấp hợp lệ. Lỗi/bỏ qua: ${skipped}.\nBạn có muốn nhập dữ liệu này không?`
+        `T?m th?y ${validSuppliers.length} nh? cung c?p h?p l?. L?i/b? qua: ${skipped}.\nB?n c? mu?n nh?p d? li?u n?y kh?ng?`
       );
       if (!confirmed) return;
 
@@ -339,19 +339,19 @@ export default function NhaCungCap() {
           await apiJsonChecked('/partners', {
             method: 'POST',
             body: supplier,
-          }, 'Không thể nhập nhà cung cấp từ Excel.');
+          }, 'Kh?ng th? nh?p nh? cung c?p t? Excel.');
           success += 1;
         } catch (err) {
-          console.error('Lỗi nhập nhà cung cấp:', err);
+          console.error('L?i nh?p nh? cung c?p:', err);
           failed += 1;
         }
       }
 
       await fetchSuppliers();
-      alert(`Nhập Excel hoàn tất!\n- Thành công: ${success}\n- Lỗi/bỏ qua: ${skipped + failed}`);
+      alert(`Nh?p Excel ho?n t?t!\n- Th?nh c?ng: ${success}\n- L?i/b? qua: ${skipped + failed}`);
     } catch (err) {
-      console.error('Lỗi đọc file Excel:', err);
-      alert('Không thể đọc file Excel: ' + err.message);
+      console.error('L?i d?c file Excel:', err);
+      alert('Kh?ng th? d?c file Excel: ' + err.message);
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -366,17 +366,17 @@ export default function NhaCungCap() {
 
   const exportExcel = () => {
     if (filtered.length === 0) {
-      alert('Không có nhà cung cấp để xuất Excel.');
+      alert('Kh?ng c? nh? cung c?p d? xu?t Excel.');
       return;
     }
 
     const data = filtered.map(p => ({
-      'Tên NCC': p.name,
-      'Số điện thoại': p.phone || '',
-      'Mã số thuế': p.tax_code || '',
+      'T?n NCC': p.name,
+      'S? di?n tho?i': p.phone || '',
+      'M? s? thu?': p.tax_code || '',
       'Email': p.email || '',
-      'Địa chỉ': p.address || '',
-      'Loại hóa đơn': p.invoice_type === 'electronic' ? 'Có hóa đơn điện tử' : 'Không hóa đơn điện tử',
+      '??a ch?': p.address || '',
+      'Lo?i h?a don': p.invoice_type === 'electronic' ? 'C? h?a don di?n t?' : 'Kh?ng h?a don di?n t?',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     ws['!cols'] = [
@@ -388,7 +388,7 @@ export default function NhaCungCap() {
       { wch: 22 },
     ];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Nhà cung cấp');
+    XLSX.utils.book_append_sheet(wb, ws, 'Nh? cung c?p');
     XLSX.writeFile(wb, `nha_cung_cap_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
@@ -406,19 +406,19 @@ export default function NhaCungCap() {
     if (directSummary) return directSummary;
 
     if (paymentLoading) {
-      return { payment_status: 'loading', label: 'Đang tải...', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
+      return { payment_status: 'loading', label: '?ang t?i...', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
     }
 
     if (paymentLoaded) {
-      return { payment_status: 'none', label: 'Chưa có phiếu', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: 0 };
+      return { payment_status: 'none', label: 'Chua c? phi?u', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: 0 };
     }
 
-    return { payment_status: 'unknown', label: 'Chưa có dữ liệu', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
+    return { payment_status: 'unknown', label: 'Chua c? d? li?u', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
   };
 
   const getSupplierPaymentLabel = (summary) => {
     if (summary.label) return summary.label;
-    return summary.payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán';
+    return summary.payment_status === 'paid' ? '?? thanh to?n' : 'Chua thanh to?n';
   };
 
   const getSupplierPaymentBadgeClass = (status) => {
@@ -438,11 +438,11 @@ export default function NhaCungCap() {
         </span>
         {hasMoneyData && (
           <div className="text-[11px] text-gray-500 leading-4">
-            {summary.import_count ? <div>{summary.import_count} phiếu nhập</div> : null}
+            {summary.import_count ? <div>{summary.import_count} phi?u nh?p</div> : null}
             {summary.remaining_amount > 0 ? (
-              <div>Còn {formatPaymentMoney(summary.remaining_amount)}</div>
+              <div>C?n {formatPaymentMoney(summary.remaining_amount)}</div>
             ) : summary.total_amount > 0 ? (
-              <div>Đã trả {formatPaymentMoney(summary.paid_amount)}</div>
+              <div>?? tr? {formatPaymentMoney(summary.paid_amount)}</div>
             ) : null}
           </div>
         )}
@@ -455,7 +455,7 @@ export default function NhaCungCap() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <span className="text-orange-500"></span>
-          <span>Quản lý Nhà cung cấp</span>
+          <span>Qu?n l? Nh? cung c?p</span>
         </h1>
         <div className="flex gap-2">
           <input
@@ -471,20 +471,20 @@ export default function NhaCungCap() {
             disabled={importing}
             className="px-4 py-2 border border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-sm font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Upload size={16} /> {importing ? 'Đang nhập...' : 'Nhập Excel'}
+            <Upload size={16} /> {importing ? '?ang nh?p...' : 'Nh?p Excel'}
           </button>
           <button onClick={exportExcel} className="px-4 py-2 border border-orange-300 text-orange-600 hover:bg-orange-50 rounded-lg text-sm font-medium flex items-center gap-1.5">
-            <FileDown size={16} /> Xuất Excel
+            <FileDown size={16} /> Xu?t Excel
           </button>
           <button onClick={openAdd} className="btn-primary flex items-center gap-1">
-            <Plus size={16} /> Thêm nhà cung cấp
+            <Plus size={16} /> Th?m nh? cung c?p
           </button>
         </div>
       </div>
 
       <input
         className="input-field mb-4"
-        placeholder="🔍 Tìm nhà cung cấp theo tên, SĐT hoặc MST..."
+        placeholder="?? T?m nh? cung c?p theo t?n, S?T ho?c MST..."
         value={search}
         onChange={e => setSearch(e.target.value)}
       />
@@ -493,50 +493,50 @@ export default function NhaCungCap() {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-orange-50 text-orange-700 text-xs">
-              <th className="p-2 text-left w-48">Tên đối tác</th>
-              <th className="p-2 text-left w-32">SĐT</th>
+              <th className="p-2 text-left w-48">T?n d?i t?c</th>
+              <th className="p-2 text-left w-32">S?T</th>
               <th className="p-2 text-left w-32">MST</th>
               <th className="p-2 text-left w-40">Email</th>
-              <th className="p-2 text-left w-24">Loại HĐ</th>
-              <th className="p-2 text-left w-24">Thanh toán</th>
-              <th className="p-2 text-left w-64">Địa chỉ</th>
-              <th className="p-2 text-center w-24">Hành động</th>
+              <th className="p-2 text-left w-24">Lo?i H?</th>
+              <th className="p-2 text-left w-24">Thanh to?n</th>
+              <th className="p-2 text-left w-64">??a ch?</th>
+              <th className="p-2 text-center w-24">H?nh d?ng</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
                 <td colSpan={8} className="text-center text-gray-400 py-10 flex items-center justify-center gap-2">
-                  <Loader size={16} className="animate-spin" /> Đang tải...
+                  <Loader size={16} className="animate-spin" /> ?ang t?i...
                 </td>
               </tr>
             )}
             {!loading && filtered.length === 0 && (
               <tr>
                 <td colSpan={8} className="text-center text-gray-400 py-10">
-                  {search ? 'Không tìm thấy nhà cung cấp' : 'Chưa có nhà cung cấp nào'}
+                  {search ? 'Kh?ng t?m th?y nh? cung c?p' : 'Chua c? nh? cung c?p n?o'}
                 </td>
               </tr>
             )}
             {!loading && filtered.map(p => (
               <tr key={p.id} className="border-b hover:bg-orange-50">
                 <td className="p-2 font-medium">{p.name}</td>
-                <td className="p-2">{p.phone || '—'}</td>
-                <td className="p-2 font-mono text-xs">{p.tax_code || '—'}</td>
-                <td className="p-2 text-gray-600 text-xs">{p.email || '—'}</td>
+                <td className="p-2">{p.phone || '?'}</td>
+                <td className="p-2 font-mono text-xs">{p.tax_code || '?'}</td>
+                <td className="p-2 text-gray-600 text-xs">{p.email || '?'}</td>
                 <td className="p-2">
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${p.invoice_type === 'electronic' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                    {p.invoice_type === 'electronic' ? 'Có HĐĐT' : 'Không HĐĐT'}
+                    {p.invoice_type === 'electronic' ? 'C? H??T' : 'Kh?ng H??T'}
                   </span>
                 </td>
                 <td className="p-2">{renderSupplierPayment(p)}</td>
-                <td className="p-2 text-gray-500 text-xs">{p.address || '—'}</td>
+                <td className="p-2 text-gray-500 text-xs">{p.address || '?'}</td>
                 <td className="p-2 text-center">
                   <button onClick={() => openEdit(p)} className="text-blue-600 hover:text-blue-800 text-xs mr-2 flex items-center gap-1 inline-flex">
-                    <Edit2 size={12} /> Sửa
+                    <Edit2 size={12} /> S?a
                   </button>
                   <button onClick={() => handleDelete(p.id)} className="text-red-500 hover:text-red-700 text-xs flex items-center gap-1 inline-flex">
-                    <Trash2 size={12} /> Xóa
+                    <Trash2 size={12} /> X?a
                   </button>
                 </td>
               </tr>
@@ -551,25 +551,25 @@ export default function NhaCungCap() {
           <div className="relative z-10 bg-white rounded-xl shadow-2xl p-6 w-[520px]">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center gap-2 text-orange-700">
-                🏭 {editing ? 'Sửa Nhà cung cấp' : 'Thêm Nhà cung cấp mới'}
+                ?? {editing ? 'S?a Nh? cung c?p' : 'Th?m Nh? cung c?p m?i'}
               </h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xl">?</button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Tên NCC <span className="text-red-500">*</span></label>
+                <label className="text-xs text-gray-500 block mb-1">T?n NCC <span className="text-red-500">*</span></label>
                 <input
                   ref={nameInputRef}
                   className="input-field w-full"
                   value={form.name}
                   onChange={e => setForm({ ...form, name: e.target.value })}
-                  placeholder="VD: Công ty TNHH ABC"
+                  placeholder="VD: C?ng ty TNHH ABC"
                   required
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Số điện thoại</label>
+                  <label className="text-xs text-gray-500 block mb-1">S? di?n tho?i</label>
                   <input
                     className="input-field w-full"
                     value={form.phone}
@@ -578,12 +578,12 @@ export default function NhaCungCap() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Mã số thuế</label>
+                  <label className="text-xs text-gray-500 block mb-1">M? s? thu?</label>
                   <input
                     className="input-field w-full"
                     value={form.tax_code}
                     onChange={e => setForm({ ...form, tax_code: e.target.value })}
-                    placeholder="MST nếu có"
+                    placeholder="MST n?u c?"
                   />
                 </div>
               </div>
@@ -600,17 +600,17 @@ export default function NhaCungCap() {
                 </div>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Địa chỉ</label>
+                <label className="text-xs text-gray-500 block mb-1">??a ch?</label>
                 <textarea
                   className="input-field w-full"
                   value={form.address}
                   onChange={e => setForm({ ...form, address: e.target.value })}
-                  placeholder="Địa chỉ đầy đủ..."
+                  placeholder="??a ch? d?y d?..."
                   rows={2}
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Loại hóa đơn</label>
+                <label className="text-xs text-gray-500 block mb-1">Lo?i h?a don</label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -621,7 +621,7 @@ export default function NhaCungCap() {
                       onChange={() => setForm({ ...form, invoice_type: 'non_electronic' })}
                       className="accent-blue-600"
                     />
-                    <span className="text-sm">Không hóa đơn điện tử</span>
+                    <span className="text-sm">Kh?ng h?a don di?n t?</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -632,16 +632,16 @@ export default function NhaCungCap() {
                       onChange={() => setForm({ ...form, invoice_type: 'electronic' })}
                       className="accent-red-600"
                     />
-                    <span className="text-sm">Có hóa đơn điện tử</span>
+                    <span className="text-sm">C? h?a don di?n t?</span>
                   </label>
                 </div>
               </div>
             </form>
             <div className="flex gap-2 mt-4">
               <button onClick={handleSubmit} disabled={saving} className="btn-success flex-1 disabled:opacity-50">
-                💾 {saving ? 'Đang lưu...' : 'Lưu'}
+                ?? {saving ? '?ang luu...' : 'Luu'}
               </button>
-              <button onClick={() => setShowForm(false)} className="btn-danger flex-1">Hủy</button>
+              <button onClick={() => setShowForm(false)} className="btn-danger flex-1">H?y</button>
             </div>
           </div>
         </div>
@@ -650,69 +650,69 @@ export default function NhaCungCap() {
       {/* Help Modal */}
       {showHelp && (
         <HelpModal
-          title="Hướng dẫn sử dụng Quản lý Nhà cung cấp"
+          title="Hu?ng d?n s? d?ng Qu?n l? Nh? cung c?p"
           onClose={() => setShowHelp(false)}
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">🏭 Tổng quan</h3>
-                <p>Trang Nhà cung cấp giúp bạn quản lý thông tin các đối tác cung cấp hàng hóa. Mỗi nhà cung cấp có thể được liên kết với sản phẩm để lưu thông tin giá nhập và loại hóa đơn.</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? T?ng quan</h3>
+                <p>Trang Nh? cung c?p gi?p b?n qu?n l? th?ng tin c?c d?i t?c cung c?p h?ng h?a. M?i nh? cung c?p c? th? du?c li?n k?t v?i s?n ph?m d? luu th?ng tin gi? nh?p v? lo?i h?a don.</p>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">➕ Thêm nhà cung cấp mới</h3>
+                <h3 className="font-bold text-gray-800 mb-2">? Th?m nh? cung c?p m?i</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nhấn nút <strong>"Thêm nhà cung cấp"</strong> ở góc trên phải</li>
-                  <li>Điền các thông tin bắt buộc: <strong>Tên NCC</strong></li>
-                  <li>Các thông tin tùy chọn: SĐT, MST, Email, Địa chỉ</li>
-                  <li>Chọn <strong>Loại hóa đơn</strong>: Có HĐĐT hoặc Không HĐĐT</li>
-                  <li>Nhấn "Lưu" để hoàn tất</li>
+                  <li>Nh?n n?t <strong>"Th?m nh? cung c?p"</strong> ? g?c tr?n ph?i</li>
+                  <li>?i?n c?c th?ng tin b?t bu?c: <strong>T?n NCC</strong></li>
+                  <li>C?c th?ng tin t?y ch?n: S?T, MST, Email, ??a ch?</li>
+                  <li>Ch?n <strong>Lo?i h?a don</strong>: C? H??T ho?c Kh?ng H??T</li>
+                  <li>Nh?n "Luu" d? ho?n t?t</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">✏️ Chỉnh sửa nhà cung cấp</h3>
-                <p>Nhấn nút <strong>"Sửa"</strong> ở cột Hành động để cập nhật thông tin nhà cung cấp. Các thông tin có thể thay đổi: SĐT, MST, Email, Địa chỉ, Loại hóa đơn.</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? Ch?nh s?a nh? cung c?p</h3>
+                <p>Nh?n n?t <strong>"S?a"</strong> ? c?t H?nh d?ng d? c?p nh?t th?ng tin nh? cung c?p. C?c th?ng tin c? th? thay d?i: S?T, MST, Email, ??a ch?, Lo?i h?a don.</p>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">🗑️ Xóa nhà cung cấp</h3>
-                <p>Nhấn nút <strong>"Xóa"</strong> ở cột Hành động để xóa nhà cung cấp. <strong className="text-red-600">Lưu ý:</strong> Không thể xóa nếu nhà cung cấp đang được sử dụng trong sản phẩm.</p>
+                <h3 className="font-bold text-gray-800 mb-2">??? X?a nh? cung c?p</h3>
+                <p>Nh?n n?t <strong>"X?a"</strong> ? c?t H?nh d?ng d? x?a nh? cung c?p. <strong className="text-red-600">Luu ?:</strong> Kh?ng th? x?a n?u nh? cung c?p dang du?c s? d?ng trong s?n ph?m.</p>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2"> Tìm kiếm</h3>
-                <p>Nhập từ khóa vào ô tìm kiếm để lọc danh sách theo:</p>
+                <h3 className="font-bold text-gray-800 mb-2"> T?m ki?m</h3>
+                <p>Nh?p t? kh?a v?o ? t?m ki?m d? l?c danh s?ch theo:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
-                  <li>Tên nhà cung cấp</li>
-                  <li>Số điện thoại</li>
-                  <li>Mã số thuế (MST)</li>
+                  <li>T?n nh? cung c?p</li>
+                  <li>S? di?n tho?i</li>
+                  <li>M? s? thu? (MST)</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">📥 Nhập Excel</h3>
-                <p>Nhấn nút <strong>"Nhập Excel"</strong>, chọn file .xlsx hoặc .xls, kiểm tra thông báo xác nhận rồi đồng ý để nhập từng nhà cung cấp vào hệ thống.</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? Nh?p Excel</h3>
+                <p>Nh?n n?t <strong>"Nh?p Excel"</strong>, ch?n file .xlsx ho?c .xls, ki?m tra th?ng b?o x?c nh?n r?i d?ng ? d? nh?p t?ng nh? cung c?p v?o h? th?ng.</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
-                  <li>Cột bắt buộc: <strong>Tên NCC</strong> hoặc <strong>Tên nhà cung cấp</strong> hoặc <strong>name</strong></li>
-                  <li>Cột tùy chọn: <strong>Số điện thoại/SĐT/phone</strong>, <strong>Mã số thuế/MST/tax_code</strong>, <strong>Email/email</strong>, <strong>Địa chỉ/address</strong>, <strong>Loại hóa đơn/invoice_type</strong></li>
-                  <li>Dòng trống hoặc dòng thiếu tên nhà cung cấp sẽ được bỏ qua và tính vào số lỗi/bỏ qua</li>
-                  <li>Loại hóa đơn nhận các giá trị như "Có hóa đơn điện tử", "Có HĐĐT", "electronic"; giá trị khác sẽ mặc định là không hóa đơn điện tử</li>
+                  <li>C?t b?t bu?c: <strong>T?n NCC</strong> ho?c <strong>T?n nh? cung c?p</strong> ho?c <strong>name</strong></li>
+                  <li>C?t t?y ch?n: <strong>S? di?n tho?i/S?T/phone</strong>, <strong>M? s? thu?/MST/tax_code</strong>, <strong>Email/email</strong>, <strong>??a ch?/address</strong>, <strong>Lo?i h?a don/invoice_type</strong></li>
+                  <li>D?ng tr?ng ho?c d?ng thi?u t?n nh? cung c?p s? du?c b? qua v? t?nh v?o s? l?i/b? qua</li>
+                  <li>Lo?i h?a don nh?n c?c gi? tr? nhu "C? h?a don di?n t?", "C? H??T", "electronic"; gi? tr? kh?c s? m?c d?nh l? kh?ng h?a don di?n t?</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">📤 Xuất Excel</h3>
-                <p>Nhấn nút <strong>"Xuất Excel"</strong> để tải danh sách nhà cung cấp đang hiển thị theo bộ lọc tìm kiếm ra file .xlsx. File chứa các cột: Tên NCC, Số điện thoại, Mã số thuế, Email, Địa chỉ, Loại hóa đơn.</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? Xu?t Excel</h3>
+                <p>Nh?n n?t <strong>"Xu?t Excel"</strong> d? t?i danh s?ch nh? cung c?p dang hi?n th? theo b? l?c t?m ki?m ra file .xlsx. File ch?a c?c c?t: T?n NCC, S? di?n tho?i, M? s? thu?, Email, ??a ch?, Lo?i h?a don.</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h3 className="font-bold text-blue-800 mb-2">💡 Mẹo & Lưu ý</h3>
+                <h3 className="font-bold text-blue-800 mb-2">?? M?o & Luu ?</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
-                  <li><strong>Loại hóa đơn:</strong> Chọn "Có hóa đơn điện tử" nếu nhà cung cấp cung cấp hóa đơn GTGT, chọn "Không hóa đơn điện tử" cho hóa đơn thường</li>
-                  <li><strong>MST:</strong> Nhập đầy đủ 10-13 số để dễ tra cứu và xuất hóa đơn</li>
-                  <li>Thông tin nhà cung cấp sẽ hiển thị trong trang Sản phẩm khi chọn nhà cung cấp cho sản phẩm mới</li>
-                  <li>Giá nhập sản phẩm có thể khác nhau tùy theo nhà cung cấp - nên thêm nhiều nhà cung cấp để có nhiều lựa chọn</li>
+                  <li><strong>Lo?i h?a don:</strong> Ch?n "C? h?a don di?n t?" n?u nh? cung c?p cung c?p h?a don GTGT, ch?n "Kh?ng h?a don di?n t?" cho h?a don thu?ng</li>
+                  <li><strong>MST:</strong> Nh?p d?y d? 10-13 s? d? d? tra c?u v? xu?t h?a don</li>
+                  <li>Th?ng tin nh? cung c?p s? hi?n th? trong trang S?n ph?m khi ch?n nh? cung c?p cho s?n ph?m m?i</li>
+                  <li>Gi? nh?p s?n ph?m c? th? kh?c nhau t?y theo nh? cung c?p - n?n th?m nhi?u nh? cung c?p d? c? nhi?u l?a ch?n</li>
                 </ul>
               </div>
             </div>

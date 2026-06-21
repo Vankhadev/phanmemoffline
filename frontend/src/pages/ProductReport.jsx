@@ -127,29 +127,29 @@ function yearRange(yearValue) {
 function getPeriodRange({ period, selectedDate, selectedMonth, selectedYear, from, to }) {
   if (period === 'day') {
     const normalizedSelectedDate = normalizeDateInputValue(selectedDate);
-    if (!normalizedSelectedDate) return { valid: false, message: 'Vui lòng chọn ngày hợp lệ.' };
+    if (!normalizedSelectedDate) return { valid: false, message: 'Vui l?ng ch?n ng?y h?p l?.' };
     return { valid: true, from: normalizedSelectedDate, to: normalizedSelectedDate };
   }
 
   if (period === 'month') {
     const range = monthRange(selectedMonth);
-    if (!range) return { valid: false, message: 'Vui lòng chọn tháng hợp lệ.' };
+    if (!range) return { valid: false, message: 'Vui l?ng ch?n th?ng h?p l?.' };
     return { valid: true, ...range };
   }
 
   if (period === 'year') {
     const range = yearRange(selectedYear);
-    if (!range) return { valid: false, message: 'Vui lòng nhập năm hợp lệ.' };
+    if (!range) return { valid: false, message: 'Vui l?ng nh?p nam h?p l?.' };
     return { valid: true, ...range };
   }
 
   const normalizedFrom = normalizeDateInputValue(from);
   const normalizedTo = normalizeDateInputValue(to);
-  if (!hasDateValue(from)) return { valid: false, message: 'Vui lòng chọn ngày bắt đầu.' };
-  if (!hasDateValue(to)) return { valid: false, message: 'Vui lòng chọn ngày kết thúc.' };
-  if (!normalizedFrom) return { valid: false, message: 'Ngày bắt đầu không hợp lệ.' };
-  if (!normalizedTo) return { valid: false, message: 'Ngày kết thúc không hợp lệ.' };
-  if (normalizedFrom > normalizedTo) return { valid: false, message: 'Ngày bắt đầu không được lớn hơn ngày kết thúc.' };
+  if (!hasDateValue(from)) return { valid: false, message: 'Vui l?ng ch?n ng?y b?t d?u.' };
+  if (!hasDateValue(to)) return { valid: false, message: 'Vui l?ng ch?n ng?y k?t th?c.' };
+  if (!normalizedFrom) return { valid: false, message: 'Ng?y b?t d?u kh?ng h?p l?.' };
+  if (!normalizedTo) return { valid: false, message: 'Ng?y k?t th?c kh?ng h?p l?.' };
+  if (normalizedFrom > normalizedTo) return { valid: false, message: 'Ng?y b?t d?u kh?ng du?c l?n hon ng?y k?t th?c.' };
   return { valid: true, from: normalizedFrom, to: normalizedTo };
 }
 
@@ -162,7 +162,7 @@ function formatNumber(value) {
 }
 
 function formatDateKey(value) {
-  if (!value) return '—';
+  if (!value) return '?';
   const normalizedValue = normalizeDateInputValue(value);
   if (!normalizedValue) return String(value);
   const [year, month, day] = normalizedValue.split('-');
@@ -170,7 +170,7 @@ function formatDateKey(value) {
 }
 
 function formatDateTime(value) {
-  if (!value) return '—';
+  if (!value) return '?';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('vi-VN', {
@@ -196,15 +196,15 @@ function safeFilePart(value) {
 }
 
 const PERIOD_OPTIONS = [
-  { value: 'day', label: 'Theo ngày' },
-  { value: 'month', label: 'Theo tháng' },
-  { value: 'year', label: 'Theo năm' },
-  { value: 'custom', label: 'Khoảng ngày tùy chỉnh' },
+  { value: 'day', label: 'Theo ng?y' },
+  { value: 'month', label: 'Theo th?ng' },
+  { value: 'year', label: 'Theo nam' },
+  { value: 'custom', label: 'Kho?ng ng?y t?y ch?nh' },
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'completed', label: 'Đơn hoàn thành' },
-  { value: 'exclude_cancelled', label: 'Tất cả trừ đơn hủy' },
+  { value: 'completed', label: '?on ho?n th?nh' },
+  { value: 'exclude_cancelled', label: 'T?t c? tr? don h?y' },
 ];
 
 function buildProductReportRequest(filters) {
@@ -226,17 +226,17 @@ function buildProductReportRequest(filters) {
 }
 
 function getPeriodDescription(filters, range) {
-  if (filters.period === 'day') return `theo ngày ${formatDateKey(range.from)}`;
+  if (filters.period === 'day') return `theo ng?y ${formatDateKey(range.from)}`;
 
   if (filters.period === 'month') {
     const [year, month] = String(filters.selectedMonth || '').split('-');
-    if (year && month) return `theo tháng ${month}/${year}`;
-    return `theo tháng ${formatDateKey(range.from)} - ${formatDateKey(range.to)}`;
+    if (year && month) return `theo th?ng ${month}/${year}`;
+    return `theo th?ng ${formatDateKey(range.from)} - ${formatDateKey(range.to)}`;
   }
 
-  if (filters.period === 'year') return `theo năm ${filters.selectedYear}`;
+  if (filters.period === 'year') return `theo nam ${filters.selectedYear}`;
 
-  return `theo khoảng ngày từ ${formatDateKey(range.from)} đến ${formatDateKey(range.to)}`;
+  return `theo kho?ng ng?y t? ${formatDateKey(range.from)} d?n ${formatDateKey(range.to)}`;
 }
 
 function getStatusLabel(status) {
@@ -272,8 +272,8 @@ function DatePickerField({
   value,
   onChange,
   disabled = false,
-  placeholder = 'Chọn ngày',
-  ariaLabel = 'Chọn ngày',
+  placeholder = 'Ch?n ng?y',
+  ariaLabel = 'Ch?n ng?y',
   minDate = '',
   maxDate = '',
 }) {
@@ -364,7 +364,7 @@ function DatePickerField({
               type="button"
               className="rounded-xl border border-gray-200 p-2 text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
               onClick={() => changeMonth(-1)}
-              aria-label="Tháng trước"
+              aria-label="Th?ng tru?c"
             >
               <ChevronLeft size={16} />
             </button>
@@ -373,7 +373,7 @@ function DatePickerField({
               type="button"
               className="rounded-xl border border-gray-200 p-2 text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
               onClick={() => changeMonth(1)}
-              aria-label="Tháng sau"
+              aria-label="Th?ng sau"
             >
               <ChevronRight size={16} />
             </button>
@@ -401,7 +401,7 @@ function DatePickerField({
                   className={`aspect-square rounded-xl text-sm font-semibold transition ${isDisabled ? 'cursor-not-allowed bg-gray-50 text-gray-300' : isSelected ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700' : isToday ? 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'text-gray-700 hover:bg-gray-100'}`}
                   onClick={() => selectDate(day)}
                   aria-pressed={isSelected}
-                  aria-label={`Chọn ngày ${formatDateKey(dayValue)}`}
+                  aria-label={`Ch?n ng?y ${formatDateKey(dayValue)}`}
                   disabled={isDisabled}
                 >
                   {day.getDate()}
@@ -417,14 +417,14 @@ function DatePickerField({
               onClick={() => selectDate(new Date())}
               disabled={isDateDisabled(todayValue)}
             >
-              Hôm nay
+              H?m nay
             </button>
             <button
               type="button"
               className="rounded-lg px-2 py-1.5 text-gray-500 transition hover:bg-gray-100"
               onClick={() => setIsOpen(false)}
             >
-              Đóng
+              ??ng
             </button>
           </div>
         </div>
@@ -499,8 +499,8 @@ function DateRangePopover({ from, to, label, onApply, disabled = false }) {
   const normalizedTo = normalizeDateInputValue(to);
   const fromText = normalizedFrom ? formatDateKey(normalizedFrom) : 'Chọn ngày';
   const toText = normalizedTo ? formatDateKey(normalizedTo) : 'Chọn ngày';
-  const draftFromText = draftFrom ? (normalizeDateInputValue(draftFrom) ? formatDateKey(draftFrom) : 'Không hợp lệ') : '—';
-  const draftToText = draftTo ? (normalizeDateInputValue(draftTo) ? formatDateKey(draftTo) : 'Không hợp lệ') : '—';
+  const draftFromText = draftFrom ? (normalizeDateInputValue(draftFrom) ? formatDateKey(draftFrom) : 'Không hợp lệ') : '?';
+  const draftToText = draftTo ? (normalizeDateInputValue(draftTo) ? formatDateKey(draftTo) : 'Không hợp lệ') : '?';
   const isRangeValid = Boolean(normalizedFrom && normalizedTo && normalizedFrom <= normalizedTo);
   const rangeStatusText = isRangeValid ? `Từ ${fromText} đến ${toText}` : label;
   const normalizedDraftFrom = normalizeDateInputValue(draftFrom);
@@ -546,10 +546,7 @@ function DateRangePopover({ from, to, label, onApply, disabled = false }) {
       </button>
 
       {isOpen && !disabled && (
-        <div
-          className="absolute left-0 top-full z-[70] mt-2 max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl"
-          style={{ width: 'min(34rem, calc(100vw - 2rem))' }}
-        >
+        <div className="absolute left-0 top-full z-[70] mt-2 max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl" style={{ width: 'min(34rem, calc(100vw - 2rem))' }}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
@@ -640,7 +637,7 @@ function DateRangeInlinePicker({
   const normalizedTo = normalizeDateInputValue(to);
   const hasInvalidRange = Boolean(normalizedFrom && normalizedTo && normalizedFrom > normalizedTo);
   const helperText = hasInvalidRange
-    ? 'Ngày bắt đầu không được lớn hơn ngày kết thúc.'
+    ? 'Ng?y b?t d?u kh?ng du?c l?n hon ng?y k?t th?c.'
     : label;
   const canApply = !disabled && !isApplying && Boolean(normalizedFrom && normalizedTo && !hasInvalidRange);
 
@@ -661,7 +658,7 @@ function DateRangeInlinePicker({
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
             <Calendar size={15} />
           </span>
-          Chọn khoảng ngày báo cáo
+          Ch?n kho?ng ng?y b?o c?o
         </div>
         <button
           type="button"
@@ -670,27 +667,27 @@ function DateRangeInlinePicker({
           disabled={!canApply}
         >
           {isApplying ? <Loader size={16} className="animate-spin" /> : <Search size={16} />}
-          Áp dụng
+          ?p d?ng
         </button>
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Từ ngày</label>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">T? ng?y</label>
           <DatePickerField
             value={from}
             onChange={onFromChange}
             disabled={disabled || isApplying}
-            ariaLabel="Chọn từ ngày của báo cáo sản phẩm"
+            ariaLabel="Ch?n t? ng?y c?a b?o c?o s?n ph?m"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-gray-600">Đến ngày</label>
+          <label className="mb-1 block text-xs font-semibold text-gray-600">??n ng?y</label>
           <DatePickerField
             value={to}
             onChange={onToChange}
             disabled={disabled || isApplying}
-            ariaLabel="Chọn đến ngày của báo cáo sản phẩm"
+            ariaLabel="Ch?n d?n ng?y c?a b?o c?o s?n ph?m"
           />
         </div>
       </div>
@@ -720,6 +717,7 @@ export default function ProductReport() {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
   const [createdNotice, setCreatedNotice] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
 
   const selectedRange = useMemo(() => getPeriodRange({
     period,
@@ -756,13 +754,13 @@ export default function ProductReport() {
       });
       const res = await fetch(endpoint);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Không lập được báo cáo sản phẩm');
+      if (!res.ok) throw new Error(data.error || 'Kh?ng l?p du?c b?o c?o s?n ph?m');
       setReport(data);
       setLastFetchedAt(new Date());
       return true;
     } catch (err) {
       setReport(null);
-      setError(err.message || 'Không lập được báo cáo sản phẩm');
+      setError(err.message || 'Kh?ng l?p du?c b?o c?o s?n ph?m');
       return false;
     } finally {
       setLoading(false);
@@ -870,7 +868,7 @@ export default function ProductReport() {
       });
       const res = await fetch(endpoint);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Không tạo được báo cáo sản phẩm');
+      if (!res.ok) throw new Error(data.error || 'Kh?ng t?o du?c b?o c?o s?n ph?m');
 
       const appliedDraft = { ...reportDraft, from: request.range.from, to: request.range.to };
       if (reportDraft.period === 'day') appliedDraft.selectedDate = request.range.from;
@@ -878,10 +876,10 @@ export default function ProductReport() {
       setReport(data);
       setLastFetchedAt(new Date());
       setError('');
-      setCreatedNotice(`Đã tạo báo cáo ${getPeriodDescription(appliedDraft, request.range)} · ${getStatusLabel(appliedDraft.status)} · ${formatNumber(data.summary?.orderCount)} đơn hàng · ${formatNumber(data.summary?.totalQuantity)} sản phẩm · ${formatVND(data.summary?.totalRevenue)}.`);
+      setCreatedNotice(`?? t?o b?o c?o ${getPeriodDescription(appliedDraft, request.range)} ? ${getStatusLabel(appliedDraft.status)} ? ${formatNumber(data.summary?.orderCount)} don h?ng ? ${formatNumber(data.summary?.totalQuantity)} s?n ph?m ? ${formatVND(data.summary?.totalRevenue)}.`);
       setIsCreateModalOpen(false);
     } catch (err) {
-      setCreateError(err.message || 'Không tạo được báo cáo sản phẩm');
+      setCreateError(err.message || 'Kh?ng t?o du?c b?o c?o s?n ph?m');
     } finally {
       setCreateLoading(false);
     }
@@ -907,41 +905,41 @@ export default function ProductReport() {
     const range = report?.metadata || report?.filters || selectedRange;
     const detailRows = rows.map((row, index) => ({
       STT: index + 1,
-      Ngày: formatDateKey(row.date),
-      'Tên phiên bản': row.productName || '',
-      'Mã SKU': row.sku || '',
-      'Số lượng hàng bán': Number(row.quantitySold) || 0,
-      'Tiền hàng': Number(row.grossAmount) || 0,
-      'Chiết khấu sản phẩm': Number(row.productDiscount) || 0,
-      'Chiết khấu phân bổ': Number(row.allocatedDiscount) || 0,
-      Thuế: Number(row.taxAmount) || 0,
-      'Thành tiền': Number(row.netAmount) || 0,
-      'Số đơn': Number(row.orderCount) || 0,
+      Ngay: formatDateKey(row.date),
+      "Ten phien ban": row.productName || '',
+      "Ma SKU": row.sku || '',
+      "So luong hang ban": Number(row.quantitySold) || 0,
+      "Tien hang": Number(row.grossAmount) || 0,
+      "Chiet khau san pham": Number(row.productDiscount) || 0,
+      "Chiet khau phan bo": Number(row.allocatedDiscount) || 0,
+      Thue: Number(row.taxAmount) || 0,
+      "Thanh tien": Number(row.netAmount) || 0,
+      "So don": Number(row.orderCount) || 0,
     }));
 
     detailRows.push({
       STT: '',
-      Ngày: '',
-      'Tên phiên bản': 'TỔNG CỘNG',
-      'Mã SKU': '',
-      'Số lượng hàng bán': Number(summary.totalQuantity) || 0,
-      'Tiền hàng': Number(summary.grossAmount) || 0,
-      'Chiết khấu sản phẩm': Number(summary.productDiscount) || 0,
-      'Chiết khấu phân bổ': Number(summary.allocatedDiscount) || 0,
-      Thuế: Number(summary.taxAmount) || 0,
-      'Thành tiền': Number(summary.netAmount) || 0,
-      'Số đơn': Number(summary.orderCount) || 0,
+      Ngay: '',
+      "Ten phien ban": 'TONG CONG',
+      "Ma SKU": '',
+      "So luong hang ban": Number(summary.totalQuantity) || 0,
+      "Tien hang": Number(summary.grossAmount) || 0,
+      "Chiet khau san pham": Number(summary.productDiscount) || 0,
+      "Chiet khau phan bo": Number(summary.allocatedDiscount) || 0,
+      Thue: Number(summary.taxAmount) || 0,
+      "Thanh tien": Number(summary.netAmount) || 0,
+      "So don": Number(summary.orderCount) || 0,
     });
 
     const summaryRows = [
-      { 'Chỉ tiêu': 'Từ ngày', 'Giá trị': formatDateKey(range.from) },
-      { 'Chỉ tiêu': 'Đến ngày', 'Giá trị': formatDateKey(range.to) },
-      { 'Chỉ tiêu': 'Kiểu thời gian', 'Giá trị': PERIOD_OPTIONS.find(option => option.value === (range.period || period))?.label || period },
-      { 'Chỉ tiêu': 'Trạng thái đơn', 'Giá trị': STATUS_OPTIONS.find(option => option.value === (range.status || status))?.label || status },
-      { 'Chỉ tiêu': 'Số đơn hàng', 'Giá trị': Number(summary.orderCount) || 0 },
-      { 'Chỉ tiêu': 'Tổng số sản phẩm bán', 'Giá trị': Number(summary.totalQuantity) || 0 },
-      { 'Chỉ tiêu': 'Tổng doanh thu', 'Giá trị': Number(summary.totalRevenue) || 0 },
-      { 'Chỉ tiêu': 'Xuất lúc', 'Giá trị': new Date().toLocaleString('vi-VN') },
+      { 'Ch? ti?u': 'T? ng?y', 'Gi? tr?': formatDateKey(range.from) },
+      { 'Ch? ti?u': '??n ng?y', 'Gi? tr?': formatDateKey(range.to) },
+      { 'Ch? ti?u': 'Ki?u th?i gian', 'Gi? tr?': PERIOD_OPTIONS.find(option => option.value === (range.period || period))?.label || period },
+      { 'Ch? ti?u': 'Tr?ng th?i don', 'Gi? tr?': STATUS_OPTIONS.find(option => option.value === (range.status || status))?.label || status },
+      { 'Ch? ti?u': 'S? don h?ng', 'Gi? tr?': Number(summary.orderCount) || 0 },
+      { 'Ch? ti?u': 'T?ng s? s?n ph?m b?n', 'Gi? tr?': Number(summary.totalQuantity) || 0 },
+      { 'Ch? ti?u': 'T?ng doanh thu', 'Gi? tr?': Number(summary.totalRevenue) || 0 },
+      { 'Ch? ti?u': 'Xu?t l?c', 'Gi? tr?': new Date().toLocaleString('vi-VN') },
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -968,7 +966,7 @@ export default function ProductReport() {
   }
 
   const rangeLabel = selectedRange.valid
-    ? `Từ ${formatDateKey(selectedRange.from)} đến ${formatDateKey(selectedRange.to)}`
+    ? `T? ${formatDateKey(selectedRange.from)} d?n ${formatDateKey(selectedRange.to)}`
     : selectedRange.message;
   const rangePickerFrom = period === 'custom' ? from : (selectedRange.valid ? selectedRange.from : from);
   const rangePickerTo = period === 'custom' ? to : (selectedRange.valid ? selectedRange.to : to);
@@ -1006,11 +1004,11 @@ export default function ProductReport() {
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-[0.25em] text-blue-200/80">Product Sales Report</div>
-                  <h1 className="text-2xl font-bold">Báo cáo thống kê sản phẩm</h1>
+                  <h1 className="text-2xl font-bold">B?o c?o th?ng k? s?n ph?m</h1>
                 </div>
               </div>
               <p className="text-sm text-blue-100/80 max-w-3xl">
-                Thống kê số đơn hàng, số lượng sản phẩm đã bán và doanh thu theo ngày/tháng/năm. Mặc định chỉ tính đơn hoàn thành và loại trừ đơn hủy.
+                Th?ng k? s? don h?ng, s? lu?ng s?n ph?m d? b?n v? doanh thu theo ng?y/th?ng/nam. M?c d?nh ch? t?nh don ho?n th?nh v? lo?i tr? don h?y.
               </p>
             </div>
 
@@ -1020,7 +1018,7 @@ export default function ProductReport() {
                 onClick={openCreateModal}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-blue-900 shadow-sm hover:bg-blue-50"
               >
-                <FilePlus size={16} /> Thêm báo cáo
+                <FilePlus size={16} /> Th?m b?o c?o
               </button>
               <button
                 type="button"
@@ -1037,7 +1035,7 @@ export default function ProductReport() {
         <div className="p-5 bg-gray-50 border-t border-white/10">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[170px_minmax(170px,0.9fr)_minmax(300px,1.35fr)_180px_auto]">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Kiểu thời gian</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Ki?u th?i gian</label>
               <select className="input-field w-full" value={period} onChange={e => setPeriod(e.target.value)}>
                 {PERIOD_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -1047,14 +1045,14 @@ export default function ProductReport() {
 
             {period === 'day' && (
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">Ngày tạo đơn</label>
-                <DatePickerField value={selectedDate} onChange={setSelectedDate} ariaLabel="Chọn ngày tạo đơn" />
+                <label className="mb-1 block text-xs font-medium text-gray-500">Ng?y t?o don</label>
+                <DatePickerField value={selectedDate} onChange={setSelectedDate} ariaLabel="Ch?n ng?y t?o don" />
               </div>
             )}
 
             {period === 'month' && (
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">Tháng tạo đơn</label>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Th?ng t?o don</label>
                 <div className="relative">
                   <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input type="month" className="input-field w-full pl-9" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} />
@@ -1064,7 +1062,7 @@ export default function ProductReport() {
 
             {period === 'year' && (
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">Năm tạo đơn</label>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Nam t?o don</label>
                 <div className="relative">
                   <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -1080,7 +1078,7 @@ export default function ProductReport() {
             )}
 
             <div className="xl:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-gray-500">Khoảng ngày</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Kho?ng ng?y</label>
               <DateRangeInlinePicker
                 from={rangePickerFrom}
                 to={rangePickerTo}
@@ -1093,7 +1091,7 @@ export default function ProductReport() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Trạng thái đơn</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Tr?ng th?i don</label>
               <select className="input-field w-full" value={status} onChange={e => setStatus(e.target.value)}>
                 {STATUS_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -1109,13 +1107,13 @@ export default function ProductReport() {
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 xl:w-auto"
               >
                 {loading ? <Loader size={16} className="animate-spin" /> : <Search size={16} />}
-                Thống kê
+                Th?ng k?
               </button>
               <button
                 type="button"
                 onClick={resetFilters}
                 className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-500 hover:bg-gray-100"
-                title="Đặt lại bộ lọc"
+                title="??t l?i b? l?c"
               >
                 <RefreshCw size={16} />
               </button>
@@ -1124,10 +1122,10 @@ export default function ProductReport() {
 
           <div className="mt-3 flex flex-col gap-2 text-xs text-gray-500 md:flex-row md:items-center md:justify-between">
             <div>
-              <span className="font-medium text-gray-600">Bộ lọc:</span> {rangeLabel} · {STATUS_OPTIONS.find(option => option.value === status)?.label || status}
+              <span className="font-medium text-gray-600">B? l?c:</span> {rangeLabel} ? {STATUS_OPTIONS.find(option => option.value === status)?.label || status}
             </div>
             <div>
-              {report?.metadata?.timezone ? `Múi giờ: ${report.metadata.timezone}` : 'Múi giờ: Asia/Saigon'}
+              {report?.metadata?.timezone ? `M?i gi?: ${report.metadata.timezone}` : 'M?i gi?: Asia/Saigon'}
               {lastFetchedAt ? ` · Cập nhật: ${formatDateTime(lastFetchedAt)}` : ''}
             </div>
           </div>
@@ -1150,24 +1148,24 @@ export default function ProductReport() {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-blue-700">
             <div className="flex items-center gap-2 text-xs font-medium opacity-80">
-              <ShoppingCart size={15} /> Số lượng đơn hàng
+              <ShoppingCart size={15} /> S? lu?ng don h?ng
             </div>
             <div className="mt-1 text-2xl font-bold">{formatNumber(summary.orderCount)}</div>
-            <div className="mt-1 text-xs opacity-80">{getStatusLabel(report?.metadata?.status || status)} trong kỳ</div>
+            <div className="mt-1 text-xs opacity-80">{getStatusLabel(report?.metadata?.status || status)} trong k?</div>
           </div>
           <div className="rounded-2xl border border-purple-100 bg-purple-50 px-4 py-3 text-purple-700">
             <div className="flex items-center gap-2 text-xs font-medium opacity-80">
-              <Package size={15} /> Tổng sản phẩm đã bán
+              <Package size={15} /> T?ng s?n ph?m d? b?n
             </div>
             <div className="mt-1 text-2xl font-bold">{formatNumber(summary.totalQuantity)}</div>
-            <div className="mt-1 text-xs opacity-80">Tổng số lượng từ chi tiết đơn hàng</div>
+            <div className="mt-1 text-xs opacity-80">T?ng s? lu?ng t? chi ti?t don h?ng</div>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-emerald-700">
             <div className="flex items-center gap-2 text-xs font-medium opacity-80">
-              <DollarSign size={15} /> Tổng doanh thu
+              <DollarSign size={15} /> T?ng doanh thu
             </div>
             <div className="mt-1 text-2xl font-bold">{formatVND(summary.totalRevenue)}</div>
-            <div className="mt-1 text-xs opacity-80">Tính theo tổng tiền hóa đơn</div>
+            <div className="mt-1 text-xs opacity-80">T?nh theo t?ng ti?n h?a don</div>
           </div>
         </div>
       )}
@@ -1177,15 +1175,15 @@ export default function ProductReport() {
           <div>
             <div className="flex items-center gap-2">
               <FileText size={18} className="text-blue-600" />
-              <h2 className="font-bold text-gray-800">Bảng báo cáo sản phẩm</h2>
+              <h2 className="font-bold text-gray-800">B?ng b?o c?o s?n ph?m</h2>
             </div>
             <p className="mt-1 text-sm text-gray-500">
-              Tổng hợp theo ngày và sản phẩm/SKU: số lượng bán, tiền hàng, chiết khấu, thuế và thành tiền.
+              T?ng h?p theo ng?y v? s?n ph?m/SKU: s? lu?ng b?n, ti?n h?ng, chi?t kh?u, thu? v? th?nh ti?n.
             </p>
           </div>
           {report && (
             <div className="text-sm font-medium text-gray-600">
-              {formatNumber(rows.length)} dòng · {formatVND(summary.netAmount)} thành tiền dòng hàng
+              {formatNumber(rows.length)} d?ng ? {formatVND(summary.netAmount)} th?nh ti?n d?ng h?ng
             </div>
           )}
         </div>
@@ -1194,15 +1192,15 @@ export default function ProductReport() {
           <table className="w-full min-w-[1180px] text-sm">
             <thead>
               <tr className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                <th className="px-4 py-3 text-left">Ngày</th>
-                <th className="px-4 py-3 text-left">Tên phiên bản</th>
-                <th className="px-4 py-3 text-left">Mã SKU</th>
-                <th className="px-4 py-3 text-right">Số lượng hàng bán</th>
-                <th className="px-4 py-3 text-right">Tiền hàng</th>
+                <th className="px-4 py-3 text-left">Ng?y</th>
+                <th className="px-4 py-3 text-left">T?n phi?n b?n</th>
+                <th className="px-4 py-3 text-left">M? SKU</th>
+                <th className="px-4 py-3 text-right">S? lu?ng h?ng b?n</th>
+                <th className="px-4 py-3 text-right">Ti?n h?ng</th>
                 <th className="px-4 py-3 text-right">Chiết khấu sản phẩm</th>
-                <th className="px-4 py-3 text-right">Chiết khấu phân bổ</th>
+                <th className="px-4 py-3 text-right">Chi?t kh?u ph?n b?</th>
                 <th className="px-4 py-3 text-right">Thuế</th>
-                <th className="px-4 py-3 text-right">Thành tiền</th>
+                <th className="px-4 py-3 text-right">Th?nh ti?n</th>
               </tr>
             </thead>
             <tbody>
@@ -1211,9 +1209,9 @@ export default function ProductReport() {
                   <td className="px-4 py-3 font-medium text-gray-700">{formatDateKey(row.date)}</td>
                   <td className="px-4 py-3">
                     <div className="font-semibold text-gray-900">{row.productName || 'Sản phẩm'}</div>
-                    <div className="mt-0.5 text-xs text-gray-400">{row.type === 'combo' ? 'Combo' : 'Sản phẩm/biến thể'} · {formatNumber(row.orderCount)} đơn</div>
+                    <div className="mt-0.5 text-xs text-gray-400">{row.type === 'combo' ? 'Combo' : 'S?n ph?m/bi?n th?'} ? {formatNumber(row.orderCount)} don</div>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{row.sku || '—'}</td>
+                  <td className="px-4 py-3 text-gray-600">{row.sku || '?'}</td>
                   <td className="px-4 py-3 text-right font-semibold text-blue-700">{formatNumber(row.quantitySold)}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{formatVND(row.grossAmount)}</td>
                   <td className="px-4 py-3 text-right text-rose-600">{formatVND(row.productDiscount)}</td>
@@ -1224,7 +1222,7 @@ export default function ProductReport() {
               ))}
               {rows.length > 0 && (
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                  <td className="px-4 py-3" colSpan={3}>Tổng cộng</td>
+                  <td className="px-4 py-3" colSpan={3}>T?ng c?ng</td>
                   <td className="px-4 py-3 text-right text-blue-700">{formatNumber(summary.totalQuantity)}</td>
                   <td className="px-4 py-3 text-right">{formatVND(summary.grossAmount)}</td>
                   <td className="px-4 py-3 text-right text-rose-600">{formatVND(summary.productDiscount)}</td>
@@ -1240,19 +1238,19 @@ export default function ProductReport() {
         {loading ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
             <Loader size={32} className="animate-spin text-blue-400" />
-            <div className="font-medium text-gray-600">Đang lập báo cáo sản phẩm...</div>
+            <div className="font-medium text-gray-600">?ang l?p b?o c?o s?n ph?m...</div>
           </div>
         ) : report && rows.length === 0 ? (
           <div className="py-16 text-center">
-            <div className="mb-3 text-5xl opacity-20">📦</div>
-            <div className="font-semibold text-gray-600">Không có sản phẩm bán ra trong khoảng thời gian đã chọn</div>
-            <div className="mt-1 text-sm text-gray-400">Báo cáo chỉ tính đơn phù hợp trạng thái đã chọn và luôn loại trừ đơn hủy.</div>
+            <div className="mb-3 text-5xl opacity-20">?Y"?</div>
+            <div className="font-semibold text-gray-600">Kh?ng c? s?n ph?m b?n ra trong kho?ng th?i gian d? ch?n</div>
+            <div className="mt-1 text-sm text-gray-400">B?o c?o ch? t?nh don ph? h?p tr?ng th?i d? ch?n v? lu?n lo?i tr? don h?y.</div>
           </div>
         ) : !report ? (
           <div className="py-16 text-center">
-            <div className="mb-3 text-5xl opacity-20">📊</div>
-            <div className="font-semibold text-gray-600">Chưa có dữ liệu báo cáo</div>
-            <div className="mt-1 text-sm text-gray-400">Chọn bộ lọc thời gian rồi nhấn “Thống kê”.</div>
+            <div className="mb-3 text-5xl opacity-20">?Y"S</div>
+            <div className="font-semibold text-gray-600">Chua c? d? li?u b?o c?o</div>
+            <div className="mt-1 text-sm text-gray-400">Ch?n b? l?c th?i gian r?i nh?n ?Th?ng k?.</div>
           </div>
         ) : null}
       </div>
@@ -1266,9 +1264,9 @@ export default function ProductReport() {
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-blue-200/80">
                     <FilePlus size={15} /> New Product Report
                   </div>
-                  <h3 className="mt-1 text-xl font-bold">Tạo báo cáo sản phẩm</h3>
+                  <h3 className="mt-1 text-xl font-bold">T?o b?o c?o s?n ph?m</h3>
                   <p className="mt-1 text-sm text-blue-100/80">
-                    Chọn kỳ báo cáo, trạng thái đơn và tạo báo cáo từ dữ liệu đơn hàng hiện có.
+                    Ch?n k? b?o c?o, tr?ng th?i don v? t?o b?o c?o t? d? li?u don h?ng hi?n c?.
                   </p>
                 </div>
                 <button
@@ -1276,7 +1274,7 @@ export default function ProductReport() {
                   onClick={closeCreateModal}
                   disabled={createLoading}
                   className="rounded-xl border border-white/10 bg-white/10 p-2 text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
-                  aria-label="Đóng form tạo báo cáo"
+                  aria-label="??ng form t?o b?o c?o"
                 >
                   <X size={18} />
                 </button>
@@ -1286,7 +1284,7 @@ export default function ProductReport() {
             <form onSubmit={createReport} className="space-y-4 p-5">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-700">Loại báo cáo</label>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">Lo?i b?o c?o</label>
                   <select
                     className="input-field w-full"
                     value={reportDraft.period}
@@ -1301,19 +1299,19 @@ export default function ProductReport() {
 
                 {reportDraft.period === 'day' && (
                   <div>
-                    <label className="mb-1 block text-sm font-semibold text-gray-700">Ngày báo cáo</label>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700">Ng?y b?o c?o</label>
                     <DatePickerField
                       value={reportDraft.selectedDate}
                       onChange={value => updateReportDraft('selectedDate', value)}
                       disabled={createLoading}
-                      ariaLabel="Chọn ngày báo cáo"
+                      ariaLabel="Ch?n ng?y b?o c?o"
                     />
                   </div>
                 )}
 
                 {reportDraft.period === 'month' && (
                   <div>
-                    <label className="mb-1 block text-sm font-semibold text-gray-700">Tháng báo cáo</label>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700">Th?ng b?o c?o</label>
                     <div className="relative">
                       <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
@@ -1329,7 +1327,7 @@ export default function ProductReport() {
 
                 {reportDraft.period === 'year' && (
                   <div>
-                    <label className="mb-1 block text-sm font-semibold text-gray-700">Năm báo cáo</label>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700">Nam b?o c?o</label>
                     <div className="relative">
                       <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
@@ -1350,30 +1348,30 @@ export default function ProductReport() {
                     <div className="flex items-start gap-2 text-sm font-bold text-blue-800">
                       <Calendar size={16} className="mt-0.5 shrink-0" />
                       <div>
-                        <div>Khoảng ngày tùy chỉnh</div>
+                        <div>Kho?ng ng?y t?y ch?nh</div>
                         <p className="mt-1 text-xs font-medium text-blue-700/75">
-                          Chọn độc lập ngày bắt đầu và ngày kết thúc, hệ thống lọc bao gồm cả hai ngày đã chọn.
+                          Ch?n d?c l?p ng?y b?t d?u v? ng?y k?t th?c, h? th?ng l?c bao g?m c? hai ng?y d? ch?n.
                         </p>
                       </div>
                     </div>
                     <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-gray-700">Ngày bắt đầu</label>
+                        <label className="mb-1 block text-sm font-semibold text-gray-700">Ng?y b?t d?u</label>
                         <DatePickerField
                           value={reportDraft.from}
                           onChange={value => updateReportDraft('from', value)}
                           disabled={createLoading}
-                          ariaLabel="Chọn ngày bắt đầu"
+                          ariaLabel="Ch?n ng?y b?t d?u"
                           maxDate={normalizeDateInputValue(reportDraft.to)}
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-gray-700">Ngày kết thúc</label>
+                        <label className="mb-1 block text-sm font-semibold text-gray-700">Ng?y k?t th?c</label>
                         <DatePickerField
                           value={reportDraft.to}
                           onChange={value => updateReportDraft('to', value)}
                           disabled={createLoading}
-                          ariaLabel="Chọn ngày kết thúc"
+                          ariaLabel="Ch?n ng?y k?t th?c"
                           minDate={normalizeDateInputValue(reportDraft.from)}
                         />
                       </div>
@@ -1382,7 +1380,7 @@ export default function ProductReport() {
                 )}
 
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-700">Trạng thái đơn</label>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">Tr?ng th?i don</label>
                   <select
                     className="input-field w-full"
                     value={reportDraft.status}
@@ -1396,17 +1394,17 @@ export default function ProductReport() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-700">Khoảng dữ liệu</label>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">Kho?ng d? li?u</label>
                   <div className={`flex min-h-[44px] items-center rounded-xl border px-3 py-2 text-sm font-medium ${createRange.valid ? 'border-blue-100 bg-blue-50 text-blue-700' : 'border-red-200 bg-red-50 text-red-600'}`}>
                     {createRange.valid
-                      ? `Từ ${formatDateKey(createRange.from)} đến ${formatDateKey(createRange.to)}`
+                      ? `T? ${formatDateKey(createRange.from)} d?n ${formatDateKey(createRange.to)}`
                       : createRange.message}
                   </div>
                 </div>
               </div>
 
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                Báo cáo sẽ gọi API hiện có, luôn loại trừ đơn bị hủy và cập nhật ngay bảng cùng 3 chỉ số: số đơn hàng, tổng sản phẩm đã bán, tổng doanh thu.
+                B?o c?o s? g?i API hi?n c?, lu?n lo?i tr? don b? h?y v? c?p nh?t ngay b?ng c?ng 3 ch? s?: s? don h?ng, t?ng s?n ph?m d? b?n, t?ng doanh thu.
               </div>
 
               {createError && (
@@ -1422,7 +1420,7 @@ export default function ProductReport() {
                   disabled={createLoading}
                   className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Hủy
+                  H?y
                 </button>
                 <button
                   type="submit"
@@ -1430,12 +1428,27 @@ export default function ProductReport() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
                   {createLoading ? <Loader size={16} className="animate-spin" /> : <FilePlus size={16} />}
-                  Tạo báo cáo
+                  T?o b?o c?o
                 </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {showHelp && (
+        <HelpModal
+          show={showHelp}
+          onClose={() => setShowHelp(false)}
+          title="Hu?ng d?n b?o c?o s?n ph?m"
+          content={[
+            'Bu?c 1: Ch?n k? b?o c?o theo ng?y, th?ng, nam ho?c kho?ng th?i gian t?y ch?nh.',
+            'Bu?c 2: Ch?n tr?ng th?i don h?ng d? quy?t d?nh d? li?u n?o du?c t?nh v?o b?o c?o.',
+            'Bu?c 3: Xem tru?c kho?ng d? li?u d? ki?m tra l?i m?c th?i gian tru?c khi t?o b?o c?o.',
+            'Bu?c 4: Nh?n T?o b?o c?o d? t?i s? lu?ng b?n, doanh thu v? danh s?ch s?n ph?m theo k?.',
+            'Bu?c 5: D?ng n?t xu?t file d? t?i Excel khi c?n d?i so?t ho?c g?i qu?n l?.',
+          ]}
+        />
       )}
     </div>
   );
