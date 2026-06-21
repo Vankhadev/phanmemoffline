@@ -1,7 +1,7 @@
-{
+﻿{
     "name":  "phanmienoffline-electron",
-    "version":  "1.9.3",
-    "description":  "Bán hàng offline ",
+    "version": "1.9.5",
+    "description":  "BÃ¡n hÃ ng offline ",
     "repository":  {
                        "type":  "git",
                        "url":  "git+https://github.com/Vankhadev/phanmemoffline.git"
@@ -38,7 +38,7 @@
                 },
     "build":  {
                   "appId":  "com.vankhammo.phanmienoffline",
-                  "productName":  "Bán Hàng Pos",
+                  "productName":  "BÃ¡n HÃ ng Pos",
                   "directories":  {
                                       "output":  "release"
                                   },
@@ -92,7 +92,7 @@
                                "allowToChangeInstallationDirectory":  true,
                                "createDesktopShortcut":  true,
                                "createStartMenuShortcut":  true,
-                               "shortcutName":  "Bán Hàng Pos"
+                               "shortcutName":  "BÃ¡n HÃ ng Pos"
                            },
                   "publish":  [
                                   {
@@ -148,3 +148,4 @@
                             "electron-builder":  "^24.13.3"
                         }
 }
+

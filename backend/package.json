@@ -1,6 +1,6 @@
 ﻿{
     "name":  "phanmienoffline-backend",
-    "version":  "1.9.3",
+    "version": "1.9.5",
     "description":  "Backend for BÃ¡n HÃ ng Pos",
     "main":  "src/server.js",
     "scripts":  {
@@ -30,3 +30,4 @@
                             "nodemon":  "^3.1.10"
                         }
 }
+
