@@ -1,8 +1,8 @@
 {
-  "version": "1.5.0",
-  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.5.0/banhangoffline-setup-v1.5.0-x64.exe",
+  "version": "1.9.7",
+  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.9.7/banhangoffline-setup-v1.9.7-x64.exe",
   "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "releaseNotes": "Tổng quan:\n- Bản 1.5.0 bổ sung nền tảng kế toán, báo cáo thuế GTGT, báo cáo tồn kho, nhật ký hoạt động và phân quyền kế toán/thu ngân/nhân viên.\n- Luồng bán hàng và nhập hàng ghi bút toán, quỹ, công nợ, hóa đơn điện tử và log thao tác nghiệp vụ; hỗ trợ đảo bút toán khi hủy.\n- Bổ sung backup database JSON trước migration kế toán và backup định kỳ/startup có retention.\n\nPhát hành:\n- Đồng bộ version 1.5.0 cho ứng dụng desktop, frontend, backend và lockfile tương ứng.\n- Cập nhật changelog, tài liệu release, manifest ví dụ, tên asset và tag kiểm tra theo v1.5.0.\n\nLưu ý quan trọng:\n- Windows 10/11 64-bit dùng banhangoffline-setup-v1.5.0-x64.exe; Windows 32-bit dùng banhangoffline-setup-v1.5.0-ia32.exe.\n- Metadata production latest.yml/update-manifest.json chỉ sinh lại từ installer thực tế trước khi publish artifact.",
+  "releaseNotes": "Tổng quan:\n- Bản v1.9.7 bổ sung nền tảng kế toán, báo cáo thuế GTGT, báo cáo tồn kho, nhật ký hoạt động và phân quyền kế toán/thu ngân/nhân viên.\n- Luồng bán hàng và nhập hàng ghi bút toán, quỹ, công nợ, hóa đơn điện tử và log thao tác nghiệp vụ; hỗ trợ đảo bút toán khi hủy.\n- Bổ sung backup database JSON trước migration kế toán và backup định kỳ/startup có retention.\n\nPhát hành:\n- Đồng bộ version 1.5.0 cho ứng dụng desktop, frontend, backend và lockfile tương ứng.\n- Cập nhật changelog, tài liệu release, manifest ví dụ, tên asset và tag kiểm tra theo v1.5.0.\n\nLưu ý quan trọng:\n- Windows 10/11 64-bit dùng banhangoffline-setup-v1.5.0-x64.exe; Windows 32-bit dùng banhangoffline-setup-v1.5.0-ia32.exe.\n- Metadata production latest.yml/update-manifest.json chỉ sinh lại từ installer thực tế trước khi publish artifact.",
   "releaseDate": "2026-06-06T00:00:00.000+07:00",
   "platform": "win32",
   "arch": "x64",
@@ -17,8 +17,8 @@
     "x64": {
       "platform": "win32",
       "arch": "x64",
-      "fileName": "banhangoffline-setup-v1.5.0-x64.exe",
-      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.5.0/banhangoffline-setup-v1.5.0-x64.exe",
+      "fileName": "banhangoffline-setup-v1.9.7-x64.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.9.7/banhangoffline-setup-v1.9.7-x64.exe",
       "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "size": 0,
       "installerType": "nsis"
@@ -26,8 +26,8 @@
     "ia32": {
       "platform": "win32",
       "arch": "ia32",
-      "fileName": "banhangoffline-setup-v1.5.0-ia32.exe",
-      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.5.0/banhangoffline-setup-v1.5.0-ia32.exe",
+      "fileName": "banhangoffline-setup-v1.9.7-ia32.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.9.7/banhangoffline-setup-v1.9.7-ia32.exe",
       "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
       "size": 0,
       "installerType": "nsis"

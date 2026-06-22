@@ -1,6 +1,6 @@
 {
-  "version": "1.7.2",
-  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.7.2/banhangoffline-setup-v1.7.2-x64.exe",
+  "version": "1.9.7",
+  "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.9.7/banhangoffline-setup-v1.9.7-x64.exe",
   "sha256": "bfae641d787615254fa00c90d65bc803ae82634dbd22295ad39287d90b0b6fed",
   "releaseNotes": "- Cập nhật ứng dụng lên phiên bản 1.7.2.\n- Có bộ cài riêng cho Windows x64 và Windows 32-bit (ia32).",
   "releaseDate": "2026-06-13T01:42:15.958Z",
@@ -17,8 +17,8 @@
     "x64": {
       "platform": "win32",
       "arch": "x64",
-      "fileName": "banhangoffline-setup-v1.7.2-x64.exe",
-      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.7.2/banhangoffline-setup-v1.7.2-x64.exe",
+      "fileName": "banhangoffline-setup-v1.9.7-x64.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.9.7/banhangoffline-setup-v1.9.7-x64.exe",
       "sha256": "bfae641d787615254fa00c90d65bc803ae82634dbd22295ad39287d90b0b6fed",
       "size": 90147098,
       "installerType": "nsis"
@@ -26,8 +26,8 @@
     "ia32": {
       "platform": "win32",
       "arch": "ia32",
-      "fileName": "banhangoffline-setup-v1.7.2-ia32.exe",
-      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.7.2/banhangoffline-setup-v1.7.2-ia32.exe",
+      "fileName": "banhangoffline-setup-v1.9.7-ia32.exe",
+      "url": "https://github.com/Vankhadev/phanmemoffline/releases/download/v1.9.7/banhangoffline-setup-v1.9.7-ia32.exe",
       "sha256": "1756a2dd7c6b9cbee13c07f33124f6e25fbc8d0823d2e5b2e941dda77de9b97a",
       "size": 80564447,
       "installerType": "nsis"
