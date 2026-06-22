@@ -245,6 +245,58 @@ export default function OrderList() {
   const [stockToast, setStockToast] = useState(null);
   const lastStockLimitToastRef = useRef('');
 
+  // ----- Price memory & suggestion -----
+  // Remember last accepted price per customer+product in localStorage.
+  const PRICE_MEMORY_KEY = 'kha_price_memory';
+  const loadPriceMemory = () => {
+    try { return JSON.parse(localStorage.getItem(PRICE_MEMORY_KEY) || '{}'); } catch { return {}; }
+  };
+  const savePriceMemory = (mem) => {
+    try { localStorage.setItem(PRICE_MEMORY_KEY, JSON.stringify(mem)); } catch {}
+  };
+  const getStoredPrice = (customerId, productId) => {
+    const mem = loadPriceMemory();
+    return mem[`${customerId || 'null'}_${productId}`];
+  };
+  const setStoredPrice = (customerId, productId, price) => {
+    const mem = loadPriceMemory();
+    mem[`${customerId || 'null'}_${productId}`] = price;
+    savePriceMemory(mem);
+  };
+  // UI state for a price suggestion toast
+  const [priceSuggestion, setPriceSuggestion] = useState(null); // { lineIndex, productId, price, customerId, oldPrice }
+  // Show suggestion when a stored price differs from the current price of a line
+  const maybeShowPriceSuggestion = (lineIndex, productId, price, customerId) => {
+    const stored = getStoredPrice(customerId, productId);
+    if (stored != null && stored !== price) {
+      setPriceSuggestion({ lineIndex, productId, price, customerId, oldPrice: stored });
+      setTimeout(() => setPriceSuggestion(null), 10000);
+    }
+  };
+  // Apply the suggested price to the specific line and update memory
+  const applySuggestedPrice = () => {
+    if (!priceSuggestion) return;
+    const { lineIndex, price, productId, customerId } = priceSuggestion;
+    setEditDetails(prev => {
+      const updated = prev.map((d, i) => {
+        if (i !== lineIndex) return d;
+        const newItem = { ...d, unit_price: price };
+        newItem.line_total = newItem.quantity * price - (newItem.discount_amount || 0);
+        return newItem;
+      });
+      // recalc order totals
+      const sub = updated.reduce((s, d) => s + (d.line_total || 0), 0);
+      const vat = sub * (editForm.vat_percent / 100);
+      const disc = editForm.discount_percent ? sub * editForm.discount_percent / 100 : (editForm.discount_amount || 0);
+      const total = sub + vat - disc + (+editForm.delivery_fee || 0);
+      const paid = +editForm.paid_amount || 0;
+      setEditForm(f => ({ ...f, subtotal: sub, total, remaining_amount: Math.max(0, total - paid), change_amount: Math.max(0, paid - total) }));
+      return updated;
+    });
+    setStoredPrice(customerId, productId, price);
+    setPriceSuggestion(null);
+  };
+
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [expandedParents, setExpandedParents] = useState({});
@@ -302,6 +354,22 @@ export default function OrderList() {
     apiJson('/products/all/with-variants', {}, 'Không tải được sản phẩm.')
       .then(data => setEditProducts(Array.isArray(data) ? data : []))
       .catch(() => setEditProducts([]));
+  }, [showProductPicker, showEdit]);
+
+  // Tự động cập nhật danh sách sản phẩm khi có thay đổi (sửa/nhập) ở các tab khác
+  useEffect(() => {
+    const handleProductChange = () => {
+      if (!showProductPicker && !showEdit) return;
+      apiJson('/products/all/with-variants', {}, 'Không tải được sản phẩm.')
+        .then(data => setEditProducts(Array.isArray(data) ? data : []))
+        .catch(() => setEditProducts([]));
+    };
+    const unsubUpdated = globalSyncEmitter.on('PRODUCT_UPDATED', handleProductChange);
+    const unsubImported = globalSyncEmitter.on('PRODUCT_IMPORTED', handleProductChange);
+    return () => {
+      unsubUpdated();
+      unsubImported();
+    };
   }, [showProductPicker, showEdit]);
 
   useEffect(() => {
@@ -582,11 +650,24 @@ export default function OrderList() {
   const repriceEditDetailsForCustomer = useCallback((details = [], customer = null) => {
     const priceType = customer ? customerTypeToPriceType(customer.customer_type || customer.customer_type_name) : 'retail';
     return details.map(line => {
-      const unitPrice = getPriceValueByType(getLineProductSource(line), priceType);
+      const source = getLineProductSource(line);
+      const currentUnitPrice = getPriceValueByType(source, priceType);
       const quantity = Number(line.quantity) || 1;
       const discountPercent = Number(line.discount_percent) || 0;
-      const discountAmount = discountPercent > 0 ? quantity * unitPrice * discountPercent / 100 : (Number(line.discount_amount) || 0);
-      return { ...line, unit_price: unitPrice, discount_amount: discountAmount, line_total: quantity * unitPrice - discountAmount };
+      const discountAmount = discountPercent > 0 ? quantity * currentUnitPrice * discountPercent / 100 : (Number(line.discount_amount) || 0);
+      // Preserve historic cost/sale prices if they already exist; otherwise set them based on current product price.
+      const costPrice = line.cost_price_at_sale != null ? line.cost_price_at_sale : (line.import_price != null ? line.import_price : currentUnitPrice);
+      const salePrice = line.sale_price_at_sale != null ? line.sale_price_at_sale : currentUnitPrice;
+      const profit = line.profit_at_sale != null ? line.profit_at_sale : (salePrice - costPrice) * quantity;
+      return {
+        ...line,
+        unit_price: line.unit_price != null ? line.unit_price : currentUnitPrice,
+        cost_price_at_sale: costPrice,
+        sale_price_at_sale: salePrice,
+        profit_at_sale: profit,
+        discount_amount: discountAmount,
+        line_total: quantity * (line.unit_price != null ? line.unit_price : currentUnitPrice) - discountAmount,
+      };
     });
   }, [getLineProductSource]);
 
@@ -595,6 +676,13 @@ export default function OrderList() {
     const customer = customerId ? customers.find(c => Number(c.id) === customerId) : null;
     setEditDetails(prev => {
       const updated = repriceEditDetailsForCustomer(prev, customer);
+      // Show price suggestions for any lines where stored price differs
+      updated.forEach((line, idx) => {
+        const prodId = line.product_id || line.variant_id;
+        if (prodId) {
+          maybeShowPriceSuggestion(idx, prodId, line.unit_price, customerId);
+        }
+      });
       const sub = updated.reduce((sum, d) => sum + (Number(d.line_total) || 0), 0);
       setEditForm(f => {
         const vat = sub * ((Number(f.vat_percent) || 0) / 100);
@@ -790,34 +878,48 @@ export default function OrderList() {
   // Thêm sản phẩm vào chi tiết sửa
   const addDetailFromPicker = (p) => {
     const isVariant = Boolean(p.is_variant || p.parent_id || p.parent_name || p.parent?.name);
+    const isService = Boolean(p.is_service || p.service);
     const displayName = getProductDisplayName(p);
     const customer = editForm.customer_id ? customers.find(c => Number(c.id) === Number(editForm.customer_id)) : null;
     const activePriceType = customer ? customerTypeToPriceType(customer.customer_type) : 'retail';
     const price = getPriceValueByType(p, activePriceType);
-    const newDetail = {
-      type: 'product',
-      item_type: 'product',
+    const baseDetail = {
       id: Date.now(),
-      product_id: p.id,
-      variant_id: isVariant ? p.id : null,
-      parent_id: isVariant ? (p.parent_id || p.parent?.id || null) : null,
-      parent_name: isVariant ? (p.parent_name || p.parent?.name || '') : '',
-      variant_name: isVariant ? p.name : '',
-      product_name: displayName,
-      product_sku: p.sku || '',
-      name: displayName,
-      sku: p.sku || '',
       quantity: 1,
       unit_price: price,
       discount_amount: 0,
       discount_percent: 0,
       line_total: price,
-      max_stock: p.stock,
-      current_stock: p.stock,
-      stock: p.stock,
       _new: true,
     };
+    const newDetail = isService
+      ? {
+          type: 'service',
+          item_type: 'service',
+          is_service: true,
+          ...baseDetail,
+          name: displayName,
+          sku: p.sku || '',
+        }
+      : {
+          type: 'product',
+          item_type: 'product',
+          product_id: p.id,
+          variant_id: isVariant ? p.id : null,
+          parent_id: isVariant ? (p.parent_id || p.parent?.id || null) : null,
+          parent_name: isVariant ? (p.parent_name || p.parent?.name || '') : '',
+          variant_name: isVariant ? p.name : '',
+          product_name: displayName,
+          product_sku: p.sku || '',
+          name: displayName,
+          sku: p.sku || '',
+          max_stock: p.stock,
+          current_stock: p.stock,
+          stock: p.stock,
+          ...baseDetail,
+        };
     setEditDetails(prev => {
+      const lineIdx = prev.length; // index of the new line
       const updated = [...prev, newDetail];
       const sub = updated.reduce((s, d) => s + (d.line_total || 0), 0);
       const vat = sub * (editForm.vat_percent / 100);
@@ -825,6 +927,8 @@ export default function OrderList() {
       const total = sub + vat - disc + (+editForm.delivery_fee || 0);
       const paid = +editForm.paid_amount || 0;
       setEditForm(f => ({ ...f, subtotal: sub, total, remaining_amount: Math.max(0, total - paid), change_amount: Math.max(0, paid - total) }));
+      // Show price suggestion if stored price differs
+      maybeShowPriceSuggestion(lineIdx, p.id, price, editForm.customer_id);
       return updated;
     });
     setShowProductPicker(false);
@@ -954,8 +1058,60 @@ export default function OrderList() {
         remaining_amount: editForm.remaining_amount || 0,
         status: editForm.status || 'pending',
         created_at: editForm.created_at || null,
-        details: editDetails.map(({ type, item_type, is_service, isService, combo_id, product_id, variant_id, parent_id, parent_name, variant_name, product_name, product_sku, name, sku, quantity, unit_price, import_price, cost_price_at_sale, sale_price_at_sale, profit_at_sale, discount_amount, discount_percent, line_total }) =>
-          ({ type: type || item_type || (is_service || isService ? 'service' : undefined), item_type: item_type || type || (is_service || isService ? 'service' : undefined), is_service: is_service || isService || false, combo_id: combo_id || null, product_id, variant_id: variant_id || null, parent_id: parent_id || null, parent_name: parent_name || '', variant_name: variant_name || '', product_name: product_name || name || '', product_sku: product_sku || sku || '', name: name || product_name || '', sku: sku || product_sku || '', quantity, unit_price, import_price: import_price ?? cost_price_at_sale ?? 0, cost_price_at_sale: cost_price_at_sale ?? import_price ?? 0, sale_price_at_sale: sale_price_at_sale ?? unit_price ?? 0, profit_at_sale: profit_at_sale ?? ((sale_price_at_sale ?? unit_price ?? 0) - (cost_price_at_sale ?? import_price ?? 0)) * (quantity || 1), discount_amount, discount_percent, line_total })),
+      details: editDetails.map(detail => {
+        const {
+          type,
+          item_type,
+          is_service,
+          isService,
+          combo_id,
+          product_id,
+          variant_id,
+          parent_id,
+          parent_name,
+          variant_name,
+          product_name,
+          product_sku,
+          name,
+          sku,
+          quantity,
+          unit_price,
+          import_price,
+          cost_price_at_sale,
+          sale_price_at_sale,
+          profit_at_sale,
+          discount_amount,
+          discount_percent,
+          line_total,
+        } = detail;
+        // Nếu sản phẩm không tồn tại trong danh mục hiện tại, bỏ product_id / variant_id để server không trả lỗi
+        const productExists = product_id && editProducts.some(p => Number(p.id) === Number(product_id));
+        const variantExists = variant_id && editProducts.some(p => Number(p.id) === Number(variant_id));
+        return {
+          type: type || item_type || (is_service || isService ? 'service' : undefined),
+          item_type: item_type || type || (is_service || isService ? 'service' : undefined),
+          is_service: is_service || isService || false,
+          combo_id: combo_id || null,
+          product_id: productExists ? product_id : null,
+          variant_id: variantExists ? variant_id : null,
+          parent_id: parent_id || null,
+          parent_name: parent_name || '',
+          variant_name: variant_name || '',
+          product_name: product_name || name || '',
+          product_sku: product_sku || sku || '',
+          name: name || product_name || '',
+          sku: sku || product_sku || '',
+          quantity,
+          unit_price,
+          import_price: import_price ?? cost_price_at_sale ?? 0,
+          cost_price_at_sale: cost_price_at_sale ?? import_price ?? 0,
+          sale_price_at_sale: sale_price_at_sale ?? unit_price ?? 0,
+          profit_at_sale: profit_at_sale ?? ((sale_price_at_sale ?? unit_price ?? 0) - (cost_price_at_sale ?? import_price ?? 0)) * (quantity || 1),
+          discount_amount,
+          discount_percent,
+          line_total,
+        };
+      }),
       };
       await apiJsonChecked(`/invoices/${showEdit.id}`, { method: 'PUT', body: payload }, 'Không thể lưu đơn hàng.');
       setShowEdit(null);
@@ -1043,6 +1199,19 @@ export default function OrderList() {
         <div className="toast-stack">
           <div className="toast-card border-red-200 bg-red-50 text-red-700">
             ⚠️ {stockToast.message}
+          </div>
+        </div>
+      )}
+      {priceSuggestion && (
+        <div className="toast-stack mt-2">
+          <div className="toast-card border-blue-200 bg-blue-50 text-blue-700 flex items-center gap-2">
+            📊 Giá thay đổi: {priceSuggestion.oldPrice} → {priceSuggestion.price}. Áp dụng?
+            <button onClick={applySuggestedPrice} className="ml-auto px-2 py-1 bg-blue-600 text-white rounded">
+              Áp dụng
+            </button>
+            <button onClick={() => setPriceSuggestion(null)} className="px-2 py-1 bg-gray-300 rounded">
+              Bỏ qua
+            </button>
           </div>
         </div>
       )}
@@ -1161,15 +1330,17 @@ export default function OrderList() {
 
         <div className="p-4 border-t border-gray-100">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_220px_220px_220px]">
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                className="input-field w-full pl-9"
-                placeholder="T?m theo m? don, DH XXXXX, t?n kh?ch h?ng..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
+          <div className="relative" onClick={() => document.getElementById('order-search')?.focus()}>
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              id="order-search"
+              autoFocus
+              className="input-field w-full pl-9"
+              placeholder="Tìm theo mã đơn, DHXXXXX, tên khách hàng..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
             <select className="input-field" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
               <option value="all">Tất cả trạng thái</option>
               <option value="pending">⏳ Chờ xác nhận</option>

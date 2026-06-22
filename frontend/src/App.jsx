@@ -766,7 +766,7 @@ function AppLayout({
         >
           <nav className="flex h-full flex-col overflow-y-auto px-4 py-5">
             <div className="flex items-center gap-3 mb-6 px-3">
-              <img src="./icons/app-icon.svg" alt="POS Logo" className="h-9 w-9 rounded-xl object-cover shadow-sm" />
+               <img src="/icons/app-icon.svg" alt="POS Logo" className="h-9 w-9 rounded-xl object-cover shadow-sm" />
               <div className="font-bold text-gray-800 text-lg leading-tight">Bán Hàng Pos</div>
             </div>
             {navGroups.map(group => {

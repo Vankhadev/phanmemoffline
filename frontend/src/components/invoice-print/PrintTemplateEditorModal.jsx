@@ -334,12 +334,16 @@ export default function PrintTemplateEditorModal({
         editor_meta_json: buildEditorMeta(editor.settings, { action: 'manual-save' }),
       });
       const item = normalizeApiItem(data);
-      if (item) {
-        editor.setTemplateFromServer(item, { preferDraft: true });
-        setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
-        autosave.markSaved(item);
-        onSaved?.(item);
-      }
+        if (item) {
+          // Cập nhật template và revision sau khi lưu draft
+          editor.setTemplateFromServer(item, { preferDraft: true });
+          // Đặt lại baseline để tránh autosave gây xung đột với phiên bản mới
+          setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
+          autosave.markSaved(item);
+          // Đảm bảo revision được đồng bộ, tránh hiển thị phiên bản cũ
+          if (item.revision) editor.setRevision(item.revision);
+          onSaved?.(item);
+        }
       setNotice(buildNotice('success', 'D? luu draft m?u in.'));
       return item;
     } catch (error) {
@@ -371,12 +375,14 @@ export default function PrintTemplateEditorModal({
         status: 'active',
       });
       const item = normalizeApiItem(data);
-      if (item) {
-        editor.setTemplateFromServer(item, { preferDraft: false });
-        setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
-        autosave.markSaved(item);
-        onSaved?.(item);
-      }
+        if (item) {
+          editor.setTemplateFromServer(item, { preferDraft: false });
+          setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
+          autosave.markSaved(item);
+          // Đồng bộ revision để preview và autosave không còn dùng phiên bản cũ
+          if (item.revision) editor.setRevision(item.revision);
+          onSaved?.(item);
+        }
       setNotice(buildNotice('success', 'D? publish m?u in. Trang in h?a don s? d?ng b?n published m?i.'));
     } catch (error) {
       if (isRevisionConflict(error)) {

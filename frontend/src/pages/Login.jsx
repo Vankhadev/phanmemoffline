@@ -293,6 +293,43 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     }
   };
 
+  // -------------------------- Đăng ký tài khoản mới --------------------------
+  const handleRegister = async (event) => {
+    event.preventDefault();
+    setError('');
+    setSuccess('');
+
+    // Sử dụng cùng hàm kiểm tra như admin
+    if (!validateAdminForm()) return;
+    if (form.password !== form.confirmPassword) {
+      setError('Mật khẩu và xác nhận không khớp.');
+      return;
+    }
+
+    const payload = {
+      name: form.name.trim(),
+      email: normalizeEmail(form.email),
+      phone: form.phone.trim(),
+      password: form.password,
+      ...getClientDeviceMetadata(),
+    };
+
+    if (!applyServerOverride()) return;
+
+    setLoading(true);
+    try {
+      const data = await authApi.register(payload);
+      setSuccess('Tạo tài khoản thành công. Đang đăng nhập...');
+      // Lưu tài khoản offline để có thể đăng nhập trên các máy khác
+      await rememberMobileOfflineAccount({ email: form.email, password: form.password, payload: data });
+      await completeLogin(data);
+    } catch (err) {
+      setError(getApiErrorMessage(err?.data, err.message || 'Không thể đăng ký.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const showSetupForm = needsSetup && authMode === 'setup';
   const isLoginDisabled = loading || checkingSetup || !form.email.trim() || !form.password;
   const isBootstrapDisabled = loading || checkingSetup || !showSetupForm;
@@ -302,7 +339,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden bg-slate-50 border border-slate-100">
-            <img src="./icons/app-icon-192.png" alt="POS Logo" className="w-full h-full object-cover" />
+            <img src="/icons/app-icon-192.png" alt="POS Logo" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-2xl font-bold text-gray-800">B?n H?ng Pos</h1>
           <p className="text-blue-600 font-semibold mt-1">
@@ -342,24 +379,37 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
             )}
 
 
-            {needsSetup && (
-              <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-amber-50 p-1">
+            {/* Toggle between Đăng ký, Đăng nhập, và Thiết lập (nếu cần) */}
+            <div className="mb-4 grid grid-cols-3 gap-2 rounded-xl bg-amber-50 p-1">
+              {/* Đăng ký - luôn hiển thị nếu không ở chế độ setup */}
+              {!showSetupForm && (
+                <button
+                  type="button"
+                  onClick={() => switchAuthMode('register')}
+                  className="rounded-lg px-3 py-2 text-sm font-bold text-green-800 hover:bg-green-100"
+                >
+                  Đăng ký
+                </button>
+              )}
+              {/* Đăng nhập */}
+              <button
+                type="button"
+                onClick={() => switchAuthMode('login')}
+                className={`rounded-lg px-3 py-2 text-sm font-bold transition ${authMode === 'login' ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-700 hover:bg-blue-50'}`}
+              >
+                ?ang nh?p t?i kho?n d? c?
+              </button>
+              {/* Thiết lập admin nếu cần */}
+              {needsSetup && (
                 <button
                   type="button"
                   onClick={() => switchAuthMode('setup')}
-                  className={`rounded-lg px-3 py-2 text-sm font-bold transition ${showSetupForm ? 'bg-amber-600 text-white shadow-sm' : 'text-amber-800 hover:bg-amber-100'}`}
+                  className={`rounded-lg px-3 py-2 text-sm font-bold transition ${authMode === 'setup' ? 'bg-amber-600 text-white shadow-sm' : 'text-amber-800 hover:bg-amber-100'}`}
                 >
                   Thi?t l?p m?y n?y
                 </button>
-                <button
-                  type="button"
-                  onClick={() => switchAuthMode('login')}
-                  className={`rounded-lg px-3 py-2 text-sm font-bold transition ${!showSetupForm ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-700 hover:bg-blue-50'}`}
-                >
-                  ?ang nh?p t?i kho?n d? c?
-                </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {showSetupForm ? (
               <form onSubmit={handleBootstrapAdmin} className="space-y-4">
@@ -482,7 +532,63 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   M? trang dang k? l?n d?u ri?ng
                 </Link>
               </form>
-            ) : (
+            )}
+            {/* Form đăng ký tài khoản mới */}
+            {authMode === 'register' && (
+              <form onSubmit={handleRegister} className="space-y-4">
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
+                  <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold">Đăng ký tài khoản</div>
+                    <div>Nhập thông tin để tạo tài khoản mới.</div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <span className="inline-flex items-center gap-1"><User size={14} /> Họ và tên <span className="text-red-500">*</span></span>
+                  </label>
+                  <input type="text" value={form.name} onChange={e => set('name', e.target.value)} placeholder="VD: Nguyễn Văn A" className="input-field w-full pl-4" autoComplete="name" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <span className="inline-flex items-center gap-1"><Mail size={14} /> Email <span className="text-red-500">*</span></span>
+                  </label>
+                  <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="user@domain.com" className="input-field w-full pl-4" autoComplete="email" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <span className="inline-flex items-center gap-1"><Phone size={14} /> Số điện thoại <span className="text-red-500">*</span></span>
+                  </label>
+                  <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="0909 123 456" className="input-field w-full pl-4" autoComplete="tel" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <span className="inline-flex items-center gap-1"><Lock size={14} /> Mật khẩu <span className="text-red-500">*</span></span>
+                  </label>
+                  <div className="relative">
+                    <input type={showPass ? 'text' : 'password'} value={form.password} onChange={e => set('password', e.target.value)} placeholder="Tối thiểu 6 ký tự" className="input-field w-full pl-4 pr-10" autoComplete="new-password" required />
+                    <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label={showPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
+                      {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <span className="inline-flex items-center gap-1"><Lock size={14} /> Xác nhận mật khẩu <span className="text-red-500">*</span></span>
+                  </label>
+                  <div className="relative">
+                    <input type={showConfirm ? 'text' : 'password'} value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} placeholder="Nhập lại mật khẩu" className="input-field w-full pl-4 pr-10" autoComplete="new-password" required />
+                    <button type="button" onClick={() => setShowConfirm(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label={showConfirm ? 'Ẩn xác nhận' : 'Hiện xác nhận'}>
+                      {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+                <button type="submit" disabled={loading} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2">
+                  {loading ? 'Đang lưu...' : 'Đăng ký'}
+                </button>
+              </form>
+            )}
+            {showSetupForm ? (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
