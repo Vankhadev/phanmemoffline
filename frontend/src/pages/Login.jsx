@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   authApi,
@@ -293,16 +293,16 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     }
   };
 
-  // -------------------------- Đăng ký tài khoản mới --------------------------
+  // -------------------------- ÄÄƒng kÃ½ tÃ i khoáº£n má»›i --------------------------
   const handleRegister = async (event) => {
     event.preventDefault();
     setError('');
     setSuccess('');
 
-    // Sử dụng cùng hàm kiểm tra như admin
+    // Sá»­ dá»¥ng cÃ¹ng hÃ m kiá»ƒm tra nhÆ° admin
     if (!validateAdminForm()) return;
     if (form.password !== form.confirmPassword) {
-      setError('Mật khẩu và xác nhận không khớp.');
+      setError('Máº­t kháº©u vÃ  xÃ¡c nháº­n khÃ´ng khá»›p.');
       return;
     }
 
@@ -319,12 +319,12 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     setLoading(true);
     try {
       const data = await authApi.register(payload);
-      setSuccess('Tạo tài khoản thành công. Đang đăng nhập...');
-      // Lưu tài khoản offline để có thể đăng nhập trên các máy khác
+      setSuccess('Táº¡o tÃ i khoáº£n thÃ nh cÃ´ng. Äang Ä‘Äƒng nháº­p...');
+      // LÆ°u tÃ i khoáº£n offline Ä‘á»ƒ cÃ³ thá»ƒ Ä‘Äƒng nháº­p trÃªn cÃ¡c mÃ¡y khÃ¡c
       await rememberMobileOfflineAccount({ email: form.email, password: form.password, payload: data });
       await completeLogin(data);
     } catch (err) {
-      setError(getApiErrorMessage(err?.data, err.message || 'Không thể đăng ký.'));
+      setError(getApiErrorMessage(err?.data, err.message || 'KhÃ´ng thá»ƒ Ä‘Äƒng kÃ½.'));
     } finally {
       setLoading(false);
     }
@@ -379,19 +379,19 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
             )}
 
 
-            {/* Toggle between Đăng ký, Đăng nhập, và Thiết lập (nếu cần) */}
+            {/* Toggle between ÄÄƒng kÃ½, ÄÄƒng nháº­p, vÃ  Thiáº¿t láº­p (náº¿u cáº§n) */}
             <div className="mb-4 grid grid-cols-3 gap-2 rounded-xl bg-amber-50 p-1">
-              {/* Đăng ký - luôn hiển thị nếu không ở chế độ setup */}
+              {/* ÄÄƒng kÃ½ - luÃ´n hiá»ƒn thá»‹ náº¿u khÃ´ng á»Ÿ cháº¿ Ä‘á»™ setup */}
               {!showSetupForm && (
                 <button
                   type="button"
                   onClick={() => switchAuthMode('register')}
                   className="rounded-lg px-3 py-2 text-sm font-bold text-green-800 hover:bg-green-100"
                 >
-                  Đăng ký
+                  ÄÄƒng kÃ½
                 </button>
               )}
-              {/* Đăng nhập */}
+              {/* ÄÄƒng nháº­p */}
               <button
                 type="button"
                 onClick={() => switchAuthMode('login')}
@@ -399,7 +399,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
               >
                 ?ang nh?p t?i kho?n d? c?
               </button>
-              {/* Thiết lập admin nếu cần */}
+              {/* Thiáº¿t láº­p admin náº¿u cáº§n */}
               {needsSetup && (
                 <button
                   type="button"
@@ -533,21 +533,21 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 </Link>
               </form>
             )}
-            {/* Form đăng ký tài khoản mới */}
+            {/* Form Ä‘Äƒng kÃ½ tÃ i khoáº£n má»›i */}
             {authMode === 'register' && (
               <form onSubmit={handleRegister} className="space-y-4">
                 <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
                   <AlertTriangle size={18} className="shrink-0 mt-0.5" />
                   <div>
-                    <div className="font-semibold">Đăng ký tài khoản</div>
-                    <div>Nhập thông tin để tạo tài khoản mới.</div>
+                    <div className="font-semibold">ÄÄƒng kÃ½ tÃ i khoáº£n</div>
+                    <div>Nháº­p thÃ´ng tin Ä‘á»ƒ táº¡o tÃ i khoáº£n má»›i.</div>
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><User size={14} /> Họ và tên <span className="text-red-500">*</span></span>
+                    <span className="inline-flex items-center gap-1"><User size={14} /> Há» vÃ  tÃªn <span className="text-red-500">*</span></span>
                   </label>
-                  <input type="text" value={form.name} onChange={e => set('name', e.target.value)} placeholder="VD: Nguyễn Văn A" className="input-field w-full pl-4" autoComplete="name" required />
+                  <input type="text" value={form.name} onChange={e => set('name', e.target.value)} placeholder="VD: Nguyá»…n VÄƒn A" className="input-field w-full pl-4" autoComplete="name" required />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -557,34 +557,34 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><Phone size={14} /> Số điện thoại <span className="text-red-500">*</span></span>
+                    <span className="inline-flex items-center gap-1"><Phone size={14} /> Sá»‘ Ä‘iá»‡n thoáº¡i <span className="text-red-500">*</span></span>
                   </label>
                   <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="0909 123 456" className="input-field w-full pl-4" autoComplete="tel" required />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><Lock size={14} /> Mật khẩu <span className="text-red-500">*</span></span>
+                    <span className="inline-flex items-center gap-1"><Lock size={14} /> Máº­t kháº©u <span className="text-red-500">*</span></span>
                   </label>
                   <div className="relative">
-                    <input type={showPass ? 'text' : 'password'} value={form.password} onChange={e => set('password', e.target.value)} placeholder="Tối thiểu 6 ký tự" className="input-field w-full pl-4 pr-10" autoComplete="new-password" required />
-                    <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label={showPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
+                    <input type={showPass ? 'text' : 'password'} value={form.password} onChange={e => set('password', e.target.value)} placeholder="Tá»‘i thiá»ƒu 6 kÃ½ tá»±" className="input-field w-full pl-4 pr-10" autoComplete="new-password" required />
+                    <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label={showPass ? 'áº¨n máº­t kháº©u' : 'Hiá»‡n máº­t kháº©u'}>
                       {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><Lock size={14} /> Xác nhận mật khẩu <span className="text-red-500">*</span></span>
+                    <span className="inline-flex items-center gap-1"><Lock size={14} /> XÃ¡c nháº­n máº­t kháº©u <span className="text-red-500">*</span></span>
                   </label>
                   <div className="relative">
-                    <input type={showConfirm ? 'text' : 'password'} value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} placeholder="Nhập lại mật khẩu" className="input-field w-full pl-4 pr-10" autoComplete="new-password" required />
-                    <button type="button" onClick={() => setShowConfirm(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label={showConfirm ? 'Ẩn xác nhận' : 'Hiện xác nhận'}>
+                    <input type={showConfirm ? 'text' : 'password'} value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} placeholder="Nháº­p láº¡i máº­t kháº©u" className="input-field w-full pl-4 pr-10" autoComplete="new-password" required />
+                    <button type="button" onClick={() => setShowConfirm(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label={showConfirm ? 'áº¨n xÃ¡c nháº­n' : 'Hiá»‡n xÃ¡c nháº­n'}>
                       {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
                 <button type="submit" disabled={loading} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2">
-                  {loading ? 'Đang lưu...' : 'Đăng ký'}
+                  {loading ? 'Äang lÆ°u...' : 'ÄÄƒng kÃ½'}
                 </button>
               </form>
             )}
@@ -705,4 +705,5 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     </div>
   );
 }
+
 

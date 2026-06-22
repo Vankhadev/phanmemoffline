@@ -1,6 +1,6 @@
 {
     "name":  "phanmienoffline-frontend",
-    "version":  "1.9.9",
+    "version":  "2.1.2",
     "private":  true,
     "type":  "module",
     "scripts":  {
@@ -27,4 +27,3 @@
                             "vite":  "^6.3.5"
                         }
 }
-

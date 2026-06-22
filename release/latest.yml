@@ -1,11 +1,11 @@
-version: 1.9.7
+version: 2.1.1
 files:
-  - url: banhangoffline-setup-v1.9.7-x64.exe
-    sha512: j/XxijAEo/Ab9Y9coZw+dF6JoFRq/JT2D+zAZqu5I4oXf5TgG+YNHXdXH/WWkXA7Hr2nB5FKpKOlXT2j2wvXQA==
-    size: 90147098
-  - url: banhangoffline-setup-v1.9.7-ia32.exe
-    sha512: qqHl0UqTbxURDiqKLIop6DMwj6ErOEW5gXcc/6a97XrnbZo0TkcmgsJsZJIXlELKbtHP+qOR8NeBtOwdMRSLQA==
-    size: 80564447
-path: banhangoffline-setup-v1.9.7-x64.exe
-sha512: j/XxijAEo/Ab9Y9coZw+dF6JoFRq/JT2D+zAZqu5I4oXf5TgG+YNHXdXH/WWkXA7Hr2nB5FKpKOlXT2j2wvXQA==
-releaseDate: '2026-06-13T01:42:14.382Z'
+  - url: banhangoffline-setup-v2.1.1-x64.exe
+    sha512: 3xrOTLb+MqDsDBmv2YsChOMlnYbvWx9scjH4AyIvsN5jY50Xa7LfnnXGSDE5mEH+a9MPDeaAOCSBSPJGSF52Kg==
+    size: 109239992
+  - url: banhangoffline-setup-v2.1.1-ia32.exe
+    sha512: CVIAHG0VQ3giUSmveS6gOaU7FmbnBBHL7rQTBu8393kO02MmQPDIZbbFQItKTTN9cQuMtRxN+/pAEtjPUMxg4g==
+    size: 100095441
+path: banhangoffline-setup-v2.1.1-x64.exe
+sha512: 3xrOTLb+MqDsDBmv2YsChOMlnYbvWx9scjH4AyIvsN5jY50Xa7LfnnXGSDE5mEH+a9MPDeaAOCSBSPJGSF52Kg==
+releaseDate: '2026-06-22T18:32:07.317Z'

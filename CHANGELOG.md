@@ -1,4 +1,19 @@
-﻿## v1.9.5 - 2026-06-21
+﻿## v2.1.2 - 2026-06-23
+
+### Fixed
+- Sửa lỗi giá vốn của đơn hàng cũ bị thay đổi khi nhập hàng mới.
+- Sửa lỗi lợi nhuận bị tính sai khi cập nhật giá nhập sản phẩm.
+- Sửa lỗi báo cáo doanh thu và lợi nhuận lấy giá vốn hiện tại thay vì giá vốn tại thời điểm bán.
+- Sửa lỗi đơn hàng lịch sử bị ảnh hưởng khi cập nhật giá sản phẩm.
+
+### Improved
+- Lưu cố định giá vốn tại thời điểm bán (cost_price_at_sale).
+- Lưu cố định giá bán tại thời điểm bán (sale_price_at_sale).
+- Đơn hàng cũ giữ nguyên dữ liệu lịch sử.
+- Đơn hàng mới sử dụng giá nhập mới nhất.
+- Cải thiện độ chính xác báo cáo doanh thu và lợi nhuận.
+
+## v1.9.5 - 2026-06-21
 
 ### Fixed
 - Sửa luồng sửa đơn hàng trong Danh sách đơn hàng: chọn khách hàng bằng ô tìm kiếm + gợi ý thay vì xổ toàn bộ danh sách.
@@ -456,5 +471,4 @@
 - Windows 10/11 thÃ´ng thÆ°á»ng: dÃ¹ng `banhangoffline-setup-v1.3.5-x64.exe`.
 - Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€: dÃ¹ng `banhangoffline-setup-v1.3.5-ia32.exe`.
 - Chá»‰ táº£i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`.
-
 

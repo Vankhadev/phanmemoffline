@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-electron",
-  "version": "1.9.9",
+  "version": "2.1.2",
   "description": "Bám hànng pos ",
   "repository": {
     "type": "git",
@@ -148,3 +148,4 @@
     "electron-builder": "^24.13.3"
   }
 }
+
