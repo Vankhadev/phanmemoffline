@@ -411,7 +411,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
               )}
             </div>
 
-            {showSetupForm ? (
+            {showSetupForm && (
               <form onSubmit={handleBootstrapAdmin} className="space-y-4">
                 <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
                   <AlertTriangle size={18} className="shrink-0 mt-0.5" />
@@ -531,8 +531,8 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 <Link to="/dang-ky" className="w-full border border-amber-200 text-amber-700 hover:bg-amber-50 py-2.5 rounded-xl font-semibold transition flex items-center justify-center gap-2 text-sm">
                   M? trang dang k? l?n d?u ri?ng
                 </Link>
-              </form>
-            )}
+                </form>
+              )}
             {/* Form Ä‘Äƒng kÃ½ tÃ i khoáº£n má»›i */}
             {authMode === 'register' && (
               <form onSubmit={handleRegister} className="space-y-4">
@@ -588,7 +588,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 </button>
               </form>
             )}
-            {showSetupForm ? (
+            {showSetupForm && (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
