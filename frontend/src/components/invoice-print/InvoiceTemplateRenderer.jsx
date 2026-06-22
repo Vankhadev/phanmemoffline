@@ -564,13 +564,25 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
   const articleRef = useRef(null);
   const [measuredTableBottomMm, setMeasuredTableBottomMm] = useState(null);
   const [measuredElementHeightsMm, setMeasuredElementHeightsMm] = useState({});
+  const [measuredRowHeightsMm, setMeasuredRowHeightsMm] = useState([]);
+  const [measuredHeaderHeightMm, setMeasuredHeaderHeightMm] = useState(0);
   const tableMetrics = useMemo(
     () => getItemsTablePageMetrics(document, normalized.items.length, normalized.items),
     [document, normalized.items],
   );
+  const safePaddingMm = Number(document.canvas?.safePaddingMm ?? 5) || 0;
   const tableBottomMm = Math.max(Number(measuredTableBottomMm) || 0, tableMetrics.bottom);
-  const tablePages = useMemo(() => buildItemsTablePhysicalPages(document, normalized.items.length, normalized.items), [document, normalized.items.length, normalized.items]);
-  const tableLastPageBottomMm = Number(tablePages?.bottom) || tableBottomMm;
+  // Build the physical pages using the measured header/row heights so the printed
+  // bottom of the table accounts for the blank space the browser adds when splitting
+  // rows across page boundaries. Without this, multi-page invoices placed the totals
+  // block too high and it printed on top of the item rows.
+  const tablePages = useMemo(() => buildItemsTablePhysicalPages(document, normalized.items.length, normalized.items, {
+    pageHeightMm: page.height,
+    safePaddingMm,
+    measuredRowHeightsMm,
+    measuredHeaderHeightMm,
+  }), [document, measuredHeaderHeightMm, measuredRowHeightsMm, normalized.items.length, normalized.items, page.height, safePaddingMm]);
+  const tableLastPageBottomMm = Math.max(Number(tablePages?.bottom) || 0, tableBottomMm);
   const setArticleRef = useCallback((node) => {
     articleRef.current = node;
     assignForwardedRef(refProp, node);
@@ -587,11 +599,11 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
     elements,
     zonesById,
     tableTopMm: tableMetrics.y,
-    tableBottomMm,
+    tableBottomMm: tableLastPageBottomMm,
     pageHeightMm: page.height,
-    safePaddingMm: Number(document.canvas?.safePaddingMm ?? 5) || 0,
+    safePaddingMm,
     measuredHeights: measuredElementHeightsMm,
-  }), [document.canvas?.safePaddingMm, elements, measuredElementHeightsMm, page.height, tableBottomMm, tableMetrics.y, zonesById]);
+  }), [elements, measuredElementHeightsMm, page.height, safePaddingMm, tableLastPageBottomMm, tableMetrics.y, zonesById]);
   const getElementTopMm = useCallback((element) => {
     if (elementTopOverridesMm.has(element.id)) return elementTopOverridesMm.get(element.id);
     return getFlowElementBaseTopMm(element, zonesById);
@@ -612,6 +624,24 @@ function V2Renderer({ refProp, payload, template, settingsOverride = {}, logoPre
       const nextBottom = Math.round(((Number(tableNode.offsetTop) + tableHeightPx) / pxPerMm) * 1000) / 1000;
       if (!Number.isFinite(nextBottom)) return;
       setMeasuredTableBottomMm(current => (Math.abs((Number(current) || 0) - nextBottom) > 0.25 ? nextBottom : current));
+
+      const headerNode = tableNode.querySelector('thead');
+      const headerHeightMm = headerNode ? roundMm((Number(headerNode.offsetHeight) || 0) / pxPerMm) : 0;
+      setMeasuredHeaderHeightMm(current => (Math.abs((Number(current) || 0) - headerHeightMm) > 0.25 ? headerHeightMm : current));
+
+      const nextRowHeights = [];
+      tableNode.querySelectorAll('tr[data-invoice-item-index]').forEach(node => {
+        const idx = Number(node.getAttribute('data-invoice-item-index'));
+        if (!Number.isFinite(idx)) return;
+        nextRowHeights[idx] = roundMm((Number(node.offsetHeight) || 0) / pxPerMm);
+      });
+      setMeasuredRowHeightsMm(current => {
+        if ((current?.length || 0) !== nextRowHeights.length) return nextRowHeights;
+        for (let i = 0; i < nextRowHeights.length; i += 1) {
+          if (Math.abs((Number(current[i]) || 0) - (Number(nextRowHeights[i]) || 0)) > 0.25) return nextRowHeights;
+        }
+        return current;
+      });
 
       const nextHeights = {};
       article.querySelectorAll('.invoice-template-v2-element[data-invoice-element-id]').forEach(node => {

@@ -18,6 +18,7 @@ import {
 } from '../utils/negativeStock';
 import useNegativeStockSettings from '../utils/useNegativeStockSettings';
 import QuantityStepper from '../components/QuantityStepper';
+import { recordCartPrices, lookupRememberedPrice } from '../utils/customerPriceMemory';
 
 const PRICE_LABELS = { retail: 'Lẻ', wholesale: 'Sỉ', vip: 'VIP' };
 const COMBO_REFRESH_STALE_MS = 30 * 1000;
@@ -193,6 +194,8 @@ export default function CreateOrder({ user, store }) {
   const [creating, setCreating] = useState(false);
   const [lastInvoice, setLastInvoice] = useState(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+  // Per-line remembered-price suggestions. key = cart item id, value = { unitPrice, currentPrice, productKey, expiresAt }.
+  const [priceSuggestions, setPriceSuggestions] = useState({});
   const [showProductPanel, setShowProductPanel] = useState(false);
   const [deliveryDate, setDeliveryDate] = useState('');
   const [saleDate] = useState(() => new Date().toLocaleDateString('vi-VN'));
@@ -277,6 +280,51 @@ export default function CreateOrder({ user, store }) {
   };
   const toggleComboRow = (rowKey) => {
     setExpandedComboRows(prev => ({ ...prev, [rowKey]: !prev[rowKey] }));
+  };
+
+  // Per-line price suggestions. We never override the cart's current unit price;
+  // we just propose the previous price the same customer paid for the same
+  // priceType, and the operator clicks to accept it. After 10s the chip
+  // auto-hides. Switching price type or customer wipes the chips, so a
+  // wholesale customer can never be shown a retail-class suggestion.
+  const PRICE_SUGGESTION_TTL_MS = 10000;
+  const dismissPriceSuggestion = (lineId) => {
+    setPriceSuggestions(prev => {
+      if (!prev || !lineId || !prev[lineId]) return prev;
+      const next = { ...prev };
+      delete next[lineId];
+      return next;
+    });
+  };
+  const applyPriceSuggestion = (lineId) => {
+    const suggestion = priceSuggestions?.[lineId];
+    if (!suggestion || !Number.isFinite(Number(suggestion.unitPrice))) {
+      dismissPriceSuggestion(lineId);
+      return;
+    }
+    const nextPrice = Math.max(0, Number(suggestion.unitPrice) || 0);
+    setCart(prevCart => prevCart.map(line => (line.id === lineId
+      ? recalculateCartLine({ ...line, unit_price: nextPrice })
+      : line)));
+    dismissPriceSuggestion(lineId);
+  };
+  const triggerPriceSuggestionFor = (line) => {
+    if (!line || isComboOrderItem(line) || isServiceOrderItem(line)) return;
+    const remembered = lookupRememberedPrice(selectedCustomer, line, priceType);
+    if (!remembered) return;
+    const currentPrice = Number(line.unit_price) || 0;
+    if (Math.abs(currentPrice - remembered.unitPrice) < 0.5) return;
+    const expiresAt = Date.now() + PRICE_SUGGESTION_TTL_MS;
+    setPriceSuggestions(prev => ({
+      ...prev,
+      [line.id]: {
+        unitPrice: remembered.unitPrice,
+        currentPrice,
+        productKey: remembered.productKey,
+        priceType: remembered.priceType,
+        expiresAt,
+      },
+    }));
   };
 
   const fetchCombos = async ({ force = false } = {}) => {
@@ -624,7 +672,14 @@ export default function CreateOrder({ user, store }) {
   };
 
   const findMissingOrderProductLine = (lines = cart) => (
-    (Array.isArray(lines) ? lines : []).find(line => !isComboOrderItem(line) && !isServiceOrderItem(line) && !resolveOrderProductRecord(line))
+    (Array.isArray(lines) ? lines : []).find(line => {
+      if (isComboOrderItem(line) || isServiceOrderItem(line)) return false;
+      // Treat any line without a product/variant/combo reference as a free service line,
+      // so legacy invoices that lost the explicit 'service' flag can still be edited.
+      const hasReference = line?.product_id || line?.variant_id || line?.combo_id;
+      if (!hasReference) return false;
+      return !resolveOrderProductRecord(line);
+    })
   );
 
   const repriceCartLineForType = (item, nextPriceType = 'retail') => {
@@ -910,6 +965,8 @@ export default function CreateOrder({ user, store }) {
     if (!product?.id) return;
     const line = buildProductCartLine(product, quantity);
     setCart(prev => mergeCartLineQuantity(prev, line, line.quantity));
+    // Defer to after state commit so the line carries its final id/unit_price.
+    window.setTimeout(() => triggerPriceSuggestionFor(line), 0);
   };
 
   const addSearchResultToOrder = (item, kind = 'product') => {
@@ -1618,6 +1675,7 @@ export default function CreateOrder({ user, store }) {
         reason: saveToPending ? 'order-created-offline' : 'order-created',
         changedTables: ['invoices', 'invoice_details', 'products'],
       });
+      try { recordCartPrices(selectedCustomer, cart, priceType); } catch (_) { /* memory is best-effort */ }
 
       applyOrderStockRealtime(cart, editingInvoiceId ? editBaselineCart : []);
       setLastInvoice(inv);
@@ -1743,6 +1801,7 @@ export default function CreateOrder({ user, store }) {
         reason: 'order-updated',
         changedTables: ['invoices', 'invoice_details', 'products'],
       });
+      try { recordCartPrices(selectedCustomer, cart, priceType); } catch (_) { /* memory is best-effort */ }
       alert('? D? luu thay d?i don h?ng!');
     } catch (err) {
       setCreating(false);

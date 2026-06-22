@@ -10,6 +10,7 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import OrderList from './pages/OrderList';
+import LiveSyncBadge from './components/LiveSyncBadge';
 import KhoHang from './pages/KhoHang';
 import Nhaphang from './pages/nhaphang';
 import CustomerOrderReport from './pages/CustomerOrderReport';
@@ -584,7 +585,6 @@ function AppLayout({
   const [openMenus, setOpenMenus] = useState(() => ({
     don_hang: location.pathname.startsWith('/tao-don-hang') || location.pathname.startsWith('/danh-sach-don-hang'),
     danh_muc: location.pathname.startsWith('/san-pham') || location.pathname.startsWith('/kho-hang') || location.pathname.startsWith('/khach-hang') || location.pathname.startsWith('/nhap-hang') || location.pathname.startsWith('/nha-cung-cap'),
-    ke_toan: location.pathname.startsWith('/ke-toan'),
     quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat'),
   }));
   const [updateToast, setUpdateToast] = useState(null);
@@ -661,7 +661,6 @@ function AppLayout({
       const autoOpenMatchers = {
         don_hang: ['/tao-don-hang', '/danh-sach-don-hang'],
         danh_muc: ['/san-pham', '/kho-hang', '/khach-hang', '/nhap-hang', '/nha-cung-cap'],
-        ke_toan: ['/ke-toan'],
         quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/bang-luong-nhan-vien', '/cai-dat'],
       };
 
@@ -709,17 +708,6 @@ function AppLayout({
           { to: '/khach-hang', label: 'Khách hàng', icon: Users },
           { to: '/nhap-hang', label: 'Nhập hàng', icon: ShoppingCart },
           { to: '/nha-cung-cap', label: 'Đối Tác', icon: Truck },
-        ],
-      },
-      {
-        key: 'ke_toan',
-        label: 'Kế toán', 
-        icon: Scale,
-        items: [
-          { to: '/ke-toan', label: 'Doanh thu/lợi nhuận', icon: BarChart3 },
-          { to: '/ke-toan/bao-cao-thue', label: 'Báo cáo thuế GTGT', icon: ReceiptText },
-          { to: '/ke-toan/bao-cao-ton-kho', label: 'Báo cáo tồn kho', icon: Warehouse },
-          { to: '/ke-toan/nhat-ky', label: 'Nhật ký hoạt động', icon: FileClock },
         ],
       },
       {
@@ -848,7 +836,11 @@ function AppLayout({
           </nav>
         </aside>
         <div className="app-main-scroll flex-1 min-h-0 min-w-0 overflow-x-auto overflow-y-auto p-3 sm:p-4">
-          <div className="mb-3 flex items-center justify-end no-print">
+          <div className="mb-3 flex items-center justify-end gap-3 no-print">
+            <LiveSyncBadge
+              tables={['invoices', 'invoice_details', 'customers', 'customer_types', 'partners', 'products', 'product_categories', 'combos', 'import_logs', 'import_details', 'cash_book', 'accounting']}
+              className="hidden sm:inline-flex"
+            />
             <button
               type="button"
               onClick={() => setShowScreenGuide(true)}

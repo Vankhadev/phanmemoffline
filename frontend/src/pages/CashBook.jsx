@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
 import { globalSyncEmitter } from '../utils/eventEmitter';
 import { Plus, Edit2, Trash2, TrendingUp, TrendingDown, Calendar, Filter, Upload, Download, X, DollarSign } from 'lucide-react';
@@ -133,6 +133,25 @@ export default function CashBook() {
     }
   };
 
+  const handleDeleteAll = async () => {
+    if (transactions.length === 0) { alert('Không có giao dịch để xóa.'); return; }
+    if (!confirm('Xóa TẤT CẢ giao dịch trong sổ quỹ? Hành động này không thể hoàn tác!')) return;
+    if (!confirm('Bạn có chắc chắn? Tất cả dữ liệu thu chi sẽ bị xóa vĩnh viễn!')) return;
+    try {
+      let deleted = 0;
+      for (const t of transactions) {
+        try {
+          await apiJsonChecked(`${API}/cash-book/${t.id}`, { method: 'DELETE' }, 'Không thể xóa giao dịch.');
+          deleted++;
+        } catch (err) { /* skip individual errors */ }
+      }
+      alert(`Đã xóa ${deleted} giao dịch.`);
+      fetchTransactions();
+    } catch (err) {
+      alert('Lỗi kết nối: ' + err.message);
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!confirm('X?a giao d?ch n?y?')) return;
     try {
@@ -191,6 +210,9 @@ export default function CashBook() {
           </button>
           <button onClick={openAdd} className="btn-primary flex items-center gap-1">
             <Plus size={16} /> Th?m giao d?ch
+          </button>
+          <button onClick={handleDeleteAll} className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium flex items-center gap-1.5">
+            <Trash2 size={16} /> Xóa tất cả
           </button>
         </div>
       </div>

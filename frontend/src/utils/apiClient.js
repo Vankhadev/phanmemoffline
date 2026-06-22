@@ -8,6 +8,7 @@ import {
 } from './authStorage';
 import { getProductDisplayName } from './productSearch';
 import { attachClientOrderMetadata, ensureClientOrderId } from './clientOrderId';
+import { emitGlobalSyncEvents } from './eventEmitter';
 
 export const AUTH_EXPIRED_EVENT = 'vankha-auth:expired';
 export const SYNC_UPDATED_EVENT = 'vankha-sync:updated';
@@ -118,6 +119,16 @@ export function requestCrossTabSyncUpdate(detail = {}) {
   window.dispatchEvent(new CustomEvent(SYNC_UPDATED_EVENT, {
     detail: normalizedDetail,
   }));
+
+  // Same-tab notifications: also emit on the global event emitter so pages that
+  // subscribe via globalSyncEmitter (Customers, KhoHang, nhacungcap, reports...)
+  // refresh immediately after a mutation in the current tab, without requiring
+  // a manual reload (Ctrl+R).
+  try {
+    emitGlobalSyncEvents(changedTables, normalizedDetail.op || null, normalizedDetail);
+  } catch (err) {
+    if (typeof console !== 'undefined') console.warn('[SYNC] emitGlobalSyncEvents failed', err);
+  }
 
   window.dispatchEvent(new CustomEvent(SYNC_BROADCAST_REQUEST_EVENT, {
     detail: normalizedDetail,

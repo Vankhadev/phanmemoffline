@@ -8,7 +8,7 @@ export const TABLE_STYLE_ELEMENT_TYPE = 'rectangle';
 export const TABLE_COLUMN_LABELS = Object.freeze({
   no: 'STT',
   name: 'Tên sản phẩm',
-  sku: 'M? SKU',
+  sku: 'Mã SKU',
   unit: 'Đơn vị',
   qty: 'Số lượng',
   quantity: 'Số lượng',

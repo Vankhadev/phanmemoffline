@@ -77,6 +77,30 @@ export function emitGlobalSyncEvents(changedTables, op = null, data = null) {
         globalSyncEmitter.emit('DEBT_UPDATED', data);
         break;
 
+      case 'partners':
+        if (op === 'insert') {
+          globalSyncEmitter.emit('PARTNER_CREATED', data);
+        } else if (op === 'delete') {
+          globalSyncEmitter.emit('PARTNER_DELETED', data);
+        } else {
+          globalSyncEmitter.emit('PARTNER_UPDATED', data);
+        }
+        // Backward-compatible alias because some screens still listen to
+        // the customer-shaped events for the suppliers page.
+        globalSyncEmitter.emit('CUSTOMER_UPDATED', data);
+        break;
+
+      case 'customer_types':
+        if (op === 'insert') {
+          globalSyncEmitter.emit('CUSTOMER_TYPE_CREATED', data);
+        } else if (op === 'delete') {
+          globalSyncEmitter.emit('CUSTOMER_TYPE_DELETED', data);
+        } else {
+          globalSyncEmitter.emit('CUSTOMER_TYPE_UPDATED', data);
+        }
+        globalSyncEmitter.emit('CUSTOMER_UPDATED', data);
+        break;
+
       default:
         break;
     }

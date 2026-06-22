@@ -80,12 +80,20 @@ function isComboDetail(detail = {}) {
 }
 
 function isServiceDetail(detail = {}) {
-  return detail.type === 'service'
+  if (detail.type === 'service'
     || detail.item_type === 'service'
     || detail.type === 'custom_service'
     || detail.item_type === 'custom_service'
     || detail.is_service
-    || detail.isService;
+    || detail.isService) return true;
+  // Backward-compatible fallback: if a sale line has no product reference at all
+  // (no product_id, no variant_id, no combo_id, no SKU) we treat it as a free
+  // service line. This covers legacy invoices created before the 'service' type
+  // was persisted, so editing them does not throw 'product not found' errors.
+  const hasProductRef = detail.product_id || detail.variant_id || detail.combo_id;
+  const sku = (detail.product_sku || detail.sku || detail.variant_sku || detail.productSku || '').toString().trim();
+  if (!hasProductRef && !sku) return true;
+  return false;
 }
 
 function firstNonEmpty(...values) {
@@ -200,14 +208,20 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
   const product_name = displayFields.product_name;
   const product_sku = displayFields.product_sku;
   const quantity = +detail.quantity || 1;
-  const unit_price = +detail.unit_price || 0;
+  const explicitUnitPrice = toNumber(detail.sale_price_at_sale ?? detail.unit_price ?? detail.sale_price, Number.NaN);
+  const unit_price = Number.isFinite(explicitUnitPrice) ? Math.max(0, explicitUnitPrice) : 0;
   const discount_amount = +detail.discount_amount || 0;
 
-  let import_price = 0;
-  if (product_id) {
+  const explicitImportPrice = toNumber(
+    detail.cost_price_at_sale ?? detail.import_price ?? detail.purchase_price ?? detail.cost_price,
+    Number.NaN,
+  );
+  let import_price = Number.isFinite(explicitImportPrice) ? Math.max(0, explicitImportPrice) : 0;
+  if (!Number.isFinite(explicitImportPrice) && product_id) {
     const prod = getOne('products', p => p.id == product_id);
-    if (prod) import_price = prod.import_price || 0;
+    if (prod) import_price = Math.max(0, toNumber(prod.import_price, 0));
   }
+  const profit_at_sale = (unit_price - import_price) * quantity;
 
   return {
     invoice_id,
@@ -226,6 +240,9 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
     quantity,
     unit_price,
     import_price,
+    cost_price_at_sale: import_price,
+    sale_price_at_sale: unit_price,
+    profit_at_sale,
     discount_amount,
     discount_percent: +detail.discount_percent || 0,
     line_total: +detail.line_total || (quantity * unit_price - discount_amount),

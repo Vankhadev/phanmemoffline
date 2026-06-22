@@ -257,19 +257,9 @@ function getDetailSku(detail = {}, productsById = new Map()) {
 // Báo cáo thống kê bán hàng theo sản phẩm trong khoảng ngày local Asia/Saigon
 // Query: from, to (YYYY-MM-DD), period=day|month|year|custom, status=completed mặc định
 // ─────────────────────────────────────────────
-function getDetailUnitCost(detail = {}, productsById = new Map(), comboItemsByComboId = new Map()) {
-  const snapshotCost = toNumber(detail.import_price, Number.NaN);
-  if (Number.isFinite(snapshotCost) && snapshotCost > 0) return snapshotCost;
-
-  if (detail.combo_id) {
-    return roundMoney((comboItemsByComboId.get(Number(detail.combo_id)) || []).reduce((sum, item) => {
-      const product = productsById.get(Number(item.variant_id)) || productsById.get(Number(item.product_id));
-      return sum + toNumber(item.quantity, 1) * toNumber(product?.import_price);
-    }, 0));
-  }
-
-  const product = productsById.get(Number(detail.variant_id)) || productsById.get(Number(detail.product_id));
-  return Math.max(0, toNumber(product?.import_price));
+function getDetailUnitCost(detail = {}) {
+  const snapshotCost = toNumber(detail.cost_price_at_sale ?? detail.import_price ?? detail.purchase_price, Number.NaN);
+  return Number.isFinite(snapshotCost) ? Math.max(0, snapshotCost) : 0;
 }
 
 router.get('/product-report', (req, res) => {
@@ -336,7 +326,7 @@ router.get('/product-report', (req, res) => {
         const taxAmount = invoiceVat * ratio;
         const revenueBeforeTax = grossAmount - productDiscount - allocatedDiscount;
         const netAmount = grossAmount - productDiscount - allocatedDiscount + taxAmount;
-        const unitCost = getDetailUnitCost(detail, productsById, comboItemsByComboId);
+        const unitCost = getDetailUnitCost(detail);
         const costAmount = quantity * unitCost;
         const estimatedProfit = revenueBeforeTax - costAmount;
         const productName = getDetailProductName(detail, productsById);

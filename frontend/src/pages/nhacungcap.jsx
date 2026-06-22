@@ -104,14 +104,21 @@ export default function NhaCungCap() {
       console.log('[SYNC] Partners refreshed');
     };
 
-    const unsubscribeCreated = globalSyncEmitter.on('CUSTOMER_CREATED', handleSyncRefresh);
-    const unsubscribeUpdated = globalSyncEmitter.on('CUSTOMER_UPDATED', handleSyncRefresh);
+    const unsubscribeCreated = globalSyncEmitter.on('PARTNER_CREATED', handleSyncRefresh);
+    const unsubscribeUpdated = globalSyncEmitter.on('PARTNER_UPDATED', handleSyncRefresh);
+    const unsubscribeDeleted = globalSyncEmitter.on('PARTNER_DELETED', handleSyncRefresh);
     const unsubscribeImported = globalSyncEmitter.on('PRODUCT_IMPORTED', handleSyncRefresh);
+    // Backward-compatible aliases (some flows still emit CUSTOMER_* for partners).
+    const unsubscribeLegacyCreated = globalSyncEmitter.on('CUSTOMER_CREATED', handleSyncRefresh);
+    const unsubscribeLegacyUpdated = globalSyncEmitter.on('CUSTOMER_UPDATED', handleSyncRefresh);
 
     return () => {
       unsubscribeCreated();
       unsubscribeUpdated();
+      unsubscribeDeleted();
       unsubscribeImported();
+      unsubscribeLegacyCreated();
+      unsubscribeLegacyUpdated();
     };
   }, []);
 

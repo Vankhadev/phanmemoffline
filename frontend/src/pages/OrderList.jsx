@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiJson, apiJsonChecked, resolveApiUrl, requestSyncCheck } from '../utils/apiClient';
 import { globalSyncEmitter } from '../utils/eventEmitter';
@@ -656,6 +656,10 @@ export default function OrderList() {
     if (inv._isOffline) {
       const cartDetails = inv.cart?.map((c, i) => ({
         id: c.id || (`offline_${i}`),
+        type: c.type || c.item_type || (c.is_service || c.isService ? 'service' : 'product'),
+        item_type: c.item_type || c.type || (c.is_service || c.isService ? 'service' : 'product'),
+        is_service: c.is_service || c.isService || false,
+        combo_id: c.combo_id || null,
         product_id: c.product_id || null,
         variant_id: c.variant_id || null,
         parent_id: c.parent_id || null,
@@ -791,6 +795,8 @@ export default function OrderList() {
     const activePriceType = customer ? customerTypeToPriceType(customer.customer_type) : 'retail';
     const price = getPriceValueByType(p, activePriceType);
     const newDetail = {
+      type: 'product',
+      item_type: 'product',
       id: Date.now(),
       product_id: p.id,
       variant_id: isVariant ? p.id : null,
@@ -948,8 +954,8 @@ export default function OrderList() {
         remaining_amount: editForm.remaining_amount || 0,
         status: editForm.status || 'pending',
         created_at: editForm.created_at || null,
-        details: editDetails.map(({ product_id, variant_id, parent_id, parent_name, variant_name, product_name, product_sku, name, sku, quantity, unit_price, discount_amount, discount_percent, line_total }) =>
-          ({ product_id, variant_id: variant_id || null, parent_id: parent_id || null, parent_name: parent_name || '', variant_name: variant_name || '', product_name: product_name || name || '', product_sku: product_sku || sku || '', name: name || product_name || '', sku: sku || product_sku || '', quantity, unit_price, discount_amount, discount_percent, line_total })),
+        details: editDetails.map(({ type, item_type, is_service, isService, combo_id, product_id, variant_id, parent_id, parent_name, variant_name, product_name, product_sku, name, sku, quantity, unit_price, import_price, cost_price_at_sale, sale_price_at_sale, profit_at_sale, discount_amount, discount_percent, line_total }) =>
+          ({ type: type || item_type || (is_service || isService ? 'service' : undefined), item_type: item_type || type || (is_service || isService ? 'service' : undefined), is_service: is_service || isService || false, combo_id: combo_id || null, product_id, variant_id: variant_id || null, parent_id: parent_id || null, parent_name: parent_name || '', variant_name: variant_name || '', product_name: product_name || name || '', product_sku: product_sku || sku || '', name: name || product_name || '', sku: sku || product_sku || '', quantity, unit_price, import_price: import_price ?? cost_price_at_sale ?? 0, cost_price_at_sale: cost_price_at_sale ?? import_price ?? 0, sale_price_at_sale: sale_price_at_sale ?? unit_price ?? 0, profit_at_sale: profit_at_sale ?? ((sale_price_at_sale ?? unit_price ?? 0) - (cost_price_at_sale ?? import_price ?? 0)) * (quantity || 1), discount_amount, discount_percent, line_total })),
       };
       await apiJsonChecked(`/invoices/${showEdit.id}`, { method: 'PUT', body: payload }, 'Không thể lưu đơn hàng.');
       setShowEdit(null);
@@ -993,7 +999,7 @@ export default function OrderList() {
         // Refresh product stock
         await fetchInvoices();
         apiJson('/products/all/with-variants').catch(() => { });
-        alert('? D? h?y don h?ng! Don s? t? d?ng x?a sau 24 gi?.');
+        alert('? Đã hủy đơn hàng! Đơn sẻ tự động xóa sau 24 giờ.');
       }
     } catch {
       alert('📡 Không thể kết nối server!');
@@ -1002,7 +1008,7 @@ export default function OrderList() {
 
   // Xác nhận thanh toán (chuyển trạng thái sang completed)
   const handleMarkAsPaid = async (inv) => {
-    if (!confirm(`X?c nh?n don h?ng ${inv.invoice_code} d? thanh to?n?`)) return;
+    if (!confirm(`Xác nhận đơn hàng ${inv.invoice_code} đã thanh toán!`)) return;
     try {
       if (inv._isOffline) {
         // Cập nhật offline order trong localStorage
@@ -1017,7 +1023,7 @@ export default function OrderList() {
             sameOrderIdentity(o, inv) ? { ...o, status: 'completed', _isOffline: true } : o
           ));
         }
-        alert('? D? c?p nh?t tr?ng th?i don offline th?nh "D? thanh to?n"!');
+        alert('? Đã cập nhật trạng thái đơn hàng thành "Đã thanh tóan"!');
       } else {
         // Gọi API xác nhận đơn hàng (PATCH /invoices/:id/confirm)
         await apiJsonChecked(`/invoices/${inv.id}/confirm`, { method: 'PATCH' }, 'Không thể xác nhận thanh toán.');
@@ -1054,7 +1060,7 @@ export default function OrderList() {
                 </div>
               </div>
               <p className="text-sm text-blue-100/80 max-w-2xl">
-                Theo dõi đơn online, đơn offline, trạng thái xử lý và thao tác nhanh trên cùng một màn hình.
+                Theo dõi đơn đơn hàng, trạng thái xử lý và thao tác nhanh trên cùng một màn hình.
               </p>
             </div>
 
@@ -1086,7 +1092,7 @@ export default function OrderList() {
                   disabled={isBulkDeleting}
                   className="px-3.5 py-2 rounded-xl bg-red-500 hover:bg-red-400 disabled:bg-white/20 text-sm font-semibold flex items-center gap-2"
                 >
-                  <Trash2 size={15} /> H?y d? ch?n ({selectedOrders.length})
+                  <Trash2 size={15} /> Hủy đã chọn ({selectedOrders.length})
                 </button>
               )}
             </div>

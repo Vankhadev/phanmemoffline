@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   AlignCenter,
@@ -157,6 +157,20 @@ export default function PrintTemplateEditorModal({
       setLoading(false);
     }
   }, [editor.setTemplateFromServer, show, template]);
+  const refreshRevisionBeforeSave = useCallback(async () => {
+    if (!template?.id) return null;
+    try {
+      const data = await printTemplatesApi.detail(template.id);
+      const item = normalizeApiItem(data);
+      if (item && item.revision) {
+        editor.setRevision(item.revision);
+        // autosave not yet defined at this point; revision synced via editor state
+      }
+      return item;
+    } catch (_error) {
+      return null;
+    }
+  }, [editor.setRevision, template?.id]);
 
   const loadPreviewInvoice = useCallback(async (templateId = activeTemplate?.id) => {
     if (!show) return;
@@ -312,6 +326,7 @@ export default function PrintTemplateEditorModal({
     setBusy('draft');
     setNotice(null);
     try {
+      await refreshRevisionBeforeSave();
       const data = await printTemplatesApi.autosave(activeTemplate.id, {
         revision: editor.revision,
         layout_json: editor.document,
@@ -337,7 +352,7 @@ export default function PrintTemplateEditorModal({
     } finally {
       setBusy('');
     }
-  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved]);
+  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved, refreshRevisionBeforeSave]);
 
   const handlePublish = useCallback(async () => {
     if (!activeTemplate?.id) {
@@ -347,6 +362,7 @@ export default function PrintTemplateEditorModal({
     setBusy('publish');
     setNotice(null);
     try {
+      await refreshRevisionBeforeSave();
       const data = await printTemplatesApi.publish(activeTemplate.id, {
         revision: editor.revision,
         layout_json: editor.document,
@@ -371,7 +387,7 @@ export default function PrintTemplateEditorModal({
     } finally {
       setBusy('');
     }
-  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved]);
+  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved, refreshRevisionBeforeSave]);
 
   const handleDiscardDraft = useCallback(async () => {
     if (!activeTemplate?.id) return;
@@ -379,6 +395,7 @@ export default function PrintTemplateEditorModal({
     setBusy('discard');
     setNotice(null);
     try {
+      await refreshRevisionBeforeSave();
       const data = await printTemplatesApi.discardDraft(activeTemplate.id, { revision: editor.revision });
       const item = normalizeApiItem(data);
       if (item) {
@@ -397,7 +414,7 @@ export default function PrintTemplateEditorModal({
     } finally {
       setBusy('');
     }
-  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved]);
+  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved, refreshRevisionBeforeSave]);
 
   const handleReload = useCallback(async () => {
     setBusy('reload');

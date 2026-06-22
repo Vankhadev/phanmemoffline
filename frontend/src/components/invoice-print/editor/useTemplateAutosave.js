@@ -142,9 +142,21 @@ export default function useTemplateAutosave({
         onSavedRef.current?.(item, data);
       } catch (error) {
         if (isRevisionConflict(error)) {
+          const serverRevision = error?.data?.details?.current_revision || error?.data?.current_revision || null;
+          if (serverRevision && serverRevision !== revisionRef.current) {
+            revisionRef.current = serverRevision;
+            lastSavedSignatureRef.current = '';
+            inFlightSignatureRef.current = '';
+            if (mountedRef.current) {
+              setStatus('dirty');
+              setConflict(null);
+              setSaveTick(v => v + 1);
+            }
+            return;
+          }
           const nextConflict = {
-            message: error?.message || 'M?u in d? du?c c?p nh?t ? phi?n kh?c.',
-            currentRevision: error?.data?.details?.current_revision || error?.data?.current_revision || null,
+            message: error?.message || 'M\u1EABu in \u0111\u00E3 \u0111\u01B0\u1EE3c c\u1EADp nh\u1EADt \u1EDF phi\u00EAn kh\u00E1c.',
+            currentRevision: serverRevision,
             expectedRevision: error?.data?.details?.expected_revision || error?.data?.expected_revision || revisionRef.current,
           };
           if (mountedRef.current) {

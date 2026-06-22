@@ -1147,16 +1147,30 @@ export default function Products({ store }) {
 
   // -- XU?T Excel --
   const handleExportExcel = () => {
-    const rows = [];
-    products.forEach(parent => {
-      rows.push(productToExcelRow(parent, 'PARENT'));
-      (parent.variants || []).forEach(variant => {
-        rows.push(productToExcelRow(variant, 'VARIANT', parent));
+    try {
+      const sourceProducts = Array.isArray(products) ? products : [];
+      if (sourceProducts.length === 0) {
+        alert('Chua co san pham nao de xuat Excel.');
+        return;
+      }
+      const rows = [];
+      sourceProducts.forEach(parent => {
+        if (!parent) return;
+        rows.push(productToExcelRow(parent, 'PARENT'));
+        (Array.isArray(parent.variants) ? parent.variants : []).forEach(variant => {
+          if (variant) rows.push(productToExcelRow(variant, 'VARIANT', parent));
+        });
       });
-    });
-
-    const wb = buildProductsWorkbook(rows);
-    XLSX.writeFile(wb, `danh_sach_san_pham_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      if (rows.length === 0) {
+        alert('Khong co du lieu san pham de xuat.');
+        return;
+      }
+      const wb = buildProductsWorkbook(rows);
+      XLSX.writeFile(wb, `danh_sach_san_pham_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (err) {
+      console.error('[Products] Xuat Excel that bai:', err);
+      alert('Khong the xuat file Excel: ' + (err && err.message ? err.message : 'Loi khong xac dinh'));
+    }
   };
 
   const handleDownloadExcelTemplate = () => {
