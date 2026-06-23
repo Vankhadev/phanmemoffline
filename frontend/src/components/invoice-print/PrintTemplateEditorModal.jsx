@@ -131,6 +131,8 @@ export default function PrintTemplateEditorModal({
   const [editorMode, setEditorMode] = useState('canvas');
   const [sapoDraft, setSapoDraft] = useState(() => buildSapoDraftFromTemplate(template || {}));
   const [canvasInteracting, setCanvasInteracting] = useState(false);
+  // Toggle to enable/disable autosave manually
+  const [autosaveEnabled, setAutosaveEnabled] = useState(true);
   const htmlEditorRef = useRef(null);
 
   const editor = useTemplateEditorState(template || {});
@@ -279,7 +281,8 @@ export default function PrintTemplateEditorModal({
 
   const autosave = useTemplateAutosave({
     templateId: activeTemplate?.id,
-    enabled: show && canManage && hasTemplateId && !loading,
+    // Disable autosave to prevent unwanted automatic saves
+    enabled: autosaveEnabled && show && canManage && hasTemplateId && !loading,
     document: editor.document,
     settings: editor.settings,
     revision: editor.revision,
@@ -675,6 +678,10 @@ export default function PrintTemplateEditorModal({
                 <Type size={15} /> Kéo thả
               </button>
             </div>
+            {/* Toggle autosave */}
+            <label className="invoice-editor-autosave-toggle" style={{ marginLeft: '1rem' }}>
+              <input type="checkbox" checked={autosaveEnabled} onChange={e => setAutosaveEnabled(e.target.checked)} /> Tự động lưu
+            </label>
             <button type="button" className="invoice-editor-close" onClick={onClose} disabled={busy === 'publish' || busy === 'sapo-save'}>
               <X size={20} />
             </button>
