@@ -239,7 +239,7 @@ function defaultStyleForType(type) {
         showPaymentMethod: false,
         showSeller: true,
         showOrderSource: false,
-        orderCodeLabel: 'M? don',
+        orderCodeLabel: 'Mã đơn',
         orderDateLabel: 'Ngày',
         paymentMethodLabel: 'Thanh toán',
         sellerLabelShort: 'NV',

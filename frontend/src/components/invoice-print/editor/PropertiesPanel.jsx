@@ -79,9 +79,12 @@ function AlignField({ value, onChange }) {
 }
 
 const FONT_OPTIONS = [
-  { value: 'system', label: 'System Sans' },
-  { value: 'serif', label: 'Serif' },
-  { value: 'mono', label: 'Mono' },
+  { value: 'system', label: 'Segoe UI (Mặc định)' },
+  { value: 'tahoma', label: 'Tahoma' },
+  { value: 'arial', label: 'Arial' },
+  { value: 'times', label: 'Times New Roman' },
+  { value: 'serif', label: 'Georgia (Serif)' },
+  { value: 'mono', label: 'Consolas (Mono)' },
 ];
 
 const OBJECT_FIT_OPTIONS = [

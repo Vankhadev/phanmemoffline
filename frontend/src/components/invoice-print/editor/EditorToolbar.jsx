@@ -20,7 +20,7 @@ import {
 function statusText(status, lastSavedAt) {
   if (status === 'saving') return 'Đang autosave...';
   if (status === 'dirty') return 'Có thay đổi chưa lưu';
-  if (status === 'saved' && lastSavedAt) return `D? autosave ${new Date(lastSavedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+  if (status === 'saved' && lastSavedAt) return `Đã autosave ${new Date(lastSavedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
   if (status === 'conflict') return 'Xung đột revision';
   if (status === 'error') return 'Autosave lỗi';
   return 'Sẵn sàng';
@@ -62,8 +62,8 @@ export default function EditorToolbar({
     <div className="invoice-editor-toolbar">
       <div className="invoice-editor-toolbar-main">
         <div>
-          <h2>{template?.template_name || template?.name || 'M?u in h?a ?n'}</h2>
-          <p>Revision {template?.revision || settings?.publish?.revision || 1} - {template?.has_draft ? 'C? draft' : 'Published'}</p>
+          <h2>{template?.template_name || template?.name || 'Mẫu in hóa đơn'}</h2>
+          <p>Revision {template?.revision || settings?.publish?.revision || 1} - {template?.has_draft ? 'Có draft' : 'Published'}</p>
         </div>
         <span className={`invoice-editor-save-status is-${autosaveStatus || 'idle'}`}>{statusText(autosaveStatus, lastSavedAt)}</span>
       </div>

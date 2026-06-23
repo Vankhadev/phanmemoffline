@@ -98,9 +98,12 @@ function formatFooterTemplate(text, payload = {}) {
 
 function normalizeFontFamily(value) {
   const key = String(value || '').trim().toLowerCase();
-  if (key === 'serif') return 'Georgia, Times New Roman, serif';
-  if (key === 'mono' || key === 'monospace') return 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
-  return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  if (key === 'tahoma') return 'Tahoma, "Segoe UI", sans-serif';
+  if (key === 'arial') return 'Arial, "Segoe UI", Tahoma, sans-serif';
+  if (key === 'times') return '"Times New Roman", Georgia, serif';
+  if (key === 'serif') return 'Georgia, "Times New Roman", serif';
+  if (key === 'mono' || key === 'monospace') return 'Consolas, ui-monospace, SFMono-Regular, Menlo, Monaco, monospace';
+  return '"Segoe UI", Tahoma, Arial, sans-serif';
 }
 
 function alignToJustify(value) {
@@ -224,8 +227,8 @@ function ElementContent({ element, template, payload }) {
   if (element.type === 'signatures') {
     return (
       <div className="invoice-editor-preview-signatures" style={{ ...baseStyle, gap: style.signatureGapMm !== undefined ? `${style.signatureGapMm}mm` : undefined }}>
-        <div><b>{style.buyerLabel || signatures.buyer?.label || 'Kh?ch h?ng'}</b><span>{style.buyerHint || '(K? v? ghi r? h? t?n)'}</span></div>
-        <div><b>{style.sellerLabel || signatures.seller?.label || 'Ng??i b?n'}</b><span>{style.sellerHint || '(K? v? ghi r? h? t?n)'}</span></div>
+        <div><b>{style.buyerLabel || signatures.buyer?.label || 'Khách hàng'}</b><span>{style.buyerHint || '(Ký và ghi rõ họ tên)'}</span></div>
+        <div><b>{style.sellerLabel || signatures.seller?.label || 'Người bán'}</b><span>{style.sellerHint || '(Ký và ghi rõ họ tên)'}</span></div>
       </div>
     );
   }
@@ -632,7 +635,7 @@ export default function EditorCanvas({
         </div>
       </div>
       <div className="invoice-editor-canvas-footer">
-        <span>{page.paperSize} {page.orientation === 'landscape' ? 'ngang' : 'd?c'} ? {page.width}?{page.height}mm ? zoom {Math.round(zoom * 100)}%</span>
+        <span>{page.paperSize} {page.orientation === 'landscape' ? 'ngang' : 'dọc'} — {page.width}×{page.height}mm — zoom {Math.round(zoom * 100)}%</span>
         <span>Snap grid {snapEnabled ? `${snapGridMm}mm + alignment` : 'OFF'} ? Arrow 0.5mm ? Shift+Arrow 1mm</span>
       </div>
     </section>

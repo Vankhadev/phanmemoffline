@@ -282,7 +282,7 @@ export default function PrintTemplateEditorModal({
   const autosave = useTemplateAutosave({
     templateId: activeTemplate?.id,
     // Disable autosave to prevent unwanted automatic saves
-    enabled: autosaveEnabled && show && canManage && hasTemplateId && !loading,
+    enabled: autosaveEnabled && show && canManage && hasTemplateId && !loading && !busy,
     document: editor.document,
     settings: editor.settings,
     revision: editor.revision,
@@ -329,9 +329,10 @@ export default function PrintTemplateEditorModal({
     setBusy('draft');
     setNotice(null);
     try {
-      await refreshRevisionBeforeSave();
+      const freshItem = await refreshRevisionBeforeSave();
+      const currentRevision = freshItem?.revision || editor.revision;
       const data = await printTemplatesApi.autosave(activeTemplate.id, {
-        revision: editor.revision,
+        revision: currentRevision,
         layout_json: editor.document,
         settings_json: editor.settings,
         editor_meta_json: buildEditorMeta(editor.settings, { action: 'manual-save' }),
@@ -369,9 +370,10 @@ export default function PrintTemplateEditorModal({
     setBusy('publish');
     setNotice(null);
     try {
-      await refreshRevisionBeforeSave();
+      const freshItem = await refreshRevisionBeforeSave();
+      const currentRevision = freshItem?.revision || editor.revision;
       const data = await printTemplatesApi.publish(activeTemplate.id, {
-        revision: editor.revision,
+        revision: currentRevision,
         layout_json: editor.document,
         settings_json: editor.settings,
         editor_meta_json: buildEditorMeta(editor.settings, { action: 'publish' }),
@@ -404,8 +406,9 @@ export default function PrintTemplateEditorModal({
     setBusy('discard');
     setNotice(null);
     try {
-      await refreshRevisionBeforeSave();
-      const data = await printTemplatesApi.discardDraft(activeTemplate.id, { revision: editor.revision });
+      const freshItem = await refreshRevisionBeforeSave();
+      const currentRevision = freshItem?.revision || editor.revision;
+      const data = await printTemplatesApi.discardDraft(activeTemplate.id, { revision: currentRevision });
       const item = normalizeApiItem(data);
       if (item) {
         editor.setTemplateFromServer(item, { preferDraft: false });

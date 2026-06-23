@@ -354,7 +354,7 @@ export default function Stats() {
             <FileDown size={16} /> Xu?t Excel th?ng
           </button>
           <button type="button" onClick={exportCurrentRangeReport} className="flex items-center gap-1 rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-700">
-            <FileDown size={16} /> Xu?t kho?ng dang xem
+            <FileDown size={16} /> tổng lợi nhận
           </button>
         </div>
       </div>
