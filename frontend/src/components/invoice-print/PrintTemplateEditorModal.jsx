@@ -158,20 +158,6 @@ export default function PrintTemplateEditorModal({
       setLoading(false);
     }
   }, [editor.setTemplateFromServer, show, template]);
-  const refreshRevisionBeforeSave = useCallback(async () => {
-    if (!template?.id) return null;
-    try {
-      const data = await printTemplatesApi.detail(template.id);
-      const item = normalizeApiItem(data);
-      if (item && item.revision) {
-        editor.setRevision(item.revision);
-        // autosave not yet defined at this point; revision synced via editor state
-      }
-      return item;
-    } catch (_error) {
-      return null;
-    }
-  }, [editor.setRevision, template?.id]);
 
   const loadPreviewInvoice = useCallback(async (templateId = activeTemplate?.id) => {
     if (!show) return;
@@ -327,8 +313,7 @@ export default function PrintTemplateEditorModal({
     setBusy('draft');
     setNotice(null);
     try {
-      const freshItem = await refreshRevisionBeforeSave();
-      const currentRevision = freshItem?.revision || editor.revision;
+      const currentRevision = editor.revision;
       const data = await printTemplatesApi.autosave(activeTemplate.id, {
         revision: currentRevision,
         layout_json: editor.document,
@@ -336,16 +321,13 @@ export default function PrintTemplateEditorModal({
         editor_meta_json: buildEditorMeta(editor.settings, { action: 'manual-save' }),
       });
       const item = normalizeApiItem(data);
-        if (item) {
-          // Cập nhật template và revision sau khi lưu draft
-          editor.setTemplateFromServer(item, { preferDraft: true });
-          // Đặt lại baseline để tránh autosave gây xung đột với phiên bản mới
-          setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
-          autosave.markSaved(item);
-          // Đảm bảo revision được đồng bộ, tránh hiển thị phiên bản cũ
-          if (item.revision) editor.setRevision(item.revision);
-          onSaved?.(item);
-        }
+      if (item) {
+        // Giữ nguyên canvas hiện tại để tránh nhảy layout sau khi lưu.
+        editor.setRevision(item.revision || editor.revision);
+        setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
+        autosave.markSaved(item);
+        onSaved?.(item);
+      }
       setNotice(buildNotice('success', 'D? luu draft m?u in.'));
       return item;
     } catch (error) {
@@ -358,7 +340,7 @@ export default function PrintTemplateEditorModal({
     } finally {
       setBusy('');
     }
-  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved, refreshRevisionBeforeSave]);
+  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved]);
 
   const handlePublish = useCallback(async () => {
     if (!activeTemplate?.id) {
@@ -368,8 +350,7 @@ export default function PrintTemplateEditorModal({
     setBusy('publish');
     setNotice(null);
     try {
-      const freshItem = await refreshRevisionBeforeSave();
-      const currentRevision = freshItem?.revision || editor.revision;
+      const currentRevision = editor.revision;
       const data = await printTemplatesApi.publish(activeTemplate.id, {
         revision: currentRevision,
         layout_json: editor.document,
@@ -378,14 +359,12 @@ export default function PrintTemplateEditorModal({
         status: 'active',
       });
       const item = normalizeApiItem(data);
-        if (item) {
-          editor.setTemplateFromServer(item, { preferDraft: false });
-          setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
-          autosave.markSaved(item);
-          // Đồng bộ revision để preview và autosave không còn dùng phiên bản cũ
-          if (item.revision) editor.setRevision(item.revision);
-          onSaved?.(item);
-        }
+      if (item) {
+        editor.setRevision(item.revision || editor.revision);
+        setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
+        autosave.markSaved(item);
+        onSaved?.(item);
+      }
       setNotice(buildNotice('success', 'D? publish m?u in. Trang in h?a don s? d?ng b?n published m?i.'));
     } catch (error) {
       if (isRevisionConflict(error)) {
@@ -396,7 +375,7 @@ export default function PrintTemplateEditorModal({
     } finally {
       setBusy('');
     }
-  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved, refreshRevisionBeforeSave]);
+  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved]);
 
   const handleDiscardDraft = useCallback(async () => {
     if (!activeTemplate?.id) return;
@@ -404,12 +383,11 @@ export default function PrintTemplateEditorModal({
     setBusy('discard');
     setNotice(null);
     try {
-      const freshItem = await refreshRevisionBeforeSave();
-      const currentRevision = freshItem?.revision || editor.revision;
+      const currentRevision = editor.revision;
       const data = await printTemplatesApi.discardDraft(activeTemplate.id, { revision: currentRevision });
       const item = normalizeApiItem(data);
       if (item) {
-        editor.setTemplateFromServer(item, { preferDraft: false });
+        editor.setRevision(item.revision || editor.revision);
         setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
         autosave.resetAutosave(item.revision || editor.revision);
         onSaved?.(item);
@@ -424,7 +402,7 @@ export default function PrintTemplateEditorModal({
     } finally {
       setBusy('');
     }
-  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved, refreshRevisionBeforeSave]);
+  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved]);
 
   const handleReload = useCallback(async () => {
     setBusy('reload');
