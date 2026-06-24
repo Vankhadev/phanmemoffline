@@ -438,25 +438,15 @@ function parseExpectedRevision(body = {}) {
 }
 
 function requireExpectedRevision(expectedRevision, actionLabel = 'luu mau in') {
-  if (expectedRevision) return expectedRevision;
-  throw createHttpError(
-    400,
-    `Thieu revision hien tai khi ${actionLabel}. Vui long tai chi tiet template truoc khi thao tac.`,
-    'PRINT_TEMPLATE_REVISION_REQUIRED'
-  );
+  // Revision-conflict enforcement removed for offline single-user use; a missing
+  // revision now falls back to null instead of throwing, so Save/Public/Discard
+  // never fail with the previous-version error.
+  return parsePositiveInteger(expectedRevision) || null;
 }
 
 function assertRevisionMatches(row, expectedRevision) {
-  const requiredRevision = requireExpectedRevision(expectedRevision);
-  const currentRevision = parsePositiveInteger(row?.revision) || 1;
-  if (currentRevision !== requiredRevision) {
-    throw createHttpError(
-      409,
-      'Mau in hoa don da duoc cap nhat o phien khac. Vui long tai lai truoc khi luu.',
-      'PRINT_TEMPLATE_REVISION_CONFLICT',
-      { expected_revision: requiredRevision, current_revision: currentRevision }
-    );
-  }
+  // No-op: a revision mismatch no longer blocks Save/Public/Discard.
+  return true;
 }
 
 function parseDraftPayload(body = {}) {
@@ -515,8 +505,6 @@ async function autosavePrintTemplateDraft(options = {}) {
   return withAtomicDbWrite(() => {
     const locked = getTemplateRowById(accountId, id);
     if (!locked) throw createHttpError(404, 'Khong tim thay mau in hoa don.', 'PRINT_TEMPLATE_NOT_FOUND');
-    requireExpectedRevision(parsed.expectedRevision, 'autosave draft mau in hoa don');
-    assertRevisionMatches(locked, parsed.expectedRevision);
 
     const currentRevision = parsePositiveInteger(locked.revision) || 1;
     const nextRevision = currentRevision + 1;
@@ -612,8 +600,6 @@ async function publishPrintTemplateDraft(options = {}) {
   return withAtomicDbWrite(() => {
     const locked = getTemplateRowById(accountId, id);
     if (!locked) throw createHttpError(404, 'Khong tim thay mau in hoa don.', 'PRINT_TEMPLATE_NOT_FOUND');
-    requireExpectedRevision(parsed.expectedRevision, 'publish mau in hoa don');
-    assertRevisionMatches(locked, parsed.expectedRevision);
 
     const currentRevision = parsePositiveInteger(locked.revision) || 1;
     const nextRevision = currentRevision + 1;
@@ -662,8 +648,6 @@ async function discardPrintTemplateDraft(options = {}) {
   return withAtomicDbWrite(() => {
     const locked = getTemplateRowById(accountId, id);
     if (!locked) throw createHttpError(404, 'Khong tim thay mau in hoa don.', 'PRINT_TEMPLATE_NOT_FOUND');
-    requireExpectedRevision(expectedRevision, 'huy draft mau in hoa don');
-    assertRevisionMatches(locked, expectedRevision);
     const payload = {
       draft_layout_json: null,
       draft_settings_json: null,

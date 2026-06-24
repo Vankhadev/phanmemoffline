@@ -18,11 +18,11 @@ import {
 } from 'lucide-react';
 
 function statusText(status, lastSavedAt) {
-  if (status === 'saving') return 'Đang autosave...';
+  if (status === 'saving') return 'Đang lưu...';
   if (status === 'dirty') return 'Có thay đổi chưa lưu';
-  if (status === 'saved' && lastSavedAt) return `Đã autosave ${new Date(lastSavedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+  if (status === 'saved' && lastSavedAt) return `Đã lưu ${new Date(lastSavedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
   if (status === 'conflict') return 'Xung đột revision';
-  if (status === 'error') return 'Autosave lỗi';
+  if (status === 'error') return 'Lưu lỗi';
   return 'Sẵn sàng';
 }
 

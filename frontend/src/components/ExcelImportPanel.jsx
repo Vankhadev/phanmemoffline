@@ -414,12 +414,25 @@ export default function ExcelImportPanel({
     const file = event.target.files?.[0];
     if (!file) return;
     try {
+      const extension = String(file.name || '').split('.').pop()?.toLowerCase();
+      if (!['xlsx', 'xls', 'csv'].includes(extension)) {
+        throw new Error('Chỉ hỗ trợ file .xlsx, .xls hoặc .csv.');
+      }
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true, raw: false });
+      if (!buffer || buffer.byteLength === 0) {
+        throw new Error('File rỗng hoặc không đọc được dữ liệu.');
+      }
+      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true, raw: false, dense: false });
       const sheets = workbook.SheetNames || [];
+      if (sheets.length === 0) {
+        throw new Error('File Excel không có sheet dữ liệu hợp lệ.');
+      }
       const preferredSheet = dataType === 'invoices' ? 'Hóa đơn' : 'Sản phẩm';
       const selectedSheet = sheets.includes(preferredSheet) ? preferredSheet : (sheets[0] || '');
       const parsed = parseWorksheetRows(workbook, selectedSheet);
+      if (parsed.rows.length === 0) {
+        throw new Error(`Sheet "${selectedSheet}" không có dòng dữ liệu hợp lệ.`);
+      }
       setExcel(prev => ({
         ...prev,
         fileName: file.name,
@@ -436,9 +449,10 @@ export default function ExcelImportPanel({
         commitResult: null,
       }));
       setSelected([]);
-      setStatus({ tone: 'success', message: `D? d?c file ${file.name}: ${formatNumber(parsed.rows.length)} d?ng, ${formatNumber(parsed.columns.length)} c?t.` });
+      setStatus({ tone: 'success', message: `Đã đọc file ${file.name}: ${formatNumber(parsed.rows.length)} dòng, ${formatNumber(parsed.columns.length)} cột.` });
     } catch (err) {
-      setStatus({ tone: 'error', message: `Không thể đọc file Excel/CSV: ${err.message}` });
+      const message = err?.message || 'Không thể đọc file Excel.';
+      setStatus({ tone: 'error', message: `Không thể đọc file Excel: ${message}` });
     } finally {
       if (inputRef.current) inputRef.current.value = '';
     }

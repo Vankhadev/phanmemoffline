@@ -979,25 +979,15 @@ function parseExpectedRevision(body = {}) {
 }
 
 function requireExpectedRevision(expectedRevision, actionLabel = 'lưu mẫu in') {
-  if (expectedRevision) return expectedRevision;
-  throw createHttpError(
-    400,
-    `Thiếu revision hiện tại khi ${actionLabel}. Vui lòng tải chi tiết template trước khi thao tác.`,
-    'PRINT_TEMPLATE_REVISION_REQUIRED'
-  );
+  // Revision-conflict enforcement removed for offline single-user use; a missing
+  // revision now falls back to null instead of throwing, so Save/Public/Discard
+  // never fail with "Mẫu in đã được lưu ở phiên bản trước".
+  return parsePositiveInteger(expectedRevision) || null;
 }
 
 function assertRevisionMatches(row, expectedRevision) {
-  const requiredRevision = requireExpectedRevision(expectedRevision);
-  const currentRevision = parsePositiveInteger(row?.revision) || 1;
-  if (currentRevision !== requiredRevision) {
-    throw createHttpError(
-      409,
-      'Mẫu in hóa đơn đã được cập nhật ở phiên khác. Vui lòng tải lại trước khi lưu.',
-      'PRINT_TEMPLATE_REVISION_CONFLICT',
-      { expected_revision: requiredRevision, current_revision: currentRevision }
-    );
-  }
+  // No-op: a revision mismatch no longer blocks Save/Public/Discard.
+  return true;
 }
 
 function parseDraftPayload(body = {}) {
@@ -1073,8 +1063,6 @@ async function autosavePrintTemplateDraft(options = {}) {
   const row = await withTemplateTransaction(async connection => {
     const locked = await getTemplateRowById(accountId, id, { connection, forUpdate: true });
     if (!locked) throw createHttpError(404, 'Không tìm thấy mẫu in hóa đơn.', 'PRINT_TEMPLATE_NOT_FOUND');
-    requireExpectedRevision(parsed.expectedRevision, 'autosave draft mẫu in hóa đơn');
-    assertRevisionMatches(locked, parsed.expectedRevision);
 
     const currentRevision = parsePositiveInteger(locked.revision) || 1;
     const nextRevision = currentRevision + 1;
@@ -1174,8 +1162,6 @@ async function publishPrintTemplateDraft(options = {}) {
   const row = await withTemplateTransaction(async connection => {
     const locked = await getTemplateRowById(accountId, id, { connection, forUpdate: true });
     if (!locked) throw createHttpError(404, 'Không tìm thấy mẫu in hóa đơn.', 'PRINT_TEMPLATE_NOT_FOUND');
-    requireExpectedRevision(parsed.expectedRevision, 'publish mẫu in hóa đơn');
-    assertRevisionMatches(locked, parsed.expectedRevision);
 
     const currentRevision = parsePositiveInteger(locked.revision) || 1;
     const nextRevision = currentRevision + 1;
@@ -1228,8 +1214,6 @@ async function discardPrintTemplateDraft(options = {}) {
   const row = await withTemplateTransaction(async connection => {
     const locked = await getTemplateRowById(accountId, id, { connection, forUpdate: true });
     if (!locked) throw createHttpError(404, 'Không tìm thấy mẫu in hóa đơn.', 'PRINT_TEMPLATE_NOT_FOUND');
-    requireExpectedRevision(expectedRevision, 'hủy draft mẫu in hóa đơn');
-    assertRevisionMatches(locked, expectedRevision);
     const nextRevision = (parsePositiveInteger(locked.revision) || 1) + 1;
     const payload = {
       draft_layout_json: null,

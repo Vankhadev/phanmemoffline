@@ -164,15 +164,18 @@ function createUnlinkedInvoiceSaleDetail(detail = {}) {
   };
 }
 
-function resolveInvoiceSaleDetailProduct(detail = {}, index = 0) {
+function resolveInvoiceSaleDetailProduct(detail = {}, index = 0, options = {}) {
   if (isComboDetail(detail) || isServiceDetail(detail)) return { ...(detail || {}) };
 
   const sku = getDetailSku(detail);
   const requestedProductId = detail.variant_id || detail.product_id || null;
   const hasRequestedProductId = Number.isFinite(Number(requestedProductId)) && Number(requestedProductId) > 0;
   const productById = getActiveProductById(requestedProductId);
-  const product = productById || (!hasRequestedProductId ? getActiveProductBySku(sku) : null);
+  const product = productById || getActiveProductBySku(sku);
   if (!product) {
+    if (options.allowUnlinkedOnMissingProduct === true) {
+      return createUnlinkedInvoiceSaleDetail(detail);
+    }
     if (!hasRequestedProductId && sku) return createUnlinkedInvoiceSaleDetail(detail);
     throw createProductNotFoundError(detail, index);
   }
@@ -267,9 +270,9 @@ function mergeDuplicateDetails(details) {
   return Array.from(map.values());
 }
 
-function prepareInvoiceDetailsForPersistence(details = []) {
+function prepareInvoiceDetailsForPersistence(details = [], options = {}) {
   if (!Array.isArray(details)) return [];
-  return mergeDuplicateDetails(details.map((detail, index) => resolveInvoiceSaleDetailProduct(detail, index)));
+  return mergeDuplicateDetails(details.map((detail, index) => resolveInvoiceSaleDetailProduct(detail, index, options)));
 }
 
 function deductStock(productOrVariantId, quantity, options = {}) {
