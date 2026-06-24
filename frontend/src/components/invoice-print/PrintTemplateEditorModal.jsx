@@ -131,8 +131,7 @@ export default function PrintTemplateEditorModal({
   const [editorMode, setEditorMode] = useState('canvas');
   const [sapoDraft, setSapoDraft] = useState(() => buildSapoDraftFromTemplate(template || {}));
   const [canvasInteracting, setCanvasInteracting] = useState(false);
-  // Autosave is decommissioned; keep the visual control disabled to preserve layout.
-  const [autosaveEnabled, setAutosaveEnabled] = useState(false);
+  const [autosaveEnabled, setAutosaveEnabled] = useState(true);
   const htmlEditorRef = useRef(null);
 
   const editor = useTemplateEditorState(template || {});
@@ -281,7 +280,7 @@ export default function PrintTemplateEditorModal({
 
   const autosave = useTemplateAutosave({
     templateId: activeTemplate?.id,
-    enabled: false,
+    enabled: Boolean(canManage && autosaveEnabled),
     document: editor.document,
     settings: editor.settings,
     revision: editor.revision,
@@ -513,7 +512,12 @@ export default function PrintTemplateEditorModal({
   const handleCanvasGestureEnd = useCallback(() => {
     editor.endHistory();
     window.requestAnimationFrame(() => setCanvasInteracting(false));
-  }, [editor]);
+    if (canManage && activeTemplate?.id && autosaveEnabled && !busy) {
+      window.setTimeout(() => {
+        void saveDraftNow();
+      }, 0);
+    }
+  }, [activeTemplate?.id, autosaveEnabled, busy, canManage, editor, saveDraftNow]);
 
   useEffect(() => {
     if (!show || editorMode !== 'canvas') return undefined;
@@ -682,7 +686,7 @@ export default function PrintTemplateEditorModal({
             </div>
             {/* Toggle autosave */}
             <label className="invoice-editor-autosave-toggle" style={{ marginLeft: '1rem' }}>
-              <input type="checkbox" checked={autosaveEnabled} onChange={e => setAutosaveEnabled(e.target.checked)} disabled /> Tự động lưu
+              <input type="checkbox" checked={autosaveEnabled} onChange={e => setAutosaveEnabled(e.target.checked)} disabled={!canManage || busy === 'draft' || busy === 'publish'} /> Tự động lưu
             </label>
             <button type="button" className="invoice-editor-close" onClick={onClose} disabled={busy === 'publish' || busy === 'sapo-save'}>
               <X size={20} />

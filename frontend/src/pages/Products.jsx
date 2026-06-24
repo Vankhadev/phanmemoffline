@@ -120,6 +120,10 @@ const EMPTY_VARIANT_FORM = Object.freeze({
 });
 
 const createProductFormInitial = (overrides = {}) => ({ ...EMPTY_PRODUCT_FORM, ...overrides });
+const isServiceProductRecord = (product = {}) => {
+  const type = String(product.product_type || product.item_type || product.type || '').trim().toLowerCase();
+  return type === 'service' || type === 'custom_service' || product.is_service === true || product.isService === true;
+};
 const createVariantFormInitial = (overrides = {}) => ({ ...EMPTY_VARIANT_FORM, ...overrides });
 
 const stripInventoryFields = (data = {}) => {
@@ -150,7 +154,7 @@ const ProductFormModal = memo(function ProductFormModal({
 }) {
   const [form, setForm] = useState(() => createProductFormInitial(initialForm));
   const nameInputRef = useRef(null);
-  const stockError = getNegativeStockInputError(form.stock, negativeStockSettings);
+  const stockError = serviceMode ? '' : getNegativeStockInputError(form.stock, negativeStockSettings);
   const stockValueNumber = parseStockInputNumber(form.stock, 0);
   const stockIsNegative = Number.isFinite(stockValueNumber) && stockValueNumber < 0;
 
@@ -176,13 +180,13 @@ const ProductFormModal = memo(function ProductFormModal({
   }, []);
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
-    const nextStockError = getNegativeStockInputError(form.stock, negativeStockSettings);
+    const nextStockError = serviceMode ? '' : getNegativeStockInputError(form.stock, negativeStockSettings);
     if (nextStockError) {
       onStockLimitError?.(nextStockError);
       return;
     }
     onSubmit(form);
-  }, [form, negativeStockSettings, onStockLimitError, onSubmit]);
+  }, [form, negativeStockSettings, onStockLimitError, onSubmit, serviceMode]);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
@@ -190,7 +194,7 @@ const ProductFormModal = memo(function ProductFormModal({
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Package size={20} className="text-blue-600" />
-            {editing ? 'S?a s?n ph?m' : 'Th?m s?n ph?m m?i'}
+            {serviceMode ? (editing ? 'Sửa dịch vụ khác' : 'Thêm dịch vụ khác') : (editing ? 'S?a s?n ph?m' : 'Th?m s?n ph?m m?i')}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={20} />
@@ -253,7 +257,7 @@ const ProductFormModal = memo(function ProductFormModal({
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
             <button type="submit" disabled={saving || Boolean(stockError)}
               className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-              ?? {saving ? '?ang luu...' : (editing ? 'Luu thay d?i' : 'Luu')}
+              ?? {saving ? '?ang luu...' : (serviceMode ? (editing ? 'Lưu dịch vụ' : 'Thêm dịch vụ') : (editing ? 'Luu thay d?i' : 'Luu'))}
             </button>
             <button type="button" onClick={onClose} className="btn-danger flex-1">H?y</button>
           </div>
@@ -308,7 +312,7 @@ const VariantFormModal = memo(function VariantFormModal({
       return;
     }
     onSubmit(form);
-  }, [form, negativeStockSettings, onStockLimitError, onSubmit]);
+  }, [form, negativeStockSettings, onStockLimitError, onSubmit, serviceMode]);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
@@ -531,6 +535,7 @@ export default function Products({ store }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [productFormInitial, setProductFormInitial] = useState(() => createProductFormInitial());
+  const [productFormServiceMode, setProductFormServiceMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showCategorySection, setShowCategorySection] = useState(false);
@@ -539,6 +544,7 @@ export default function Products({ store }) {
   const [stockSortDirection, setStockSortDirection] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [stockToast, setStockToast] = useState(null);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
   const { settings: negativeStockSettings } = useNegativeStockSettings();
   const negativeStockLimitLabel = useMemo(() => getNegativeStockLimitLabel(negativeStockSettings), [negativeStockSettings]);
   const supplierNameById = useMemo(() => new Map((suppliers || []).map(supplier => [String(supplier.id), supplier.name])), [suppliers]);
@@ -1030,28 +1036,28 @@ export default function Products({ store }) {
   }, [clearSelectedProducts, fetchProducts, removeDeletedProductsFromState, selectedProductsForBulkAction]);
 
   const requiredExcelColumns = [
-    'Lo?i d?ng',
+    'Loại dòng',
     'SKU',
     'Parent SKU',
-    'T?n s?n ph?m',
-    'T?n cha',
-    'Gi? nh?p',
-    'Gi? s?',
-    'Gi? l?',
-    'Gi? VIP',
-    'T?n kho',
-    '?on v?',
-    'Danh m?c text',
+    'Tên sản phẩm',
+    'Tên cha',
+    'Giá nhập',
+    'Giá sỉ',
+    'Giá lẻ',
+    'Giá VIP',
+    'Tồn kho',
+    'Đơn vị',
+    'Danh mục text',
     'Default category id',
     'Supplier id',
-    'Ho?t d?ng',
+    'Hoạt động',
   ];
   const referenceExcelColumns = [
     'ID',
     'Parent ID',
     'Default category name',
     'Supplier name',
-    'Ghi ch?',
+    'Ghi chú',
   ];
   const excelColumns = [...requiredExcelColumns, ...referenceExcelColumns];
 
@@ -1077,49 +1083,49 @@ export default function Products({ store }) {
   const productToExcelRow = (product, type, parent = null) => {
     const supplierId = product.supplier_id ?? parent?.supplier_id ?? '';
     return {
-      'Lo?i d?ng': type,
+      'Loại dòng': type,
       'SKU': product.sku || '',
       'Parent SKU': parent?.sku || '',
-      'T?n s?n ph?m': product.name || '',
-      'T?n cha': parent?.name || '',
-      'Gi? nh?p': product.import_price ?? '',
-      'Gi? s?': product.wholesale_price ?? '',
-      'Gi? l?': product.retail_price ?? '',
-      'Gi? VIP': product.vip_price ?? '',
-      'T?n kho': product.stock ?? '',
-      '?on v?': product.unit || parent?.unit || 'c?i',
-      'Danh m?c text': getProductCategoryText(product, parent),
+      'Tên sản phẩm': product.name || '',
+      'Tên cha': parent?.name || '',
+      'Giá nhập': product.import_price ?? '',
+      'Giá sỉ': product.wholesale_price ?? '',
+      'Giá lẻ': product.retail_price ?? '',
+      'Giá VIP': product.vip_price ?? '',
+      'Tồn kho': product.stock ?? '',
+      'Đơn vị': product.unit || parent?.unit || 'cái',
+      'Danh mục text': getProductCategoryText(product, parent),
       'Default category id': product.default_category_id ?? parent?.default_category_id ?? '',
       'Supplier id': supplierId,
-      'Ho?t d?ng': product.active === 0 ? 'Kh?ng' : 'C?',
+      'Hoạt động': product.active === 0 ? 'Không' : 'Có',
       'ID': product.id ?? '',
       'Parent ID': parent?.id ?? product.parent_id ?? '',
       'Default category name': getDefaultCategoryDisplayName(product, parent),
       'Supplier name': getSupplierDisplayName(supplierId),
-      'Ghi ch?': type === 'VARIANT'
-        ? 'Bi?n th?: m? ri?ng; Parent SKU l? m? s?n ph?m cha d?ng d? gi? quan h?'
-        : 'S?n ph?m cha: d? tr?ng Parent SKU',
+      'Ghi chú': type === 'VARIANT'
+        ? 'Biến thể: mã riêng; Parent SKU là mã sản phẩm cha dùng để giữ quan hệ'
+        : 'Sản phẩm cha: để trống Parent SKU',
     };
   };
 
   const appendExcelGuideSheet = (wb) => {
     const guideRows = [
-      ['C?t', 'B?t bu?c', '? nghia / c?ch nh?p'],
-      ['Lo?i d?ng', 'Khuy?n ngh?', 'Nh?p PARENT cho s?n ph?m cha, VARIANT cho bi?n th?. C? th? b? tr?ng d? backend t? suy lu?n: c? Parent SKU l? VARIANT, kh?ng c? Parent SKU l? PARENT.'],
-      ['SKU', 'C? v?i PARENT/import', 'D?ng d? d?i chi?u khi import/c?p nh?t. V?i b?n ghi m?i, backend c?p m? SP ri?ng v? kh?ng c?n nh?p th? c?ng tr?n giao di?n.'],
-      ['Parent SKU', 'C? v?i VARIANT', 'SKU c?a s?n ph?m cha. Parent SKU ph?i t?n t?i trong c?ng file ho?c d? c? trong h? th?ng. D?ng PARENT ph?i d? tr?ng c?t n?y.'],
-      ['T?n s?n ph?m', 'C? v?i SKU m?i', 'T?n s?n ph?m cha ho?c t?n bi?n th?. V?i bi?n th?, t?n bi?n th? l? d? li?u ph?n bi?t d? c?p nh?t d?ng d?ng trong c?ng s?n ph?m cha.'],
-      ['T?n cha', 'Tham kh?o', 'Ch? gi?p ngu?i d?ng d?c file; backend li?n k?t b?ng Parent SKU.'],
-      ['Gi? nh?p / Gi? s? / Gi? l? / Gi? VIP', 'Kh?ng', 'Nh?p s? kh?ng ?m. C? th? d?ng d?nh d?ng 100000, 100.000 ho?c 100,000.'],
-      ['T?n kho', 'Kh?ng', `C? th? ?m d?n ${negativeStockLimitLabel}. N?u th?p hon ${negativeStockLimitLabel}, backend s? ch?n ghi d? li?u.`],
-      ['?on v?', 'Kh?ng', 'V? d?: c?i, b?, h?p. Bi?n th? b? tr?ng s? l?y theo s?n ph?m cha khi th?m m?i.'],
-      ['Danh m?c text', 'Kh?ng', 'T?n/nh?m/t? kh?a danh m?c. Backend c? th? t? kh?p danh m?c m?c d?nh n?u d? c?u h?nh.'],
-      ['Default category id', 'Kh?ng', 'ID danh m?c m?c d?nh n?u bi?t ch?nh x?c. N?u kh?ng bi?t th? d? tr?ng v? d?ng Danh m?c text.'],
-      ['Supplier id', 'Kh?ng', 'ID nh? cung c?p n?u bi?t ch?nh x?c.'],
-      ['Ho?t d?ng', 'Kh?ng', 'Nh?p C?/Kh?ng, 1/0 ho?c d? tr?ng. B? tr?ng s? m?c d?nh l? C? khi import.'],
-      ['ID / Parent ID / Default category name / Supplier name / Ghi ch?', 'Kh?ng', 'C?t tham kh?o khi xu?t file t? h? th?ng; backend b? qua khi import.'],
-      ['Alias du?c h? tr?', 'Kh?ng', 'C? th? d?ng c?c c?t ph? bi?n nhu M? SKU, Ma SKU, M? s?n ph?m, T?n, SL h?ng, So luong, Gi? v?n, Gi? b?n, ?VT, Danh m?c, ParentSKU, SKU cha, M? cha, Ho?t d?ng, Tr?ng th?i.'],
-      ['Luu ?', 'C?', 'Import validate to?n b? file tru?c khi ghi d? tr?nh m?t quan h? cha - con. N?u c? l?i, d? li?u chua du?c ghi.'],
+      ['Cột', 'Bắt buộc', 'Ý nghĩa / cách nhập'],
+      ['Loại dòng', 'Khuyến nghị', 'Nhập PARENT cho sản phẩm cha, VARIANT cho biến thể. Có thể bỏ trống để backend tự suy luận: có Parent SKU là VARIANT, không có Parent SKU là PARENT.'],
+      ['SKU', 'Có với PARENT/import', 'Dùng để đối chiếu khi import/cập nhật. Với bản ghi mới, backend cấp mã SP riêng và không cần nhập thủ công trên giao diện.'],
+      ['Parent SKU', 'Có với VARIANT', 'SKU của sản phẩm cha. Parent SKU phải tồn tại trong cùng file hoặc đã có trong hệ thống. Dòng PARENT phải để trống cột này.'],
+      ['Tên sản phẩm', 'Có với SKU mới', 'Tên sản phẩm cha hoặc tên biến thể. Với biến thể, tên biến thể là dữ liệu phân biệt để cập nhật đúng dòng trong cùng sản phẩm cha.'],
+      ['Tên cha', 'Tham khảo', 'Chỉ giúp người dùng đọc file; backend liên kết bằng Parent SKU.'],
+      ['Giá nhập / Giá sỉ / Giá lẻ / Giá VIP', 'Không', 'Nhập số không âm. Có thể dùng định dạng 100000, 100.000 hoặc 100,000.'],
+      ['Tồn kho', 'Không', `Có thể âm đến ${negativeStockLimitLabel}. Nếu thấp hơn ${negativeStockLimitLabel}, backend sẽ chặn ghi dữ liệu.`],
+      ['Đơn vị', 'Không', 'Ví dụ: cái, bộ, hộp. Biến thể bỏ trống sẽ lấy theo sản phẩm cha khi thêm mới.'],
+      ['Danh mục text', 'Không', 'Tên/nhóm/từ khóa danh mục. Backend có thể tự khớp danh mục mặc định nếu đã cấu hình.'],
+      ['Default category id', 'Không', 'ID danh mục mặc định nếu biết chính xác. Nếu không biết thì để trống và dùng Danh mục text.'],
+      ['Supplier id', 'Không', 'ID nhà cung cấp nếu biết chính xác.'],
+      ['Hoạt động', 'Không', 'Nhập Có/Không, 1/0 hoặc để trống. Bỏ trống sẽ mặc định là Có khi import.'],
+      ['ID / Parent ID / Default category name / Supplier name / Ghi chú', 'Không', 'Cột tham khảo khi xuất file từ hệ thống; backend bỏ qua khi import.'],
+      ['Alias được hỗ trợ', 'Không', 'Có thể dùng các cột phổ biến như Mã SKU, Ma SKU, Mã sản phẩm, Tên, SL hàng, So luong, Giá vốn, Giá bán, ĐVT, Danh mục, ParentSKU, SKU cha, Mã cha, Hoạt động, Trạng thái.'],
+      ['Lưu ý', 'Có', 'Import validate toàn bộ file trước khi ghi để tránh mất quan hệ cha - con. Nếu có lỗi, dữ liệu chưa được ghi.'],
     ];
     const guideWs = XLSX.utils.aoa_to_sheet(guideRows);
     guideWs['!cols'] = [
@@ -1127,7 +1133,7 @@ export default function Products({ store }) {
       { wch: 14 },
       { wch: 110 },
     ];
-    XLSX.utils.book_append_sheet(wb, guideWs, 'Hu?ng d?n');
+    XLSX.utils.book_append_sheet(wb, guideWs, 'Hướng dẫn');
   };
 
   const buildProductsWorkbook = (rows) => {
@@ -1140,17 +1146,20 @@ export default function Products({ store }) {
       }),
     };
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'S?n ph?m');
+    XLSX.utils.book_append_sheet(wb, ws, 'Sản phẩm');
     appendExcelGuideSheet(wb);
     return wb;
   };
 
-  // -- XU?T Excel --
-  const handleExportExcel = () => {
+  // -- XUẤT Excel --
+  const handleExportExcel = async () => {
+    if (isExportingExcel) return;
+    setIsExportingExcel(true);
     try {
-      const sourceProducts = Array.isArray(products) ? products : [];
+      const latestProducts = await fetchProducts();
+      const sourceProducts = Array.isArray(latestProducts) ? latestProducts : (Array.isArray(products) ? products : []);
       if (sourceProducts.length === 0) {
-        alert('Chua co san pham nao de xuat Excel.');
+        alert('Chưa có sản phẩm nào để xuất Excel.');
         return;
       }
       const rows = [];
@@ -1162,14 +1171,16 @@ export default function Products({ store }) {
         });
       });
       if (rows.length === 0) {
-        alert('Khong co du lieu san pham de xuat.');
+        alert('Không có dữ liệu sản phẩm để xuất.');
         return;
       }
       const wb = buildProductsWorkbook(rows);
       XLSX.writeFile(wb, `danh_sach_san_pham_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (err) {
-      console.error('[Products] Xuat Excel that bai:', err);
-      alert('Khong the xuat file Excel: ' + (err && err.message ? err.message : 'Loi khong xac dinh'));
+      console.error('[Products] Xuất Excel thất bại:', err);
+      alert('Không thể xuất file Excel: ' + (err && err.message ? err.message : 'Lỗi không xác định'));
+    } finally {
+      setIsExportingExcel(false);
     }
   };
 
@@ -1484,6 +1495,15 @@ export default function Products({ store }) {
     setShowForm(true);
   }, []);
 
+  const openAddService = useCallback(() => {
+    setVariantParent(null);
+    setShowVariantModal(false);
+    setEditing(null);
+    setProductFormServiceMode(true);
+    setProductFormInitial(createProductFormInitial({ stock: 0, unit: 'lần', product_type: 'service', item_type: 'service', type: 'service', is_service: true }));
+    setShowForm(true);
+  }, []);
+
   const openEdit = useCallback((p) => {
     setVariantParent(null);
     setShowVariantModal(false);
@@ -1505,7 +1525,8 @@ export default function Products({ store }) {
 
   const handleProductSubmit = useCallback(async (nextForm) => {
     if (!nextForm.name?.trim()) { alert('Vui l?ng nh?p t?n s?n ph?m!'); return; }
-    const stockError = getNegativeStockInputError(nextForm.stock);
+    const serviceProduct = productFormServiceMode || nextForm.is_service === true || String(nextForm.product_type || nextForm.item_type || nextForm.type || '').toLowerCase() === 'service';
+    const stockError = serviceProduct ? '' : getNegativeStockInputError(nextForm.stock);
     if (stockError) { showStockLimitToast(stockError); return; }
     const currentEditing = editing;
     setSaving(true);
@@ -1515,7 +1536,8 @@ export default function Products({ store }) {
       const payload = {
         ...stripInventoryFields(nextForm),
         category: String(nextForm.category || '').trim(),
-        stock: parseStockInputNumber(nextForm.stock, 0),
+        stock: serviceProduct ? 0 : parseStockInputNumber(nextForm.stock, 0),
+        ...(serviceProduct ? { product_type: 'service', item_type: 'service', type: 'service', is_service: true } : {}),
         updated_at: currentEditing?.updated_at || undefined,
       };
       delete payload.sku;
@@ -1541,7 +1563,7 @@ export default function Products({ store }) {
     } finally {
       setSaving(false);
     }
-  }, [closeProductForm, editing, fetchProducts, showStockLimitToast]);
+  }, [closeProductForm, editing, fetchProducts, productFormServiceMode, showStockLimitToast]);
 
   const handleDelete = useCallback(async (id) => {
     if (!confirm('X?a s?n ph?m n?y? T?t c? bi?n th? s? b? x?a.')) return;
@@ -1803,9 +1825,9 @@ export default function Products({ store }) {
             <Upload size={16} /> Nh?p Excel
           </button>
           <input ref={excelInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportExcel} />
-          <button onClick={handleExportExcel}
-            className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 border border-orange-300 bg-white text-orange-700 hover:bg-orange-50 transition">
-            <Download size={16} /> Xu?t Excel
+          <button onClick={handleExportExcel} disabled={isExportingExcel}
+            className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 border border-orange-300 bg-white text-orange-700 hover:bg-orange-50 transition disabled:opacity-60 disabled:cursor-not-allowed">
+            <Download size={16} /> {isExportingExcel ? 'Đang xuất...' : 'Xuất Excel'}
           </button>
           {selectedProductsForBulkAction.length > 0 && (
             <button onClick={handleBulkDelete} disabled={isBulkDeleting}
@@ -2317,8 +2339,8 @@ export default function Products({ store }) {
                   <button onClick={handleDownloadExcelTemplate} className="px-3 py-2 rounded-lg text-xs font-medium border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1.5">
                     <Download size={14} /> T?i m?u Excel
                   </button>
-                  <button onClick={handleExportExcel} className="px-3 py-2 rounded-lg text-xs font-medium border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 flex items-center gap-1.5">
-                    <Download size={14} /> Xu?t danh s?ch hi?n c?
+                  <button onClick={handleExportExcel} disabled={isExportingExcel} className="px-3 py-2 rounded-lg text-xs font-medium border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">
+                    <Download size={14} /> {isExportingExcel ? 'Đang xuất...' : 'Xuất danh sách hiện có'}
                   </button>
                 </div>
               </div>

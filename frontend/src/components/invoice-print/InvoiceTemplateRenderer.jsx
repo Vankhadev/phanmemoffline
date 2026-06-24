@@ -270,9 +270,9 @@ function getPayableAmount(totals = {}, customer = {}, invoice = {}) {
 
 function getCssFontFamily(value) {
   const key = String(value || '').trim().toLowerCase();
-  if (key === 'serif') return 'Georgia, Times New Roman, serif';
-  if (key === 'mono' || key === 'monospace') return 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
-  return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  if (key === 'serif') return 'Georgia, "Times New Roman", "Noto Serif", serif';
+  if (key === 'mono' || key === 'monospace') return 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace';
+  return '"Segoe UI", Arial, Tahoma, Roboto, "Noto Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
 }
 
 function StoreLogo({ store, visible, widthMm, heightMm, style = {} }) {

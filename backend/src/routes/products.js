@@ -151,6 +151,8 @@ function buildProductsTree() {
 }
 
 function productPayload(body, existing = {}, parent = null) {
+  const rawProductType = String(body.product_type || body.item_type || body.type || existing.product_type || '').trim().toLowerCase();
+  const isServiceProduct = rawProductType === 'service' || rawProductType === 'custom_service' || body.is_service === true || body.isService === true || existing.is_service === true;
   const categoryText = body.category !== undefined && body.category !== null
     ? String(body.category).trim()
     : (existing.category !== undefined ? existing.category : (parent?.category || ''));
@@ -166,7 +168,7 @@ function productPayload(body, existing = {}, parent = null) {
     wholesale_price: body.wholesale_price !== null && body.wholesale_price !== undefined ? parseFloat(body.wholesale_price) || 0 : (existing.wholesale_price || 0),
     retail_price: body.retail_price !== null && body.retail_price !== undefined ? parseFloat(body.retail_price) || 0 : (existing.retail_price || 0),
     vip_price: body.vip_price !== null && body.vip_price !== undefined ? parseFloat(body.vip_price) || 0 : (existing.vip_price || 0),
-    stock: body.stock !== null && body.stock !== undefined ? parseInt(body.stock, 10) || 0 : (existing.stock || 0),
+    stock: isServiceProduct ? 0 : (body.stock !== null && body.stock !== undefined ? parseInt(body.stock, 10) || 0 : (existing.stock || 0)),
     unit: body.unit ? String(body.unit).trim() : (existing.unit || parent?.unit || 'cái'),
     category: categoryText,
     default_category_id: defaultCategoryId,
@@ -175,8 +177,15 @@ function productPayload(body, existing = {}, parent = null) {
       : (existing.supplier_id !== undefined ? existing.supplier_id : (parent?.supplier_id || null)),
   };
 
+  if (isServiceProduct) {
+    payload.product_type = 'service';
+    payload.item_type = 'service';
+    payload.type = 'service';
+    payload.is_service = true;
+  }
+
   const stockProvided = body.stock !== null && body.stock !== undefined;
-  if (stockProvided || !existing.id) {
+  if (!isServiceProduct && (stockProvided || !existing.id)) {
     assertProductStockValueWithinLimit({
       productId: existing.id || body.id || null,
       productName: payload.name || body.name || existing.name || parent?.name || payload.sku || 'Sản phẩm',
@@ -188,6 +197,7 @@ function productPayload(body, existing = {}, parent = null) {
 
   const optionalFields = [
     'barcode', 'image_url', 'description', 'option1', 'option2', 'option3', 'sync_source',
+    'product_type', 'item_type', 'type', 'is_service',
   ];
   for (const field of optionalFields) {
     if (Object.prototype.hasOwnProperty.call(body, field)) payload[field] = body[field] || '';
