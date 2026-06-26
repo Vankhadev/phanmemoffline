@@ -8,7 +8,7 @@ const { randomUUID } = require('crypto');
 const { createUpdateManager } = require('./updater');
 const { upgradeShortcuts } = require('./shortcutManager');
 
-const DEFAULT_BACKEND_PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || process.env.PHANMEM_PORT || 3001);
+const DEFAULT_BACKEND_PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || process.env.PHANMEM_PORT || 7000);
 const BACKEND_HOST = String(process.env.KHA_BACKEND_HOST || process.env.PHANMEM_HOST || process.env.HOST || '127.0.0.1').trim() || '127.0.0.1';
 const BACKEND_API_BASE_CHANNEL = 'kha:backend:get-api-base';
 const BACKEND_INFO_CHANNEL = 'kha:backend:get-info';
@@ -40,7 +40,7 @@ function sleep(ms) {
 
 function normalizeStartPort(value) {
   const port = Number(value);
-  return Number.isInteger(port) && port > 0 && port < 65536 ? port : 3001;
+  return Number.isInteger(port) && port > 0 && port < 65536 ? port : 7000;
 }
 
 function getBackendClientHost(host = BACKEND_HOST) {

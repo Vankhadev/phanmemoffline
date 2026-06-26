@@ -25,7 +25,7 @@ function readPortValue(value, fallback = '') {
 const backendPort = readPortValue(process.env.VITE_BACKEND_PORT)
   || readPortValue(process.env.PHANMEM_PORT)
   || readPortValue(process.env.KHA_BACKEND_PORT)
-  || '3001'
+  || '7000'
 const backendHost = readEnvText(process.env.VITE_BACKEND_HOST)
   || readEnvText(process.env.PHANMEM_BACKEND_HOST)
   || readEnvText(process.env.KHA_BACKEND_TARGET_HOST)

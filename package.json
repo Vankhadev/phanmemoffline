@@ -1,7 +1,7 @@
 {
   "name": "phanmienoffline-electron",
   "version": "2.2.8",
-  "description": "Bám hànng pos ",
+  "description": "Bán Hàng Pos - Phần mềm bán hàng offline",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Vankhadev/phanmemoffline.git"
@@ -34,11 +34,13 @@
     "build:all": "npm run build:frontend && npm run package:portable && npm run package:installer && npm run generate:latest-yml && npm run generate:update-manifest",
     "generate:latest-yml": "node scripts/generate-latest-yml.js",
     "generate:update-manifest": "node scripts/generate-update-manifest.js",
-    "test:repeat-sku-orders": "npm --prefix backend run test:repeat-sku-orders"
+    "test:repeat-sku-orders": "npm --prefix backend run test:repeat-sku-orders",
+    "healthcheck": "node scripts/healthcheck.js",
+    "test:business": "node scripts/business-test.js"
   },
   "build": {
     "appId": "com.vankhammo.phanmienoffline",
-    "productName": "BÃ¡n HÃ ng Pos",
+    "productName": "Bán Hàng Pos",
     "directories": {
       "output": "release"
     },
@@ -148,4 +150,3 @@
     "electron-builder": "^24.13.3"
   }
 }
-

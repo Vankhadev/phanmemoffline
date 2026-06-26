@@ -80,7 +80,7 @@ const historyRoutes = require('./routes/history');
 //  EXPRESS APP
 // ============================================================
 const app  = express();
-const PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || process.env.PHANMEM_PORT || 3001);
+const PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || process.env.PHANMEM_PORT || 7000);
 const HOST = String(
   process.env.KHA_BACKEND_HOST ||
   process.env.PHANMEM_HOST ||
@@ -177,7 +177,14 @@ app.use(cors({
 app.use('/api/products/import-excel-rows', express.json({ limit: '25mb' }));
 app.use('/api/excel-imports', express.json({ limit: '25mb' }));
 app.use('/api/print-templates', express.json({ limit: '10mb' }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    res.type('application/json; charset=utf-8');
+  }
+  next();
+});
 // Global request context middleware for database hooks
 app.use((req, res, next) => {
   requestContext.run(req, () => {
@@ -764,10 +771,10 @@ Started: ${SERVER_STARTED_AT}
 
   server.on('error', (err) => {
     if (err && err.code === 'EADDRINUSE') {
-      console.error(`[KHA SERVER] Cong ${PORT} dang bi mot ung dung khac chiem dung (EADDRINUSE).`);
-      console.error('[KHA SERVER] Hay tat ung dung dang giu cong nay, hoac dat bien moi truong PORT=<cong_khac> roi chay lai backend.');
+      console.error(`[KHA SERVER] Cổng ${PORT} đang bị một ứng dụng khác chiếm dụng (EADDRINUSE).`);
+      console.error('[KHA SERVER] Hãy tắt ứng dụng đang giữ cổng này, hoặc đặt biến môi trường PORT=<cổng_khác> rồi chạy lại backend.');
     } else {
-      console.error('[KHA SERVER] Loi HTTP server:', err && err.message ? err.message : err);
+      console.error('[KHA SERVER] Lỗi HTTP server:', err && err.message ? err.message : err);
     }
     process.exit(1);
   });
