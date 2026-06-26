@@ -214,7 +214,7 @@ export default function Payroll() {
   const validateForm = () => {
     if (!form.employee_name.trim()) return 'Vui lượng nhập t?n nhân viên';
     const month = Number.parseInt(form.month, 10);
-    if (!Number.isInteger(month) || month < 1 || month > 12) return 'Tháng luong ph?i t? 1 d?n 12';
+    if (!Number.isInteger(month) || month < 1 || month > 12) return 'Tháng luong ph?i t? 1 đến 12';
     const year = Number.parseInt(form.year, 10);
     if (!Number.isInteger(year) || year < 1900 || year > 3000) return 'Nam luong không hợp l?';
 
@@ -377,7 +377,7 @@ export default function Payroll() {
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Nhân Thêm bảng lương d? tạo k? luong mới.</li>
                   <li>Nhập ngày l?m, ngày ngh?, thu?ng v? t?m ?ng.</li>
-                  <li>Lực theo th?ng ho?c nam d? xem danh sách d? luu.</li>
+                  <li>Lực theo tháng ho?c nam d? xem danh sách d? luu.</li>
                   <li>Dùng n?t Sửa ho?c Xóa tr?n tứng dụng khi c?n ch?nh.</li>
                 </ul>
               </div>
@@ -484,7 +484,7 @@ export default function Payroll() {
               <th className="p-2 text-right">Luong/ngày</th>
               <th className="p-2 text-right">Ngày l?m</th>
               <th className="p-2 text-right">Ngày ngh?</th>
-              <th className="p-2 text-right">Luong th?ng</th>
+              <th className="p-2 text-right">Luong tháng</th>
               <th className="p-2 text-right">?ng tru?c</th>
               <th className="p-2 text-right">Tang ca</th>
               <th className="p-2 text-right">Thu?ng thêm</th>
@@ -602,7 +602,7 @@ export default function Payroll() {
               </div>
 
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                Tổng thu nh?p được t?nh t? luong th?ng, tang ca, thu?ng thêm, thu?ng l? v? thu?ng Tốt; th?c nhân tr? ti?n ?ng tru?c.
+                Tổng thu nh?p được t?nh t? luong tháng, tang ca, thu?ng thêm, thu?ng l? v? thu?ng Tốt; th?c nhân tr? ti?n ?ng tru?c.
               </div>
 
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
@@ -611,14 +611,14 @@ export default function Payroll() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                   <div className="bg-white rounded-lg p-3 border">
-                    <div className="text-xs text-gray-500">Luong th?ng</div>
+                    <div className="text-xs text-gray-500">Luong tháng</div>
                     <div className="text-lg font-bold text-blue-600">{formatVND(preview.salaryMonth)}</div>
                     <div className="text-xs text-gray-400">Luong/ngày ? ngày l?m</div>
                   </div>
                   <div className="bg-white rounded-lg p-3 border">
                     <div className="text-xs text-gray-500">Tổng thu nh?p</div>
                     <div className="text-lg font-bold text-purple-600">{formatVND(preview.totalIncome)}</div>
-                    <div className="text-xs text-gray-400">Luong th?ng + tang ca + c?c kho?n thu?ng</div>
+                    <div className="text-xs text-gray-400">Luong tháng + tang ca + các kho?n thu?ng</div>
                   </div>
                   <div className="bg-white rounded-lg p-3 border">
                     <div className="text-xs text-gray-500">Luong th?c nhân</div>

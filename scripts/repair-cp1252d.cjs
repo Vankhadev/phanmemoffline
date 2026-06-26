@@ -1,0 +1,44 @@
+﻿const fs=require('fs');
+const path=require('path');
+const cp1252reverse={0x20AC:0x80,0x201A:0x82,0x192:0x83,0x201E:0x84,0x2026:0x85,0x2020:0x86,0x2021:0x87,0x2C6:0x88,0x2030:0x89,0x160:0x8A,0x2039:0x8B,0x152:0x8C,0x17D:0x8E,0x2018:0x91,0x2019:0x92,0x201C:0x93,0x201D:0x94,0x2022:0x95,0x2013:0x96,0x2014:0x97,0x2DC:0x98,0x2122:0x99,0x161:0x9A,0x203A:0x9B,0x153:0x9C,0x17E:0x9E,0x178:0x9F};
+// Mojibake if line contains: Ã/Ä/Æ followed by a letter (incl vietnamese diacritic 0xC0-0xFF and U+1EA0+),
+// OR áº/á» (U+00E1 + U+00BA/BB), OR 'â€' sequence.
+function isLetterLike(cp){ return (cp>=0x41&&cp<=0x5A)||(cp>=0x61&&cp<=0x7A)||(cp>=0xC0&&cp<=0xFF)||(cp>=0x100&&cp<=0x24F)||(cp>=0x1EA0&&cp<=0x1EFF); }
+function hasMojibake(L){
+  for(let i=0;i<L.length;i++){
+    const cp=L.charCodeAt(i); const next=L.charCodeAt(i+1);
+    if((cp===0xC3||cp===0xC4||cp===0xC6) && isLetterLike(next)) return true;
+    if(cp===0xE1 && (next===0xBA||next===0xBB)) return true;
+    if(cp===0xE2 && next===0x20AC) return true; // â€
+  }
+  return false;
+}
+function walk(dir,acc=[]){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isDirectory()){if(e.name==='node_modules'||e.name==='dist')continue;walk(p,acc);}else if(/\.(jsx?|js)$/.test(e.name))acc.push(p);}return acc;}
+function reverseCp1252(s){
+  const bytes=[]; let ok=true;
+  for(const ch of s){ const cp=ch.codePointAt(0);
+    if(cp<=0x7F) bytes.push(cp);
+    else if(cp>=0xA0&&cp<=0xFF) bytes.push(cp);
+    else if(cp1252reverse[cp]!==undefined) bytes.push(cp1252reverse[cp]);
+    else if(cp>=0x80&&cp<=0x9F) bytes.push(cp);
+    else { ok=false; break; }
+  }
+  return ok?Buffer.from(bytes):null;
+}
+const ROOT=path.join(__dirname,'..','frontend','src');
+let totalFiles=0,totalLines=0,failed=0;
+const rep=[];
+for(const file of walk(ROOT)){
+  const c=fs.readFileSync(file,'utf8');
+  const lines=c.split(/\r?\n/);
+  let changed=false,lc=0;
+  for(let i=0;i<lines.length;i++){
+    if(!hasMojibake(lines[i])) continue;
+    const r=reverseCp1252(lines[i]);
+    if(r){ const dec=r.toString('utf8'); if(dec!==lines[i] && !hasMojibake(dec)){ lines[i]=dec; changed=true; lc++; } else failed++; }
+    else failed++;
+  }
+  if(changed){ fs.writeFileSync(file,lines.join('\n'),'utf8'); totalFiles++; totalLines+=lc; rep.push(`${path.relative(ROOT,file)}: ${lc}`); }
+}
+console.log(`Files: ${totalFiles} Lines: ${totalLines} failed: ${failed}`);
+rep.slice(0,40).forEach(r=>console.log('  '+r));

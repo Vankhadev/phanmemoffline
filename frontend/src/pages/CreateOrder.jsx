@@ -425,7 +425,7 @@ export default function CreateOrder({ user, store }) {
       setCustomerSearch('');
       setShowCustomerForm(false);
       setNewCustomer({ name: '', phone: '', email: '', tax_code: '', customer_type: 'Khách lẻ' });
-      alert(`?? Server offline - Khách hàng đã được luu c?c b?.\nT?n: ${newCustomer.name}\nM? t?m: ${offlineId}\n\nSử dụng b? khi server trở lại.`);
+      alert(`?? Server offline - Khách hàng đã được luu các b?.\nT?n: ${newCustomer.name}\nM? t?m: ${offlineId}\n\nSử dụng b? khi server trở lại.`);
     }
   };
 
@@ -1582,7 +1582,7 @@ export default function CreateOrder({ user, store }) {
         reason: 'product-created-from-order',
         changedTables: ['products'],
       });
-      alert('? D? thêm sản phẩm mới v?o đơn hàng!');
+      alert('? D? thêm sản phẩm mới vào đơn hàng!');
     } catch (err) {
       alert(err?.name === 'AbortError' ? '⏱️ Server không phản hồi khi tạo sản phẩm.' : getApiErrorMessage(err?.data, err?.message || 'Lỗi kết nối khi tạo sản phẩm.'));
     }
@@ -2135,7 +2135,7 @@ export default function CreateOrder({ user, store }) {
                           </div>
                           <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                             <div className={`text-[10px] ${stockMeta.textClass}`}>{stockMeta.display}</div>
-                            {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>Âm kho</div>}
+                            {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>�m kho</div>}
                             {stockMeta.isNearLimit && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.extraBadgeClass || 'bg-orange-100 text-orange-800 border border-orange-200'}`}>{stockMeta.extraLabel || negativeStockNearLimitLabel}</div>}
                             <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(item))}</div>
                           </div>
@@ -2434,7 +2434,7 @@ export default function CreateOrder({ user, store }) {
                           </div>
                           <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                             <div className={`text-[10px] ${stockMeta.textClass}`}>{stockMeta.display}</div>
-                            {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>Âm kho</div>}
+                            {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>�m kho</div>}
                             {stockMeta.isNearLimit && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.extraBadgeClass || 'bg-orange-100 text-orange-800 border border-orange-200'}`}>{stockMeta.extraLabel || negativeStockNearLimitLabel}</div>}
                             <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(item))}</div>
                           </div>

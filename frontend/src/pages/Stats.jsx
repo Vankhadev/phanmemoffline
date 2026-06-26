@@ -154,7 +154,7 @@ export default function Stats() {
   const fetchSummary = useCallback(async () => {
     const response = await fetch(`${API}/stats/summary`);
     const data = await response.json();
-    if (!response.ok) throw new Error(data?.error || 'Không thử lại th?ng k? t?ng quan.');
+    if (!response.ok) throw new Error(data?.error || 'Không thử lại tháng k? tổng quan.');
     setSummary(data);
   }, []);
 
@@ -193,7 +193,7 @@ export default function Stats() {
         return next;
       });
     } catch (err) {
-      setError(err?.message || 'Không thử lại th?ng k?.');
+      setError(err?.message || 'Không thử lại tháng k?.');
       setDailyStats([]);
       setProfitReport(null);
     } finally {
@@ -347,11 +347,11 @@ export default function Stats() {
         </h3>
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="mb-1 block text-xs text-gray-500">Chọn th?ng</label>
+            <label className="mb-1 block text-xs text-gray-500">Chọn tháng</label>
             <input type="month" className="input-field" value={monthExport} onChange={event => setMonthExport(event.target.value)} />
           </div>
           <button type="button" onClick={exportMonthlyReport} className="btn-success flex items-center gap-1">
-            <FileDown size={16} /> Xuất Excel th?ng
+            <FileDown size={16} /> Xuất Excel tháng
           </button>
           <button type="button" onClick={exportCurrentRangeReport} className="flex items-center gap-1 rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-700">
             <FileDown size={16} /> tổng lợi nhận
@@ -363,14 +363,14 @@ export default function Stats() {
         <HelpModal
           show={showHelp}
           onClose={() => setShowHelp(false)}
-          title="Hướng dẫn th?ng k? doanh thu"
+          title="Hướng dẫn tháng k? doanh thu"
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">C?ch d?c m?n h?nh</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Chọn m?c thời gian theo ngày, tu?n, th?ng ho?c nam.</li>
-                  <li>Xem c?c th? t?ng quan d? kiểm tra doanh thu v? lợi nhuận.</li>
+                  <li>Chọn m?c thời gian theo ngày, tu?n, tháng ho?c nam.</li>
+                  <li>Xem các th? tổng quan d? kiểm tra doanh thu v? lợi nhuận.</li>
                   <li>Dùng n?t xu?t Excel đã tải báo cáo chi tiết.</li>
                 </ul>
               </div>
@@ -378,7 +378,7 @@ export default function Stats() {
                 <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Báo cáo t? l?m mới khi dữ liệu đơn hàng thay đổi.</li>
-                  <li>C? th? m? r?ng t?ng ngày d? xem chi tiết đơn hàng.</li>
+                  <li>C? th? m? r?ng tổng ngày d? xem chi tiết đơn hàng.</li>
                 </ul>
               </div>
             </div>

@@ -141,11 +141,11 @@ export default function Home({ user, store = {} }) {
     setStatsMessageTone('info');
 
     try {
-      const data = await apiJsonChecked('/dashboard/summary', {}, 'Không thử lại th?ng k? trang ch?.');
+      const data = await apiJsonChecked('/dashboard/summary', {}, 'Không thử lại tháng k? trang ch?.');
       let negativeStockSource = data;
       if (!hasNegativeStockFields(data)) {
         try {
-          negativeStockSource = await apiJsonChecked('/stats/summary', {}, 'Không thử lại th?ng k? ?m kho.');
+          negativeStockSource = await apiJsonChecked('/stats/summary', {}, 'Không thử lại tháng k? ?m kho.');
         } catch (_) {
           negativeStockSource = data;
         }
@@ -170,10 +170,10 @@ export default function Home({ user, store = {} }) {
       setStats(EMPTY_STATS);
 
       if (error instanceof ApiError && Number(error.status) === 403) {
-        setStatsMessage('Tài khoản hiện tại chua được c?p quy?n xem th?ng k?. Trang ch? v?n hiển thị đầy đủ c?c khu v?c c?n lỗi.');
+        setStatsMessage('Tài khoản hiện tại chua được c?p quy?n xem tháng k?. Trang ch? v?n hiển thị đầy đủ các khu v?c c?n lỗi.');
         setStatsMessageTone('warning');
       } else {
-        setStatsMessage('Không thử lại th?ng k? l?c n?y. Dữ liệu s? tự động b? lỗi khi kết nối ?n d?nh.');
+        setStatsMessage('Không thử lại tháng k? l?c n?y. Dữ liệu s? tự động b? lỗi khi kết nối ?n d?nh.');
         setStatsMessageTone('info');
       }
     } finally {
@@ -202,7 +202,7 @@ export default function Home({ user, store = {} }) {
     {
       title: 'Doanh thu h?m nay',
       value: formatVND(stats.todayRevenue),
-      sub: '?? g?m c?c don ho?n tốt trong ngày',
+      sub: '?? g?m các don ho?n tốt trong ngày',
       icon: BarChart3,
       textColor: 'text-blue-600',
       bgColor: 'bg-blue-50',
@@ -333,7 +333,7 @@ export default function Home({ user, store = {} }) {
               <span className="capitalize">{todayLabel}</span>
             </p>
             <p className="max-w-3xl text-sm leading-6 text-gray-500">
-              Theo dài nhanh doanh thu, tồn kho v? truy c?p c?c khu v?c l?m vi?c quan tr?ng t? một m?n h?nh t?ng quan th?ng nh?t.
+              Theo dài nhanh doanh thu, tồn kho v? truy c?p các khu v?c l?m vi?c quan tr?ng t? một m?n h?nh tổng quan tháng nh?t.
             </p>
           </div>
 
@@ -474,7 +474,7 @@ export default function Home({ user, store = {} }) {
                 <h3 className="mb-2 font-bold text-gray-800">?? Tháng k? nhanh</h3>
                 <p>4 thệ thống k? hiện thệ thống tin quan tr?ng nh?t:</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li><strong>Doanh thu h?m nay:</strong> Tổng ti?n t? c?c đơn hàng d? thanh toán trong ngày</li>
+                  <li><strong>Doanh thu h?m nay:</strong> Tổng ti?n t? các đơn hàng d? thanh toán trong ngày</li>
                   <li><strong>?on h?ng h?m nay:</strong> Số lượng don tạo trong ngày v? s? d? thanh toán</li>
                   <li><strong>Tổng sản phẩm:</strong> Tổng s? sản phẩm trong kho, c? sản phẩm cha v? biến thể</li>
                   <li><strong>Cảnh báo tồn kho:</strong> Số lượng sản phẩm t?n 0, s?p h?t ho?c dang ?m kho</li>
@@ -484,11 +484,11 @@ export default function Home({ user, store = {} }) {
 
               <div>
                 <h3 className="mb-2 font-bold text-gray-800">?? Truy c?p nhanh</h3>
-                <p>7 n?t truy c?p nhanh d?n c?c ch?c nang ch?nh:</p>
+                <p>7 n?t truy c?p nhanh đến các ch?c nang ch?nh:</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
                   <li><strong>Quản lý sản phẩm:</strong> Thêm, sửa, xóa sản phẩm v? biến thể</li>
                   <li><strong>?on h?ng:</strong> Xem danh sách đơn hàng, l?c v? xử lý trạng thái</li>
-                  <li><strong>Tháng k?:</strong> Xem bi?u d? doanh thu theo ngày/tu?n/th?ng</li>
+                  <li><strong>Tháng k?:</strong> Xem bi?u d? doanh thu theo ngày/tu?n/tháng</li>
                   <li><strong>Báo cáo đơn hàng:</strong> Xem báo cáo theo đơn hàng</li>
                   <li><strong>Kho hàng:</strong> Theo dài tồn kho v? cảnh báo h?ng h?a</li>
                   <li><strong>Nh? cung cấp:</strong> Quản lý thông tin nh? cung cấp</li>
@@ -499,8 +499,8 @@ export default function Home({ user, store = {} }) {
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
                 <h3 className="mb-2 font-bold text-blue-800">?? M?o</h3>
                 <ul className="list-disc space-y-1 pl-5 text-blue-700">
-                  <li>Kiểm tra trang ch? mới ngày d? n?m b?t t?nh h?nh kinh doanh</li>
-                  <li>Click v?o c?c s? li?u d? xem chi tiết khi tài khoản c? quy?n truy c?p</li>
+                  <li>Kiểm tra trang ch? mới ngày d? n?m bắt t?nh h?nh kinh doanh</li>
+                  <li>Click vào các s? li?u d? xem chi tiết khi tài khoản c? quy?n truy c?p</li>
                   <li>Dữ liệu s? t? cập nhật sau khi tạo don ho?c khi hệ thống d?ng b? thay đổi</li>
                 </ul>
               </div>

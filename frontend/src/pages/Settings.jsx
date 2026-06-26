@@ -169,7 +169,7 @@ function getUpdateErrorMessage(error) {
     MANIFEST_URL_MISSING: 'Chua x?c d?nh được URL cập nhật. Mặc định ứng dụng d?ng GitHub Releases latest.yml.',
     CONFIG_INVALID: 'File cấu hình cập nhật không hợp l?.',
     URL_INVALID: 'URL cập nhật ho?c installer không hợp l?.',
-    DEV_UPDATER_DISABLED: 'Auto-update b? tốt khi ch?y development/unpacked. Hủy test tr?n b?n d? c?i b?ng NSIS ho?c b?t KHA_ENABLE_ELECTRON_UPDATER=1 c? ch? d?ch.',
+    DEV_UPDATER_DISABLED: 'Auto-update b? tốt khi ch?y development/unpacked. Hủy test tr?n b?n d? cái bằng NSIS ho?c bắt KHA_ENABLE_ELECTRON_UPDATER=1 c? ch? d?ch.',
     WINDOW_NOT_READY: 'Ch? kiểm tra cập nhật sau khi của s? ch?nh d? s?n s?ng.',
     ELECTRON_UPDATER_ERROR: 'electron-updater b?o lỗi trong qu? tr?nh kiểm tra/t?i cập nhật.',
     CHECK_FAILED: 'Kiểm tra cập nhật th?t b?i.',
@@ -178,7 +178,7 @@ function getUpdateErrorMessage(error) {
     UPDATE_FEED_UNAUTHORIZED_OR_PRIVATE: 'GitHub Release/feed y?u c?u xác thực, token sai/thi?u quy?n ho?c repo dang private. Client Electron không được nh?ng token n?n không th? t? cập nhật t? asset private.',
     UPDATE_FEED_METADATA_NOT_FOUND: 'Không t?m th?y latest.yml trong GitHub Release latest ho?c release latest không public.',
     UPDATE_METADATA_INVALID: 'Metadata cập nhật tr?n GitHub Release không hợp l? ho?c r?ng.',
-    UPDATE_RUNTIME_ARCH_UNSUPPORTED: 'M?y Windows hiện tại chua c? b? c?i phù hợp. Hủy t?i d?ng b?n x64 ho?c ia32 t? GitHub Release.',
+    UPDATE_RUNTIME_ARCH_UNSUPPORTED: 'M?y Windows hiện tại chua c? b? cái phù hợp. Hủy t?i d?ng b?n x64 ho?c ia32 t? GitHub Release.',
     UPDATE_METADATA_MISSING_RUNTIME_INSTALLER: 'GitHub Release chua c? installer ri?ng cho ki?n tr?c m?y n?y. C?n upload asset cấu hình t? -x64.exe ho?c -ia32.exe v? cập nhật latest.yml.',
     UPDATE_METADATA_SELECTED_INSTALLER_MISMATCH: 'Metadata cập nhật dang chọn installer không kh?p ki?n tr?c m?y. Không t?i d? tr?nh lỗi Windows không ch?y được ứng dụng.',
     UPDATE_ASSET_NOT_ACCESSIBLE_OR_PRIVATE: 'Không tải được installer/blockmap. Asset c? th? thi?u, t?n không kh?p latest.yml ho?c repo private tr? 404.',
@@ -1039,7 +1039,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   };
 
   const handleDeleteType = async (id) => {
-    if (!window.confirm('Xóa loại kh?ch n?y?')) return;
+    if (!window.confirm('Xóa loại khách n?y?')) return;
 
     setCustomerTypesNotice(null);
     try {
@@ -1072,7 +1072,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     try {
       const data = await printTemplatesApi.create({
         template_name: `Mẫu in hóa đơn ${printTemplates.length + 1}`,
-        description: 'Thi?t k? b?ng editor mẫu in Canva-like.',
+        description: 'Thi?t k? bằng editor mẫu in Canva-like.',
         shop_name: storeForm.name,
         shop_address: storeForm.address,
         shop_phone: storeForm.phone,
@@ -1322,7 +1322,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     return saveNegativeStockSettings({
       enabled: nextEnabled,
       limitInput: nextLimitInput,
-      successMessage: nextEnabled ? '?? b?t ch? d? xuất âm' : '?? tốt ch? d? xuất âm',
+      successMessage: nextEnabled ? '?? bắt ch? d? xuất âm' : '?? tốt ch? d? xuất âm',
     });
   };
 
@@ -1427,11 +1427,11 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       const detail = verified?.contentLength
         ? `HTTP ${verified.statusCode}, ${formatBytes(verified.contentLength)}, ${verified.contentType || 'Content-Type không r?'}`
         : '?? kiểm tra định dạngg t?n file v? HTTP.';
-      setUpdateNotice(`Link t?i ${installer.label} hợp lệ (${detail}). đang m? tr?nh duy?t mặc định. N?u SmartScreen/antivirus cảnh báo, ch? tiếp tục khi file d?ng t?n ${installer.fileName} v? URL thu?c github.com/Vankhadev/phanmemoffline.`);
+      setUpdateNotice(`Link t?i ${installer.label} hợp lệ (${detail}). đang m? tr?nh duy?t mặc định. Nếu SmartScreen/antivirus cảnh báo, ch? tiếp tục khi file d?ng t?n ${installer.fileName} v? URL thu?c github.com/Vankhadev/phanmemoffline.`);
 
       if (window.khaDesktop?.openExternal) {
         const opened = await window.khaDesktop.openExternal(url);
-        if (!opened?.ok) throw new Error(opened?.error?.message || 'Không m? được link t?i b?ng tr?nh duy?t mặc định.');
+        if (!opened?.ok) throw new Error(opened?.error?.message || 'Không m? được link t?i bằng tr?nh duy?t mặc định.');
       } else {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
@@ -1444,7 +1444,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     const nextTabs = [];
     if (canViewStore) nextTabs.push({ key: 'store', label: 'Cửa hàng', icon: <Store size={16} /> });
     if (canViewEmployees) nextTabs.push({ key: 'employees', label: 'Nhân viên', icon: <Users size={16} /> });
-    if (canViewCustomerTypes) nextTabs.push({ key: 'customer-types', label: 'Loại kh?ch', icon: <Tag size={16} /> });
+    if (canViewCustomerTypes) nextTabs.push({ key: 'customer-types', label: 'Loại khách', icon: <Tag size={16} /> });
     if (canViewNegativeStock) nextTabs.push({ key: 'negative-stock', label: 'Xuất ?m', icon: <Package size={16} /> });
     if (canViewPrintTemplates) nextTabs.push({ key: 'print-templates', label: 'Mẫu in hóa đơn', icon: <FileText size={16} /> });
     if (canAccessSection(['settings.read', 'settings.manage'])) nextTabs.push({ key: 'backup', label: 'Backup', icon: <Image size={16} /> });
@@ -1586,7 +1586,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               {storeSaving ? 'đang luu...' : 'Luu thay đổi'}
             </button>
             <span className="text-xs text-gray-500">
-              Các thay đổi n?y ?nh hu?ng tr?c ti?p d?n thông tin hiển thị tr?n hóa đơn v? c?c trang d?ng dữ liệu cửa hàng.
+              Các thay đổi n?y ?nh hu?ng tr?c ti?p đến thông tin hiển thị tr?n hóa đơn v? các trang d?ng dữ liệu cửa hàng.
             </span>
           </div>
         </div>
@@ -1695,7 +1695,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 onClick={openAddType}
                 className="btn-primary inline-flex min-h-10 items-center gap-2 text-sm"
               >
-                <Plus size={14} /> Thêm loại kh?ch
+                <Plus size={14} /> Thêm loại khách
               </button>
             )}
           </div>
@@ -1732,7 +1732,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                           type="button"
                           onClick={() => openEditType(type)}
                           className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-blue-700 hover:bg-blue-100"
-                          title="Sửa loại kh?ch"
+                          title="Sửa loại khách"
                         >
                           <Edit2 size={14} />
                         </button>
@@ -1740,7 +1740,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                           type="button"
                           onClick={() => handleDeleteType(type.id)}
                           className="rounded-lg border border-red-200 bg-red-50 p-2 text-red-600 hover:bg-red-100"
-                          title="Xóa loại kh?ch"
+                          title="Xóa loại khách"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -1769,7 +1769,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             </div>
             <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${negativeStockSettings.enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200' : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'}`}>
               <span className={`h-2 w-2 rounded-full ${negativeStockSettings.enabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-              {negativeStockSettings.enabled ? 'đang b?t' : 'đang tốt'}
+              {negativeStockSettings.enabled ? 'đang bắt' : 'đang tốt'}
             </span>
           </div>
 
@@ -1780,7 +1780,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <div className="space-y-2">
                 <div className="font-semibold text-gray-800 dark:text-slate-100">Cho ph?p xuất âm tồn kho sản phẩm</div>
                 <p className="text-sm text-gray-600 dark:text-slate-300">
-                  Khi b?t, hệ thống cho phép xu?t vu?t tồn kho hiện c? theo số lượng ?m t?i da admin nh?p. Khi tốt, hệ thống chọn mới tru?ng hợp lệm tồn kho nh? hon <strong>0</strong>.
+                  Khi bắt, hệ thống cho phép xu?t vu?t tồn kho hiện c? theo số lượng ?m t?i da admin nh?p. Khi tốt, hệ thống chọn mới tru?ng hợp lệm tồn kho nh? hon <strong>0</strong>.
                 </p>
               </div>
 
@@ -1797,14 +1797,14 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="text-sm font-semibold">
-                      {negativeStockSettings.enabled ? 'đang b?t' : 'đang tốt'}
+                      {negativeStockSettings.enabled ? 'đang bắt' : 'đang tốt'}
                     </span>
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${negativeStockSettings.enabled ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'}`}>
                       {negativeStockSettings.enabled ? 'ON' : 'OFF'}
                     </span>
                   </span>
                   <span className="mt-1 block text-xs font-medium opacity-80">
-                    {negativeStockSaving ? 'đang luu thay đổi...' : 'Ch?m d? b?t/tốt nhanh'}
+                    {negativeStockSaving ? 'đang luu thay đổi...' : 'Ch?m d? bắt/tốt nhanh'}
                   </span>
                 </span>
 
@@ -1878,8 +1878,8 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div className="font-semibold">Nguy?n t?c ?p d?ng</div>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>Khi tốt: backend không cho xu?t n?u t?n d? ki?n nh? hon 0.</li>
-              <li>Khi b?t: admin nh?p {negativeStockAdminLimitLabel}, backend cho phép t?n sau xu?t gi?m t?i da d?n {negativeStockRuntimeLimitLabel}.</li>
-              <li>N?u vu?t gi?i h?n, backend trở lại r? t?n sản phẩm, t?n hiện tại, số lượng xu?t v? gi?i h?n t?i thi?u.</li>
+              <li>Khi bắt: admin nh?p {negativeStockAdminLimitLabel}, backend cho phép t?n sau xu?t gi?m t?i da đến {negativeStockRuntimeLimitLabel}.</li>
+              <li>Nếu vu?t gi?i h?n, backend trở lại r? t?n sản phẩm, t?n hiện tại, số lượng xu?t v? gi?i h?n t?i thi?u.</li>
               <li>Frontend d?c/ghi tr?c ti?p qua API /api/settings/negative-stock v? không cón d?ng gi?i h?n hard-code.</li>
             </ul>
           </div>
@@ -1937,7 +1937,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   </button>
                 </div>
               )}
-              Chua c? mẫu in hóa đơn. Nhân ?Thêm mẫu in? d? tạo m?u d?u ti?n.
+              Chua c? mẫu in hóa đơn. Nhân ?Thêm mẫu in? d? tạo m?u đầu ti?n.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -1998,7 +1998,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   <Image size={18} /> Quản lý Backup
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Backup d?nh k? mới 72 gi?, gi? t?i da 30 b?n g?n nh?t, n?n ZIP v? luu lịch sử v?o b?ng system_backups / backup_logs.
+                  Backup d?nh k? mới 72 gi?, gi? t?i da 30 b?n g?n nh?t, n?n ZIP v? luu lịch sử vào bằng system_backups / backup_logs.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -2096,7 +2096,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 <div className="text-gray-500">Phiên b?n hiện tại</div>
                 <div className="mt-1 text-2xl font-bold text-gray-800">{currentVersion}</div>
                 <div className="mt-2 text-xs text-gray-500">
-                  N?n t?ng: {appInfo?.platform || window.khaDesktop?.platform || 'web'} ? Ki?n tr?c: {appInfo?.arch || 'unknown'}
+                  N?n tổng: {appInfo?.platform || window.khaDesktop?.platform || 'web'} ? Ki?n tr?c: {appInfo?.arch || 'unknown'}
                 </div>
               </div>
               <div className="rounded-xl border bg-gray-50 p-4">
@@ -2127,7 +2127,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   <div>app-update.yml: {runtimeDiagnostics.appUpdateYmlExists ? 'C?' : 'Không th?y'}</div>
                   <div>Ki?n tr?c runtime: {runtimeArch || 'unknown'}</div>
                   <div>Tuong th?ch: {runtimeCompatibility?.supported === false ? 'Không' : 'C?'}</div>
-                  <div className="break-all md:col-span-2">?u?ng d?n app-update.yml: {runtimeDiagnostics.appUpdateYmlPath || 'Không x?c d?nh'}</div>
+                  <div className="break-all md:col-span-2">?u?ng đến app-update.yml: {runtimeDiagnostics.appUpdateYmlPath || 'Không x?c d?nh'}</div>
                 </div>
               </div>
             )}
@@ -2136,13 +2136,13 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <div className={`mt-4 rounded-lg border px-4 py-3 text-sm ${runtimeCompatibility.supported === false ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
                 <div className="font-semibold">Tuong th?ch m?y Windows</div>
                 <div className="mt-1">{runtimeCompatibility.message}</div>
-                <div className="mt-1 text-xs">B? c?i khuy?n ngh?: {recommendedInstaller?.label || 'Windows x64'}.</div>
+                <div className="mt-1 text-xs">B? cái khuy?n ngh?: {recommendedInstaller?.label || 'Windows x64'}.</div>
               </div>
             )}
 
             {!desktopAvailable && (
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                T?nh nang cập nhật ch? ho?t d?ng trong ứng dụng Electron d? c?i tr?n Windows. Khi ch?y frontend web d?c l?p, API cập nhật s? không kh? d?ng.
+                T?nh nang cập nhật ch? ho?t d?ng trong ứng dụng Electron d? cái tr?n Windows. Khi ch?y frontend web d?c l?p, API cập nhật s? không kh? d?ng.
               </div>
             )}
 
@@ -2174,7 +2174,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   <div className="text-xs text-gray-500 md:text-right">
                     <div>Ngày ph?t h?nh: {formatDateTime(updateInfo.releaseDate)}</div>
                     <div>Dung lu?ng: {formatBytes(updateInfo.size)}</div>
-                    {updateInfo.mandatory && <div className="font-semibold text-red-600">Bản cập nhật b?t bu?c</div>}
+                    {updateInfo.mandatory && <div className="font-semibold text-red-600">Bản cập nhật bắt bu?c</div>}
                   </div>
                 </div>
                 <div className="mt-3 text-sm">
@@ -2256,9 +2256,9 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           </div>
 
           <div className="card border-emerald-100 bg-emerald-50 text-sm text-emerald-800">
-            <h3 className="mb-3 font-bold">Tải b? c?i th? cứng dụng ki?n tr?c</h3>
+            <h3 className="mb-3 font-bold">Tải b? cái th? cứng dụng ki?n tr?c</h3>
             <div className="mb-3 rounded-lg border border-emerald-200 bg-white/70 px-3 py-2 text-xs">
-              Lu?n t?i t? GitHub Release ch?nh th?c v? chọn d?ng file cấu hình t? ki?n tr?c. N?u Windows b?o ?ứng dụng n?y không th? ch?y tr?n PC của b?n?, h?y th? b?n ia32 cho Windows 32-bit ho?c kiểm tra m?y c? h? tr? x64 không.
+              Lu?n t?i t? GitHub Release ch?nh th?c v? chọn d?ng file cấu hình t? ki?n tr?c. Nếu Windows b?o ?ứng dụng n?y không th? ch?y tr?n PC của b?n?, h?y th? b?n ia32 cho Windows 32-bit ho?c kiểm tra m?y c? h? tr? x64 không.
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               {WINDOWS_INSTALLERS.map(installer => {
@@ -2361,7 +2361,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               </div>
 
               <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                Vai tr? h? tr?: admin, kế toán, thu ng?n, nhân viên v? user cu. Khi tạo mới, backend v?n t? c?p role ban d?u theo co ch? cu; client s? cập nhật lỗi role đã chọn ngay sau khi tạo n?u c? quy?n quản lý ngu?i d?ng.
+                Vai tr? h? tr?: admin, kế toán, thu ng?n, nhân viên v? user cu. Khi tạo mới, backend v?n t? c?p role ban đầu theo co ch? cu; client s? cập nhật lỗi role đã chọn ngay sau khi tạo n?u c? quy?n quản lý ngu?i d?ng.
               </div>
             </div>
 
@@ -2387,7 +2387,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="customer-type-modal-title">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 id="customer-type-modal-title" className="text-lg font-bold">
-                {typeEdit ? 'Sửa loại kh?ch' : 'Thêm loại kh?ch'}
+                {typeEdit ? 'Sửa loại khách' : 'Thêm loại khách'}
               </h2>
               <button type="button" onClick={closeTypeModal} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
@@ -2398,7 +2398,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <SectionNotice notice={typeNotice} />
               <InputField
                 id="customer-type-name"
-                label="Tồn loại kh?ch"
+                label="Tồn loại khách"
                 value={typeForm.name}
                 onChange={event => setTypeForm(current => ({ ...current, name: event.target.value }))}
                 placeholder="V? d?: Khách VIP"
@@ -2457,7 +2457,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div>
               <h3 className="mb-2 font-bold text-gray-800">Tổng quan</h3>
               <p>
-                Trang Cài đặt cho phép cấu hình thông tin cửa hàng, quản lý nhân viên, loại khách hàng, b?t/tốt xuất âm tồn kho, mẫu in hóa đơn v? cập nhật ứng dụng Electron.
+                Trang Cài đặt cho phép cấu hình thông tin cửa hàng, quản lý nhân viên, loại khách hàng, bắt/tốt xuất âm tồn kho, mẫu in hóa đơn v? cập nhật ứng dụng Electron.
               </p>
             </div>
 
@@ -2475,26 +2475,26 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <ul className="list-disc space-y-1 pl-5">
                 <li>Thêm, sửa ho?c v? hi?u tài khoản nhân viên.</li>
                 <li>C? th? chọn role Admin, Kế toán, Thu ng?n, Nhân viên ho?c User cu d? gi? tuong th?ch dữ liệu legacy.</li>
-                <li>Admin to?n quy?n; kế toán truy c?p module kế toán; thu ng?n ch? xem doanh thu; nhân viên/user cu không v?o module kế toán.</li>
+                <li>Admin to?n quy?n; kế toán truy c?p module kế toán; thu ng?n ch? xem doanh thu; nhân viên/user cu không vào module kế toán.</li>
                 <li>Khi sửa nhân viên, c? th? d? tr?ng mật khẩu n?u không mu?n dài.</li>
               </ul>
             </div>
 
             <div>
-              <h3 className="mb-2 font-bold text-gray-800">Tab Loại kh?ch</h3>
+              <h3 className="mb-2 font-bold text-gray-800">Tab Loại khách</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Tạo v? ch?nh m?u cho t?ng nh?m khách hàng.</li>
-                <li>Xóa loại kh?ch l? thao t?c soft-delete tr?n backend.</li>
+                <li>Tạo v? ch?nh m?u cho tổng nh?m khách hàng.</li>
+                <li>Xóa loại khách l? thao t?c soft-delete tr?n backend.</li>
               </ul>
             </div>
 
             <div>
               <h3 className="mb-2 font-bold text-gray-800">Tab Xuất ?m</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Dùng d? b?t/tốt cho phép xuất âm tồn kho sản phẩm.</li>
-                <li>Khi b?t, admin nh?p số lượng ?m t?i da; v? đã nhập {negativeStockAdminLimitLabel} th? t?n t?i thi?u runtime l? {negativeStockRuntimeLimitLabel}.</li>
+                <li>Dùng d? bắt/tốt cho phép xuất âm tồn kho sản phẩm.</li>
+                <li>Khi bắt, admin nh?p số lượng ?m t?i da; v? đã nhập {negativeStockAdminLimitLabel} th? t?n t?i thi?u runtime l? {negativeStockRuntimeLimitLabel}.</li>
                 <li>Khi tốt, mới thao t?c l?m tồn kho nh? hon 0 s? b? backend t? ch?i.</li>
-                <li>? gi?i h?n luu qua API /api/settings/negative-stock v? được c?c m?n h?nh b?n h?ng/kho d?ng l?m runtime settings.</li>
+                <li>? gi?i h?n luu qua API /api/settings/negative-stock v? được các m?n h?nh b?n h?ng/kho d?ng l?m runtime settings.</li>
               </ul>
             </div>
 
@@ -2502,7 +2502,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <h3 className="mb-2 font-bold text-gray-800">Tab Mẫu in hóa đơn</h3>
               <ul className="list-disc space-y-1 pl-5">
                 <li>Danh sách mẫu in l?y t? API th?t <strong>/api/print-templates</strong>, khứng dụng mock cho CRUD ho?c editor ch?nh th?c.</li>
-                <li>Editor Canva-like h? tr? k?o th?, resize, zoom, grid, snap, L?u v? Publish sang layout in th?t, preview b?ng hóa đơn th?t.</li>
+                <li>Editor Canva-like h? tr? k?o th?, resize, zoom, grid, snap, L?u v? Publish sang layout in th?t, preview bằng hóa đơn th?t.</li>
                 <li>Preview editor v? renderer in d?ng dữ liệu hóa đơn th?t t? API <strong>/api/invoices/:idOrCode/print</strong>; logo upload/xóa qua asset endpoint ri?ng.</li>
               </ul>
             </div>
@@ -2512,7 +2512,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <ul className="list-disc space-y-1 pl-5">
                 <li>Ch? ho?t d?ng khi ch?y b?n Electron d? d?ng g?i.</li>
                 <li>App ch? cài đặt sau khi ngu?i d?ng xác nhận v? s? sao luu database trước khi cập nhật.</li>
-                <li>Khi c?n debug, c? th? xem du?ng d?n file update.log được hiển thị trong trang.</li>
+                <li>Khi c?n debug, c? th? xem du?ng đến file update.log được hiển thị trong trang.</li>
               </ul>
             </div>
           </div>

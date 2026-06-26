@@ -577,7 +577,7 @@ const mapProductForImport = (searchProduct = {}, fullProduct = {}, productTree =
   const name = isVariant
     ? firstImportValue(displayName, searchProduct.tenSP, searchProduct.display_name, searchProduct.name, source.tenSP, source.name)
     : firstImportValue(source.name, searchProduct.name, source.tenSP, searchProduct.tenSP);
-  const unit = firstImportValue(source.unit, searchProduct.unit, source.donVi, searchProduct.donVi) || 'c?i';
+  const unit = firstImportValue(source.unit, searchProduct.unit, source.donVi, searchProduct.donVi) || 'cái';
   const importPrice = Math.max(0, getFirstFiniteNumber(source.import_price, searchProduct.import_price, source.giaNhap, searchProduct.giaNhap, source.retail_price, searchProduct.retail_price));
   const retailPrice = Math.max(0, getFirstFiniteNumber(source.retail_price, searchProduct.retail_price, source.giaBan, searchProduct.giaBan, source.price, searchProduct.price));
   const wholesalePrice = Math.max(0, getFirstFiniteNumber(source.wholesale_price, searchProduct.wholesale_price));
@@ -759,7 +759,7 @@ const Nhaphang = ({ store }) => {
 
   const categoriesById = useMemo(() => buildCategoriesById(categories), [categories]);
   const selectedSupplierId = getSupplierRecordId(selectedSupplier);
-  // Cho ph?p nh?p b?t k? sản phẩm n?o v?i b?t k? nh? cung cấp n?o.
+  // Cho ph?p nh?p bắt k? sản phẩm n?o v?i bắt k? nh? cung cấp n?o.
   // Trước d?y danh sách sản phẩm bộ lọc theo selectedSupplier khi?n ch?
   // nh?ng sản phẩm g?n v?i NCC d? mới hiện. Gi? lu?n d?ng to?n b? allProducts.
   const getScopedProductSearchResults = useCallback((query = '') => {
@@ -784,7 +784,7 @@ const Nhaphang = ({ store }) => {
     ));
     if (duplicatedOrder) {
       const supplierName = duplicatedOrder.nhaCungCap?.tenNCC || 'nh? cung cấp kh?c';
-      return `M? phi?u ${normalizedImportCodeInput} d? t?n t?i ? phi?u của ${supplierName}. Khứng dụng chung một m? phi?u cho nhi?u nh? cung cấp.`;
+      return `M? phiếu ${normalizedImportCodeInput} d? t?n t?i ? phiếu của ${supplierName}. Khứng dụng chung một m? phiếu cho nhi?u nh? cung cấp.`;
     }
     return '';
   }, [currentOrder?.id, currentOrder?.maDonHang, normalizedImportCodeInput, orderHistory]);
@@ -1004,13 +1004,13 @@ const Nhaphang = ({ store }) => {
     const discount = Number(product.chietKhau || 0);
     const taxPercent = Number(product.thueGTGT ?? product.tax_percent ?? product.vat_percent ?? 0);
 
-    if (!product.tenSP) errors.push('Tồn sản phẩm l? b?t bu?c');
-    if (!product.donVi) errors.push('?on v? l? b?t bu?c');
+    if (!product.tenSP) errors.push('Tồn sản phẩm l? bắt bu?c');
+    if (!product.donVi) errors.push('?on v? l? bắt bu?c');
     if (!getImportRowKey(product)) errors.push('Dùng sản phẩm thi?u product_id, variant_id ho?c SKU hợp lệ');
     const quantityError = getImportQuantityInputError(product.soLuongNhap);
     if (quantityError) errors.push(quantityError);
     if (!Number.isFinite(importPrice) || importPrice < 0) {
-      errors.push('Giá nhập ph?i l?n hon ho?c b?ng 0');
+      errors.push('Giá nhập ph?i l?n hon ho?c bằng 0');
     }
     if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
       errors.push('Chi?t kh?u ph?i t? 0-100%');
@@ -1361,7 +1361,7 @@ const Nhaphang = ({ store }) => {
     setSelectedProduct(null);
     setEditingProductIndex(null);
     setError(null);
-    setSuccess(changes.length > 0 ? `?? cập nhật ${changes.length} d?ng sản phẩm v?o phiếu nhập.` : 'Danh sách chọn t?m đã được gi? nguy?n, không cóng tr?ng sản phẩm.');
+    setSuccess(changes.length > 0 ? `?? cập nhật ${changes.length} d?ng sản phẩm vào phiếu nhập.` : 'Danh sách chọn t?m đã được gi? nguy?n, không cóng tr?ng sản phẩm.');
     setTimeout(() => setSuccess(null), 3000);
   };
 
@@ -1386,7 +1386,7 @@ const Nhaphang = ({ store }) => {
       </div>
       <div className="max-h-72 overflow-y-auto p-2 space-y-2 scroll-smooth">
         {importPickerSelections.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-xs text-gray-400">B?m n?t + m?u xanh ngay c?nh t?n sản phẩm d? dua v?o danh sách t?m.</div>
+          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-xs text-gray-400">B?m n?t + m?u xanh ngay c?nh t?n sản phẩm d? dua vào danh sách t?m.</div>
         ) : importPickerSelections.map(selection => {
           const price = Math.max(0, getFirstFiniteNumber(selection.product.giaNhap, selection.product.import_price, selection.product.retail_price));
           const quantity = isValidImportQuantityInput(selection.quantity) ? parseImportQuantity(selection.quantity, 0) : 0;
@@ -1509,7 +1509,7 @@ const Nhaphang = ({ store }) => {
     const parent = product.parent || null;
     const name = isVariant ? getProductDisplayName(product, parent) : (product.name || product.tenSP || '');
     const sku = product.sku || product.maSP || '';
-    const unit = product.unit || product.donVi || 'c?i';
+    const unit = product.unit || product.donVi || 'cái';
     const categoryName = product.default_category?.name || product.category || '';
     const parentName = !isVariant ? (product.parent_name || product.parent?.name || '') : '';
     const price = Math.max(0, getFirstFiniteNumber(product.import_price, product.giaNhap, product.retail_price));
@@ -1626,7 +1626,7 @@ const Nhaphang = ({ store }) => {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm font-semibold text-sky-700">
                 Bản đã chọn {importPickerSelections.length.toLocaleString('vi-VN')} sản phẩm
-                {importPickerSelections.length > 0 ? ` ? ${importPickerTotalQuantity.toLocaleString('vi-VN')} c?i ? ${formatVND(importPickerEstimatedTotal)}` : ''}
+                {importPickerSelections.length > 0 ? ` ? ${importPickerTotalQuantity.toLocaleString('vi-VN')} cái ? ${formatVND(importPickerEstimatedTotal)}` : ''}
               </div>
               <div className="flex items-center justify-end gap-3">
                 <button
@@ -1776,7 +1776,7 @@ const Nhaphang = ({ store }) => {
           thanhTien: mergedLine.lineTotal
         };
       }));
-      setSuccess(`?? g?p thêm ${quantityToAdd} v?o d?ng ${duplicateName}.`);
+      setSuccess(`?? g?p thêm ${quantityToAdd} vào d?ng ${duplicateName}.`);
       setTimeout(() => setSuccess(null), 3000);
     } else {
       setProducts(prev => [...prev, normalizedProduct]);
@@ -1958,7 +1958,7 @@ const Nhaphang = ({ store }) => {
           maSP: d.sku || '',
           tenSP: d.product_name || '',
           soLuong: quantity,
-          donVi: d.unit || 'c?i',
+          donVi: d.unit || 'cái',
           giaNhap: importPrice,
           retail_price: +d.retail_price || 0,
           wholesale_price: +d.wholesale_price || 0,
@@ -2102,10 +2102,10 @@ const Nhaphang = ({ store }) => {
     const isEditing = Boolean(isEditingOrder && editingImportKey);
     const nextImportCode = isEditing ? (currentOrder.maDonHang || normalizedImportCodeInput || '') : normalizedImportCodeInput;
     const confirmMessage = isEditing
-      ? `Cập nhật phiếu nhập ${nextImportCode || currentOrder.maDonHang || 'm? tự động'}? Hệ thống s? sửa d?ng phi?u hiện tại, không tạo phi?u/m? mới.`
+      ? `Cập nhật phiếu nhập ${nextImportCode || currentOrder.maDonHang || 'm? tự động'}? Hệ thống s? sửa d?ng phiếu hiện tại, không tạo phiếu/m? mới.`
       : status === 'received'
         ? 'Tạo v? nhập hàng? H?nh d?ng n?y s? cập nhật số lượng tồn kho.'
-        : 'Tạo đơn hàng (chua nh?p)? ?on h?ng sẽ được luu v?o hệ thống.';
+        : 'Tạo đơn hàng (chua nh?p)? ?on h?ng sẽ được luu vào hệ thống.';
     if (!window.confirm(confirmMessage)) return;
 
     setSaving(true);
@@ -2255,7 +2255,7 @@ const Nhaphang = ({ store }) => {
       setSearchQuery('');
       setFilteredProducts([]);
       setShowSearchResults(false);
-      setSuccess(edit ? `đang sửa phi?u ${fullOrder.maDonHang}. Khi luu s? g?i API cập nhật, không tạo phi?u mới.` : `?? t?i phi?u ${fullOrder.maDonHang} d? xem.`);
+      setSuccess(edit ? `đang sửa phiếu ${fullOrder.maDonHang}. Khi luu s? g?i API cập nhật, không tạo phiếu mới.` : `?? t?i phiếu ${fullOrder.maDonHang} d? xem.`);
     } catch (err) {
       console.error('Error loading import order:', err);
       setError('Không thử lại chi tiết phiếu nhập.');
@@ -2266,13 +2266,13 @@ const Nhaphang = ({ store }) => {
 
   // Cancel order and let backend rollback stock exactly once if this import already applied stock
   const handleCancelOrder = async (order) => {
-    const reason = prompt('Nhợp lệ do h?y don (không b?t bu?c):', '');
+    const reason = prompt('Nhợp lệ do h?y don (không bắt bu?c):', '');
     if (reason === null) return; // User cancelled
 
     const confirmCancel = window.confirm(
       `Hủy đơn hàng ${order.maDonHang}?\n\n` +
-      'N?u phi?u n?y đã nhập kho, hệ thống s? tự động trở lại d?ng số lượng d? c?ng v? ch? rollback một l?n.\n' +
-      'N?u phi?u chua t?ng nh?p kho, tồn kho s? không b? thay đổi.\n\n' +
+      'Nếu phiếu n?y đã nhập kho, hệ thống s? tự động trở lại d?ng số lượng d? c?ng v? ch? rollback một l?n.\n' +
+      'Nếu phiếu chua tổng nh?p kho, tồn kho s? không b? thay đổi.\n\n' +
       `L? do: ${reason || 'Không có'}\n\n` +
       'Bản c? ch?c chọn?'
     );
@@ -2322,8 +2322,8 @@ const Nhaphang = ({ store }) => {
   const handleDeleteOrder = async (order) => {
     const confirmDelete = window.confirm(
       `Xóa phiếu nhập ${order.maDonHang}?\n\n` +
-      'N?u phi?u đã nhập kho, backend s? rollback tồn kho d?ng một l?n trước khi ?n kh?i danh sách.\n' +
-      'Thao t?c n?y không tạo phi?u mới v? không rollback l?p n?u g?i lỗi.'
+      'Nếu phiếu đã nhập kho, backend s? rollback tồn kho d?ng một l?n trước khi ?n kh?i danh sách.\n' +
+      'Thao t?c n?y không tạo phiếu mới v? không rollback l?p n?u g?i lỗi.'
     );
     if (!confirmDelete) return;
 
@@ -2367,7 +2367,7 @@ const Nhaphang = ({ store }) => {
     if (selectedHistoryIds.length === 0) return;
     const confirmDelete = window.confirm(
       `Xóa ${selectedHistoryIds.length} phiếu nhập đã chọn?\n\n` +
-      'Backend s? rollback tồn kho d?ng một l?n cho t?ng phi?u đã nhập kho v? b? qua rollback l?p.'
+      'Backend s? rollback tồn kho d?ng một l?n cho tổng phiếu đã nhập kho v? b? qua rollback l?p.'
     );
     if (!confirmDelete) return;
 
@@ -2389,7 +2389,7 @@ const Nhaphang = ({ store }) => {
         handleReset();
       }
       setSelectedHistoryIds([]);
-      setSuccess(`?? xóa ${result.deleted_count || 0} phiếu nhập${result.rollback_count ? `, rollback tồn kho ${result.rollback_count} phi?u` : ''}.`);
+      setSuccess(`?? xóa ${result.deleted_count || 0} phiếu nhập${result.rollback_count ? `, rollback tồn kho ${result.rollback_count} phiếu` : ''}.`);
       fetchAllProducts();
     } catch (err) {
       console.error('Error bulk deleting import orders:', err);
@@ -2406,7 +2406,7 @@ const Nhaphang = ({ store }) => {
       return;
     }
     if (hasUnsavedPaymentAffectingChanges) {
-      setError('Phiếu nhập dang c? thay đổi sản phẩm ho?c t?ng ti?n chua luu. Vui lòng cập nhật phi?u trước khi thanh toán d? tr?nh sai c?ng n?.');
+      setError('Phiếu nhập dang c? thay đổi sản phẩm ho?c tổng ti?n chua luu. Vui lòng cập nhật phiếu trước khi thanh toán d? tr?nh sai c?ng n?.');
       setTimeout(() => setError(null), 5000);
       return;
     }
@@ -2418,7 +2418,7 @@ const Nhaphang = ({ store }) => {
 
     const confirmPay = window.confirm(
       `Thanh toán phiếu nhập ${currentOrder?.maDonHang || editingImportKey}?\n\n` +
-      'Thao t?c n?y ch? cập nhật phi?u hiện tại sang d? thanh toán v? ghi nhân s? qu?/c?ng n? li?n quan, không tạo phi?u mới v? không thay đổi tồn kho.'
+      'Thao t?c n?y ch? cập nhật phiếu hiện tại sang d? thanh toán v? ghi nhân s? qu?/c?ng n? li?n quan, không tạo phiếu mới v? không thay đổi tồn kho.'
     );
     if (!confirmPay) return;
 
@@ -2470,7 +2470,7 @@ const Nhaphang = ({ store }) => {
         return { ...order, ...nextPayment };
       }));
       fetchImportHistory();
-      setSuccess(`Phiếu ${result.import_code || editingImportKey} đã được thanh toán, không tạo phi?u mới v? không dài tồn kho.`);
+      setSuccess(`Phiếu ${result.import_code || editingImportKey} đã được thanh toán, không tạo phiếu mới v? không dài tồn kho.`);
     } catch (err) {
       console.error('Error paying import order:', err);
       setError(err.message || 'Không th? thanh toán phiếu nhập. Vui lòng thử lại sau.');
@@ -2545,7 +2545,7 @@ const Nhaphang = ({ store }) => {
             disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError || hasImportCodeError}
             className="sapo-btn"
           >
-            {isEditingOrder ? 'Cập nhật phi?u' : 'Tạo & chua nh?p'}
+            {isEditingOrder ? 'Cập nhật phiếu' : 'Tạo & chua nh?p'}
           </button>
           <button
             onClick={handleCreateAndReceive}
@@ -2691,7 +2691,7 @@ const Nhaphang = ({ store }) => {
               </div>
               <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-1">
                 <label className="block min-w-0">
-                  <span className="mb-1 block text-xs font-medium text-gray-500">M? phi?u</span>
+                  <span className="mb-1 block text-xs font-medium text-gray-500">M? phiếu</span>
                   <input
                     className={`input-field w-full ${isEditingOrder ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} ${hasImportCodeError ? 'border-red-400 bg-red-50 text-red-700 focus:border-red-500 focus:ring-red-500' : ''}`}
                     value={importCodeInput}
@@ -2702,7 +2702,7 @@ const Nhaphang = ({ store }) => {
                     disabled={saving}
                   />
                   {!importCodeInputError && !isEditingOrder && (
-                    <p className="mt-1 text-xs text-gray-400">Nhập m? phi?u nh? cung cấp n?u c?; d? tr?ng hệ thống t? sinh m? PN.</p>
+                    <p className="mt-1 text-xs text-gray-400">Nhập m? phiếu nh? cung cấp n?u c?; d? tr?ng hệ thống t? sinh m? PN.</p>
                   )}
                   {importCodeInputError && <p className="mt-1 text-xs font-medium text-red-600">{importCodeInputError}</p>}
                 </label>
@@ -2730,7 +2730,7 @@ const Nhaphang = ({ store }) => {
                   <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" disabled={saving} />
                   T?ch d?ng
                 </label>
-                <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-gray-300 text-gray-500 hover:bg-gray-50" title="C?u h?nh b?ng">
+                <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-gray-300 text-gray-500 hover:bg-gray-50" title="C?u h?nh bằng">
                   <Settings className="h-4 w-4" />
                 </button>
               </div>
@@ -2782,7 +2782,7 @@ const Nhaphang = ({ store }) => {
                               const isVariant = isImportVariantProduct(product, product.parent || null);
                               const name = isVariant ? getProductDisplayName(product, product.parent || null) : (product.name || product.tenSP || '');
                               const sku = product.sku || product.maSP || '';
-                              const unit = product.unit || product.donVi || 'c?i';
+                              const unit = product.unit || product.donVi || 'cái';
                               const categoryName = product.default_category?.name || product.category || '';
                               const parentName = !isVariant ? (product.parent_name || product.parent?.name || '') : '';
                               const availableQuantity = getProductAvailableQuantity(product);
@@ -2802,7 +2802,7 @@ const Nhaphang = ({ store }) => {
                                           editingProductIndex !== null ? handleSelectProduct(product) : handleAddImportPickerSelection(product);
                                         }}
                                         className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700"
-                                        title="Thêm sản phẩm v?o danh sách t?m"
+                                        title="Thêm sản phẩm vào danh sách t?m"
                                       >
                                         <Plus className="h-3.5 w-3.5" />
                                       </button>
@@ -2853,7 +2853,7 @@ const Nhaphang = ({ store }) => {
                 </select>
               </div>
               {!selectedSupplier && (
-                <p className="mt-2 text-xs text-amber-600">Chọn nh? cung cấp tru?c d? thêm sản phẩm v?o phiếu nhập.</p>
+                <p className="mt-2 text-xs text-amber-600">Chọn nh? cung cấp tru?c d? thêm sản phẩm vào phiếu nhập.</p>
               )}
             </div>
             <div className="w-full max-w-full overflow-x-auto">
@@ -2891,7 +2891,7 @@ const Nhaphang = ({ store }) => {
                             <button type="button" onClick={() => handleEditProductRow(index)} disabled={saving} className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-blue-300">??i sản phẩm</button>
                           </div>
                         </td>
-                        <td className="px-2 py-3 align-top text-sm text-gray-600">{product.donVi || product.unit || 'c?i'}</td>
+                        <td className="px-2 py-3 align-top text-sm text-gray-600">{product.donVi || product.unit || 'cái'}</td>
                         <td className="px-2 py-3 align-top">
                           <input type="number" min="0.0001" step="1" value={product.soLuongNhap ?? ''} onChange={(e) => handleUpdateProduct(index, 'soLuongNhap', e.target.value)} className={`min-h-10 w-full rounded-sm border px-2 py-2 text-right text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 ${rowQuantityError ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300'}`} disabled={saving} />
                           {rowQuantityError && <div className="mt-1 text-[11px] font-medium text-red-600">{rowQuantityError}</div>}
@@ -2957,7 +2957,7 @@ const Nhaphang = ({ store }) => {
                   <div className="min-w-0">
                     <h2 className="flex items-center gap-2 text-base font-semibold text-blue-900">
                       <Package className="h-4 w-4 shrink-0" />
-                      {editingProductIndex !== null ? `Cập nhật d?ng #${editingProductIndex + 1}` : 'Thêm sản phẩm v?o phi?u'}
+                      {editingProductIndex !== null ? `Cập nhật d?ng #${editingProductIndex + 1}` : 'Thêm sản phẩm vào phiếu'}
                     </h2>
                     <p className="mt-0.5 truncate text-sm text-blue-700" title={selectedProduct.tenSP}>{selectedProduct.tenSP} ? M?: {selectedProduct.maSP || 'N/A'}</p>
                   </div>
@@ -3079,7 +3079,7 @@ const Nhaphang = ({ store }) => {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button onClick={() => handleAddProduct({ keepSearching: false })} disabled={saving || Boolean(selectedProductQuantityError)} className="flex w-full items-center justify-center gap-2 rounded-sm bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-400">
                     <Plus className="h-4 w-4" />
-                    {editingProductIndex !== null ? 'Cập nhật d?ng sản phẩm' : 'Thêm v?o danh sách'}
+                    {editingProductIndex !== null ? 'Cập nhật d?ng sản phẩm' : 'Thêm vào danh sách'}
                   </button>
                   <button onClick={() => handleAddProduct({ keepSearching: true })} disabled={saving || Boolean(selectedProductQuantityError)} className="flex w-full items-center justify-center gap-2 rounded-sm bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:bg-emerald-400" title="Thêm sản phẩm v? gi? ? tìm kiếm đã nhập ti?p">
                     <Search className="h-4 w-4" />
@@ -3377,7 +3377,7 @@ const Nhaphang = ({ store }) => {
                                 const isVariant = isImportVariantProduct(product, product.parent || null);
                                 const name = isVariant ? getProductDisplayName(product, product.parent || null) : (product.name || product.tenSP || '');
                                 const sku = product.sku || product.maSP || '';
-                                const unit = product.unit || product.donVi || 'c?i';
+                                const unit = product.unit || product.donVi || 'cái';
                                 const categoryName = product.default_category?.name || product.category || '';
                                 const parentName = !isVariant ? (product.parent_name || product.parent?.name || '') : '';
                                 const availableQuantity = getProductAvailableQuantity(product);
@@ -3397,7 +3397,7 @@ const Nhaphang = ({ store }) => {
                                             editingProductIndex !== null ? handleSelectProduct(product) : handleAddImportPickerSelection(product);
                                           }}
                                           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700"
-                                          title="Thêm sản phẩm v?o danh sách t?m"
+                                          title="Thêm sản phẩm vào danh sách t?m"
                                         >
                                           <Plus className="w-3.5 h-3.5" />
                                         </button>
@@ -3427,10 +3427,10 @@ const Nhaphang = ({ store }) => {
                     )}
                   </div>
                   {!selectedSupplier && (
-                    <p className="mt-2 text-xs text-amber-600">Chọn nh? cung cấp tru?c d? thêm nhi?u sản phẩm v?o phiếu nhập.</p>
+                    <p className="mt-2 text-xs text-amber-600">Chọn nh? cung cấp tru?c d? thêm nhi?u sản phẩm vào phiếu nhập.</p>
                   )}
                   {selectedSupplier && (
-                    <p className="mt-2 text-xs text-gray-500">?? chọn nh? cung cấp: {selectedSupplier.tenNCC}. B?m n?t + c?nh t?n đã chọn nhi?u sản phẩm, sau d? b?m Chọn xong d? thêm v?o phiếu nhập.</p>
+                    <p className="mt-2 text-xs text-gray-500">?? chọn nh? cung cấp: {selectedSupplier.tenNCC}. B?m n?t + c?nh t?n đã chọn nhi?u sản phẩm, sau d? b?m Chọn xong d? thêm vào phiếu nhập.</p>
                   )}
                 </div>
               </div>
@@ -3443,7 +3443,7 @@ const Nhaphang = ({ store }) => {
                   <div className="min-w-0">
                     <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">
                       <Package className="w-4 h-4 shrink-0" />
-                      {editingProductIndex !== null ? `Cập nhật d?ng #${editingProductIndex + 1}` : 'Thêm sản phẩm v?o phi?u'}
+                      {editingProductIndex !== null ? `Cập nhật d?ng #${editingProductIndex + 1}` : 'Thêm sản phẩm vào phiếu'}
                     </h2>
                     <p className="text-sm text-blue-700 mt-0.5 truncate" title={selectedProduct.tenSP}>{selectedProduct.tenSP} ? M?: {selectedProduct.maSP || 'N/A'}</p>
                   </div>
@@ -3570,7 +3570,7 @@ const Nhaphang = ({ store }) => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button onClick={() => handleAddProduct({ keepSearching: false })} disabled={saving || Boolean(selectedProductQuantityError)} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm">
                       <Plus className="w-4 h-4" />
-                      {editingProductIndex !== null ? 'Cập nhật d?ng sản phẩm' : 'Thêm v?o danh sách'}
+                      {editingProductIndex !== null ? 'Cập nhật d?ng sản phẩm' : 'Thêm vào danh sách'}
                     </button>
                     <button onClick={() => handleAddProduct({ keepSearching: true })} disabled={saving || Boolean(selectedProductQuantityError)} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm" title="Thêm sản phẩm v? gi? nguy?n ? tìm kiếm đã nhập ti?p">
                       <Search className="w-4 h-4" />
@@ -3617,7 +3617,7 @@ const Nhaphang = ({ store }) => {
                               </div>
                             </td>
                             <td className="px-4 py-3 text-sm font-medium text-gray-900 align-top"><div className="min-w-0"><div className="truncate" title={product.tenSP}>{product.tenSP}</div><div className="mt-1 text-xs text-gray-500 truncate" title={product.maSP || ''}>M?: {product.maSP || 'N/A'}</div><button type="button" onClick={() => handleEditProductRow(index)} disabled={saving} className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-blue-300">??i sản phẩm</button></div></td>
-                            <td className="px-4 py-3 text-sm text-gray-600 align-top">{product.donVi || product.unit || 'c?i'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600 align-top">{product.donVi || product.unit || 'cái'}</td>
                             <td className="px-4 py-3 align-top"><input type="number" min="0.0001" step="1" value={product.soLuongNhap ?? ''} onChange={(e) => handleUpdateProduct(index, 'soLuongNhap', e.target.value)} className={`min-h-10 w-full rounded-md border px-2 py-2 text-right text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${rowQuantityError ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-300'}`} disabled={saving} />{rowQuantityError && <div className="mt-1 text-[11px] font-medium text-red-600">{rowQuantityError}</div>}</td>
                             <td className="px-4 py-3 align-top"><input type="number" min="0" step="1000" value={lineAmounts.price} onChange={(e) => handleUpdateProduct(index, 'giaNhap', e.target.value)} className="min-h-10 w-full rounded-md border border-gray-300 px-2 py-2 text-right text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" disabled={saving} /></td>
                             <td className="px-4 py-3 align-top"><div className="flex items-center gap-1"><input type="number" min="0" max="100" step="0.1" value={lineAmounts.discountPercent} onChange={(e) => handleUpdateProduct(index, 'chietKhau', e.target.value)} className="min-h-10 w-full rounded-md border border-gray-300 px-2 py-2 text-right text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" disabled={saving} /><span className="text-xs text-gray-500">%</span></div></td>
@@ -3751,9 +3751,9 @@ const Nhaphang = ({ store }) => {
                   </button>
                   <p className={`mt-2 text-xs ${hasUnsavedPaymentAffectingChanges ? 'text-orange-600' : 'text-gray-500'}`}>
                     {hasUnsavedPaymentAffectingChanges
-                      ? 'Phiếu d? dài sản phẩm ho?c t?ng ti?n; h?y cập nhật phi?u trước khi thanh toán lỗi d? c?ng n? ch?nh x?c.'
+                      ? 'Phiếu d? dài sản phẩm ho?c tổng ti?n; h?y cập nhật phiếu trước khi thanh toán lỗi d? c?ng n? ch?nh x?c.'
                       : editingImportKey
-                      ? 'N?t n?y ch? cập nhật phi?u hiện tại, không tạo phi?u mới v? không thay đổi tồn kho.'
+                      ? 'N?t n?y ch? cập nhật phiếu hiện tại, không tạo phiếu mới v? không thay đổi tồn kho.'
                       : 'C?n tạo ho?c chọn phiếu nhập trước khi thanh toán.'}
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
@@ -3798,7 +3798,7 @@ const Nhaphang = ({ store }) => {
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 px-4 rounded-md flex items-center justify-center gap-2 text-sm shadow-sm"
                   >
                     <Save className="w-4 h-4" />
-                    {isEditingOrder ? 'Cập nhật phi?u' : 'Tạo & Luu t?m'}
+                    {isEditingOrder ? 'Cập nhật phiếu' : 'Tạo & Luu t?m'}
                   </button>
                 </div>
 
@@ -3823,16 +3823,16 @@ const Nhaphang = ({ store }) => {
                 <div>
                   <h3 className="font-bold text-gray-800 mb-2">Quy tr?nh ch?nh</h3>
                   <ol className="list-decimal pl-5 space-y-1">
-                    <li>Chọn nh? cung cấp v? nh?p m? phi?u n?u c?n.</li>
+                    <li>Chọn nh? cung cấp v? nh?p m? phiếu n?u c?n.</li>
                     <li>Thêm sản phẩm, số lượng nh?p, giá nhập, chi?t kh?u v? thu?.</li>
-                    <li>Kiểm tra t?ng ti?n, trạng thái thanh toán v? thông tin phi?u.</li>
-                    <li>Dùng Tạo & Nhập hàng d? cập nhật tồn kho ho?c Tạo & Luu t?m d? luu phi?u.</li>
+                    <li>Kiểm tra tổng ti?n, trạng thái thanh toán v? thông tin phiếu.</li>
+                    <li>Dùng Tạo & Nhập hàng d? cập nhật tồn kho ho?c Tạo & Luu t?m d? luu phiếu.</li>
                   </ol>
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
                   <ul className="list-disc pl-5 space-y-1">
-                    <li>Không th? luu phi?u n?u chua chọn nh? cung cấp ho?c chua c? sản phẩm.</li>
+                    <li>Không th? luu phiếu n?u chua chọn nh? cung cấp ho?c chua c? sản phẩm.</li>
                     <li>Phiếu đã nhập kho khi xóa sẽ được backend rollback tồn kho d?ng một l?n.</li>
                   </ul>
                 </div>
@@ -3976,7 +3976,7 @@ const Nhaphang = ({ store }) => {
             {orderHistory.length > 0 && (
               <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
                 <p className="text-xs text-gray-500">
-                  Luu ?: Khi h?y phi?u đã nhập kho, backend s? tự động rollback tồn kho d?ng một l?n; phi?u luu t?m chua nh?p kho s? không dài tồn kho.
+                  Luu ?: Khi h?y phiếu đã nhập kho, backend s? tự động rollback tồn kho d?ng một l?n; phiếu luu t?m chua nh?p kho s? không dài tồn kho.
                 </p>
               </div>
             )}

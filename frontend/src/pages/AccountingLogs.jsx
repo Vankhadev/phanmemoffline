@@ -208,7 +208,7 @@ export default function AccountingLogs() {
           <div className="flex items-end gap-2"><button type="submit" disabled={loading} className="btn-primary min-h-11 flex-1 xl:flex-none"><Filter size={16} /> Lực</button><button type="button" onClick={resetFilters} disabled={loading} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50" title="??t lỗi"><RefreshCw size={16} /></button></div>
         </form>
         <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
-          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 font-semibold text-indigo-700"><CalendarDays size={13} /> {filters.from || 'T? d?u'} - {filters.to || 'Hiện tại'}</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 font-semibold text-indigo-700"><CalendarDays size={13} /> {filters.from || 'T? đầu'} - {filters.to || 'Hiện tại'}</span>
           <span>{data.pagination.total.toLocaleString('vi-VN')} nhật ký</span>
           {data.generated_at && <span>Truy v?n l?c: {formatDateTime(data.generated_at)}</span>}
         </div>

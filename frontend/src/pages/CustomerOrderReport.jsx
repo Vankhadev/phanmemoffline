@@ -561,7 +561,7 @@ export default function CustomerOrderReport() {
                 </div>
               </div>
               <p className="text-sm text-blue-100/80 max-w-3xl">
-                Chọn khách hàng v? kho?ng ngày d? xem đầy đủ hóa đơn b?n h?ng trong k?. Kho?ng ngày được t?nh t? 00:00 ngày bắt đầu d?n 23:59:59 ngày kết thúc theo ngày local.
+                Chọn khách hàng v? kho?ng ngày d? xem đầy đủ hóa đơn b?n h?ng trong k?. Kho?ng ngày được t?nh t? 00:00 ngày bắt đầu đến 23:59:59 ngày kết thúc theo ngày local.
               </p>
             </div>
 
@@ -715,7 +715,7 @@ export default function CustomerOrderReport() {
             <span className="mt-0.5 block text-xs text-gray-500">{[selectedCustomer.phone, selectedCustomer.email].filter(Boolean).join(' ? ') || 'Chua c? S?T/Email'}</span>
           </div>
           <div>
-            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">M? / Nh?m kh?ch</span>
+            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">M? / Nh?m khách</span>
             <span className="mt-1 block font-bold text-gray-900">{selectedCustomer.customer_code || '?'}</span>
             <span className="mt-0.5 block text-xs text-gray-500">{selectedCustomer.customer_type_name || 'Khách lẻ'}</span>
           </div>
@@ -781,7 +781,7 @@ export default function CustomerOrderReport() {
         <div className="flex flex-col gap-2 border-b border-gray-100 px-5 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="font-bold text-gray-800">Danh sách hóa đơn mua h?ng</h2>
-            <p className="text-xs text-gray-500">Hiện th? chi tiết sản phẩm, don gi?, số lượng v? t?ng ti?n của t?ng hóa đơn.</p>
+            <p className="text-xs text-gray-500">Hiện th? chi tiết sản phẩm, don gi?, số lượng v? tổng ti?n của tổng hóa đơn.</p>
           </div>
           {report && (
             <div className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
@@ -871,7 +871,7 @@ export default function CustomerOrderReport() {
               ))}
               {invoices.length > 0 && (
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                  <td className="px-4 py-3" colSpan={3}>Tổng c?ng tất cả c?c don trong k?</td>
+                  <td className="px-4 py-3" colSpan={3}>Tổng c?ng tất cả các don trong k?</td>
                   <td className="px-4 py-3 text-right text-blue-700 text-base font-extrabold">{formatVND(summary.total_amount)}</td>
                   <td className="px-4 py-3" colSpan={2}></td>
                 </tr>
@@ -883,7 +883,7 @@ export default function CustomerOrderReport() {
         {loadingReport ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
             <Loader size={32} className="animate-spin text-blue-400" />
-            <div className="font-semibold text-gray-600">đang th?ng k? dữ liệu đơn hàng...</div>
+            <div className="font-semibold text-gray-600">đang tháng k? dữ liệu đơn hàng...</div>
           </div>
         ) : report && invoices.length === 0 ? (
           <div className="py-16 text-center">
@@ -916,8 +916,8 @@ export default function CustomerOrderReport() {
             'Bu?c 1: Chọn khách hàng v? kho?ng thời gian c?n xem lịch sử mua h?ng.',
             'Bu?c 2: Nhân tạo ho?c l?m mới báo cáo đã tải d?ng dữ liệu đơn hàng theo bộ lọc.',
             'Bu?c 3: Xem ph?n tổng hợp d? n?m s? don, doanh thu, sản phẩm v? th?i di?m mua g?n nh?t.',
-            'Bu?c 4: Dùng n?t Xem d? m? chi tiết t?ng don ngay trong popup m? không r?i m?n h?nh.',
-            'Bu?c 5: C? th? in ho?c t?i PDF t?ng don tr?c ti?p t? b?ng kết quả khi c?n dài chi?u.',
+            'Bu?c 4: Dùng n?t Xem d? m? chi tiết tổng don ngay trong popup m? không r?i m?n h?nh.',
+            'Bu?c 5: C? th? in ho?c t?i PDF tổng don tr?c ti?p t? bằng kết quả khi c?n dài chi?u.',
           ]}
         />
       )}

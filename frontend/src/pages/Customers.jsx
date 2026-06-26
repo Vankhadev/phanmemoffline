@@ -183,7 +183,7 @@ export default function Customers() {
     }
   };
   const handleTypeDelete = async (id) => {
-    if (!confirm('Xóa loại kh?ch n?y?')) return;
+    if (!confirm('Xóa loại khách n?y?')) return;
     try {
       await customerTypesApi.remove(id);
       fetchCustomerTypes();
@@ -418,7 +418,7 @@ export default function Customers() {
   const exportCustomersReport = async () => {
     const [year, month] = reportMonth.split('-');
 
-    // L?y hóa đơn th?ng d?
+    // L?y hóa đơn tháng d?
     const res = await fetch(`${API}/invoices`);
     const invoices = await res.json();
 
@@ -450,7 +450,7 @@ export default function Customers() {
       stt++;
     });
 
-    csv += `\nT?NG C?NG, ${rows.length} kh?ch, , ${rows.reduce((s, c) => s + c.total_orders, 0)}, ${Math.round(totalRevenue)}\n`;
+    csv += `\nT?NG C?NG, ${rows.length} khách, , ${rows.reduce((s, c) => s + c.total_orders, 0)}, ${Math.round(totalRevenue)}\n`;
     csv += `Ngày xu?t: ${new Date().toLocaleString('vi-VN')}\n`;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -499,11 +499,11 @@ export default function Customers() {
       {/* Xuất Excel */}
       <div className="card mb-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 p-4">
         <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
-          <FileDown className="text-blue-600" size={16} /> Xuất báo cáo khách hàng theo th?ng
+          <FileDown className="text-blue-600" size={16} /> Xuất báo cáo khách hàng theo tháng
         </h3>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <div className="sm:w-auto">
-            <label className="text-xs text-gray-500 block mb-1">Chọn th?ng</label>
+            <label className="text-xs text-gray-500 block mb-1">Chọn tháng</label>
             <input type="month" className="input-field w-full" value={reportMonth}
               onChange={e => setReportMonth(e.target.value)} />
           </div>
@@ -762,7 +762,7 @@ export default function Customers() {
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-4 sm:p-6 max-h-[90dvh] overflow-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-purple-800">
-                {editingType ? 'Sửa loại kh?ch' : 'Thêm loại khách hàng'}
+                {editingType ? 'Sửa loại khách' : 'Thêm loại khách hàng'}
               </h2>
               <button onClick={() => setShowTypeForm(false)} className="text-gray-400 hover:text-gray-600 text-xl">?</button>
             </div>
@@ -824,7 +824,7 @@ export default function Customers() {
                 <h3 className="font-bold text-gray-800 mb-2">? Thêm khách hàng mới</h3>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Nhân n?t <strong>"Thêm khách hàng"</strong> ? g?c tr?n ph?i</li>
-                  <li>?i?n c?c thông tin b?t bu?c: <strong>Tồn</strong></li>
+                  <li>?i?n các thông tin bắt bu?c: <strong>Tồn</strong></li>
                   <li>Các thông tin t?y chọn: S?T, Email, MST</li>
                   <li>Chọn <strong>Loại khách hàng</strong> (n?u c?)</li>
                   <li>Nhân "Luu" d? ho?n tốt</li>
@@ -846,15 +846,15 @@ export default function Customers() {
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Nhân n?t <strong>"Quản lý loại KH"</strong> d? m? của s? quản lý</li>
                   <li><strong>Thêm loại:</strong> Nhập t?n v? chọn m?u s?c</li>
-                  <li><strong>Sửa loại:</strong> Nhân v?o t?n loại d? dài t?n/m?u</li>
-                  <li><strong>Xóa loại:</strong> Nhân icon ??? (ch? xóa được n?u không có kh?ch thu?c loại n?y)</li>
+                  <li><strong>Sửa loại:</strong> Nhân vào t?n loại d? dài t?n/m?u</li>
+                  <li><strong>Xóa loại:</strong> Nhân icon ??? (ch? xóa được n?u không có khách thu?c loại n?y)</li>
                   <li>M?u loại s? hiển thị khi chọn khách hàng trong đơn hàng</li>
                 </ul>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Tìm kiếm</h3>
-                <p>Nhập t? kh?a v?o ? tìm kiếm d? l?c theo:</p>
+                <p>Nhập t? kh?a vào ? tìm kiếm d? l?c theo:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>Tồn khách hàng</li>
                   <li>S? điện thoại</li>
@@ -863,14 +863,14 @@ export default function Customers() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Xuất báo cáo khách hàng</h3>
-                <p>Chọn th?ng v? nhân "Xuất Excel" đã tải báo cáo khách hàng v?i th?ng k? s? đơn hàng v? t?ng chi ti?u trong th?ng.</p>
+                <p>Chọn tháng v? nhân "Xuất Excel" đã tải báo cáo khách hàng v?i tháng k? s? đơn hàng v? tổng chi ti?u trong tháng.</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                 <h3 className="font-bold text-blue-800 mb-2">?? M?o & Luu ?</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
                   <li><strong>Loại khách hàng:</strong> Dùng d? ph?n nh?m (VIP, S?, L?...), mới loại c? m?u ri?ng</li>
-                  <li><strong>MST:</strong> Nhập đầy đủ cho kh?ch doanh nghi?p d? xu?t hóa đơn</li>
+                  <li><strong>MST:</strong> Nhập đầy đủ cho khách doanh nghi?p d? xu?t hóa đơn</li>
                   <li>Khách hàng s? hiển thị trong trang POS khi tạo đơn hàng</li>
                   <li>C? th? thêm khách hàng tr?c ti?p trong trang POS n?u chua c?</li>
                 </ul>

@@ -199,7 +199,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     }
 
     if (!/^0\d{9,10}$/.test(normalizePhone(form.phone))) {
-      setError('S? điện thoại ph?i bắt đầu b?ng 0 v? g?m 10-11 ch? s?.');
+      setError('S? điện thoại ph?i bắt đầu bằng 0 v? g?m 10-11 ch? s?.');
       return false;
     }
 
@@ -249,7 +249,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     try {
       const data = await loginWithCredentials(form.email, form.password);
       setSuccess(data.localOnly
-        ? 'đang nh?p c?c b? tr?n điện thoại thành công.'
+        ? 'đang nh?p các b? tr?n điện thoại thành công.'
         : 'đang nh?p thành công. đang kh?i ph?c phi?n t? server...');
       await completeLogin(data);
     } catch (err) {
@@ -284,10 +284,10 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     setLoading(true);
     try {
       const data = await authApi.bootstrapAdmin(payload);
-      setSuccess(data.message ? `${data.message}. đang đăng nhập...` : 'Tạo tài khoản qu?n tr? vi?n d?u ti?n thành công. đang đăng nhập...');
+      setSuccess(data.message ? `${data.message}. đang đăng nhập...` : 'Tạo tài khoản qu?n tr? vi?n đầu ti?n thành công. đang đăng nhập...');
       await completeLogin(data);
     } catch (err) {
-      setError(getApiErrorMessage(err?.data, err.message || 'Không th? kết nối server d? tạo qu?n tr? vi?n d?u ti?n.'));
+      setError(getApiErrorMessage(err?.data, err.message || 'Không th? kết nối server d? tạo qu?n tr? vi?n đầu ti?n.'));
     } finally {
       setLoading(false);
     }
@@ -343,7 +343,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
           </div>
           <h1 className="text-2xl font-bold text-gray-800">Bản Hàng Pos</h1>
           <p className="text-blue-600 font-semibold mt-1">
-            {checkingSetup ? 'đang kiểm tra hệ thống...' : showSetupForm ? 'Thi?t l?p l?n d?u' : 'đang nh?p hệ thống'}
+            {checkingSetup ? 'đang kiểm tra hệ thống...' : showSetupForm ? 'Thi?t l?p l?n đầu' : 'đang nh?p hệ thống'}
           </p>
           {isNativeAppRuntime() && (
             <div className="mt-2 text-xs font-bold text-emerald-700">{MOBILE_APP_DISPLAY_NAME} {MOBILE_APP_VERSION}</div>
@@ -417,7 +417,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   <AlertTriangle size={18} className="shrink-0 mt-0.5" />
                   <div>
                     <div className="font-semibold">Hệ thống chua c? qu?n tr? vi?n.</div>
-                    <div>Vui lòng tạo tài khoản admin d?u ti?n. Sau khi tạo thành công, phi?n sẽ được kh?i ph?c v? d?ng b? t? server.</div>
+                    <div>Vui lòng tạo tài khoản admin đầu ti?n. Sau khi tạo thành công, phi?n sẽ được kh?i ph?c v? d?ng b? t? server.</div>
                   </div>
                 </div>
 
@@ -524,12 +524,12 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   {loading ? (
                     <><RefreshCw size={20} className="animate-spin" /> đang tạo qu?n tr? vi?n...</>
                   ) : (
-                    <><UserPlus size={20} /> Tạo qu?n tr? vi?n d?u ti?n</>
+                    <><UserPlus size={20} /> Tạo qu?n tr? vi?n đầu ti?n</>
                   )}
                 </button>
 
                 <Link to="/dang-ky" className="w-full border border-amber-200 text-amber-700 hover:bg-amber-50 py-2.5 rounded-xl font-semibold transition flex items-center justify-center gap-2 text-sm">
-                  M? trang dang k? l?n d?u ri?ng
+                  M? trang dang k? l?n đầu ri?ng
                 </Link>
                 </form>
               )}
@@ -692,7 +692,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
             <div className="mt-6 bg-blue-50 rounded-xl p-4 text-xs text-blue-700">
               {showSetupForm ? (
-                <div>L?n d?u sử dụng: tài khoản d?u ti?n sẽ được server tự động c?p quy?n ADMIN.</div>
+                <div>L?n đầu sử dụng: tài khoản đầu ti?n sẽ được server tự động c?p quy?n ADMIN.</div>
               ) : needsSetup ? (
                 <div>Server hiện tại dang tr?ng dữ liệu. ?? đăng nhập tài khoản d? c?, h?y nh?p d?ng d?a ch? server dang luu tài khoản r?i b?m Kiểm tra ho?c đang nh?p.</div>
               ) : (

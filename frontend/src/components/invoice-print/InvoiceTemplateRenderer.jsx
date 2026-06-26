@@ -460,7 +460,7 @@ function V2ItemsTable({ document, data, segment }) {
   const tableStyleElement = getTableStyleElement(document) || {};
   const tableStyle = tableStyleElement.style || {};
   const showSku = tableStyle.showSku === true;
-  const columns = (Array.isArray(table.columns) && table.columns.length ? table.columns : []).filter(column => showSku || column.key !== 'sku');
+  const columns = (Array.isArray(table.columns) && table.columns.length ? table.columns : []).filter(column => column.hidden !== true).filter(column => showSku || column.key !== 'sku');
   const allItems = data.items || [];
   const startIndex = Number(segment?.startIndex) || 0;
   const endIndex = Number.isFinite(Number(segment?.endIndex)) ? Number(segment.endIndex) : allItems.length;

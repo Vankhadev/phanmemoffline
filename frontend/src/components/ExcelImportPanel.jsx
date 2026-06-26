@@ -190,7 +190,7 @@ const TEMPLATE_ROWS = {
       'Phương thức thanh toán': 'debt',
       'Trạng thái đơn': 'pending',
       'Thời gian tạo': '2026-05-10 10:00:00',
-      'Ghi ch?': 'M? kh?ch ph?i t?n t?i v? kh?p nh?m kh?ch',
+      'Ghi ch?': 'M? khách ph?i t?n t?i v? kh?p nh?m khách',
     },
   ],
 };
@@ -210,7 +210,7 @@ function buildGuideRows(dataType, negativeStockLimitLabel = '0') {
     invoices: [
       ['Cột', 'Bắt buộc', 'Ghi chú'],
       ['M? đơn hàng', 'C?', 'Các d?ng c?ng m? don sẽ được gom th?nh một don nhi?u sản phẩm.'],
-      ['M? khách hàng / Tồn / SDT / Email / Nh?m kh?ch', 'N?n c? m? khách hàng', 'Khách ph?i t?n t?i; n?u c? nh?m kh?ch th? ph?i kh?p loại kh?ch d? tr?nh import nh?m kh?ch l?/kh?ch s?.'],
+      ['M? khách hàng / Tồn / SDT / Email / Nh?m khách', 'N?n c? m? khách hàng', 'Khách ph?i t?n t?i; n?u c? nh?m khách th? ph?i kh?p loại khách d? tr?nh import nh?m khách l?/khách s?.'],
       ['SKU hoặc Tên sản phẩm', 'Có', 'Sản phẩm/biến thể phải tồn tại trong hệ thống.'],
       ['Số lượng', 'Có', `Số lượng bán phải lớn hơn 0; có thể bán khi tồn hiện tại 0/âm nếu tồn dự kiến không nhỏ hơn ${negativeStockLimitLabel}. Backend sẽ chặn nếu vượt ngưỡng.`],
       ['Đơn giá / Giảm giá / Thành tiền', 'Không', 'Nếu tổng tiền file khác tổng chi tiết, hệ thống ưu tiên tính lại từ chi tiết.'],

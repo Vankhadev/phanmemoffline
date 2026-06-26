@@ -257,7 +257,7 @@ export default function InvoicePrint() {
         payload = await invoicesApi.printData(idOrCode, {});
         setToast({
           tone: 'warning',
-          message: `${getErrorMessage(printDataErr, 'Template được chọn không kh? d?ng.')} ?? t?i hóa đơn b?ng m?u mặc định d? tiếp tục preview/in.`,
+          message: `${getErrorMessage(printDataErr, 'Template được chọn không kh? d?ng.')} ?? t?i hóa đơn bằng m?u mặc định d? tiếp tục preview/in.`,
         });
       }
 

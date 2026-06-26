@@ -417,7 +417,7 @@ export default function NhaCungCap() {
     }
 
     if (paymentLoaded) {
-      return { payment_status: 'none', label: 'Chua c? phi?u', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: 0 };
+      return { payment_status: 'none', label: 'Chua c? phiếu', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: 0 };
     }
 
     return { payment_status: 'unknown', label: 'Chua c? dữ liệu', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
@@ -663,14 +663,14 @@ export default function NhaCungCap() {
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Tổng quan</h3>
-                <p>Trang Nh? cung cấp gi?p b?n quản lý thông tin c?c dài t?c cung cấp h?ng h?a. Mới nh? cung cấp c? th? được li?n k?t v?i sản phẩm d? luu thông tin giá nhập v? loại hóa đơn.</p>
+                <p>Trang Nh? cung cấp gi?p b?n quản lý thông tin các dài t?c cung cấp h?ng h?a. Mới nh? cung cấp c? th? được li?n k?t v?i sản phẩm d? luu thông tin giá nhập v? loại hóa đơn.</p>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">? Thêm nh? cung cấp mới</h3>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Nhân n?t <strong>"Thêm nh? cung cấp"</strong> ? g?c tr?n ph?i</li>
-                  <li>?i?n c?c thông tin b?t bu?c: <strong>Tồn NCC</strong></li>
+                  <li>?i?n các thông tin bắt bu?c: <strong>Tồn NCC</strong></li>
                   <li>Các thông tin t?y chọn: S?T, MST, Email, ??a ch?</li>
                   <li>Chọn <strong>Loại hóa đơn</strong>: C? H??T ho?c Không H??T</li>
                   <li>Nhân "Luu" d? ho?n tốt</li>
@@ -689,7 +689,7 @@ export default function NhaCungCap() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2"> Tìm kiếm</h3>
-                <p>Nhập t? kh?a v?o ? tìm kiếm d? l?c danh sách theo:</p>
+                <p>Nhập t? kh?a vào ? tìm kiếm d? l?c danh sách theo:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>Tồn nh? cung cấp</li>
                   <li>S? điện thoại</li>
@@ -699,18 +699,18 @@ export default function NhaCungCap() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Nhập Excel</h3>
-                <p>Nhân n?t <strong>"Nhập Excel"</strong>, chọn file .xlsx ho?c .xls, kiểm tra thông báo xác nhận r?i d?ng ? đã nhập t?ng nh? cung cấp v?o hệ thống.</p>
+                <p>Nhân n?t <strong>"Nhập Excel"</strong>, chọn file .xlsx ho?c .xls, kiểm tra thông báo xác nhận r?i d?ng ? đã nhập tổng nh? cung cấp vào hệ thống.</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
-                  <li>C?t b?t bu?c: <strong>Tồn NCC</strong> ho?c <strong>Tồn nh? cung cấp</strong> ho?c <strong>name</strong></li>
+                  <li>C?t bắt bu?c: <strong>Tồn NCC</strong> ho?c <strong>Tồn nh? cung cấp</strong> ho?c <strong>name</strong></li>
                   <li>C?t t?y chọn: <strong>S? điện thoại/S?T/phone</strong>, <strong>M? s? thu?/MST/tax_code</strong>, <strong>Email/email</strong>, <strong>??a ch?/address</strong>, <strong>Loại hóa đơn/invoice_type</strong></li>
-                  <li>Dùng tr?ng ho?c d?ng thi?u t?n nh? cung cấp sẽ được b? qua v? t?nh v?o s? lỗi/b? qua</li>
-                  <li>Loại hóa đơn nhân c?c gi? tr? nhu "C? hóa đơn di?n t?", "C? H??T", "electronic"; gi? tr? kh?c s? mặc định l? không hóa đơn di?n t?</li>
+                  <li>Dùng tr?ng ho?c d?ng thi?u t?n nh? cung cấp sẽ được b? qua v? t?nh vào s? lỗi/b? qua</li>
+                  <li>Loại hóa đơn nhân các gi? tr? nhu "C? hóa đơn di?n t?", "C? H??T", "electronic"; gi? tr? kh?c s? mặc định l? không hóa đơn di?n t?</li>
                 </ul>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Xuất Excel</h3>
-                <p>Nhân n?t <strong>"Xuất Excel"</strong> đã tải danh sách nh? cung cấp dang hiển thị theo bộ lọc tìm kiếm ra file .xlsx. File ch?a c?c c?t: Tồn NCC, S? điện thoại, M? s? thu?, Email, ??a ch?, Loại hóa đơn.</p>
+                <p>Nhân n?t <strong>"Xuất Excel"</strong> đã tải danh sách nh? cung cấp dang hiển thị theo bộ lọc tìm kiếm ra file .xlsx. File ch?a các c?t: Tồn NCC, S? điện thoại, M? s? thu?, Email, ??a ch?, Loại hóa đơn.</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">

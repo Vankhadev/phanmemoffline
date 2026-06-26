@@ -381,12 +381,12 @@ export default function CashBook() {
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Tổng quan</h3>
-                <p>S? qu? gi?p b?n ghi nhân v? theo dài c?c kho?n thu chi của cửa hàng. Dữ liệu được luu tự động v? không một khi tốt m?y.</p>
+                <p>S? qu? gi?p b?n ghi nhân v? theo dài các kho?n thu chi của cửa hàng. Dữ liệu được luu tự động v? không một khi tốt m?y.</p>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Thu nh?p tự động t? đơn hàng</h3>
-                <p className="text-blue-600">Khi b?n xác nhận đơn hàng (trạng thái "?? thanh toán"), hệ thống s? tự động tạo giao dịch thu v?o s? qu? v?i:</p>
+                <p className="text-blue-600">Khi b?n xác nhận đơn hàng (trạng thái "?? thanh toán"), hệ thống s? tự động tạo giao dịch thu vào s? qu? v?i:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>Danh mục: "Doanh thu t? đơn hàng"</li>
                   <li>S? ti?n: Tổng gi? tr? hóa đơn</li>
@@ -434,14 +434,14 @@ export default function CashBook() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Xuất Excel</h3>
-                <p>Nhân n?t "Xuất Excel" đã tải to?n b? danh sách giao dịch ra file .xlsx. File ch?a c?c c?t: Ngày, Gi?, Loại, Danh mục, S? ti?n, Ghi ch?...</p>
+                <p>Nhân n?t "Xuất Excel" đã tải to?n b? danh sách giao dịch ra file .xlsx. File ch?a các c?t: Ngày, Gi?, Loại, Danh mục, S? ti?n, Ghi ch?...</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                 <h3 className="font-bold text-blue-800 mb-2">?? M?o hay</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
-                  <li>Tạo quy d?nh: Nhập chi ph? v?i danh mục r? r?ng (Tiền di?n, Tiền nu?c, Thu? một b?ng...)</li>
-                  <li>Ghi ch? m? hóa đơn v?o "M? tham chi?u" d? d? theo dài</li>
+                  <li>Tạo quy d?nh: Nhập chi ph? v?i danh mục r? r?ng (Tiền di?n, Tiền nu?c, Thu? một bằng...)</li>
+                  <li>Ghi ch? m? hóa đơn vào "M? tham chi?u" d? d? theo dài</li>
                   <li>Kiểm tra s? qu? h?ng tu?n d? dài chi?u</li>
                 </ul>
               </div>

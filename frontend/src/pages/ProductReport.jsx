@@ -133,7 +133,7 @@ function getPeriodRange({ period, selectedDate, selectedMonth, selectedYear, fro
 
   if (period === 'month') {
     const range = monthRange(selectedMonth);
-    if (!range) return { valid: false, message: 'Vui lòng chọn th?ng hợp lệ.' };
+    if (!range) return { valid: false, message: 'Vui lòng chọn tháng hợp lệ.' };
     return { valid: true, ...range };
   }
 
@@ -197,7 +197,7 @@ function safeFilePart(value) {
 
 const PERIOD_OPTIONS = [
   { value: 'day', label: 'Theo ngày' },
-  { value: 'month', label: 'Theo th?ng' },
+  { value: 'month', label: 'Theo tháng' },
   { value: 'year', label: 'Theo nam' },
   { value: 'custom', label: 'Kho?ng ngày t?y ch?nh' },
 ];
@@ -230,13 +230,13 @@ function getPeriodDescription(filters, range) {
 
   if (filters.period === 'month') {
     const [year, month] = String(filters.selectedMonth || '').split('-');
-    if (year && month) return `theo th?ng ${month}/${year}`;
-    return `theo th?ng ${formatDateKey(range.from)} - ${formatDateKey(range.to)}`;
+    if (year && month) return `theo tháng ${month}/${year}`;
+    return `theo tháng ${formatDateKey(range.from)} - ${formatDateKey(range.to)}`;
   }
 
   if (filters.period === 'year') return `theo nam ${filters.selectedYear}`;
 
-  return `theo kho?ng ngày t? ${formatDateKey(range.from)} d?n ${formatDateKey(range.to)}`;
+  return `theo kho?ng ngày t? ${formatDateKey(range.from)} đến ${formatDateKey(range.to)}`;
 }
 
 function getStatusLabel(status) {
@@ -687,7 +687,7 @@ function DateRangeInlinePicker({
             value={to}
             onChange={onToChange}
             disabled={disabled || isApplying}
-            ariaLabel="Chọn d?n ngày của báo cáo sản phẩm"
+            ariaLabel="Chọn đến ngày của báo cáo sản phẩm"
           />
         </div>
       </div>
@@ -966,7 +966,7 @@ export default function ProductReport() {
   }
 
   const rangeLabel = selectedRange.valid
-    ? `T? ${formatDateKey(selectedRange.from)} d?n ${formatDateKey(selectedRange.to)}`
+    ? `T? ${formatDateKey(selectedRange.from)} đến ${formatDateKey(selectedRange.to)}`
     : selectedRange.message;
   const rangePickerFrom = period === 'custom' ? from : (selectedRange.valid ? selectedRange.from : from);
   const rangePickerTo = period === 'custom' ? to : (selectedRange.valid ? selectedRange.to : to);
@@ -1004,11 +1004,11 @@ export default function ProductReport() {
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-[0.25em] text-blue-200/80">Product Sales Report</div>
-                  <h1 className="text-2xl font-bold">Báo cáo th?ng k? sản phẩm</h1>
+                  <h1 className="text-2xl font-bold">Báo cáo tháng k? sản phẩm</h1>
                 </div>
               </div>
               <p className="text-sm text-blue-100/80 max-w-3xl">
-                Tháng k? s? đơn hàng, số lượng sản phẩm d? b?n v? doanh thu theo ngày/th?ng/nam. Mặc định ch? t?nh don ho?n th?nh v? loại tr? don h?y.
+                Tháng k? s? đơn hàng, số lượng sản phẩm d? b?n v? doanh thu theo ngày/tháng/nam. Mặc định ch? t?nh don ho?n th?nh v? loại tr? don h?y.
               </p>
             </div>
 
@@ -1397,14 +1397,14 @@ export default function ProductReport() {
                   <label className="mb-1 block text-sm font-semibold text-gray-700">Kho?ng dữ liệu</label>
                   <div className={`flex min-h-[44px] items-center rounded-xl border px-3 py-2 text-sm font-medium ${createRange.valid ? 'border-blue-100 bg-blue-50 text-blue-700' : 'border-red-200 bg-red-50 text-red-600'}`}>
                     {createRange.valid
-                      ? `T? ${formatDateKey(createRange.from)} d?n ${formatDateKey(createRange.to)}`
+                      ? `T? ${formatDateKey(createRange.from)} đến ${formatDateKey(createRange.to)}`
                       : createRange.message}
                   </div>
                 </div>
               </div>
 
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                Báo cáo s? g?i API hiện c?, lu?n loại tr? don b? h?y v? cập nhật ngay b?ng c?ng 3 ch? s?: s? đơn hàng, t?ng sản phẩm d? b?n, t?ng doanh thu.
+                Báo cáo s? g?i API hiện c?, lu?n loại tr? don b? h?y v? cập nhật ngay bằng c?ng 3 ch? s?: s? đơn hàng, tổng sản phẩm d? b?n, tổng doanh thu.
               </div>
 
               {createError && (
@@ -1442,8 +1442,8 @@ export default function ProductReport() {
           onClose={() => setShowHelp(false)}
           title="Hướng dẫn báo cáo sản phẩm"
           content={[
-            'Bu?c 1: Chọn k? báo cáo theo ngày, th?ng, nam ho?c kho?ng thời gian t?y ch?nh.',
-            'Bu?c 2: Chọn trạng thái đơn hàng d? quy?t d?nh dữ liệu n?o được t?nh v?o báo cáo.',
+            'Bu?c 1: Chọn k? báo cáo theo ngày, tháng, nam ho?c kho?ng thời gian t?y ch?nh.',
+            'Bu?c 2: Chọn trạng thái đơn hàng d? quy?t d?nh dữ liệu n?o được t?nh vào báo cáo.',
             'Bu?c 3: Xem tru?c kho?ng dữ liệu d? kiểm tra lỗi m?c thời gian trước khi tạo báo cáo.',
             'Bu?c 4: Nhân Tạo báo cáo đã tải số lượng b?n, doanh thu v? danh sách sản phẩm theo k?.',
             'Bu?c 5: Dùng n?t xu?t file đã tải Excel khi c?n dài so?t ho?c g?i quản lý.',

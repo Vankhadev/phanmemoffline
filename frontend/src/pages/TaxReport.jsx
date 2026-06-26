@@ -47,7 +47,7 @@ function getMonthRange(month) {
 function resolveRange(filters) {
   if (filters.period === 'month') {
     const range = getMonthRange(filters.month);
-    return range ? { valid: true, ...range } : { valid: false, message: 'Vui lòng chọn th?ng hợp lệ.' };
+    return range ? { valid: true, ...range } : { valid: false, message: 'Vui lòng chọn tháng hợp lệ.' };
   }
   if (!filters.from || !filters.to) return { valid: false, message: 'Vui lòng chọn d? ngày bắt đầu v? ngày kết thúc.' };
   if (filters.from > filters.to) return { valid: false, message: 'Ngày bắt đầu không được l?n hon ngày kết thúc.' };
@@ -185,7 +185,7 @@ export default function TaxReport() {
     setNotice('');
     try {
       await accountingApi.generateTaxReport({ from: activeRange.from, to: activeRange.to });
-      setNotice(`?? luu snapshot báo cáo thu? t? ${formatDate(activeRange.from)} d?n ${formatDate(activeRange.to)}.`);
+      setNotice(`?? luu snapshot báo cáo thu? t? ${formatDate(activeRange.from)} đến ${formatDate(activeRange.to)}.`);
       await loadReport(filters);
     } catch (requestError) {
       setError(extractError(requestError, 'Không th? tạo snapshot báo cáo thu? GTGT.'));
@@ -225,7 +225,7 @@ export default function TaxReport() {
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-blue-200/80">Kế toán ? Thu? GTGT</div>
               <h1 className="mt-1 text-2xl font-bold">Báo cáo thu? GTGT</h1>
-              <p className="mt-1 max-w-3xl text-sm text-blue-100/75">Tổng hợp thu? d?u v?o, thu? d?u ra v? s? thu? ph?i n?p t? hóa đơn, phiếu nhập v? dữ liệu kế toán trong k?.</p>
+              <p className="mt-1 max-w-3xl text-sm text-blue-100/75">Tổng hợp thu? đầu vào, thu? đầu ra v? s? thu? ph?i n?p t? hóa đơn, phiếu nhập v? dữ liệu kế toán trong k?.</p>
             </div>
           </div>
           <button type="button" onClick={generateSnapshot} disabled={generating || loading || !activeRange.valid} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60">
@@ -245,10 +245,10 @@ export default function TaxReport() {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">Quy tr?nh sử dụng</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Chọn k? báo cáo theo th?ng ho?c kho?ng ngày.</li>
+                  <li>Chọn k? báo cáo theo tháng ho?c kho?ng ngày.</li>
                   <li>Nhân Xem báo cáo d? n?p dữ liệu.</li>
                   <li>Dùng Luu snapshot k? n?y d? luu trạng thái báo cáo.</li>
-                  <li>Kiểm tra b?ng d?u v?o v? d?u ra trước khi k?t xu?t.</li>
+                  <li>Kiểm tra bằng đầu vào v? đầu ra trước khi k?t xu?t.</li>
                 </ul>
               </div>
               <div>
@@ -267,7 +267,7 @@ export default function TaxReport() {
           <div>
             <label className="mb-1 block text-xs font-semibold text-gray-500">Loại k?</label>
             <select className="input-field" value={filters.period} onChange={event => setFilters(current => ({ ...current, period: event.target.value }))}>
-              <option value="month">Theo th?ng</option>
+              <option value="month">Theo tháng</option>
               <option value="custom">Kho?ng ngày</option>
             </select>
           </div>
@@ -313,13 +313,13 @@ export default function TaxReport() {
       ) : report ? (
         <>
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard icon={TrendingDown} label="Thu? GTGT d?u v?o" value={report.total_input_vat} description={`${inputRows.length} ch?ng t? d?u v?o`} tone="blue" />
-            <SummaryCard icon={TrendingUp} label="Thu? GTGT d?u ra" value={report.total_output_vat} description={`${outputRows.length} ch?ng t? d?u ra`} tone="amber" />
-            <SummaryCard icon={ShieldCheck} label={payable >= 0 ? 'Thu? ph?i n?p' : 'Thu? c?n được kh?u tr?'} value={Math.abs(payable)} description="Thu? d?u ra tr? thu? d?u v?o" tone={payable >= 0 ? 'red' : 'emerald'} />
-            <SummaryCard icon={FileCheck2} label="Doanh thu ch?u thu?" value={report.output_taxable_amount} description={`??u v?o ch?u thu?: ${formatVND(report.input_taxable_amount)}`} tone="emerald" />
+            <SummaryCard icon={TrendingDown} label="Thu? GTGT đầu vào" value={report.total_input_vat} description={`${inputRows.length} ch?ng t? đầu vào`} tone="blue" />
+            <SummaryCard icon={TrendingUp} label="Thu? GTGT đầu ra" value={report.total_output_vat} description={`${outputRows.length} ch?ng t? đầu ra`} tone="amber" />
+            <SummaryCard icon={ShieldCheck} label={payable >= 0 ? 'Thu? ph?i n?p' : 'Thu? c?n được kh?u tr?'} value={Math.abs(payable)} description="Thu? đầu ra tr? thu? đầu vào" tone={payable >= 0 ? 'red' : 'emerald'} />
+            <SummaryCard icon={FileCheck2} label="Doanh thu ch?u thu?" value={report.output_taxable_amount} description={`??u vào ch?u thu?: ${formatVND(report.input_taxable_amount)}`} tone="emerald" />
           </section>
-          <SourceTable title="Chi tiết thu? GTGT d?u ra" rows={outputRows} type="output" />
-          <SourceTable title="Chi tiết thu? GTGT d?u v?o" rows={inputRows} type="input" />
+          <SourceTable title="Chi tiết thu? GTGT đầu ra" rows={outputRows} type="output" />
+          <SourceTable title="Chi tiết thu? GTGT đầu vào" rows={inputRows} type="input" />
         </>
       ) : !error ? (
         <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-16 text-center text-gray-400">Chọn k? v? nhân ?Xem báo cáo? đã tải dữ liệu.</div>

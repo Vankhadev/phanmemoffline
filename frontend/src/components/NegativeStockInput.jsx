@@ -25,7 +25,7 @@ export default function NegativeStockInput({
   const derivedError = error || getNegativeStockInputError(textValue, settings);
   const isNegative = Number.isFinite(numericValue) && numericValue < 0;
   const hasError = Boolean(derivedError);
-  const badgeLabel = isNegative || hasError ? 'Âm kho' : 'Cho phép âm';
+  const badgeLabel = isNegative || hasError ? '�m kho' : 'Cho ph�p �m';
 
   const handleChange = (event) => {
     const nextValue = event.target.value;

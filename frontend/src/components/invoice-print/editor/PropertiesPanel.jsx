@@ -147,7 +147,8 @@ function TableProperties({ document, onUpdateTable, onUpdateElement }) {
   const styleElement = getTableStyleElement(document) || {};
   const style = styleElement.style || {};
   const columns = Array.isArray(table.columns) ? table.columns : [];
-  const totalWidth = columns.reduce((sum, column) => sum + (Number(column.widthMm) || 0), 0);
+  const visibleColumns = columns.filter(column => column.hidden !== true);
+  const totalWidth = visibleColumns.reduce((sum, column) => sum + (Number(column.widthMm) || 0), 0);
 
   const updateStyle = (patch) => {
     if (!styleElement.id) return;
@@ -191,6 +192,16 @@ function TableProperties({ document, onUpdateTable, onUpdateElement }) {
         <div className="invoice-editor-table-columns">
           {columns.map((column, index) => (
             <div key={`${column.key}-${index}`} className="invoice-editor-table-column-row">
+              <input
+                type="checkbox"
+                title="Hiện / ẩn cột khi in"
+                checked={column.hidden !== true}
+                onChange={event => {
+                  const nextColumns = [...columns];
+                  nextColumns[index] = { ...column, hidden: event.target.checked ? false : true };
+                  onUpdateTable?.({ columns: nextColumns });
+                }}
+              />
               <input value={column.label || TABLE_COLUMN_LABELS[column.key] || column.key} onChange={event => {
                 const nextColumns = [...columns];
                 nextColumns[index] = { ...column, label: event.target.value };

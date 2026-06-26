@@ -645,7 +645,7 @@ export default function OrderList() {
       const byPhone = customers.find(c => String(c.phone || '').trim() === orderPhone);
       if (byPhone) return byPhone;
     }
-    if (orderName && orderName !== 'kh?ch l?' && orderName !== 'khach le') {
+    if (orderName && orderName !== 'khách l?' && orderName !== 'khach le') {
       const byName = customers.find(c => String(c.name || '').trim().toLowerCase() === orderName);
       if (byName) return byName;
     }
@@ -2097,7 +2097,7 @@ export default function OrderList() {
                             <div className="flex items-center gap-3 shrink-0">
                               <div className="text-[10px] text-gray-400">{parent.sku || '—'}</div>
                               <div className={`text-[10px] ${getStockDisplayMeta(parent.stock, negativeStockSettings).textClass}`}>{getStockDisplayMeta(parent.stock, negativeStockSettings).display}</div>
-                              {getStockDisplayMeta(parent.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(parent.stock, negativeStockSettings).badgeClass}`}>Âm kho</div>}
+                              {getStockDisplayMeta(parent.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(parent.stock, negativeStockSettings).badgeClass}`}>�m kho</div>}
                               {getStockDisplayMeta(parent.stock, negativeStockSettings).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">{getStockDisplayMeta(parent.stock, negativeStockSettings).extraLabel || negativeStockNearLimitLabel || `Gần ${negativeStockLimitLabel}`}</div>}
                               <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getDisplayPrice(parent))}</div>
                             </div>
@@ -2124,7 +2124,7 @@ export default function OrderList() {
                                   <div className="flex items-center gap-3 shrink-0">
                                     <div className="text-[10px] text-gray-400">{variant.sku || '—'}</div>
                                     <div className={`text-[10px] ${getStockDisplayMeta(variant.stock, negativeStockSettings).textClass}`}>{getStockDisplayMeta(variant.stock, negativeStockSettings).display}</div>
-                                    {getStockDisplayMeta(variant.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(variant.stock, negativeStockSettings).badgeClass}`}>Âm kho</div>}
+                                    {getStockDisplayMeta(variant.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(variant.stock, negativeStockSettings).badgeClass}`}>�m kho</div>}
                                     {getStockDisplayMeta(variant.stock, negativeStockSettings).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">{getStockDisplayMeta(variant.stock, negativeStockSettings).extraLabel || negativeStockNearLimitLabel || `Gần ${negativeStockLimitLabel}`}</div>}
                                     <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getDisplayPrice(variant))}</div>
                                   </div>
@@ -2202,7 +2202,7 @@ export default function OrderList() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">✅ Xác nhận thanh toán</h3>
-                <p>Nhân icon <CheckSquare size={14} className="inline" /> d? d?nh d?u don d? thanh toán. Trạng thái s? chuy?n sang "Ho?n th?nh" v? hiển thị phuong th?c thanh toán.</p>
+                <p>Nhân icon <CheckSquare size={14} className="inline" /> d? d?nh đầu don d? thanh toán. Trạng thái s? chuy?n sang "Ho?n th?nh" v? hiển thị phuong th?c thanh toán.</p>
               </div>
 
               <div>

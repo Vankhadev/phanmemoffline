@@ -103,7 +103,7 @@ const EMPTY_PRODUCT_FORM = Object.freeze({
   retail_price: '',
   vip_price: '',
   stock: '',
-  unit: 'c?i',
+  unit: 'cái',
   category: '',
   supplier_id: '',
 });
@@ -116,7 +116,7 @@ const EMPTY_VARIANT_FORM = Object.freeze({
   retail_price: '',
   vip_price: '',
   stock: '',
-  unit: 'c?i',
+  unit: 'cái',
 });
 
 const createProductFormInitial = (overrides = {}) => ({ ...EMPTY_PRODUCT_FORM, ...overrides });
@@ -368,7 +368,7 @@ const VariantFormModal = memo(function VariantFormModal({
               <input className="input-field w-full bg-gray-100 text-gray-500 cursor-not-allowed" value={editingVariant ? (form.sku || '') : ''} readOnly disabled placeholder="T? sinh sau khi luu" />
               <span className="text-[10px] text-blue-500">{editingVariant ? 'M? d? c?p được gi? nguy?n.' : 'Hệ thống t? c?p m? SP ti?p theo sau khi luu.'}</span>
             </div>
-            <div><label className="text-xs text-gray-500">?on v? t?nh</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="c?i" /></div>
+            <div><label className="text-xs text-gray-500">?on v? t?nh</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="cái" /></div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
             <button type="submit" disabled={saving || Boolean(stockError)} className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -452,17 +452,17 @@ const ProductRow = memo(function ProductRow({
         </div>
 
         {hasVariants ? (
-          <div className="text-right text-sm w-20 text-gray-300" title="Tồn kho được quản lý ? t?ng biến thể">?</div>
+          <div className="text-right text-sm w-20 text-gray-300" title="Tồn kho được quản lý ? tổng biến thể">?</div>
         ) : (
           <div className="text-right text-sm w-24">
             <ProductStockValue stock={p.stock} settings={negativeStockSettings} />
           </div>
         )}
 
-        <div className="hidden text-right text-xs text-gray-500 w-24 md:block" title={hasVariants ? 'Giá nhập được quản lý ? t?ng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.import_price)}</div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-green-600'}`} title={hasVariants ? 'Gi? l? được quản lý ? t?ng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.retail_price)}</div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-red-600'}`} title={hasVariants ? 'Gi? sẽ được quản lý ? t?ng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.wholesale_price)}</div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-blue-600'}`} title={hasVariants ? 'Gi? VIP được quản lý ? t?ng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.vip_price)}</div>
+        <div className="hidden text-right text-xs text-gray-500 w-24 md:block" title={hasVariants ? 'Giá nhập được quản lý ? tổng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.import_price)}</div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-green-600'}`} title={hasVariants ? 'Gi? l? được quản lý ? tổng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.retail_price)}</div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-red-600'}`} title={hasVariants ? 'Gi? sẽ được quản lý ? tổng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.wholesale_price)}</div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-blue-600'}`} title={hasVariants ? 'Gi? VIP được quản lý ? tổng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.vip_price)}</div>
 
         <div className="flex items-center gap-1 w-full justify-end border-t border-gray-100 pt-2 md:w-40 md:border-t-0 md:pt-0">
           <button onClick={() => onAddVariant(p)} className="text-green-600 hover:text-green-800 p-1.5 rounded border border-green-300 hover:bg-green-50" title="Thêm biến thể">
@@ -861,7 +861,7 @@ export default function Products({ store }) {
       };
     });
     if (invalidQuantityItem) {
-      alert(`Số lượng của "${invalidQuantityItem.product_name || invalidQuantityItem.name || invalidQuantityItem.sku || 'sản phẩm'}" ph?i l?n hon ho?c b?ng ${MIN_QUANTITY}.`);
+      alert(`Số lượng của "${invalidQuantityItem.product_name || invalidQuantityItem.name || invalidQuantityItem.sku || 'sản phẩm'}" ph?i l?n hon ho?c bằng ${MIN_QUANTITY}.`);
       return;
     }
     const method = editingCombo ? 'PUT' : 'POST';
@@ -990,7 +990,7 @@ export default function Products({ store }) {
       clearSelectedProducts();
       return;
     }
-    if (!confirm(`Xóa ${idsToDelete.length} sản phẩm đã chọn? Tất cả biến thể của c?c sản phẩm n?y cung s? b? xóa.`)) return;
+    if (!confirm(`Xóa ${idsToDelete.length} sản phẩm đã chọn? Tất cả biến thể của các sản phẩm n?y cung s? b? xóa.`)) return;
 
     bulkDeleteInFlightRef.current = true;
     setIsBulkDeleting(true);
@@ -1198,7 +1198,7 @@ export default function Products({ store }) {
         'Gi? l?': 150000,
         'Gi? VIP': 130000,
         'Tồn kho': 0,
-        '?on v?': 'c?i',
+        '?on v?': 'cái',
         'Danh mục text': '?o thun',
         'Default category id': '',
         'Supplier id': '',
@@ -1220,7 +1220,7 @@ export default function Products({ store }) {
         'Gi? l?': 150000,
         'Gi? VIP': 130000,
         'Tồn kho': 12,
-        '?on v?': 'c?i',
+        '?on v?': 'cái',
         'Danh mục text': '?o thun',
         'Default category id': '',
         'Supplier id': '',
@@ -1242,7 +1242,7 @@ export default function Products({ store }) {
         'Gi? l?': 155000,
         'Gi? VIP': 135000,
         'Tồn kho': 8,
-        '?on v?': 'c?i',
+        '?on v?': 'cái',
         'Danh mục text': '?o thun',
         'Default category id': '',
         'Supplier id': '',
@@ -1264,7 +1264,7 @@ export default function Products({ store }) {
         'Gi? l?': 99000,
         'Gi? VIP': 89000,
         'Tồn kho': 25,
-        '?on v?': 'c?i',
+        '?on v?': 'cái',
         'Danh mục text': 'Gia d?ng',
         'Default category id': '',
         'Supplier id': '',
@@ -1353,7 +1353,7 @@ export default function Products({ store }) {
     if (backendReceivedColumns.length > 0) lines.push(`C?t nhân được: ${formatColumnList(backendReceivedColumns)}`);
     if (expectedColumns.length > 0) lines.push(`C?t chu?n g?i ?: ${formatColumnList(expectedColumns)}`);
     if (errors.length > 0) {
-      lines.push(`Một s? lỗi d?u ti?n (${Math.min(errors.length, 12)}/${errors.length}):`);
+      lines.push(`Một s? lỗi đầu ti?n (${Math.min(errors.length, 12)}/${errors.length}):`);
       lines.push(formatImportErrors(errors));
     }
     if (responseText && Object.keys(data).length === 0) {
@@ -1436,7 +1436,7 @@ export default function Products({ store }) {
         return;
       }
 
-      if (!confirm(`Tạm th?y ${importRows.length} d?ng dữ liệu trong sheet "${sheetName}".\nC?t nhân được: ${formatColumnList(displayColumns)}\n\nImport sử dụng SKU trong file d? dài chi?u/cập nhật; b?n ghi mới được backend c?p m? SP. Biến thể li?n k?t theo Parent SKU. N?u thi?u "Loại d?ng", backend s? t? suy lu?n theo Parent SKU. Dữ liệu ch? ghi khi to?n b? file hợp lệ. Tiếp tục?`)) return;
+      if (!confirm(`Tạm th?y ${importRows.length} d?ng dữ liệu trong sheet "${sheetName}".\nC?t nhân được: ${formatColumnList(displayColumns)}\n\nImport sử dụng SKU trong file d? dài chi?u/cập nhật; b?n ghi mới được backend c?p m? SP. Biến thể li?n k?t theo Parent SKU. Nếu thi?u "Loại d?ng", backend s? t? suy lu?n theo Parent SKU. Dữ liệu ch? ghi khi to?n b? file hợp lệ. Tiếp tục?`)) return;
 
       try {
         const controller = new AbortController();
@@ -1517,7 +1517,7 @@ export default function Products({ store }) {
       retail_price: p.retail_price || '',
       vip_price: p.vip_price || '',
       stock: p.stock ?? '',
-      unit: p.unit || 'c?i',
+      unit: p.unit || 'cái',
       category: p.category || '',
       supplier_id: p.supplier_id || '',
     }));
@@ -1593,7 +1593,7 @@ export default function Products({ store }) {
     setEditing(null);
     setVariantParent(parent);
     setEditingVariant(null);
-    setVariantFormInitial(createVariantFormInitial({ unit: parent.unit || 'c?i' }));
+    setVariantFormInitial(createVariantFormInitial({ unit: parent.unit || 'cái' }));
     setShowVariantModal(true);
   }, []);
 
@@ -1610,7 +1610,7 @@ export default function Products({ store }) {
       retail_price: variant.retail_price || '',
       vip_price: variant.vip_price || '',
       stock: variant.stock ?? '',
-      unit: variant.unit || 'c?i',
+      unit: variant.unit || 'cái',
     }));
     setShowVariantModal(true);
   }, []);
@@ -1847,7 +1847,7 @@ export default function Products({ store }) {
           <ExcelImportPanel
             dataType="products"
             title="Import sản phẩm v? biến thể t? Excel/CSV"
-            description="Preview/validate sản phẩm cha v? biến thể b?ng backend trước khi commit; h? tr? mapping c?t, d?ng lỗi/cảnh báo v? refresh danh sách sau import."
+            description="Preview/validate sản phẩm cha v? biến thể bằng backend trước khi commit; h? tr? mapping c?t, d?ng lỗi/cảnh báo v? refresh danh sách sau import."
             onCommitted={async () => {
               await Promise.all([fetchProducts(), fetchCategories(), fetchSuppliers()]);
             }}
@@ -2035,7 +2035,7 @@ export default function Products({ store }) {
                 type="button"
                 onClick={() => setStockSortDirection('desc')}
                 className={stockSortButtonClass('desc')}
-                title="S?p x?p tồn kho t? nhi?u nh?t d?n ?t nh?t"
+                title="S?p x?p tồn kho t? nhi?u nh?t đến ?t nh?t"
                 aria-pressed={stockSortDirection === 'desc'}
               >
                 <ArrowUp size={14} />
@@ -2044,7 +2044,7 @@ export default function Products({ store }) {
                 type="button"
                 onClick={() => setStockSortDirection('asc')}
                 className={stockSortButtonClass('asc')}
-                title="S?p x?p tồn kho t? ?t nh?t d?n nhi?u nh?t"
+                title="S?p x?p tồn kho t? ?t nh?t đến nhi?u nh?t"
                 aria-pressed={stockSortDirection === 'asc'}
               >
                 <ArrowDown size={14} />
@@ -2135,7 +2135,7 @@ export default function Products({ store }) {
                   <label className="text-xs text-gray-500 block mb-1">Tồn Combo <span className="text-red-500">*</span></label>
                   <input className="input-field w-full" value={comboForm.name}
                     onChange={e => setComboForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="VD: B? combo k? s?ch 3 t?ng" />
+                    placeholder="VD: B? combo k? s?ch 3 tổng" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">SKU</label>
@@ -2299,8 +2299,8 @@ export default function Products({ store }) {
                 <ul className="list-disc pl-5 space-y-1">
                   <li><strong>Sản phẩm cha:</strong> Sản phẩm ch?nh, không có parent_id</li>
                   <li><strong>Biến thể:</strong> Các phi?n b?n c? th? của sản phẩm cha (m?u s?c, size...)</li>
-                  <li>Nhân v?o t?n sản phẩm cha c? biến thể d? m? r?ng xem danh sách</li>
-                  <li>Khi sản phẩm cha c? biến thể, b?ng ?n tồn kho/gi? của d?ng cha v? ch? hiển thị ? t?ng biến thể; khi không cón biến thể th? d?ng cha hiển thị lỗi nhu ban d?u</li>
+                  <li>Nhân vào t?n sản phẩm cha c? biến thể d? m? r?ng xem danh sách</li>
+                  <li>Khi sản phẩm cha c? biến thể, bằng ?n tồn kho/gi? của d?ng cha v? ch? hiển thị ? tổng biến thể; khi không cón biến thể th? d?ng cha hiển thị lỗi nhu ban đầu</li>
                 </ul>
               </div>
 
@@ -2308,7 +2308,7 @@ export default function Products({ store }) {
                 <h3 className="font-bold text-gray-800 mb-2">? Thêm sản phẩm mới</h3>
                 <ol className="list-decimal pl-5 space-y-1">
                   <li>Nhân n?t <strong>"Thêm sản phẩm"</strong></li>
-                  <li>?i?n đầy đủ thông tin: Tồn, SKU (tự động), gi? c?c loại, tồn kho, don v?, danh mục, nh? cung cấp</li>
+                  <li>?i?n đầy đủ thông tin: Tồn, SKU (tự động), gi? các loại, tồn kho, don v?, danh mục, nh? cung cấp</li>
                   <li>M? sản phẩm được backend t? c?p theo d?ng SP00001, SP00002... v? được gi? nguy?n sau khi tạo</li>
                   <li>Nhân "Luu" d? ho?n tốt</li>
                 </ol>
@@ -2328,13 +2328,13 @@ export default function Products({ store }) {
                 <h3 className="font-bold text-gray-800 mb-2">?? Nhập/Xuất Excel sản phẩm</h3>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>N?n d?ng <strong>"Tải m?u Excel"</strong> ho?c <strong>"Xuất Excel"</strong> t? hệ thống r?i chỉnh sửa v? nh?p lỗi.</li>
-                  <li>Sheet chu?n l? <strong>"Sản phẩm"</strong>; n?u file không có sheet n?y, hệ thống s? d?c sheet d?u ti?n.</li>
-                  <li>C?t chu?n: <strong>Loại d?ng</strong>, <strong>SKU</strong>, <strong>Parent SKU</strong>, <strong>Tồn sản phẩm</strong>, c?c c?t gi?, <strong>Tồn kho</strong>, <strong>?on v?</strong>, <strong>Danh mục text</strong>, <strong>Default category id</strong>, <strong>Supplier id</strong>, <strong>Ho?t d?ng</strong>.</li>
-                  <li><strong>Loại d?ng</strong>: nh?p <strong>PARENT</strong> cho sản phẩm cha, <strong>VARIANT</strong> cho biến thể. N?u b? tr?ng, backend t? suy lu?n: c? Parent SKU l? VARIANT, không có Parent SKU l? PARENT.</li>
+                  <li>Sheet chu?n l? <strong>"Sản phẩm"</strong>; n?u file không có sheet n?y, hệ thống s? d?c sheet đầu ti?n.</li>
+                  <li>C?t chu?n: <strong>Loại d?ng</strong>, <strong>SKU</strong>, <strong>Parent SKU</strong>, <strong>Tồn sản phẩm</strong>, các c?t gi?, <strong>Tồn kho</strong>, <strong>?on v?</strong>, <strong>Danh mục text</strong>, <strong>Default category id</strong>, <strong>Supplier id</strong>, <strong>Ho?t d?ng</strong>.</li>
+                  <li><strong>Loại d?ng</strong>: nh?p <strong>PARENT</strong> cho sản phẩm cha, <strong>VARIANT</strong> cho biến thể. Nếu b? tr?ng, backend t? suy lu?n: c? Parent SKU l? VARIANT, không có Parent SKU l? PARENT.</li>
                   <li><strong>Parent SKU</strong> l? kh?a gi? quan h? cha-con; SKU n?y ph?i tr?ng SKU của d?ng sản phẩm cha trong file ho?c sản phẩm cha d? c? trong hệ thống. Khi tạo mới, backend c?p m? SP ti?p theo.</li>
                   <li>C? th? nh?p file c? alias ph? bi?n nhu <strong>M? SKU</strong>, <strong>Ma SKU</strong>, <strong>M? sản phẩm</strong>, <strong>Tồn</strong>, <strong>SL h?ng</strong>, <strong>So luong</strong>, <strong>Gi? v?n</strong>, <strong>Gi? b?n</strong>, <strong>?VT</strong>, <strong>Danh mục</strong>, <strong>ParentSKU</strong>, <strong>SKU cha</strong>, <strong>M? cha</strong>.</li>
-                  <li><strong>Tồn kho</strong> c? th? ?m d?n <strong>{negativeStockLimitLabel}</strong>; hệ thống cảnh báo ??m kho? v? backend s? chọn mới tồn kho th?p hon ngu?ng n?y.</li>
-                  <li>Import s? validate to?n b? file trước khi ghi. N?u c? lỗi, thông báo s? ch? r? d?ng/c?t v? dữ liệu chua được cập nhật.</li>
+                  <li><strong>Tồn kho</strong> c? th? ?m đến <strong>{negativeStockLimitLabel}</strong>; hệ thống cảnh báo ??m kho? v? backend s? chọn mới tồn kho th?p hon ngu?ng n?y.</li>
+                  <li>Import s? validate to?n b? file trước khi ghi. Nếu c? lỗi, thông báo s? ch? r? d?ng/c?t v? dữ liệu chua được cập nhật.</li>
                   <li>Các c?t <strong>ID</strong>, <strong>Parent ID</strong>, <strong>Default category name</strong>, <strong>Supplier name</strong>, <strong>Ghi ch?</strong> ch? d? tham kh?o khi xu?t file; backend b? qua khi import.</li>
                 </ul>
                 <div className="mt-3 flex gap-2">
@@ -2349,7 +2349,7 @@ export default function Products({ store }) {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">??? Xóa sản phẩm</h3>
-                <p>Nhân icon ??? d? xóa. N?u l? sản phẩm cha, tất cả biến thể con cung s? b? xóa (soft delete).</p>
+                <p>Nhân icon ??? d? xóa. Nếu l? sản phẩm cha, tất cả biến thể con cung s? b? xóa (soft delete).</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">

@@ -44,7 +44,7 @@ function formatNumber(value) {
 }
 
 const ACCOUNTING_LINKS = [
-  { to: '/ke-toan/bao-cao-thue', label: 'Báo cáo thu? GTGT', description: 'Thu? d?u v?o, d?u ra v? ph?i n?p', icon: ReceiptText, tone: 'blue' },
+  { to: '/ke-toan/bao-cao-thue', label: 'Báo cáo thu? GTGT', description: 'Thu? đầu vào, đầu ra v? ph?i n?p', icon: ReceiptText, tone: 'blue' },
   { to: '/ke-toan/bao-cao-ton-kho', label: 'Báo cáo tồn kho', description: 'Gi? v?n, gi? tr? t?n v? cảnh báo kho', icon: Warehouse, tone: 'amber' },
   { to: '/ke-toan/nhat-ky', label: 'Nhật ký ho?t d?ng', description: 'Tra c?u thay đổi nghi?p v? kế toán', icon: FileClock, tone: 'violet' },
 ];
@@ -52,7 +52,7 @@ const ACCOUNTING_LINKS = [
 const PREPARED_FEATURES = [
   { label: 'Qu? kế toán', description: 'Tổng hợp thu, chi v? s? du qu?', icon: Landmark },
   { label: 'Cùng n?', description: 'Khách hàng v? nh? cung cấp', icon: UsersRound },
-  { label: 'Hóa don di?n t?', description: 'Hóa don d?u v?o v? d?u ra', icon: BookOpenCheck },
+  { label: 'Hóa don di?n t?', description: 'Hóa don đầu vào v? đầu ra', icon: BookOpenCheck },
   { label: 'Tài khoản ng?n h?ng', description: 'Danh mục tài khoản nhân/chi', icon: Banknote },
 ];
 
@@ -117,7 +117,7 @@ export default function AccountingDashboard({ user }) {
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-200/80">Module kế toán</div>
               <h1 className="mt-1 text-2xl font-bold">{isCashier ? 'Báo cáo doanh thu' : 'Tổng quan kế toán'}</h1>
-              <p className="mt-1 max-w-3xl text-sm text-emerald-100/75">{isCashier ? 'Tài khoản thu ng?n ch? được xem tổng hợp doanh thu theo k?.' : '?i?m truy c?p nhanh d?n báo cáo thu?, tồn kho, nhật ký v? c?c dữ liệu kế toán c?t lỗi.'}</p>
+              <p className="mt-1 max-w-3xl text-sm text-emerald-100/75">{isCashier ? 'Tài khoản thu ng?n ch? được xem tổng hợp doanh thu theo k?.' : '?i?m truy c?p nhanh đến báo cáo thu?, tồn kho, nhật ký v? các dữ liệu kế toán c?t lỗi.'}</p>
             </div>
           </div>
         </div>
@@ -144,13 +144,13 @@ export default function AccountingDashboard({ user }) {
         <HelpModal
           show={showHelp}
           onClose={() => setShowHelp(false)}
-          title="Hướng dẫn t?ng quan kế toán"
+          title="Hướng dẫn tổng quan kế toán"
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">N?i dung ch?nh</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Xem t?ng doanh thu, s? hóa đơn, giá vốn v? lợi nhuận.</li>
+                  <li>Xem tổng doanh thu, s? hóa đơn, giá vốn v? lợi nhuận.</li>
                   <li>M? nhanh báo cáo thu?, tồn kho v? nhật ký ho?t d?ng.</li>
                   <li>Lực theo kho?ng ngày d? dài chi?u s? li?u.</li>
                 </ul>

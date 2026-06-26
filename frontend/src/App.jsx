@@ -377,7 +377,7 @@ function buildScreenGuide(navGroups, currentPath) {
       'Bấm Thêm để tạo hồ sơ khách hàng mới.',
       'Nhập tên, số điện thoại, email và địa chỉ nếu có.',
       'Bấm Sửa để cập nhật thông tin khi khách đổi liên hệ.',
-      'M? lịch sử mua h?ng d? xem c?c don d? ph?t sinh.',
+      'M? lịch sử mua h?ng d? xem các don d? ph?t sinh.',
     ],
     '/kho-hang': [
       'Xem tồn kho theo kho hoặc theo nhóm hàng.',
@@ -1225,7 +1225,7 @@ function DesktopApp() {
       try {
         await authApi.logout();
       } catch (_) {
-        // N?u token d? hết hạn, apiClient d? cleanup v? ph?t s? ki?n 401.
+        // Nếu token d? hết hạn, apiClient d? cleanup v? ph?t s? ki?n 401.
       }
     }
     clearAuthSession({ clearVolatile: true, includePending: true });

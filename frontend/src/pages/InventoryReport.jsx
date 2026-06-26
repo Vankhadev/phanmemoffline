@@ -184,7 +184,7 @@ export default function InventoryReport() {
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-orange-50/80">Kho hàng ? Báo cáo</div>
               <h1 className="mt-1 text-2xl font-bold">Báo cáo tồn kho</h1>
-              <p className="mt-1 max-w-3xl text-sm text-white/85">Theo dài số lượng t?n, giá vốn, gi? tr? tồn kho v? c?c cảnh báo s?p h?t, hết hạng ho?c ?m kho.</p>
+              <p className="mt-1 max-w-3xl text-sm text-white/85">Theo dài số lượng t?n, giá vốn, gi? tr? tồn kho v? các cảnh báo s?p h?t, hết hạng ho?c ?m kho.</p>
             </div>
           </div>
           <button type="button" onClick={() => loadReport()} disabled={loading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-white/15 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/25 disabled:opacity-60">
@@ -230,8 +230,8 @@ export default function InventoryReport() {
           <div>
             <label className="mb-1 block text-xs font-semibold text-gray-500">Th? t?</label>
             <select className="input-field" value={order} onChange={event => { setOrder(event.target.value); setPage(1); }}>
-              <option value="asc">Tang d?n</option>
-              <option value="desc">Gi?m d?n</option>
+              <option value="asc">Tang đến</option>
+              <option value="desc">Gi?m đến</option>
             </select>
           </div>
           <div>

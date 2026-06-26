@@ -279,7 +279,7 @@ function TablePreview({ document, payload, selected, zoom, snapEnabled, snapGrid
   const tableStyleElement = getTableStyleElement(document) || {};
   const tableStyle = tableStyleElement.style || {};
   const showSku = tableStyle.showSku === true;
-  const columns = (Array.isArray(table.columns) && table.columns.length ? table.columns : []).filter(column => showSku || column.key !== 'sku');
+  const columns = (Array.isArray(table.columns) && table.columns.length ? table.columns : []).filter(column => column.hidden !== true).filter(column => showSku || column.key !== 'sku');
 
   return (
     <ElementFrame

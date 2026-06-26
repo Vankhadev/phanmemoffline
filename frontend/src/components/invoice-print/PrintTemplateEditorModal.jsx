@@ -167,7 +167,7 @@ export default function PrintTemplateEditorModal({
       const idOrCode = latest.invoice_code || latest.id;
       if (!idOrCode) {
         setPreviewPayload({});
-        setPreviewError('Hóa don mới nh?t thi?u m?/ID d? g?i API preview. Editor v?n hiển thị realtime b?ng dữ liệu r?ng an to?n.');
+        setPreviewError('Hóa don mới nh?t thi?u m?/ID d? g?i API preview. Editor v?n hiển thị realtime bằng dữ liệu r?ng an to?n.');
         return;
       }
       const payload = await invoicesApi.printData(idOrCode, templateId ? { template_id: templateId } : {});
@@ -185,7 +185,7 @@ export default function PrintTemplateEditorModal({
     }
   }, [activeTemplate?.id, show]);
 
-  // Migration nh?: xóa c?c key autosave/draft c? trong localStorage/sessionStorage (n?u c?).
+  // Migration nh?: xóa các key autosave/draft c? trong localStorage/sessionStorage (n?u c?).
   useEffect(() => {
     if (!show) return;
     if (typeof window === 'undefined') return;
@@ -308,7 +308,7 @@ export default function PrintTemplateEditorModal({
     setBusy('save');
     setNotice(null);
     try {
-      // L?u layout hiện tại v?o database/config ch?nh (không tạo draft).
+      // L?u layout hiện tại vào database/config ch?nh (không tạo draft).
       const payload = buildTemplatePayloadFromDocument(activeTemplate, editor.document, editor.settings);
       const data = await printTemplatesApi.update(activeTemplate.id, {
         layout_json: payload.layout_json,
@@ -401,7 +401,7 @@ export default function PrintTemplateEditorModal({
         editor.setRevision(item.revision || editor.revision);
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'D? upload logo. Layout logo v?n bind template.logo, không nh?ng binary v?o JSON.'));
+      setNotice(buildNotice('success', 'D? upload logo. Layout logo v?n bind template.logo, không nh?ng binary vào JSON.'));
     } catch (error) {
       setNotice(buildNotice('error', getErrorMessage(error, 'Không thể upload logo.')));
     } finally {
@@ -615,7 +615,7 @@ export default function PrintTemplateEditorModal({
         <div className="invoice-editor-topbar">
           <div>
             <h1 id="invoice-editor-title">Chỉnh sửa mẫu in đơn hàng</h1>
-            <p>{editorMode === 'sapo' ? 'So?n n?i dung mẫu in, chọn t? kh?a v? xem tr??c A4 theo dữ liệu hóa đơn th?t.' : 'K?o th?, resize, snap grid. B?m ?L?u? ?? l?u layout, b?m ?Publish? ?? định d?u b?n in.'}</p>
+            <p>{editorMode === 'sapo' ? 'So?n n?i dung mẫu in, chọn t? kh?a v? xem tr??c A4 theo dữ liệu hóa đơn th?t.' : 'K?o th?, resize, snap grid. B?m ?L?u? ?? l?u layout, b?m ?Publish? ?? định đầu b?n in.'}</p>
           </div>
           <div className="invoice-editor-topbar-actions">
             <div className="invoice-editor-mode-toggle" role="tablist" aria-label="Chế độ chỉnh sửa mẫu in">

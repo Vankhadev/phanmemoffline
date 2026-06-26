@@ -42,7 +42,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
     totalUsers: 0,
     hasAdmin: false,
     nextRole: 'ADMIN',
-    message: 'Tài khoản d?u ti?n sẽ được c?p quy?n ADMIN',
+    message: 'Tài khoản đầu ti?n sẽ được c?p quy?n ADMIN',
   });
 
   const nextRole = String(currentBootstrapStatus.nextRole || (currentBootstrapStatus.needsSetup ? 'ADMIN' : 'USER')).toUpperCase();
@@ -89,7 +89,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
       hasAdmin: !!data?.hasAdmin,
       needsSetup: !!data?.needsSetup,
       nextRole: String(data?.nextRole || (data?.needsSetup ? 'ADMIN' : 'USER')).toUpperCase(),
-      message: data?.message || (data?.needsSetup ? 'Tài khoản d?u ti?n sẽ được c?p quy?n ADMIN' : 'Tài khoản dang k? ti?p theo s? l? USER'),
+      message: data?.message || (data?.needsSetup ? 'Tài khoản đầu ti?n sẽ được c?p quy?n ADMIN' : 'Tài khoản dang k? ti?p theo s? l? USER'),
     });
   };
 
@@ -157,7 +157,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
     }
 
     if (!/^0\d{9,10}$/.test(normalizePhone(form.phone))) {
-      setError('S? điện thoại ph?i bắt đầu b?ng 0 v? g?m 10-11 ch? s?.');
+      setError('S? điện thoại ph?i bắt đầu bằng 0 v? g?m 10-11 ch? s?.');
       return false;
     }
 
@@ -259,7 +259,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
         {registeredData ? (
           <div className="space-y-6 text-center py-4">
             <div className="text-gray-600 text-base font-medium">
-              Bản c? mu?n đăng nhập tự động b?ng tài khoản v?a tạo hay quay v? trang đăng nhập?
+              Bản c? mu?n đăng nhập tự động bằng tài khoản v?a tạo hay quay v? trang đăng nhập?
             </div>
             
             <div className="space-y-3">
