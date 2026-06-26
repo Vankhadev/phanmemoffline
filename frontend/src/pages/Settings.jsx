@@ -1087,7 +1087,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       setShowPrintTemplateModal(true);
       setTimedNotice('print-templates', setPrintTemplatesNotice, {
         tone: 'success',
-        message: '?? t?o mẫu in m?i. Editor dang m? d? thi?t k? v? autosave draft.',
+        message: '?? t?o m?u in m?i. Editor ?ang m? ?? thi?t k?, b?m L?u ho?c Publish ?? l?u.'
       }, 3000);
     } catch (error) {
       setTimedNotice('print-templates', setPrintTemplatesNotice, {
@@ -1900,7 +1900,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 <FileText size={18} /> M?u in h?a don ({printTemplates.length})
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Qu?n l? mẫu in d?ng cho h?a don th?t qua API /api/print-templates, editor Canva-like autosave draft theo revision v? preview b?ng h?a don th?t.
+                Qu?n l? m?u in d?ng cho h?a ??n th?t qua API /api/print-templates, editor Canva-like k?o th?, resize, publish sang layout in th?t.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -2502,7 +2502,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <h3 className="mb-2 font-bold text-gray-800">Tab M?u in h?a don</h3>
               <ul className="list-disc space-y-1 pl-5">
                 <li>Danh s?ch mẫu in l?y t? API th?t <strong>/api/print-templates</strong>, khứng dụng mock cho CRUD ho?c editor ch?nh th?c.</li>
-                <li>Editor Canva-like h? tr? k?o th?, resize, zoom, grid, snap, autosave draft theo revision, publish v? discard draft.</li>
+                <li>Editor Canva-like h? tr? k?o th?, resize, zoom, grid, snap, L?u v? Publish sang layout in th?t, preview b?ng h?a ??n th?t.</li>
                 <li>Preview editor v? renderer in d?ng dữ liệu h?a don th?t t? API <strong>/api/invoices/:idOrCode/print</strong>; logo upload/x?a qua asset endpoint ri?ng.</li>
               </ul>
             </div>
