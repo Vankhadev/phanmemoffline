@@ -1,4 +1,4 @@
-import {
+﻿import {
   BringToFront,
   Copy,
   Grid3X3,
@@ -131,14 +131,12 @@ export default function EditorToolbar({
           </button>
         </div>
 
+        {/* PHẦN 9: chỉ giữ Lưu + Publish, bỏ "Lưu draft"/"Bỏ draft" */}
         <button type="button" onClick={onSaveDraft} disabled={!canManage || busy === 'draft'}>
-          {busy === 'draft' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Lưu draft
+          {busy === 'draft' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Lưu
         </button>
         <button type="button" className="invoice-editor-toolbar-publish" onClick={onPublish} disabled={!canManage || !onPublish || busy === 'publish'}>
           {busy === 'publish' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} Publish
-        </button>
-        <button type="button" className="invoice-editor-toolbar-danger" onClick={onDiscardDraft} disabled={!canManage || !template?.id || busy === 'discard'}>
-          {busy === 'discard' ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Bỏ draft
         </button>
       </div>
     </div>

@@ -23,7 +23,6 @@ import EditorToolbar from './editor/EditorToolbar';
 import ElementPalette from './editor/ElementPalette';
 import LayerPanel from './editor/LayerPanel';
 import PropertiesPanel from './editor/PropertiesPanel';
-import useTemplateAutosave from './editor/useTemplateAutosave';
 import useTemplateEditorState from './editor/useTemplateEditorState';
 import { buildEditorMeta, getEditorPaperDimensions } from './editor/templateSchemaAdapter';
 import {
@@ -67,7 +66,7 @@ function isRevisionConflict(error) {
   return Number(error?.status) === 409 || code === 'PRINT_TEMPLATE_REVISION_CONFLICT';
 }
 
-function buildConflictNotice(error, fallback = 'M?u in d? du?c c?p nh?t ? phi?n kh?c.') {
+function buildConflictNotice(error, fallback = 'M?u in d? du?c cập nhật ? phi?n kh?c.') {
   const currentRevision = error?.data?.details?.current_revision || error?.data?.current_revision;
   const suffix = currentRevision ? ` Revision hiện tại trên server: ${currentRevision}.` : '';
   return `${getErrorMessage(error, fallback)}${suffix} Bấm “Tải lại” để lấy draft mới nhất trước khi tiếp tục.`;
@@ -110,9 +109,6 @@ function hasPreviewPayload(payload) {
   return Boolean(payload && typeof payload === 'object' && Object.keys(payload).length > 0);
 }
 
-function makeAutosaveBaselineKey(item = {}, fallback = {}) {
-  return `${item?.id || fallback?.id || 'template'}:${item?.revision || fallback?.revision || 1}:${item?.updated_at || item?.last_autosaved_at || item?.published_at || Date.now()}`;
-}
 
 export default function PrintTemplateEditorModal({
   show,
@@ -127,11 +123,9 @@ export default function PrintTemplateEditorModal({
   const [previewPayload, setPreviewPayload] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
-  const [autosaveBaselineKey, setAutosaveBaselineKey] = useState('initial');
   const [editorMode, setEditorMode] = useState('canvas');
   const [sapoDraft, setSapoDraft] = useState(() => buildSapoDraftFromTemplate(template || {}));
   const [canvasInteracting, setCanvasInteracting] = useState(false);
-  const [autosaveEnabled, setAutosaveEnabled] = useState(true);
   const htmlEditorRef = useRef(null);
 
   const editor = useTemplateEditorState(template || {});
@@ -149,7 +143,6 @@ export default function PrintTemplateEditorModal({
       const item = normalizeApiItem(data);
       editor.setTemplateFromServer(item || template);
       setSapoDraft(buildSapoDraftFromTemplate(item || template));
-      setAutosaveBaselineKey(makeAutosaveBaselineKey(item, template));
       return item;
     } catch (error) {
       setNotice(buildNotice('error', getErrorMessage(error, 'Không thể tải chi tiết mẫu in.')));
@@ -174,7 +167,7 @@ export default function PrintTemplateEditorModal({
       const idOrCode = latest.invoice_code || latest.id;
       if (!idOrCode) {
         setPreviewPayload({});
-        setPreviewError('H?a don m?i nh?t thi?u m?/ID d? g?i API preview. Editor v?n hi?n th? realtime b?ng d? li?u r?ng an to?n.');
+        setPreviewError('H?a don m?i nh?t thi?u m?/ID d? g?i API preview. Editor v?n hi?n th? realtime b?ng dữ liệu r?ng an to?n.');
         return;
       }
       const payload = await invoicesApi.printData(idOrCode, templateId ? { template_id: templateId } : {});
@@ -191,6 +184,35 @@ export default function PrintTemplateEditorModal({
       setPreviewLoading(false);
     }
   }, [activeTemplate?.id, show]);
+
+  // Migration nh?: x?a c?c key autosave/draft c? trong localStorage/sessionStorage (n?u c?).
+  useEffect(() => {
+    if (!show) return;
+    if (typeof window === 'undefined') return;
+    try {
+      const LEGACY_KEY_PATTERNS = [
+        /^kha_print_template.*autosave/i,
+        /^kha_print_template.*draft/i,
+        /^print_template.*autosave/i,
+        /^print_template.*draft/i,
+        /^invoice_editor.*autosave/i,
+        /^invoice_editor.*draft/i,
+        /^template_editor.*autosave/i,
+        /^template_editor.*draft/i,
+      ];
+      const cleanStorage = (storage) => {
+        if (!storage) return;
+        const toRemove = [];
+        for (let i = 0; i < storage.length; i += 1) {
+          const key = storage.key(i);
+          if (key && LEGACY_KEY_PATTERNS.some(pattern => pattern.test(key))) toRemove.push(key);
+        }
+        toRemove.forEach(key => { try { storage.removeItem(key); } catch (_) {} });
+      };
+      cleanStorage(window.localStorage);
+      cleanStorage(window.sessionStorage);
+    } catch (_) { /* ignore */ }
+  }, [show]);
 
   useEffect(() => {
     if (!show) return;
@@ -264,38 +286,11 @@ export default function PrintTemplateEditorModal({
     [previewPayload],
   );
 
-  const autosave = useTemplateAutosave({
-    templateId: activeTemplate?.id,
-    enabled: Boolean(canManage && autosaveEnabled),
-    document: editor.document,
-    settings: editor.settings,
-    revision: editor.revision,
-    baselineKey: autosaveBaselineKey,
-    onSaved: (item) => {
-      if (!item) return;
-      editor.setRevision(item.revision || editor.revision);
-      editor.setTemplate(current => ({ ...current, ...item }));
-      onSaved?.(item);
-    },
-    onConflict: (conflict) => {
-      setNotice(buildNotice('error', `${conflict.message} Bấm “Tải lại” để lấy draft mới nhất trước khi tiếp tục.`));
-    },
-    onError: (error) => {
-      setNotice(buildNotice('error', getErrorMessage(error, 'Autosave mẫu in thất bại.')));
-    },
-  });
-
-  const hasConflict = autosave.status === 'conflict';
-
   const markRevisionConflict = useCallback((error, fallback) => {
-    const conflict = {
-      message: buildConflictNotice(error, fallback),
-      currentRevision: error?.data?.details?.current_revision || error?.data?.current_revision || null,
-      expectedRevision: error?.data?.details?.expected_revision || error?.data?.expected_revision || editor.revision,
-    };
-    autosave.markConflict(conflict);
-    setNotice(buildNotice('error', conflict.message));
-  }, [autosave, editor.revision]);
+    const currentRevision = error?.data?.details?.current_revision || error?.data?.current_revision || null;
+    const suffix = currentRevision ? ` Revision hi?n t?i tr?n server: ${currentRevision}.` : '';
+    setNotice(buildNotice('error', `${getErrorMessage(error, fallback)}${suffix} B?m ?T?i l?i? ?? l?y b?n m?i nh?t tr??c khi ti?p t?c.`));
+  }, []);
 
   const handleFitZoom = useCallback(() => {
     const page = getEditorPaperDimensions(editor.document);
@@ -305,46 +300,49 @@ export default function PrintTemplateEditorModal({
     setEditorSettings(current => ({ ...current, editor: { ...current.editor, zoom: Math.round(nextZoom * 100) / 100 } }));
   }, [editor.document, setEditorSettings]);
 
-  const saveDraftNow = useCallback(async () => {
+  const handleSave = useCallback(async () => {
     if (!activeTemplate?.id) {
-      setNotice(buildNotice('error', 'M?u demo chua c? tr?n server. H?y c?u h?nh MySQL v? t?o m?u in tru?c khi luu draft.'));
+      setNotice(buildNotice('error', 'M?u demo ch?a c? tr?n server. H?y t?o m?u in tr??c khi l?u.'));
       return null;
     }
-    setBusy('draft');
+    setBusy('save');
     setNotice(null);
     try {
-      const currentRevision = editor.revision;
-      const data = await printTemplatesApi.autosave(activeTemplate.id, {
-        revision: currentRevision,
-        layout_json: editor.document,
-        settings_json: editor.settings,
+      // L?u layout hi?n t?i v?o database/config ch?nh (kh?ng t?o draft).
+      const payload = buildTemplatePayloadFromDocument(activeTemplate, editor.document, editor.settings);
+      const data = await printTemplatesApi.update(activeTemplate.id, {
+        layout_json: payload.layout_json,
+        settings_json: payload.settings_json,
+        paper_size: payload.paper_size,
+        orientation: payload.orientation,
+        template_type: activeTemplate.template_type || 'order',
+        status: activeTemplate.status === 'archived' ? 'active' : activeTemplate.status || 'active',
         editor_meta_json: buildEditorMeta(editor.settings, { action: 'manual-save' }),
       });
       const item = normalizeApiItem(data);
       if (item) {
-        // Giữ nguyên canvas hiện tại để tránh nhảy layout sau khi lưu.
+        // Ch? c?p nh?t metadata, KH?NG g?i setTemplateFromServer ?? gi? canvas hi?n t?i.
         editor.setRevision(item.revision || editor.revision);
-        setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
-        autosave.markSaved(item);
+        editor.setTemplate(current => ({ ...current, ...item }));
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'D? luu draft m?u in.'));
+      setNotice(buildNotice('success', '?? l?u m?u in. Layout hi?n t?i ???c gi? nguy?n.'));
       return item;
     } catch (error) {
       if (isRevisionConflict(error)) {
-        markRevisionConflict(error, 'Kh?ng th? luu draft v? m?u in d? du?c c?p nh?t ? phi?n kh?c.');
+        markRevisionConflict(error, 'Kh?ng th? l?u m?u in: ?? ???c c?p nh?t ? phi?n kh?c.');
       } else {
-        setNotice(buildNotice('error', getErrorMessage(error, 'Không thể lưu draft mẫu in.')));
+        setNotice(buildNotice('error', getErrorMessage(error, 'Kh?ng th? l?u m?u in.')));
       }
       return null;
     } finally {
       setBusy('');
     }
-  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved]);
+  }, [activeTemplate, editor, markRevisionConflict, onSaved]);
 
   const handlePublish = useCallback(async () => {
     if (!activeTemplate?.id) {
-      setNotice(buildNotice('error', 'M?u demo chua c? tr?n server. H?y t?o m?u in tr?n server tru?c khi publish.'));
+      setNotice(buildNotice('error', 'M?u demo chua c? tr?n server. H?y t?o mẫu in tr?n server tru?c khi publish.'));
       return;
     }
     setBusy('publish');
@@ -361,62 +359,33 @@ export default function PrintTemplateEditorModal({
       const item = normalizeApiItem(data);
       if (item) {
         editor.setRevision(item.revision || editor.revision);
-        setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
-        autosave.markSaved(item);
+        editor.setTemplate(current => ({ ...current, ...item }));
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'D? publish m?u in. Trang in h?a don s? d?ng b?n published m?i.'));
+      setNotice(buildNotice('success', 'Đã publish mẫu in. Trang in hóa đơn sẽ dùng bản published mới.'));
     } catch (error) {
       if (isRevisionConflict(error)) {
-        markRevisionConflict(error, 'Kh?ng th? publish v? m?u in d? du?c c?p nh?t ? phi?n kh?c.');
+        markRevisionConflict(error, 'Kh?ng th? publish v? mẫu in d? du?c cập nhật ? phi?n kh?c.');
       } else {
         setNotice(buildNotice('error', getErrorMessage(error, 'Không thể publish mẫu in.')));
       }
     } finally {
       setBusy('');
     }
-  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved]);
-
-  const handleDiscardDraft = useCallback(async () => {
-    if (!activeTemplate?.id) return;
-    if (!window.confirm('B? draft hi?n t?i v? quay v? b?n published?')) return;
-    setBusy('discard');
-    setNotice(null);
-    try {
-      const currentRevision = editor.revision;
-      const data = await printTemplatesApi.discardDraft(activeTemplate.id, { revision: currentRevision });
-      const item = normalizeApiItem(data);
-      if (item) {
-        editor.setRevision(item.revision || editor.revision);
-        setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
-        autosave.resetAutosave(item.revision || editor.revision);
-        onSaved?.(item);
-      }
-      setNotice(buildNotice('success', 'D? b? draft v? kh?i ph?c b?n published.'));
-    } catch (error) {
-      if (isRevisionConflict(error)) {
-        markRevisionConflict(error, 'Kh?ng th? b? draft v? m?u in d? du?c c?p nh?t ? phi?n kh?c.');
-      } else {
-        setNotice(buildNotice('error', getErrorMessage(error, 'Không thể bỏ draft mẫu in.')));
-      }
-    } finally {
-      setBusy('');
-    }
-  }, [activeTemplate?.id, autosave, editor, markRevisionConflict, onSaved]);
+  }, [activeTemplate?.id, editor, markRevisionConflict, onSaved]);
 
   const handleReload = useCallback(async () => {
     setBusy('reload');
     try {
       const item = await loadTemplateDetail();
       if (item) {
-        autosave.resetAutosave(item.revision || editor.revision);
         onSaved?.(item);
       }
       await loadPreviewInvoice(item?.id || activeTemplate?.id);
     } finally {
       setBusy('');
     }
-  }, [activeTemplate?.id, autosave, editor.revision, loadPreviewInvoice, loadTemplateDetail, onSaved]);
+  }, [activeTemplate?.id, loadPreviewInvoice, loadTemplateDetail, onSaved]);
 
   const handleLogoChange = useCallback(async (event) => {
     const file = event.target.files?.[0] || null;
@@ -452,7 +421,7 @@ export default function PrintTemplateEditorModal({
         editor.setRevision(item.revision || editor.revision);
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'D? x?a logo m?u in.'));
+      setNotice(buildNotice('success', 'D? x?a logo mẫu in.'));
     } catch (error) {
       setNotice(buildNotice('error', getErrorMessage(error, 'Không thể xóa logo.')));
     } finally {
@@ -487,15 +456,11 @@ export default function PrintTemplateEditorModal({
     editor.beginHistory();
   }, [editor]);
 
+  // PHẦN 9: không autosave sau kéo thả - vị trí chỉ lưu khi bấm Lưu (giữ nguyên vị trí)
   const handleCanvasGestureEnd = useCallback(() => {
     editor.endHistory();
     window.requestAnimationFrame(() => setCanvasInteracting(false));
-    if (canManage && activeTemplate?.id && autosaveEnabled && !busy) {
-      window.setTimeout(() => {
-        void saveDraftNow();
-      }, 0);
-    }
-  }, [activeTemplate?.id, autosaveEnabled, busy, canManage, editor, saveDraftNow]);
+  }, [editor]);
 
   useEffect(() => {
     if (!show || editorMode !== 'canvas') return undefined;
@@ -632,10 +597,9 @@ export default function PrintTemplateEditorModal({
       if (item) {
         editor.setTemplateFromServer(item, { preferDraft: false });
         setSapoDraft(buildSapoDraftFromTemplate(item));
-        setAutosaveBaselineKey(makeAutosaveBaselineKey(item, activeTemplate));
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'D? luu m?u in ki?u Sapo. Trang in h?a don s? d?ng b?n HTML m?i.'));
+      setNotice(buildNotice('success', 'D? luu mẫu in ki?u Sapo. Trang in h?a don s? d?ng b?n HTML m?i.'));
     } catch (error) {
       setNotice(buildNotice('error', getErrorMessage(error, 'Không thể lưu mẫu in kiểu Sapo.')));
     } finally {
@@ -651,7 +615,7 @@ export default function PrintTemplateEditorModal({
         <div className="invoice-editor-topbar">
           <div>
             <h1 id="invoice-editor-title">Chỉnh sửa mẫu in đơn hàng</h1>
-            <p>{editorMode === 'sapo' ? 'So?n n?i dung m?u in, ch?n t? kh?a v? xem tr??c A4 theo d? li?u h?a ?n th?t.' : 'K?o th?, resize, snap grid, autosave draft theo revision v? publish sang layout in th?t.'}</p>
+            <p>{editorMode === 'sapo' ? 'So?n n?i dung m?u in, ch?n t? kh?a v? xem tr??c A4 theo d? li?u h?a ??n th?t.' : 'K?o th?, resize, snap grid. B?m ?L?u? ?? l?u layout, b?m ?Publish? ?? ??nh d?u b?n in.'}</p>
           </div>
           <div className="invoice-editor-topbar-actions">
             <div className="invoice-editor-mode-toggle" role="tablist" aria-label="Chế độ chỉnh sửa mẫu in">
@@ -662,10 +626,7 @@ export default function PrintTemplateEditorModal({
                 <Type size={15} /> Kéo thả
               </button>
             </div>
-            {/* Toggle autosave */}
-            <label className="invoice-editor-autosave-toggle" style={{ marginLeft: '1rem' }}>
-              <input type="checkbox" checked={autosaveEnabled} onChange={e => setAutosaveEnabled(e.target.checked)} disabled={!canManage || busy === 'draft' || busy === 'publish'} /> Tự động lưu
-            </label>
+            {/* PHẦN 9: bỏ checkbox Tự động lưu - chỉ còn Lưu + Publish */}
             <button type="button" className="invoice-editor-close" onClick={onClose} disabled={busy === 'publish' || busy === 'sapo-save'}>
               <X size={20} />
             </button>
@@ -676,8 +637,6 @@ export default function PrintTemplateEditorModal({
           <EditorToolbar
             template={activeTemplate}
             settings={editor.settings}
-            autosaveStatus={autosave.status}
-            lastSavedAt={autosave.lastSavedAt}
             busy={busy}
             canManage={canManage}
             selectedId={editor.selectedId}
@@ -688,9 +647,8 @@ export default function PrintTemplateEditorModal({
             onToggleRuler={() => setEditorSettings(current => ({ ...current, editor: { ...current.editor, showRuler: current.editor?.showRuler === false } }))}
             onToggleSnap={() => setEditorSettings(current => ({ ...current, editor: { ...current.editor, snapEnabled: current.editor?.snapEnabled === false } }))}
             onFitZoom={handleFitZoom}
-            onSaveDraft={saveDraftNow}
+            onSave={handleSave}
             onPublish={handlePublish}
-            onDiscardDraft={handleDiscardDraft}
             onReload={handleReload}
             onLogoChange={handleLogoChange}
             onRemoveLogo={handleRemoveLogo}
