@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Lightweight JSON database layer for the offline-first backend.
  *
  * The helpers in this module intentionally keep a small synchronous API because
@@ -639,6 +639,7 @@ const DB_WRITE_RETRY_ATTEMPTS = Math.max(1, Number(process.env.KHA_DB_WRITE_RETR
 const DB_WRITE_RETRY_BASE_DELAY_MS = Math.max(1, Number(process.env.KHA_DB_WRITE_RETRY_BASE_DELAY_MS) || 25);
 const DB_WRITE_RETRY_MAX_DELAY_MS = Math.max(DB_WRITE_RETRY_BASE_DELAY_MS, Number(process.env.KHA_DB_WRITE_RETRY_MAX_DELAY_MS) || 250);
 let hasLoadedDb = false;
+let preMigrationBackupDone = false; // KHA hardening (PHẦN 1.3): tránh backup lại trong cùng session
 let atomicWriteDepth = 0;
 
 function sleepSync(ms) {
@@ -2312,6 +2313,23 @@ function loadDB(options = {}) {
   try {
     replaceDB(nextDB);
     const beforeMigrateSnapshot = JSON.stringify(getDb());
+    // KHA hardening (PHẦN 1.3 + PHẦN 2.6): backup an toàn TRƯỚC khi migrate khi có dữ liệu thực.
+    // Backup fail => KHÔNG migrate (yêu cầu 1.6 - fix nguyên nhân gốc, không che lỗi).
+    const hasRealData = Array.isArray(getDb().users) && getDb().users.length > 0
+      || Array.isArray(getDb().products) && getDb().products.length > 0
+      || Array.isArray(getDb().invoices) && getDb().invoices.length > 0;
+    if (hasRealData && !preMigrationBackupDone) {
+      try {
+        const preMigBackup = createDbBackup('pre-migration', { skipRetention: false });
+        if (!preMigBackup) throw new Error('Backup trước migrate thất bại - hủy migrate để bảo vệ dữ liệu');
+        preMigrationBackupDone = true;
+        console.log(`[KHA DB] Đã backup trước migrate: ${preMigBackup.file}`);
+      } catch (backupErr) {
+        hasLoadedDb = false;
+        console.error('[KHA DB] Backup trước migrate thất bại, hủy migrate:', backupErr.message);
+        throw backupErr;
+      }
+    }
     migrateDB();
     const afterMigrateSnapshot = JSON.stringify(getDb());
     if (shouldPersist || afterMigrateSnapshot !== beforeMigrateSnapshot) {
