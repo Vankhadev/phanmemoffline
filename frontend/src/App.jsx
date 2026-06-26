@@ -377,7 +377,7 @@ function buildScreenGuide(navGroups, currentPath) {
       'Bấm Thêm để tạo hồ sơ khách hàng mới.',
       'Nhập tên, số điện thoại, email và địa chỉ nếu có.',
       'Bấm Sửa để cập nhật thông tin khi khách đổi liên hệ.',
-      'M? l?ch s? mua h?ng d? xem c?c don d? ph?t sinh.',
+      'M? lịch sử mua h?ng d? xem c?c don d? ph?t sinh.',
     ],
     '/kho-hang': [
       'Xem tồn kho theo kho hoặc theo nhóm hàng.',
@@ -446,7 +446,7 @@ function buildScreenGuide(navGroups, currentPath) {
     '/bang-luong-nhan-vien': [
       'Chọn tháng cần xem bảng lương.',
       'Kiểm tra doanh thu, hoa hồng, thưởng và trạng thái chi trả.',
-      'C?p nh?t tr?ng th?i d? thanh to?n khi ho?n t?t chi tr?.',
+      'Cập nhật tr?ng th?i d? thanh to?n khi ho?n t?t chi tr?.',
       'Xuất file nếu cần lưu hoặc gửi cho kế toán.',
     ],
     '/bao-cao-theo-don-hang': [
@@ -1225,7 +1225,7 @@ function DesktopApp() {
       try {
         await authApi.logout();
       } catch (_) {
-        // N?u token d? h?t h?n, apiClient d? cleanup v? ph?t s? ki?n 401.
+        // N?u token d? hết hạn, apiClient d? cleanup v? ph?t s? ki?n 401.
       }
     }
     clearAuthSession({ clearVolatile: true, includePending: true });

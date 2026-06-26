@@ -45,7 +45,7 @@ function formatNumber(value) {
 
 const ACCOUNTING_LINKS = [
   { to: '/ke-toan/bao-cao-thue', label: 'B?o c?o thu? GTGT', description: 'Thu? d?u v?o, d?u ra v? ph?i n?p', icon: ReceiptText, tone: 'blue' },
-  { to: '/ke-toan/bao-cao-ton-kho', label: 'B?o c?o t?n kho', description: 'Gi? v?n, gi? tr? t?n v? c?nh b?o kho', icon: Warehouse, tone: 'amber' },
+  { to: '/ke-toan/bao-cao-ton-kho', label: 'B?o c?o tồn kho', description: 'Gi? v?n, gi? tr? t?n v? c?nh b?o kho', icon: Warehouse, tone: 'amber' },
   { to: '/ke-toan/nhat-ky', label: 'Nh?t k? ho?t d?ng', description: 'Tra c?u thay d?i nghi?p v? k? to?n', icon: FileClock, tone: 'violet' },
 ];
 
@@ -53,7 +53,7 @@ const PREPARED_FEATURES = [
   { label: 'Qu? k? to?n', description: 'T?ng h?p thu, chi v? s? du qu?', icon: Landmark },
   { label: 'C?ng n?', description: 'Kh?ch h?ng v? nh? cung c?p', icon: UsersRound },
   { label: 'H?a don di?n t?', description: 'H?a don d?u v?o v? d?u ra', icon: BookOpenCheck },
-  { label: 'T?i kho?n ng?n h?ng', description: 'Danh m?c t?i kho?n nh?n/chi', icon: Banknote },
+  { label: 'T?i kho?n ng?n h?ng', description: 'Danh m?c tài khoản nh?n/chi', icon: Banknote },
 ];
 
 function toneClasses(tone) {
@@ -117,7 +117,7 @@ export default function AccountingDashboard({ user }) {
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-200/80">Module k? to?n</div>
               <h1 className="mt-1 text-2xl font-bold">{isCashier ? 'B?o c?o doanh thu' : 'T?ng quan k? to?n'}</h1>
-              <p className="mt-1 max-w-3xl text-sm text-emerald-100/75">{isCashier ? 'T?i kho?n thu ng?n ch? du?c xem t?ng h?p doanh thu theo k?.' : '?i?m truy c?p nhanh d?n b?o c?o thu?, t?n kho, nh?t k? v? c?c d? li?u k? to?n c?t l?i.'}</p>
+              <p className="mt-1 max-w-3xl text-sm text-emerald-100/75">{isCashier ? 'T?i kho?n thu ng?n ch? du?c xem t?ng h?p doanh thu theo k?.' : '?i?m truy c?p nhanh d?n báo cáo thu?, tồn kho, nh?t k? v? c?c dữ liệu k? to?n c?t l?i.'}</p>
             </div>
           </div>
         </div>
@@ -136,7 +136,7 @@ export default function AccountingDashboard({ user }) {
       <section className={`grid grid-cols-1 gap-3 ${isCashier ? 'sm:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-4'}`}>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide"><TrendingUp size={16} /> T?ng doanh thu</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatVND(summary?.total_revenue)}</div></div>
         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-700"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide"><ReceiptText size={16} /> S? h?a don</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatNumber(summary?.invoice_count)}</div></div>
-        {!isCashier && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-700"><div className="text-xs font-bold uppercase tracking-wide">T?ng gi? v?n</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatVND(summary?.total_cost)}</div></div>}
+        {!isCashier && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-700"><div className="text-xs font-bold uppercase tracking-wide">T?ng giá vốn</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatVND(summary?.total_cost)}</div></div>}
         {!isCashier && <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-violet-700"><div className="text-xs font-bold uppercase tracking-wide">L?i nhu?n</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatVND(summary?.total_profit)}</div></div>}
       </section>
 
@@ -150,8 +150,8 @@ export default function AccountingDashboard({ user }) {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">N?i dung ch?nh</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Xem t?ng doanh thu, s? h?a don, gi? v?n v? l?i nhu?n.</li>
-                  <li>M? nhanh b?o c?o thu?, t?n kho v? nh?t k? ho?t d?ng.</li>
+                  <li>Xem t?ng doanh thu, s? h?a don, giá vốn v? lợi nhuận.</li>
+                  <li>M? nhanh báo cáo thu?, tồn kho v? nh?t k? ho?t d?ng.</li>
                   <li>L?c theo kho?ng ng?y d? d?i chi?u s? li?u.</li>
                 </ul>
               </div>

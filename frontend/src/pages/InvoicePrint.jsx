@@ -104,7 +104,7 @@ function isPrintTemplateApiError(error) {
     typeof data.details === 'string' ? data.details : data.details?.message,
     error?.message,
   ].filter(Boolean).join(' ');
-  return /PRINT_TEMPLATE|print[_\s-]*template|m?u in|template_id/i.test(signature);
+  return /PRINT_TEMPLATE|print[_\s-]*template|mẫu in|template_id/i.test(signature);
 }
 
 function getBackendTemplate(data) {
@@ -257,20 +257,20 @@ export default function InvoicePrint() {
         payload = await invoicesApi.printData(idOrCode, {});
         setToast({
           tone: 'warning',
-          message: `${getErrorMessage(printDataErr, 'Template du?c ch?n kh?ng kh? d?ng.')} ?? t?i h?a don b?ng m?u m?c d?nh d? ti?p t?c preview/in.`,
+          message: `${getErrorMessage(printDataErr, 'Template du?c ch?n kh?ng kh? d?ng.')} ?? t?i h?a don b?ng m?u m?c d?nh d? tiếp tục preview/in.`,
         });
       }
 
       if (!payload || typeof payload !== 'object' || !payload.invoice) {
         setData(null);
-        setError('API d? li?u in h?a don tr? v? thi?u th?ng tin h?a don.');
+        setError('API dữ liệu in h?a don tr? v? thi?u th?ng tin h?a don.');
         return;
       }
 
       let nextPayload = payload;
       const templateError = payload.metadata?.print_template_error;
       if (templateError?.message) {
-        setToast({ tone: 'warning', message: getApiErrorMessage(templateError, 'API m?u in tr? l?i; frontend dang d?ng m?u an to?n d? preview/in.') });
+        setToast({ tone: 'warning', message: getApiErrorMessage(templateError, 'API mẫu in trở lại; frontend dang d?ng m?u an to?n d? preview/in.') });
       }
 
       if (!getBackendTemplate(payload)) {
@@ -316,14 +316,14 @@ export default function InvoicePrint() {
               // Gi? fallback frontend b?n du?i n?u API m?u m?c d?nh cung l?i.
             }
           }
-          setToast({ tone: 'warning', message: getErrorMessage(templateErr, 'Chua t?i du?c m?u in t? API /api/print-templates; dang d?ng m?u m?c d?nh frontend d? preview/in.') });
+          setToast({ tone: 'warning', message: getErrorMessage(templateErr, 'Chua t?i du?c mẫu in t? API /api/print-templates; dang d?ng m?u m?c d?nh frontend d? preview/in.') });
         }
       }
 
       setData(nextPayload);
     } catch (err) {
       setData(null);
-      const message = getErrorMessage(err, 'Kh?ng th? t?i d? li?u h?a don.');
+      const message = getErrorMessage(err, 'Kh?ng th? t?i dữ liệu h?a don.');
       setError(message);
       setToast({ tone: 'error', message });
     } finally {
@@ -341,7 +341,7 @@ export default function InvoicePrint() {
     const handleTemplateUpdated = (event) => {
       const changedTemplateId = event?.detail?.templateId;
       if (templateId && changedTemplateId && String(changedTemplateId) !== String(templateId)) return;
-      setToast({ tone: 'success', message: 'M?u in v?a du?c c?p nh?t. Preview dang t?i l?i d? li?u m?i.' });
+      setToast({ tone: 'success', message: 'M?u in v?a du?c cập nhật. Preview dang t?i l?i dữ liệu m?i.' });
       loadInvoice();
     };
     window.addEventListener(PRINT_TEMPLATE_UPDATED_EVENT, handleTemplateUpdated);
@@ -525,7 +525,7 @@ export default function InvoicePrint() {
           <div>
             <h1>In {documentLabel.toLowerCase()} {page.paperSize}</h1>
             <p>
-              {invoiceCode ? `M?/ID: ${invoiceCode}` : 'Preview g?i d? li?u th?t t? API backend'}
+              {invoiceCode ? `M?/ID: ${invoiceCode}` : 'Preview g?i dữ liệu th?t t? API backend'}
               {hasBackendTemplate ? ` ? M?u: ${activeTemplate.template_name || activeTemplate.name || activeTemplate.id}` : ` ? M?c d?nh ${page.paperSize}`}
             </p>
           </div>
@@ -607,8 +607,8 @@ export default function InvoicePrint() {
         <div className="invoice-state-card no-print">
           <Loader size={28} className="animate-spin text-blue-500" />
           <div>
-            <b>?ang t?i d? li?u h?a don...</b>
-            <p>Preview ch? hi?n th? sau khi API backend tr? d? li?u th?t.</p>
+            <b>đang t?i dữ liệu h?a don...</b>
+            <p>Preview ch? hi?n th? sau khi API backend tr? dữ liệu th?t.</p>
           </div>
         </div>
       ) : error ? (

@@ -146,10 +146,10 @@ function getPeriodRange({ period, selectedDate, selectedMonth, selectedYear, fro
   const normalizedFrom = normalizeDateInputValue(from);
   const normalizedTo = normalizeDateInputValue(to);
   if (!hasDateValue(from)) return { valid: false, message: 'Vui l?ng ch?n ng?y b?t d?u.' };
-  if (!hasDateValue(to)) return { valid: false, message: 'Vui l?ng ch?n ng?y k?t th?c.' };
+  if (!hasDateValue(to)) return { valid: false, message: 'Vui l?ng ch?n ng?y kết thúc.' };
   if (!normalizedFrom) return { valid: false, message: 'Ng?y b?t d?u kh?ng h?p l?.' };
-  if (!normalizedTo) return { valid: false, message: 'Ng?y k?t th?c kh?ng h?p l?.' };
-  if (normalizedFrom > normalizedTo) return { valid: false, message: 'Ng?y b?t d?u kh?ng du?c l?n hon ng?y k?t th?c.' };
+  if (!normalizedTo) return { valid: false, message: 'Ng?y kết thúc kh?ng h?p l?.' };
+  if (normalizedFrom > normalizedTo) return { valid: false, message: 'Ng?y b?t d?u kh?ng du?c l?n hon ng?y kết thúc.' };
   return { valid: true, from: normalizedFrom, to: normalizedTo };
 }
 
@@ -637,7 +637,7 @@ function DateRangeInlinePicker({
   const normalizedTo = normalizeDateInputValue(to);
   const hasInvalidRange = Boolean(normalizedFrom && normalizedTo && normalizedFrom > normalizedTo);
   const helperText = hasInvalidRange
-    ? 'Ng?y b?t d?u kh?ng du?c l?n hon ng?y k?t th?c.'
+    ? 'Ng?y b?t d?u kh?ng du?c l?n hon ng?y kết thúc.'
     : label;
   const canApply = !disabled && !isApplying && Boolean(normalizedFrom && normalizedTo && !hasInvalidRange);
 
@@ -658,7 +658,7 @@ function DateRangeInlinePicker({
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
             <Calendar size={15} />
           </span>
-          Ch?n kho?ng ng?y b?o c?o
+          Ch?n kho?ng ng?y báo cáo
         </div>
         <button
           type="button"
@@ -678,7 +678,7 @@ function DateRangeInlinePicker({
             value={from}
             onChange={onFromChange}
             disabled={disabled || isApplying}
-            ariaLabel="Ch?n t? ng?y c?a b?o c?o s?n ph?m"
+            ariaLabel="Ch?n t? ng?y c?a báo cáo s?n ph?m"
           />
         </div>
         <div>
@@ -687,7 +687,7 @@ function DateRangeInlinePicker({
             value={to}
             onChange={onToChange}
             disabled={disabled || isApplying}
-            ariaLabel="Ch?n d?n ng?y c?a b?o c?o s?n ph?m"
+            ariaLabel="Ch?n d?n ng?y c?a báo cáo s?n ph?m"
           />
         </div>
       </div>
@@ -754,13 +754,13 @@ export default function ProductReport() {
       });
       const res = await fetch(endpoint);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Kh?ng l?p du?c b?o c?o s?n ph?m');
+      if (!res.ok) throw new Error(data.error || 'Kh?ng l?p du?c báo cáo s?n ph?m');
       setReport(data);
       setLastFetchedAt(new Date());
       return true;
     } catch (err) {
       setReport(null);
-      setError(err.message || 'Kh?ng l?p du?c b?o c?o s?n ph?m');
+      setError(err.message || 'Kh?ng l?p du?c báo cáo s?n ph?m');
       return false;
     } finally {
       setLoading(false);
@@ -868,7 +868,7 @@ export default function ProductReport() {
       });
       const res = await fetch(endpoint);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Kh?ng t?o du?c b?o c?o s?n ph?m');
+      if (!res.ok) throw new Error(data.error || 'Kh?ng t?o du?c báo cáo s?n ph?m');
 
       const appliedDraft = { ...reportDraft, from: request.range.from, to: request.range.to };
       if (reportDraft.period === 'day') appliedDraft.selectedDate = request.range.from;
@@ -876,10 +876,10 @@ export default function ProductReport() {
       setReport(data);
       setLastFetchedAt(new Date());
       setError('');
-      setCreatedNotice(`?? t?o b?o c?o ${getPeriodDescription(appliedDraft, request.range)} ? ${getStatusLabel(appliedDraft.status)} ? ${formatNumber(data.summary?.orderCount)} don h?ng ? ${formatNumber(data.summary?.totalQuantity)} s?n ph?m ? ${formatVND(data.summary?.totalRevenue)}.`);
+      setCreatedNotice(`?? t?o báo cáo ${getPeriodDescription(appliedDraft, request.range)} ? ${getStatusLabel(appliedDraft.status)} ? ${formatNumber(data.summary?.orderCount)} don h?ng ? ${formatNumber(data.summary?.totalQuantity)} s?n ph?m ? ${formatVND(data.summary?.totalRevenue)}.`);
       setIsCreateModalOpen(false);
     } catch (err) {
-      setCreateError(err.message || 'Kh?ng t?o du?c b?o c?o s?n ph?m');
+      setCreateError(err.message || 'Kh?ng t?o du?c báo cáo s?n ph?m');
     } finally {
       setCreateLoading(false);
     }
@@ -1018,7 +1018,7 @@ export default function ProductReport() {
                 onClick={openCreateModal}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-blue-900 shadow-sm hover:bg-blue-50"
               >
-                <FilePlus size={16} /> Th?m b?o c?o
+                <FilePlus size={16} /> Th?m báo cáo
               </button>
               <button
                 type="button"
@@ -1175,7 +1175,7 @@ export default function ProductReport() {
           <div>
             <div className="flex items-center gap-2">
               <FileText size={18} className="text-blue-600" />
-              <h2 className="font-bold text-gray-800">B?ng b?o c?o s?n ph?m</h2>
+              <h2 className="font-bold text-gray-800">B?ng báo cáo s?n ph?m</h2>
             </div>
             <p className="mt-1 text-sm text-gray-500">
               T?ng h?p theo ng?y v? s?n ph?m/SKU: s? lu?ng b?n, ti?n h?ng, chi?t kh?u, thu? v? th?nh ti?n.
@@ -1238,7 +1238,7 @@ export default function ProductReport() {
         {loading ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
             <Loader size={32} className="animate-spin text-blue-400" />
-            <div className="font-medium text-gray-600">?ang l?p b?o c?o s?n ph?m...</div>
+            <div className="font-medium text-gray-600">đang l?p báo cáo s?n ph?m...</div>
           </div>
         ) : report && rows.length === 0 ? (
           <div className="py-16 text-center">
@@ -1249,7 +1249,7 @@ export default function ProductReport() {
         ) : !report ? (
           <div className="py-16 text-center">
             <div className="mb-3 text-5xl opacity-20">?Y"S</div>
-            <div className="font-semibold text-gray-600">Chua c? d? li?u b?o c?o</div>
+            <div className="font-semibold text-gray-600">Chua c? dữ liệu báo cáo</div>
             <div className="mt-1 text-sm text-gray-400">Ch?n b? l?c th?i gian r?i nh?n ?Th?ng k?.</div>
           </div>
         ) : null}
@@ -1264,9 +1264,9 @@ export default function ProductReport() {
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-blue-200/80">
                     <FilePlus size={15} /> New Product Report
                   </div>
-                  <h3 className="mt-1 text-xl font-bold">T?o b?o c?o s?n ph?m</h3>
+                  <h3 className="mt-1 text-xl font-bold">T?o báo cáo s?n ph?m</h3>
                   <p className="mt-1 text-sm text-blue-100/80">
-                    Ch?n k? b?o c?o, tr?ng th?i don v? t?o b?o c?o t? d? li?u don h?ng hi?n c?.
+                    Ch?n k? báo cáo, tr?ng th?i don v? t?o báo cáo t? dữ liệu don h?ng hi?n c?.
                   </p>
                 </div>
                 <button
@@ -1274,7 +1274,7 @@ export default function ProductReport() {
                   onClick={closeCreateModal}
                   disabled={createLoading}
                   className="rounded-xl border border-white/10 bg-white/10 p-2 text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
-                  aria-label="??ng form t?o b?o c?o"
+                  aria-label="??ng form t?o báo cáo"
                 >
                   <X size={18} />
                 </button>
@@ -1284,7 +1284,7 @@ export default function ProductReport() {
             <form onSubmit={createReport} className="space-y-4 p-5">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-700">Lo?i b?o c?o</label>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">Lo?i báo cáo</label>
                   <select
                     className="input-field w-full"
                     value={reportDraft.period}
@@ -1299,19 +1299,19 @@ export default function ProductReport() {
 
                 {reportDraft.period === 'day' && (
                   <div>
-                    <label className="mb-1 block text-sm font-semibold text-gray-700">Ng?y b?o c?o</label>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700">Ng?y báo cáo</label>
                     <DatePickerField
                       value={reportDraft.selectedDate}
                       onChange={value => updateReportDraft('selectedDate', value)}
                       disabled={createLoading}
-                      ariaLabel="Ch?n ng?y b?o c?o"
+                      ariaLabel="Ch?n ng?y báo cáo"
                     />
                   </div>
                 )}
 
                 {reportDraft.period === 'month' && (
                   <div>
-                    <label className="mb-1 block text-sm font-semibold text-gray-700">Th?ng b?o c?o</label>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700">Th?ng báo cáo</label>
                     <div className="relative">
                       <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
@@ -1327,7 +1327,7 @@ export default function ProductReport() {
 
                 {reportDraft.period === 'year' && (
                   <div>
-                    <label className="mb-1 block text-sm font-semibold text-gray-700">Nam b?o c?o</label>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700">Nam báo cáo</label>
                     <div className="relative">
                       <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
@@ -1350,7 +1350,7 @@ export default function ProductReport() {
                       <div>
                         <div>Kho?ng ng?y t?y ch?nh</div>
                         <p className="mt-1 text-xs font-medium text-blue-700/75">
-                          Ch?n d?c l?p ng?y b?t d?u v? ng?y k?t th?c, h? th?ng l?c bao g?m c? hai ng?y d? ch?n.
+                          Ch?n d?c l?p ng?y b?t d?u v? ng?y kết thúc, hệ thống l?c bao g?m c? hai ng?y d? ch?n.
                         </p>
                       </div>
                     </div>
@@ -1366,12 +1366,12 @@ export default function ProductReport() {
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-gray-700">Ng?y k?t th?c</label>
+                        <label className="mb-1 block text-sm font-semibold text-gray-700">Ng?y kết thúc</label>
                         <DatePickerField
                           value={reportDraft.to}
                           onChange={value => updateReportDraft('to', value)}
                           disabled={createLoading}
-                          ariaLabel="Ch?n ng?y k?t th?c"
+                          ariaLabel="Ch?n ng?y kết thúc"
                           minDate={normalizeDateInputValue(reportDraft.from)}
                         />
                       </div>
@@ -1394,7 +1394,7 @@ export default function ProductReport() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-700">Kho?ng d? li?u</label>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">Kho?ng dữ liệu</label>
                   <div className={`flex min-h-[44px] items-center rounded-xl border px-3 py-2 text-sm font-medium ${createRange.valid ? 'border-blue-100 bg-blue-50 text-blue-700' : 'border-red-200 bg-red-50 text-red-600'}`}>
                     {createRange.valid
                       ? `T? ${formatDateKey(createRange.from)} d?n ${formatDateKey(createRange.to)}`
@@ -1404,7 +1404,7 @@ export default function ProductReport() {
               </div>
 
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                B?o c?o s? g?i API hi?n c?, lu?n lo?i tr? don b? h?y v? c?p nh?t ngay b?ng c?ng 3 ch? s?: s? don h?ng, t?ng s?n ph?m d? b?n, t?ng doanh thu.
+                B?o c?o s? g?i API hi?n c?, lu?n lo?i tr? don b? h?y v? cập nhật ngay b?ng c?ng 3 ch? s?: s? don h?ng, t?ng s?n ph?m d? b?n, t?ng doanh thu.
               </div>
 
               {createError && (
@@ -1428,7 +1428,7 @@ export default function ProductReport() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
                   {createLoading ? <Loader size={16} className="animate-spin" /> : <FilePlus size={16} />}
-                  T?o b?o c?o
+                  T?o báo cáo
                 </button>
               </div>
             </form>
@@ -1440,12 +1440,12 @@ export default function ProductReport() {
         <HelpModal
           show={showHelp}
           onClose={() => setShowHelp(false)}
-          title="Hu?ng d?n b?o c?o s?n ph?m"
+          title="Hu?ng d?n báo cáo s?n ph?m"
           content={[
-            'Bu?c 1: Ch?n k? b?o c?o theo ng?y, th?ng, nam ho?c kho?ng th?i gian t?y ch?nh.',
-            'Bu?c 2: Ch?n tr?ng th?i don h?ng d? quy?t d?nh d? li?u n?o du?c t?nh v?o b?o c?o.',
-            'Bu?c 3: Xem tru?c kho?ng d? li?u d? ki?m tra l?i m?c th?i gian tru?c khi t?o b?o c?o.',
-            'Bu?c 4: Nh?n T?o b?o c?o d? t?i s? lu?ng b?n, doanh thu v? danh s?ch s?n ph?m theo k?.',
+            'Bu?c 1: Ch?n k? báo cáo theo ng?y, th?ng, nam ho?c kho?ng th?i gian t?y ch?nh.',
+            'Bu?c 2: Ch?n tr?ng th?i don h?ng d? quy?t d?nh dữ liệu n?o du?c t?nh v?o báo cáo.',
+            'Bu?c 3: Xem tru?c kho?ng dữ liệu d? ki?m tra l?i m?c th?i gian tru?c khi t?o báo cáo.',
+            'Bu?c 4: Nh?n T?o báo cáo d? t?i s? lu?ng b?n, doanh thu v? danh s?ch s?n ph?m theo k?.',
             'Bu?c 5: D?ng n?t xu?t file d? t?i Excel khi c?n d?i so?t ho?c g?i qu?n l?.',
           ]}
         />

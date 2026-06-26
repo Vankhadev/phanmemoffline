@@ -29,7 +29,7 @@ export default class ErrorBoundary extends Component {
             <ul className="list-disc pl-5 text-gray-600 space-y-2 mb-6">
               <li>Refresh lại trang (Ctrl+F5)</li>
               <li>Kiểm tra console (F12) để xem chi tiết lỗi</li>
-              <li>Đảm bảo backend đang chạy tại port 3001</li>
+              <li>Đảm bảo backend đang chạy tại port 7000</li>
             </ul>
             <div className="bg-gray-100 rounded p-4 text-sm">
               <p className="font-mono text-red-600 break-all">

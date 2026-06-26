@@ -425,7 +425,7 @@ export default function CreateOrder({ user, store }) {
       setCustomerSearch('');
       setShowCustomerForm(false);
       setNewCustomer({ name: '', phone: '', email: '', tax_code: '', customer_type: 'Khách lẻ' });
-      alert(`?? Server offline - Kh?ch h?ng d? du?c luu c?c b?.\nT?n: ${newCustomer.name}\nM? t?m: ${offlineId}\n\nS? d?ng b? khi server tr? l?i.`);
+      alert(`?? Server offline - Kh?ch h?ng d? du?c luu c?c b?.\nT?n: ${newCustomer.name}\nM? t?m: ${offlineId}\n\nS? d?ng b? khi server trở lại.`);
     }
   };
 
@@ -1593,7 +1593,7 @@ export default function CreateOrder({ user, store }) {
     if (!guardServiceLinesBeforeSubmit()) return;
     const missingProductLine = findMissingOrderProductLine();
     if (missingProductLine) {
-      alert(`S?n ph?m "${missingProductLine.product_name || missingProductLine.name || 'd? ch?n'}" kh?ng t?n t?i trong h? th?ng. Vui l?ng ch?n l?i s?n ph?m t? danh s?ch.`);
+      alert(`S?n ph?m "${missingProductLine.product_name || missingProductLine.name || 'd? ch?n'}" kh?ng t?n t?i trong hệ thống. Vui l?ng ch?n l?i s?n ph?m t? danh s?ch.`);
       return;
     }
     if (!guardCartStockBeforeSubmit()) return;
@@ -1733,7 +1733,7 @@ export default function CreateOrder({ user, store }) {
     if (!guardServiceLinesBeforeSubmit()) return;
     const missingProductLine = findMissingOrderProductLine();
     if (missingProductLine) {
-      alert(`S?n ph?m "${missingProductLine.product_name || missingProductLine.name || 'd? ch?n'}" kh?ng t?n t?i trong h? th?ng. Vui l?ng ch?n l?i s?n ph?m t? danh s?ch.`);
+      alert(`S?n ph?m "${missingProductLine.product_name || missingProductLine.name || 'd? ch?n'}" kh?ng t?n t?i trong hệ thống. Vui l?ng ch?n l?i s?n ph?m t? danh s?ch.`);
       return;
     }
     if (!guardCartStockBeforeSubmit()) return;
@@ -2593,7 +2593,7 @@ export default function CreateOrder({ user, store }) {
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Trạng thái đơn</label>
                 <div className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
-                  <span className="text-xs font-medium text-orange-700">{editingInvoiceId ? 'ang ch?nh s?a' : 'Ch? x?c nh?n'}</span>
+                  <span className="text-xs font-medium text-orange-700">{editingInvoiceId ? 'ang chỉnh sửa' : 'Ch? x?c nh?n'}</span>
                   <span className="text-[10px] font-bold text-orange-600">{editingInvoiceId ? 'EDITING' : 'PENDING'}</span>
                 </div>
               </div>

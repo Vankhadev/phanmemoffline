@@ -187,7 +187,7 @@ export default function Payroll() {
     } catch (err) {
       setPayrolls([]);
       setSummary(null);
-      setError(err.message || 'L?i k?t n?i khi t?i b?ng luong');
+      setError(err.message || 'L?i kết nối khi t?i b?ng luong');
     } finally {
       setLoading(false);
     }
@@ -293,7 +293,7 @@ export default function Payroll() {
       setShowForm(false);
       setEditing(null);
       setForm({ ...emptyForm, month: nextFilters.month, year: nextFilters.year });
-      showToast('success', editing ? '?? c?p nh?t b?ng luong th?nh c?ng' : '?? th?m b?ng luong th?nh c?ng');
+      showToast('success', editing ? '?? cập nhật b?ng luong th?nh c?ng' : '?? th?m b?ng luong th?nh c?ng');
       fetchPayrolls(nextFilters).catch(() => {});
     } catch (err) {
       showToast('error', err.message || 'L?i server khi luu b?ng luong');
@@ -333,7 +333,7 @@ export default function Payroll() {
     } catch (err) {
       setPayrolls([]);
       setSummary(null);
-      setError(err.message || 'L?i k?t n?i khi t?i b?ng luong');
+      setError(err.message || 'L?i kết nối khi t?i b?ng luong');
     } finally {
       setLoading(false);
     }
@@ -378,13 +378,13 @@ export default function Payroll() {
                   <li>Nh?n Th?m b?ng luong d? t?o k? luong m?i.</li>
                   <li>Nh?p ng?y l?m, ng?y ngh?, thu?ng v? t?m ?ng.</li>
                   <li>L?c theo th?ng ho?c nam d? xem danh s?ch d? luu.</li>
-                  <li>D?ng n?t S?a ho?c X?a tr?n t?ng d?ng khi c?n ch?nh.</li>
+                  <li>D?ng n?t S?a ho?c X?a tr?n tứng dụng khi c?n ch?nh.</li>
                 </ul>
               </div>
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>T?ng luong v? th?c nh?n du?c t?nh t? d?ng t? d? li?u nh?p.</li>
+                  <li>T?ng luong v? th?c nh?n du?c t?nh t? d?ng t? dữ liệu nh?p.</li>
                 </ul>
               </div>
             </div>
@@ -498,7 +498,7 @@ export default function Payroll() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={16} className="text-center text-gray-400 py-10"><Loader size={16} className="inline animate-spin mr-2" />?ang t?i b?ng luong...</td></tr>
+              <tr><td colSpan={16} className="text-center text-gray-400 py-10"><Loader size={16} className="inline animate-spin mr-2" />đang t?i b?ng luong...</td></tr>
             ) : payrolls.length === 0 ? (
               <tr><td colSpan={16} className="text-center text-gray-400 py-10">Chua c? b?ng luong ph? h?p</td></tr>
             ) : payrolls.map(row => (
@@ -630,7 +630,7 @@ export default function Payroll() {
 
               <div className="flex gap-2 pt-2">
                 <button type="submit" disabled={saving} className="btn-success flex-1 disabled:opacity-50">
-                   {saving ? '?ang luu...' : 'Luu b?ng luong'}
+                   {saving ? 'đang luu...' : 'Luu b?ng luong'}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)} className="btn-danger flex-1">H?y</button>
               </div>

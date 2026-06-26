@@ -24,7 +24,7 @@ import {
 
 const STATUS_LABELS = {
   pending: 'Ch? x?c nh?n',
-  processing: '?ang x? l?',
+  processing: 'đang xử lý',
   completed: 'Ho?n th?nh',
   cancelled: '?? h?y',
 };
@@ -364,15 +364,15 @@ export default function CustomerOrderReport() {
 
   const fetchReport = useCallback(async () => {
     if (!customerId) {
-      setError('Vui l?ng ch?n kh?ch h?ng d? xem b?o c?o.');
+      setError('Vui l?ng ch?n kh?ch h?ng d? xem báo cáo.');
       return;
     }
     if (!from || !to) {
-      setError('Vui l?ng ch?n d?y d? ng?y b?t d?u v? ng?y k?t th?c.');
+      setError('Vui l?ng ch?n d?y d? ng?y b?t d?u v? ng?y kết thúc.');
       return;
     }
     if (from > to) {
-      setError('Ng?y b?t d?u kh?ng du?c l?n hon ng?y k?t th?c.');
+      setError('Ng?y b?t d?u kh?ng du?c l?n hon ng?y kết thúc.');
       return;
     }
 
@@ -380,11 +380,11 @@ export default function CustomerOrderReport() {
     setError('');
     try {
       const params = new URLSearchParams({ customer_id: customerId, from, to });
-      const data = await apiJson(`/invoices/reports/customer-orders?${params.toString()}`, {}, 'Kh?ng l?p du?c b?o c?o');
+      const data = await apiJson(`/invoices/reports/customer-orders?${params.toString()}`, {}, 'Kh?ng l?p du?c báo cáo');
       setReport(data);
     } catch (err) {
       setReport(null);
-      setError(err.message || 'Kh?ng l?p du?c b?o c?o');
+      setError(err.message || 'Kh?ng l?p du?c báo cáo');
     } finally {
       setLoadingReport(false);
     }
@@ -439,7 +439,7 @@ export default function CustomerOrderReport() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Kh?ng t?i du?c b?o c?o Excel.');
+        throw new Error(errorData.error || 'Kh?ng t?i du?c báo cáo Excel.');
       }
 
       const blob = await response.blob();
@@ -462,7 +462,7 @@ export default function CustomerOrderReport() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err.message || 'L?i khi t?i file b?o c?o Excel');
+      setError(err.message || 'L?i khi t?i file báo cáo Excel');
     } finally {
       setLoadingReport(false);
     }
@@ -561,7 +561,7 @@ export default function CustomerOrderReport() {
                 </div>
               </div>
               <p className="text-sm text-blue-100/80 max-w-3xl">
-                Ch?n kh?ch h?ng v? kho?ng ng?y d? xem d?y d? h?a don b?n h?ng trong k?. Kho?ng ng?y du?c t?nh t? 00:00 ng?y b?t d?u d?n 23:59:59 ng?y k?t th?c theo ng?y local.
+                Ch?n kh?ch h?ng v? kho?ng ng?y d? xem d?y d? h?a don b?n h?ng trong k?. Kho?ng ng?y du?c t?nh t? 00:00 ng?y b?t d?u d?n 23:59:59 ng?y kết thúc theo ng?y local.
               </p>
             </div>
 
@@ -601,7 +601,7 @@ export default function CustomerOrderReport() {
                       }}
                       onFocus={handleInputFocus}
                       onClick={handleInputFocus}
-                      placeholder={loadingCustomers ? '?ang t?i kh?ch h?ng...' : 'T?m t?n, S?T, email, m? KH...'}
+                      placeholder={loadingCustomers ? 'đang t?i kh?ch h?ng...' : 'T?m t?n, S?T, email, m? KH...'}
                     />
                     {customerSearch && (
                       <button
@@ -627,7 +627,7 @@ export default function CustomerOrderReport() {
                     </div>
                     {loadingCustomers && customers.length === 0 ? (
                       <div className="px-3 py-3 text-xs text-gray-400 flex items-center gap-2">
-                        <Loader size={12} className="animate-spin text-blue-500" /> ?ang t?i g?i ?...
+                        <Loader size={12} className="animate-spin text-blue-500" /> đang t?i g?i ?...
                       </div>
                     ) : customers.length > 0 ? (
                       customers.map(customer => (
@@ -679,7 +679,7 @@ export default function CustomerOrderReport() {
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 xl:w-auto"
               >
                 {loadingReport ? <Loader size={16} className="animate-spin" /> : <Search size={16} />}
-                Xem b?o c?o
+                Xem báo cáo
               </button>
               <button
                 onClick={() => {
@@ -722,7 +722,7 @@ export default function CustomerOrderReport() {
           <div>
             <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Ng?y tham gia</span>
             <span className="mt-1 block font-bold text-gray-900">{formatDateOnly(selectedCustomer.created_at)}</span>
-            <span className="mt-0.5 block text-xs text-gray-500">L?ch s? h? th?ng</span>
+            <span className="mt-0.5 block text-xs text-gray-500">L?ch s? hệ thống</span>
           </div>
           <div>
             <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Doanh thu tr?n d?i</span>
@@ -883,7 +883,7 @@ export default function CustomerOrderReport() {
         {loadingReport ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
             <Loader size={32} className="animate-spin text-blue-400" />
-            <div className="font-semibold text-gray-600">?ang th?ng k? d? li?u don h?ng...</div>
+            <div className="font-semibold text-gray-600">đang th?ng k? dữ liệu don h?ng...</div>
           </div>
         ) : report && invoices.length === 0 ? (
           <div className="py-16 text-center">
@@ -894,8 +894,8 @@ export default function CustomerOrderReport() {
         ) : !report ? (
           <div className="py-16 text-center">
             <div className="mb-3 text-5xl opacity-20">??</div>
-            <div className="font-semibold text-gray-600">Chua c? d? li?u b?o c?o</div>
-            <div className="mt-1 text-sm text-gray-400 font-medium">Nh?p th?ng tin kh?ch h?ng v? ch?n kho?ng th?i gian d? t?o b?o c?o chi ti?t.</div>
+            <div className="font-semibold text-gray-600">Chua c? dữ liệu báo cáo</div>
+            <div className="mt-1 text-sm text-gray-400 font-medium">Nh?p th?ng tin kh?ch h?ng v? ch?n kho?ng th?i gian d? t?o báo cáo chi ti?t.</div>
           </div>
         ) : null}
       </div>
@@ -911,13 +911,13 @@ export default function CustomerOrderReport() {
         <HelpModal
           show={showHelp}
           onClose={() => setShowHelp(false)}
-          title="Hu?ng d?n b?o c?o theo don h?ng"
+          title="Hu?ng d?n báo cáo theo don h?ng"
           content={[
-            'Bu?c 1: Ch?n kh?ch h?ng v? kho?ng th?i gian c?n xem l?ch s? mua h?ng.',
-            'Bu?c 2: Nh?n t?o ho?c l?m m?i b?o c?o d? t?i d?ng d? li?u don h?ng theo b? l?c.',
+            'Bu?c 1: Ch?n kh?ch h?ng v? kho?ng th?i gian c?n xem lịch sử mua h?ng.',
+            'Bu?c 2: Nh?n t?o ho?c l?m m?i báo cáo d? t?i d?ng dữ liệu don h?ng theo b? l?c.',
             'Bu?c 3: Xem ph?n t?ng h?p d? n?m s? don, doanh thu, s?n ph?m v? th?i di?m mua g?n nh?t.',
             'Bu?c 4: D?ng n?t Xem d? m? chi ti?t t?ng don ngay trong popup m? kh?ng r?i m?n h?nh.',
-            'Bu?c 5: C? th? in ho?c t?i PDF t?ng don tr?c ti?p t? b?ng k?t qu? khi c?n d?i chi?u.',
+            'Bu?c 5: C? th? in ho?c t?i PDF t?ng don tr?c ti?p t? b?ng kết quả khi c?n d?i chi?u.',
           ]}
         />
       )}

@@ -151,6 +151,7 @@ const ProductFormModal = memo(function ProductFormModal({
   onSubmit,
   onStockLimitError,
   negativeStockSettings,
+  serviceMode = false,
 }) {
   const [form, setForm] = useState(() => createProductFormInitial(initialForm));
   const nameInputRef = useRef(null);
@@ -257,7 +258,7 @@ const ProductFormModal = memo(function ProductFormModal({
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
             <button type="submit" disabled={saving || Boolean(stockError)}
               className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-              ?? {saving ? '?ang luu...' : (serviceMode ? (editing ? 'Lưu dịch vụ' : 'Thêm dịch vụ') : (editing ? 'Luu thay d?i' : 'Luu'))}
+              ?? {saving ? 'đang luu...' : (serviceMode ? (editing ? 'Lưu dịch vụ' : 'Thêm dịch vụ') : (editing ? 'Luu thay d?i' : 'Luu'))}
             </button>
             <button type="button" onClick={onClose} className="btn-danger flex-1">H?y</button>
           </div>
@@ -363,7 +364,7 @@ const VariantFormModal = memo(function VariantFormModal({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-500">SKU bi?n th? (h? th?ng t? sinh)</label>
+              <label className="text-xs text-gray-500">SKU bi?n th? (hệ thống t? sinh)</label>
               <input className="input-field w-full bg-gray-100 text-gray-500 cursor-not-allowed" value={editingVariant ? (form.sku || '') : ''} readOnly disabled placeholder="T? sinh sau khi luu" />
               <span className="text-[10px] text-blue-500">{editingVariant ? 'M? d? c?p du?c gi? nguy?n.' : 'H? th?ng t? c?p m? SP ti?p theo sau khi luu.'}</span>
             </div>
@@ -371,7 +372,7 @@ const VariantFormModal = memo(function VariantFormModal({
           </div>
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
             <button type="submit" disabled={saving || Boolean(stockError)} className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
-              ?? {saving ? '?ang luu...' : 'Luu bi?n th?'}
+              ?? {saving ? 'đang luu...' : 'Luu bi?n th?'}
             </button>
             <button type="button" onClick={onClose} className="btn-danger flex-1">H?y</button>
           </div>
@@ -626,7 +627,7 @@ export default function Products({ store }) {
     return () => productsFetchAbortRef.current?.abort();
   }, []);
 
-  // -- Refresh khi don/sync l?m d?i t?n kho, s?n ph?m ho?c danh m?c --
+  // -- Refresh khi don/sync l?m d?i tồn kho, s?n ph?m ho?c danh m?c --
   useEffect(() => {
     const refreshProducts = () => fetchProducts();
     const onSyncUpdated = (event) => {
@@ -775,11 +776,11 @@ export default function Products({ store }) {
         changedTables: ['product_categories', 'products'],
       });
     } catch (err) {
-      alert(`?? L?i k?t n?i khi luu danh m?c: ${err.message}`);
+      alert(`?? L?i kết nối khi luu danh m?c: ${err.message}`);
     }
   };
   const handleCategoryDelete = async (category) => {
-    if (!confirm(`V? hi?u danh m?c "${category.name}"? S?n ph?m cu v?n gi? d? li?u danh m?c d? g?n.`)) return;
+    if (!confirm(`V? hi?u danh m?c "${category.name}"? S?n ph?m cu v?n gi? dữ liệu danh m?c d? g?n.`)) return;
     await apiJsonChecked(resolveApiUrl(`/product-categories/${category.id}`), { method: 'DELETE' }, 'Kh?ng th? v? hi?u danh m?c.');
     setCategories(prev => prev.filter(item => String(item.id) !== String(category.id)));
     fetchProducts();
@@ -1228,7 +1229,7 @@ export default function Products({ store }) {
         'Parent ID': '',
         'Default category name': '',
         'Supplier name': '',
-        'Ghi ch?': 'D?ng bi?n th?: m? ri?ng do h? th?ng c?p khi t?o m?i',
+        'Ghi ch?': 'D?ng bi?n th?: m? ri?ng do hệ thống c?p khi t?o m?i',
       },
       {
         'Lo?i d?ng': 'VARIANT',
@@ -1370,13 +1371,13 @@ export default function Products({ store }) {
     return [
       '? Nh?p Excel th?nh c?ng!',
       data.detail ? `Chi ti?t: ${data.detail}` : '',
-      `T?ng d?ng c? d? li?u: ${summary.totalRows ?? 0}`,
+      `Tứng dụng c? dữ liệu: ${summary.totalRows ?? 0}`,
       `D?ng h?p l?: ${summary.validRows ?? summary.totalRows ?? 0}`,
       `T?o m?i s?n ph?m cha: ${summary.createdParents ?? 0}`,
-      `C?p nh?t s?n ph?m cha: ${summary.updatedParents ?? 0}`,
+      `Cập nhật s?n ph?m cha: ${summary.updatedParents ?? 0}`,
       `T?o m?i bi?n th?: ${summary.createdVariants ?? 0}`,
-      `C?p nh?t bi?n th?: ${summary.updatedVariants ?? 0}`,
-      `??nh l?i SKU bi?n th?: ${summary.reassignedVariantSkus ?? summary.syncedVariantSkus ?? 0}`,
+      `Cập nhật bi?n th?: ${summary.updatedVariants ?? 0}`,
+      `định l?i SKU bi?n th?: ${summary.reassignedVariantSkus ?? summary.syncedVariantSkus ?? 0}`,
       `B? qua: ${skipped}`,
       `S? l?i: ${summary.errors ?? 0}`,
     ].filter(Boolean).join('\n');
@@ -1390,7 +1391,7 @@ export default function Products({ store }) {
     const reader = new FileReader();
 
     reader.onerror = () => {
-      alert(`?? Kh?ng d?c du?c file "${file.name}". Vui l?ng d?ng file n?u dang m? v? th? l?i.`);
+      alert(`?? Kh?ng d?c du?c file "${file.name}". Vui lứng dụng file n?u dang m? v? th? l?i.`);
     };
 
     reader.onload = async (evt) => {
@@ -1409,14 +1410,14 @@ export default function Products({ store }) {
       }
 
       if (!workbook?.SheetNames?.length) {
-        alert(`?? File "${file.name}" kh?ng c? sheet n?o. Vui l?ng d?ng file .xlsx/.xls h?p l? ho?c t?i file m?u.`);
+        alert(`?? File "${file.name}" kh?ng c? sheet n?o. Vui lứng dụng file .xlsx/.xls h?p l? ho?c t?i file m?u.`);
         return;
       }
 
       const sheetName = workbook.SheetNames.includes('S?n ph?m') ? 'S?n ph?m' : workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       if (!sheet || !sheet['!ref']) {
-        alert(`?? Sheet "${sheetName}" tr?ng ho?c kh?ng d?c du?c d? li?u.`);
+        alert(`?? Sheet "${sheetName}" tr?ng ho?c kh?ng d?c du?c dữ liệu.`);
         return;
       }
 
@@ -1425,17 +1426,17 @@ export default function Products({ store }) {
       const receivedColumns = collectExcelReceivedColumns(rows);
       const displayColumns = receivedColumns.length > 0 ? receivedColumns : headerColumns;
       if (displayColumns.length === 0) {
-        alert(`?? Sheet "${sheetName}" kh?ng c? h?ng ti?u d? c?t. Vui l?ng d?ng sheet "S?n ph?m" trong file m?u.`);
+        alert(`?? Sheet "${sheetName}" kh?ng c? h?ng ti?u d? c?t. Vui lứng dụng sheet "S?n ph?m" trong file m?u.`);
         return;
       }
 
       const importRows = normalizeExcelImportRows(rows);
       if (importRows.length === 0) {
-        alert(`?? Sheet "${sheetName}" c? ti?u d? nhung kh?ng c? d?ng d? li?u.\nC?t nh?n du?c: ${formatColumnList(displayColumns)}`);
+        alert(`?? Sheet "${sheetName}" c? ti?u d? nhung kh?ng c? d?ng dữ liệu.\nC?t nh?n du?c: ${formatColumnList(displayColumns)}`);
         return;
       }
 
-      if (!confirm(`T?m th?y ${importRows.length} d?ng d? li?u trong sheet "${sheetName}".\nC?t nh?n du?c: ${formatColumnList(displayColumns)}\n\nImport s? d?ng SKU trong file d? d?i chi?u/c?p nh?t; b?n ghi m?i du?c backend c?p m? SP. Bi?n th? li?n k?t theo Parent SKU. N?u thi?u "Lo?i d?ng", backend s? t? suy lu?n theo Parent SKU. D? li?u ch? ghi khi to?n b? file h?p l?. Ti?p t?c?`)) return;
+      if (!confirm(`T?m th?y ${importRows.length} d?ng dữ liệu trong sheet "${sheetName}".\nC?t nh?n du?c: ${formatColumnList(displayColumns)}\n\nImport s? d?ng SKU trong file d? d?i chi?u/cập nhật; b?n ghi m?i du?c backend c?p m? SP. Bi?n th? li?n k?t theo Parent SKU. N?u thi?u "Lo?i d?ng", backend s? t? suy lu?n theo Parent SKU. Dữ liệu ch? ghi khi to?n b? file h?p l?. Ti?p t?c?`)) return;
 
       try {
         const controller = new AbortController();
@@ -1465,10 +1466,10 @@ export default function Products({ store }) {
           ? 'Backend kh?ng ph?n h?i sau 30 gi?y.'
           : err.message;
         alert([
-          '?? Kh?ng th? g?i d? li?u import Excel t?i backend.',
+          '?? Kh?ng th? g?i dữ liệu import Excel t?i backend.',
           `Endpoint: ${endpoint}`,
           `Chi ti?t: ${detail}`,
-          'G?i ?: ki?m tra backend d? ch?y, d?ng c?ng API v? kh?ng b? ch?n k?t n?i.',
+          'G?i ?: ki?m tra backend d? ch?y, d?ng c?ng API v? kh?ng b? ch?n kết nối.',
         ].join('\n'));
       }
     };
@@ -1547,9 +1548,9 @@ export default function Products({ store }) {
         method,
         body: payload,
         signal: controller.signal,
-      }, currentEditing ? 'Kh?ng th? c?p nh?t s?n ph?m.' : 'Kh?ng th? t?o s?n ph?m.');
+      }, currentEditing ? 'Kh?ng th? cập nhật s?n ph?m.' : 'Kh?ng th? t?o s?n ph?m.');
       clearTimeout(timer);
-      alert(currentEditing ? '? ?? c?p nh?t s?n ph?m!' : `? T?o s?n ph?m th?nh c?ng!\nM?: ${data.sku || 'h? th?ng t? sinh'}`);
+      alert(currentEditing ? '? ?? cập nhật s?n ph?m!' : `? T?o s?n ph?m th?nh c?ng!\nM?: ${data.sku || 'hệ thống t? sinh'}`);
       closeProductForm();
       setProductFormInitial(createProductFormInitial());
       fetchProducts();
@@ -1559,7 +1560,7 @@ export default function Products({ store }) {
       });
     } catch (err) {
       if (err.name === 'AbortError') alert('?? Server kh?ng ph?n h?i sau 10 gi?y.');
-      else alert(`?? L?i k?t n?i: ${err.message}`);
+      else alert(`?? L?i kết nối: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -1580,7 +1581,7 @@ export default function Products({ store }) {
       });
     } catch (err) {
       if (err.name === 'AbortError') alert('?? Server kh?ng ph?n h?i.');
-      else alert(`?? L?i k?t n?i: ${err.message}`);
+      else alert(`?? L?i kết nối: ${err.message}`);
     } finally {
       clearTimeout(timer);
     }
@@ -1638,9 +1639,9 @@ export default function Products({ store }) {
         method,
         body: variantPayload,
         signal: controller.signal,
-      }, currentEditingVariant ? 'Kh?ng th? c?p nh?t bi?n th?.' : 'Kh?ng th? t?o bi?n th?.');
+      }, currentEditingVariant ? 'Kh?ng th? cập nhật bi?n th?.' : 'Kh?ng th? t?o bi?n th?.');
       clearTimeout(timer);
-      alert(currentEditingVariant ? '? ?? c?p nh?t bi?n th?!' : `? T?o bi?n th? th?nh c?ng!\nSKU: ${data.sku || 'h? th?ng t? sinh'}`);
+      alert(currentEditingVariant ? '? ?? cập nhật bi?n th?!' : `? T?o bi?n th? th?nh c?ng!\nSKU: ${data.sku || 'hệ thống t? sinh'}`);
       closeVariantForm();
       setVariantFormInitial(createVariantFormInitial());
       fetchProducts();
@@ -1650,7 +1651,7 @@ export default function Products({ store }) {
       });
     } catch (err) {
       if (err.name === 'AbortError') alert('?? Server kh?ng ph?n h?i!');
-      else alert(`?? L?i k?t n?i: ${err.message}`);
+      else alert(`?? L?i kết nối: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -1671,7 +1672,7 @@ export default function Products({ store }) {
       });
     } catch (err) {
       if (err.name === 'AbortError') alert('?? Server kh?ng ph?n h?i.');
-      else alert(`?? L?i k?t n?i: ${err.message}`);
+      else alert(`?? L?i kết nối: ${err.message}`);
     } finally {
       clearTimeout(timer);
     }
@@ -1832,7 +1833,7 @@ export default function Products({ store }) {
           {selectedProductsForBulkAction.length > 0 && (
             <button onClick={handleBulkDelete} disabled={isBulkDeleting}
               className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition disabled:opacity-50">
-              <Trash2 size={16} /> {isBulkDeleting ? '?ang x?a...' : `X?a (${selectedProductsForBulkAction.length})`}
+              <Trash2 size={16} /> {isBulkDeleting ? 'đang x?a...' : `X?a (${selectedProductsForBulkAction.length})`}
             </button>
           )}
           <button onClick={openAdd} className="btn-primary flex items-center gap-1">
@@ -1877,7 +1878,7 @@ export default function Products({ store }) {
             )}
           </form>
           <div className="mb-2 text-xs text-gray-500">
-            Danh s?ch xem l?i {activeCategories.length} danh m?c d? t?o trong d? li?u hi?n t?i.
+            Danh s?ch xem l?i {activeCategories.length} danh m?c d? t?o trong dữ liệu hi?n t?i.
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
             {activeCategories.map(category => (
@@ -1977,7 +1978,7 @@ export default function Products({ store }) {
           {displayedProducts.length === 0
             ? 'Kh?ng c? s?n ph?m ph? h?p'
             : `Hi?n th? ${pageStartIndex + 1}-${pageEndIndex} / ${displayedProducts.length} s?n ph?m cha`}
-          {searchFilteringPending && <span className="ml-2 text-blue-500">?ang c?p nh?t k?t qu? t?m ki?m...</span>}
+          {searchFilteringPending && <span className="ml-2 text-blue-500">đang cập nhật kết quả t?m ki?m...</span>}
           {displayedProducts.length > PRODUCTS_PAGE_SIZE && <span className="ml-2 text-gray-400">Render theo trang {PRODUCTS_PAGE_SIZE} d?ng d? UI ph?n h?i nhanh.</span>}
         </div>
         {totalProductPages > 1 && (
@@ -2022,7 +2023,7 @@ export default function Products({ store }) {
             onClick={toggleSelectAll}
             disabled={filteredProductIds.length === 0}
             className="w-5 h-5 flex items-center justify-center text-gray-600 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
-            title={allFilteredSelected ? 'B? ch?n t?t c? k?t qu? dang l?c' : 'Ch?n t?t c? k?t qu? dang l?c'}
+            title={allFilteredSelected ? 'B? ch?n t?t c? kết quả dang l?c' : 'Ch?n t?t c? kết quả dang l?c'}
           >
             {allFilteredSelected ? <CheckSquare size={16} /> : <Square size={16} />}
           </button>
@@ -2034,7 +2035,7 @@ export default function Products({ store }) {
                 type="button"
                 onClick={() => setStockSortDirection('desc')}
                 className={stockSortButtonClass('desc')}
-                title="S?p x?p t?n kho t? nhi?u nh?t d?n ?t nh?t"
+                title="S?p x?p tồn kho t? nhi?u nh?t d?n ?t nh?t"
                 aria-pressed={stockSortDirection === 'desc'}
               >
                 <ArrowUp size={14} />
@@ -2043,7 +2044,7 @@ export default function Products({ store }) {
                 type="button"
                 onClick={() => setStockSortDirection('asc')}
                 className={stockSortButtonClass('asc')}
-                title="S?p x?p t?n kho t? ?t nh?t d?n nhi?u nh?t"
+                title="S?p x?p tồn kho t? ?t nh?t d?n nhi?u nh?t"
                 aria-pressed={stockSortDirection === 'asc'}
               >
                 <ArrowDown size={14} />
@@ -2094,6 +2095,7 @@ export default function Products({ store }) {
           onSubmit={handleProductSubmit}
           onStockLimitError={showStockLimitToast}
           negativeStockSettings={negativeStockSettings}
+          serviceMode={productFormServiceMode}
         />
       )}
 
@@ -2186,7 +2188,7 @@ export default function Products({ store }) {
                         ??ng
                       </button>
                     </div>
-                    {comboSearchPending && <div className="text-[11px] text-blue-500 mb-1">?ang c?p nh?t k?t qu?...</div>}
+                    {comboSearchPending && <div className="text-[11px] text-blue-500 mb-1">đang cập nhật kết quả...</div>}
                     <div className="max-h-64 overflow-auto space-y-1">
                       {filteredComboProductOptions.length === 0 && (
                         <div className="text-center text-gray-400 text-sm py-5 bg-white rounded-lg border border-dashed">
@@ -2298,7 +2300,7 @@ export default function Products({ store }) {
                   <li><strong>S?n ph?m cha:</strong> S?n ph?m ch?nh, kh?ng c? parent_id</li>
                   <li><strong>Bi?n th?:</strong> C?c phi?n b?n c? th? c?a s?n ph?m cha (m?u s?c, size...)</li>
                   <li>Nh?n v?o t?n s?n ph?m cha c? bi?n th? d? m? r?ng xem danh s?ch</li>
-                  <li>Khi s?n ph?m cha c? bi?n th?, b?ng ?n t?n kho/gi? c?a d?ng cha v? ch? hi?n th? ? t?ng bi?n th?; khi kh?ng c?n bi?n th? th? d?ng cha hi?n th? l?i nhu ban d?u</li>
+                  <li>Khi s?n ph?m cha c? bi?n th?, b?ng ?n tồn kho/gi? c?a d?ng cha v? ch? hi?n th? ? t?ng bi?n th?; khi kh?ng c?n bi?n th? th? d?ng cha hi?n th? l?i nhu ban d?u</li>
                 </ul>
               </div>
 
@@ -2306,7 +2308,7 @@ export default function Products({ store }) {
                 <h3 className="font-bold text-gray-800 mb-2">? Th?m s?n ph?m m?i</h3>
                 <ol className="list-decimal pl-5 space-y-1">
                   <li>Nh?n n?t <strong>"Th?m s?n ph?m"</strong></li>
-                  <li>?i?n d?y d? th?ng tin: T?n, SKU (t? d?ng), gi? c?c lo?i, t?n kho, don v?, danh m?c, nh? cung c?p</li>
+                  <li>?i?n d?y d? th?ng tin: T?n, SKU (t? d?ng), gi? c?c lo?i, tồn kho, don v?, danh m?c, nh? cung c?p</li>
                   <li>M? s?n ph?m du?c backend t? c?p theo d?ng SP00001, SP00002... v? du?c gi? nguy?n sau khi t?o</li>
                   <li>Nh?n "Luu" d? ho?n t?t</li>
                 </ol>
@@ -2318,21 +2320,21 @@ export default function Products({ store }) {
                   <li>Nh?n n?t <strong>+</strong> ? c?t h?nh d?ng c?a s?n ph?m cha</li>
                   <li>Nh?p t?n bi?n th? (VD: "M?u ??", "Size L")</li>
                   <li>M? bi?n th? cung du?c backend t? c?p theo c?ng b? d?m SP, kh?ng c?n nh?p th? c?ng</li>
-                  <li>?i?n gi? v? t?n kho cho bi?n th? n?y</li>
+                  <li>?i?n gi? v? tồn kho cho bi?n th? n?y</li>
                 </ol>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Nh?p/Xu?t Excel s?n ph?m</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>N?n d?ng <strong>"T?i m?u Excel"</strong> ho?c <strong>"Xu?t Excel"</strong> t? h? th?ng r?i ch?nh s?a v? nh?p l?i.</li>
-                  <li>Sheet chu?n l? <strong>"S?n ph?m"</strong>; n?u file kh?ng c? sheet n?y, h? th?ng s? d?c sheet d?u ti?n.</li>
+                  <li>N?n d?ng <strong>"T?i m?u Excel"</strong> ho?c <strong>"Xu?t Excel"</strong> t? hệ thống r?i chỉnh sửa v? nh?p l?i.</li>
+                  <li>Sheet chu?n l? <strong>"S?n ph?m"</strong>; n?u file kh?ng c? sheet n?y, hệ thống s? d?c sheet d?u ti?n.</li>
                   <li>C?t chu?n: <strong>Lo?i d?ng</strong>, <strong>SKU</strong>, <strong>Parent SKU</strong>, <strong>T?n s?n ph?m</strong>, c?c c?t gi?, <strong>T?n kho</strong>, <strong>?on v?</strong>, <strong>Danh m?c text</strong>, <strong>Default category id</strong>, <strong>Supplier id</strong>, <strong>Ho?t d?ng</strong>.</li>
                   <li><strong>Lo?i d?ng</strong>: nh?p <strong>PARENT</strong> cho s?n ph?m cha, <strong>VARIANT</strong> cho bi?n th?. N?u b? tr?ng, backend t? suy lu?n: c? Parent SKU l? VARIANT, kh?ng c? Parent SKU l? PARENT.</li>
-                  <li><strong>Parent SKU</strong> l? kh?a gi? quan h? cha-con; SKU n?y ph?i tr?ng SKU c?a d?ng s?n ph?m cha trong file ho?c s?n ph?m cha d? c? trong h? th?ng. Khi t?o m?i, backend c?p m? SP ti?p theo.</li>
+                  <li><strong>Parent SKU</strong> l? kh?a gi? quan h? cha-con; SKU n?y ph?i tr?ng SKU c?a d?ng s?n ph?m cha trong file ho?c s?n ph?m cha d? c? trong hệ thống. Khi t?o m?i, backend c?p m? SP ti?p theo.</li>
                   <li>C? th? nh?p file c? alias ph? bi?n nhu <strong>M? SKU</strong>, <strong>Ma SKU</strong>, <strong>M? s?n ph?m</strong>, <strong>T?n</strong>, <strong>SL h?ng</strong>, <strong>So luong</strong>, <strong>Gi? v?n</strong>, <strong>Gi? b?n</strong>, <strong>?VT</strong>, <strong>Danh m?c</strong>, <strong>ParentSKU</strong>, <strong>SKU cha</strong>, <strong>M? cha</strong>.</li>
-                  <li><strong>T?n kho</strong> c? th? ?m d?n <strong>{negativeStockLimitLabel}</strong>; h? th?ng c?nh b?o ??m kho? v? backend s? ch?n m?i t?n kho th?p hon ngu?ng n?y.</li>
-                  <li>Import s? validate to?n b? file tru?c khi ghi. N?u c? l?i, th?ng b?o s? ch? r? d?ng/c?t v? d? li?u chua du?c c?p nh?t.</li>
+                  <li><strong>T?n kho</strong> c? th? ?m d?n <strong>{negativeStockLimitLabel}</strong>; hệ thống c?nh b?o ??m kho? v? backend s? ch?n m?i tồn kho th?p hon ngu?ng n?y.</li>
+                  <li>Import s? validate to?n b? file tru?c khi ghi. N?u c? l?i, thông báo s? ch? r? d?ng/c?t v? dữ liệu chua du?c cập nhật.</li>
                   <li>C?c c?t <strong>ID</strong>, <strong>Parent ID</strong>, <strong>Default category name</strong>, <strong>Supplier name</strong>, <strong>Ghi ch?</strong> ch? d? tham kh?o khi xu?t file; backend b? qua khi import.</li>
                 </ul>
                 <div className="mt-3 flex gap-2">

@@ -201,7 +201,7 @@ function buildGuideRows(dataType, negativeStockLimitLabel = '0') {
       ['Cột', 'Bắt buộc', 'Ghi chú'],
       ['Loại dòng', 'Khuyến nghị', 'PARENT cho sản phẩm cha, VARIANT cho biến thể; có Parent SKU thì backend suy luận là VARIANT.'],
       ['SKU', 'C?', 'SKU/m? s?n ph?m ho?c SKU bi?n th?, kh?ng du?c tr?ng sai lo?i.'],
-      ['Parent SKU', 'C? v?i VARIANT', 'Ph?i kh?p SKU s?n ph?m cha trong file ho?c d? c? trong h? th?ng.'],
+      ['Parent SKU', 'C? v?i VARIANT', 'Ph?i kh?p SKU s?n ph?m cha trong file ho?c d? c? trong hệ thống.'],
       ['Tên sản phẩm', 'Có với bản ghi mới', 'Tên sản phẩm cha hoặc tên biến thể.'],
       ['Giá/Tồn kho', 'Không', `Giá nhập số không âm; tồn kho có thể âm đến ${negativeStockLimitLabel} (ví dụ -5, -20) và phải là số nguyên; thấp hơn ngưỡng sẽ bị backend chặn.`],
       ['Danh mục text / Default category id', 'Không', 'Khớp danh mục hiện có theo tên/từ khóa hoặc id.'],
@@ -523,7 +523,7 @@ export default function ExcelImportPanel({
       setStatus({ tone: 'error', message: 'Vui lòng chọn ít nhất một dòng hợp lệ để import.' });
       return null;
     }
-    if (!window.confirm(`Import ${selected.length} d?ng d? ch?n? Backend s? validate l?i tru?c khi ghi d? li?u.`)) return null;
+    if (!window.confirm(`Import ${selected.length} d?ng d? ch?n? Backend s? validate l?i tru?c khi ghi dữ liệu.`)) return null;
     const selectedIds = new Set(selected);
     const selectedRows = excel.previewItems
       .filter(item => selectedIds.has(`import:${item.line}:${item.rowIndex}`))

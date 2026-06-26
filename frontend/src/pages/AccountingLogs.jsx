@@ -86,21 +86,21 @@ function DetailModal({ log, loading, error, onClose }) {
         </div>
         <div className="space-y-4 p-5">
           {loading ? (
-            <div className="flex min-h-44 items-center justify-center gap-2 text-gray-500"><Loader2 size={22} className="animate-spin" /> ?ang t?i chi ti?t...</div>
+            <div className="flex min-h-44 items-center justify-center gap-2 text-gray-500"><Loader2 size={22} className="animate-spin" /> đang t?i chi ti?t...</div>
           ) : error ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
           ) : log ? (
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3"><div className="text-xs text-gray-500">Ngu?i th?c hi?n</div><div className="mt-1 font-bold text-gray-800">{log.user_name || `Ngu?i d?ng #${log.user_id || '?'}`}</div></div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3"><div className="text-xs text-gray-500">Ngu?i thực hiện</div><div className="mt-1 font-bold text-gray-800">{log.user_name || `Ngu?i d?ng #${log.user_id || '?'}`}</div></div>
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-3"><div className="text-xs text-gray-500">Th?i gian</div><div className="mt-1 font-bold text-gray-800">{formatDateTime(log.created_at)}</div></div>
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-3"><div className="text-xs text-gray-500">Action</div><div className="mt-1 break-all font-mono text-sm font-bold text-gray-800">{log.action || '?'}</div></div>
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-3"><div className="text-xs text-gray-500">Entity</div><div className="mt-1 font-bold text-gray-800">{log.entity_type || '?'} {log.entity_code ? `? ${log.entity_code}` : ''}</div></div>
               </div>
               <div><div className="mb-1 text-sm font-bold text-gray-700">N?i dung</div><div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">{log.content || '?'}</div></div>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                <div><div className="mb-1 text-sm font-bold text-gray-700">D? li?u tru?c</div><pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-3 text-xs text-slate-200">{JSON.stringify(log.before, null, 2) || 'null'}</pre></div>
-                <div><div className="mb-1 text-sm font-bold text-gray-700">D? li?u sau</div><pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-3 text-xs text-slate-200">{JSON.stringify(log.after, null, 2) || 'null'}</pre></div>
+                <div><div className="mb-1 text-sm font-bold text-gray-700">Dữ liệu tru?c</div><pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-3 text-xs text-slate-200">{JSON.stringify(log.before, null, 2) || 'null'}</pre></div>
+                <div><div className="mb-1 text-sm font-bold text-gray-700">Dữ liệu sau</div><pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-3 text-xs text-slate-200">{JSON.stringify(log.after, null, 2) || 'null'}</pre></div>
               </div>
             </>
           ) : null}
@@ -142,7 +142,7 @@ export default function AccountingLogs() {
   function applyFilters(event) {
     event?.preventDefault();
     if (draft.from && draft.to && draft.from > draft.to) {
-      setError('Ng?y b?t d?u kh?ng du?c l?n hon ng?y k?t th?c.');
+      setError('Ng?y b?t d?u kh?ng du?c l?n hon ng?y kết thúc.');
       return;
     }
     setPage(1);
@@ -192,7 +192,7 @@ export default function AccountingLogs() {
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-indigo-200/80">K? to?n ? Ki?m so?t</div>
               <h1 className="mt-1 text-2xl font-bold">Nh?t k? ho?t d?ng</h1>
-              <p className="mt-1 max-w-3xl text-sm text-indigo-100/75">Tra c?u ngu?i th?c hi?n, th?i gian, h?nh d?ng, d?i tu?ng v? n?i dung thay d?i c?a nghi?p v? k? to?n.</p>
+              <p className="mt-1 max-w-3xl text-sm text-indigo-100/75">Tra c?u ngu?i thực hiện, th?i gian, h?nh d?ng, d?i tu?ng v? n?i dung thay d?i c?a nghi?p v? k? to?n.</p>
             </div>
           </div>
           <button type="button" onClick={loadLogs} disabled={loading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-bold hover:bg-white/20 disabled:opacity-60"><RefreshCw size={17} className={loading ? 'animate-spin' : ''} /> L?m m?i</button>
@@ -204,7 +204,7 @@ export default function AccountingLogs() {
           <div><label className="mb-1 block text-xs font-semibold text-gray-500">T? ng?y</label><input type="date" className="input-field" value={draft.from} max={draft.to || undefined} onChange={event => setDraft(current => ({ ...current, from: event.target.value }))} /></div>
           <div><label className="mb-1 block text-xs font-semibold text-gray-500">??n ng?y</label><input type="date" className="input-field" value={draft.to} min={draft.from || undefined} onChange={event => setDraft(current => ({ ...current, to: event.target.value }))} /></div>
           <div><label className="mb-1 block text-xs font-semibold text-gray-500">Action</label><input list="accounting-log-actions" className="input-field" value={draft.action} onChange={event => setDraft(current => ({ ...current, action: event.target.value }))} placeholder="T?t c? action" /><datalist id="accounting-log-actions">{actionOptions.map(action => <option key={action} value={action} />)}</datalist></div>
-          <div><label className="mb-1 block text-xs font-semibold text-gray-500">T?m ki?m</label><div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input className="input-field pl-9" value={draft.search} onChange={event => setDraft(current => ({ ...current, search: event.target.value }))} placeholder="N?i dung, ngu?i th?c hi?n, entity, m?..." /></div></div>
+          <div><label className="mb-1 block text-xs font-semibold text-gray-500">T?m ki?m</label><div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input className="input-field pl-9" value={draft.search} onChange={event => setDraft(current => ({ ...current, search: event.target.value }))} placeholder="N?i dung, ngu?i thực hiện, entity, m?..." /></div></div>
           <div className="flex items-end gap-2"><button type="submit" disabled={loading} className="btn-primary min-h-11 flex-1 xl:flex-none"><Filter size={16} /> L?c</button><button type="button" onClick={resetFilters} disabled={loading} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50" title="??t l?i"><RefreshCw size={16} /></button></div>
         </form>
         <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
@@ -218,7 +218,7 @@ export default function AccountingLogs() {
       <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3 text-left">Th?i gian</th><th className="px-4 py-3 text-left">Ngu?i th?c hi?n</th><th className="px-4 py-3 text-left">Action</th><th className="px-4 py-3 text-left">Entity</th><th className="px-4 py-3 text-left">N?i dung</th><th className="px-4 py-3 text-center">Chi ti?t</th></tr></thead>
+            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3 text-left">Th?i gian</th><th className="px-4 py-3 text-left">Ngu?i thực hiện</th><th className="px-4 py-3 text-left">Action</th><th className="px-4 py-3 text-left">Entity</th><th className="px-4 py-3 text-left">N?i dung</th><th className="px-4 py-3 text-center">Chi ti?t</th></tr></thead>
             <tbody>
               {data.items.map((row, index) => (
                 <tr key={row.id || index} className="border-t border-gray-100 align-top hover:bg-gray-50">
@@ -233,7 +233,7 @@ export default function AccountingLogs() {
             </tbody>
           </table>
         </div>
-        {loading ? <div className="flex min-h-44 items-center justify-center gap-2 border-t border-gray-100 text-gray-500"><Loader2 size={24} className="animate-spin text-indigo-500" /> ?ang t?i nh?t k?...</div> : data.items.length === 0 ? <div className="border-t border-gray-100 px-4 py-14 text-center text-gray-400"><div className="mb-2 text-4xl opacity-30">??</div><div className="font-semibold text-gray-500">Kh?ng c? nh?t k? ph? h?p</div></div> : null}
+        {loading ? <div className="flex min-h-44 items-center justify-center gap-2 border-t border-gray-100 text-gray-500"><Loader2 size={24} className="animate-spin text-indigo-500" /> đang t?i nh?t k?...</div> : data.items.length === 0 ? <div className="border-t border-gray-100 px-4 py-14 text-center text-gray-400"><div className="mb-2 text-4xl opacity-30">??</div><div className="font-semibold text-gray-500">Kh?ng c? nh?t k? ph? h?p</div></div> : null}
         <div className="flex flex-col gap-3 border-t border-gray-100 bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div className="text-sm text-gray-500">Trang <strong>{data.pagination.page}</strong>/{Math.max(1, data.pagination.total_pages)}</div><div className="flex items-center gap-2"><button type="button" disabled={loading || !data.pagination.has_prev} onClick={() => setPage(current => Math.max(1, current - 1))} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-600 disabled:opacity-40"><ChevronLeft size={16} /> Tru?c</button><button type="button" disabled={loading || !data.pagination.has_next} onClick={() => setPage(current => current + 1)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-600 disabled:opacity-40">Sau <ChevronRight size={16} /></button></div></div>
       </section>
 

@@ -147,7 +147,7 @@ export default function NhaCungCap() {
   const fetchSupplierPaymentSummaries = async () => {
     setPaymentLoading(true);
     try {
-      const data = await apiJson('/imports', {}, 'Kh?ng th? t?i l?ch s? nh?p h?ng d? t?ng h?p thanh to?n');
+      const data = await apiJson('/imports', {}, 'Kh?ng th? t?i lịch sử nh?p h?ng d? t?ng h?p thanh to?n');
       const summaries = {};
 
       (Array.isArray(data) ? data : []).forEach(imp => {
@@ -229,12 +229,12 @@ export default function NhaCungCap() {
       await apiJsonChecked(url, {
         method,
         body: form,
-      }, editing ? 'Kh?ng th? c?p nh?t nh? cung c?p.' : 'Kh?ng th? th?m nh? cung c?p.');
-      alert(editing ? '? ?? c?p nh?t nh? cung c?p!' : '? ?? th?m nh? cung c?p th?nh c?ng!');
+      }, editing ? 'Kh?ng th? cập nhật nh? cung c?p.' : 'Kh?ng th? th?m nh? cung c?p.');
+      alert(editing ? '? ?? cập nhật nh? cung c?p!' : '? ?? th?m nh? cung c?p th?nh c?ng!');
       setShowForm(false);
       fetchSuppliers();
     } catch (err) {
-      alert('L?i k?t n?i: ' + err.message);
+      alert('L?i kết nối: ' + err.message);
     } finally {
       setSaving(false);
     }
@@ -247,7 +247,7 @@ export default function NhaCungCap() {
       alert('? ?? x?a nh? cung c?p!');
       fetchSuppliers();
     } catch (err) {
-      alert('L?i k?t n?i: ' + err.message);
+      alert('L?i kết nối: ' + err.message);
     }
   };
 
@@ -295,7 +295,7 @@ export default function NhaCungCap() {
       const workbook = XLSX.read(buffer, { type: 'array' });
       const firstSheetName = workbook.SheetNames[0];
       if (!firstSheetName) {
-        alert('File Excel kh?ng c? sheet d? li?u.');
+        alert('File Excel kh?ng c? sheet dữ liệu.');
         return;
       }
 
@@ -333,7 +333,7 @@ export default function NhaCungCap() {
       }
 
       const confirmed = confirm(
-        `T?m th?y ${validSuppliers.length} nh? cung c?p h?p l?. L?i/b? qua: ${skipped}.\nB?n c? mu?n nh?p d? li?u n?y kh?ng?`
+        `T?m th?y ${validSuppliers.length} nh? cung c?p h?p l?. L?i/b? qua: ${skipped}.\nB?n c? mu?n nh?p dữ liệu n?y kh?ng?`
       );
       if (!confirmed) return;
 
@@ -413,14 +413,14 @@ export default function NhaCungCap() {
     if (directSummary) return directSummary;
 
     if (paymentLoading) {
-      return { payment_status: 'loading', label: '?ang t?i...', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
+      return { payment_status: 'loading', label: 'đang t?i...', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
     }
 
     if (paymentLoaded) {
       return { payment_status: 'none', label: 'Chua c? phi?u', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: 0 };
     }
 
-    return { payment_status: 'unknown', label: 'Chua c? d? li?u', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
+    return { payment_status: 'unknown', label: 'Chua c? dữ liệu', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
   };
 
   const getSupplierPaymentLabel = (summary) => {
@@ -478,7 +478,7 @@ export default function NhaCungCap() {
             disabled={importing}
             className="px-4 py-2 border border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-sm font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Upload size={16} /> {importing ? '?ang nh?p...' : 'Nh?p Excel'}
+            <Upload size={16} /> {importing ? 'đang nh?p...' : 'Nh?p Excel'}
           </button>
           <button onClick={exportExcel} className="px-4 py-2 border border-orange-300 text-orange-600 hover:bg-orange-50 rounded-lg text-sm font-medium flex items-center gap-1.5">
             <FileDown size={16} /> Xu?t Excel
@@ -514,7 +514,7 @@ export default function NhaCungCap() {
             {loading && (
               <tr>
                 <td colSpan={8} className="text-center text-gray-400 py-10 flex items-center justify-center gap-2">
-                  <Loader size={16} className="animate-spin" /> ?ang t?i...
+                  <Loader size={16} className="animate-spin" /> đang t?i...
                 </td>
               </tr>
             )}
@@ -646,7 +646,7 @@ export default function NhaCungCap() {
             </form>
             <div className="flex gap-2 mt-4">
               <button onClick={handleSubmit} disabled={saving} className="btn-success flex-1 disabled:opacity-50">
-                ?? {saving ? '?ang luu...' : 'Luu'}
+                ?? {saving ? 'đang luu...' : 'Luu'}
               </button>
               <button onClick={() => setShowForm(false)} className="btn-danger flex-1">H?y</button>
             </div>
@@ -679,7 +679,7 @@ export default function NhaCungCap() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Ch?nh s?a nh? cung c?p</h3>
-                <p>Nh?n n?t <strong>"S?a"</strong> ? c?t H?nh d?ng d? c?p nh?t th?ng tin nh? cung c?p. C?c th?ng tin c? th? thay d?i: S?T, MST, Email, ??a ch?, Lo?i h?a don.</p>
+                <p>Nh?n n?t <strong>"S?a"</strong> ? c?t H?nh d?ng d? cập nhật th?ng tin nh? cung c?p. C?c th?ng tin c? th? thay d?i: S?T, MST, Email, ??a ch?, Lo?i h?a don.</p>
               </div>
 
               <div>
@@ -699,7 +699,7 @@ export default function NhaCungCap() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Nh?p Excel</h3>
-                <p>Nh?n n?t <strong>"Nh?p Excel"</strong>, ch?n file .xlsx ho?c .xls, ki?m tra th?ng b?o x?c nh?n r?i d?ng ? d? nh?p t?ng nh? cung c?p v?o h? th?ng.</p>
+                <p>Nh?n n?t <strong>"Nh?p Excel"</strong>, ch?n file .xlsx ho?c .xls, ki?m tra thông báo x?c nh?n r?i d?ng ? d? nh?p t?ng nh? cung c?p v?o hệ thống.</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>C?t b?t bu?c: <strong>T?n NCC</strong> ho?c <strong>T?n nh? cung c?p</strong> ho?c <strong>name</strong></li>
                   <li>C?t t?y ch?n: <strong>S? di?n tho?i/S?T/phone</strong>, <strong>M? s? thu?/MST/tax_code</strong>, <strong>Email/email</strong>, <strong>??a ch?/address</strong>, <strong>Lo?i h?a don/invoice_type</strong></li>

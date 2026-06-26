@@ -174,8 +174,8 @@ export default function Stats() {
       ]);
       const statsData = await statsResponse.json();
       const profitData = await profitResponse.json();
-      if (!statsResponse.ok) throw new Error(statsData?.error || 'Kh?ng th? t?i b?o c?o doanh thu.');
-      if (!profitResponse.ok) throw new Error(profitData?.error || 'Kh?ng th? t?i l?i nhu?n u?c t?nh.');
+      if (!statsResponse.ok) throw new Error(statsData?.error || 'Kh?ng th? t?i báo cáo doanh thu.');
+      if (!profitResponse.ok) throw new Error(profitData?.error || 'Kh?ng th? t?i lợi nhuận u?c t?nh.');
 
       const rows = Array.isArray(statsData) ? statsData : [];
       setDailyStats(rows);
@@ -237,7 +237,7 @@ export default function Stats() {
 
   const exportRows = (rows, fileName, title) => {
     if (rows.length === 0) {
-      alert('Kh?ng c? d? li?u d? xu?t.');
+      alert('Kh?ng c? dữ liệu d? xu?t.');
       return;
     }
 
@@ -343,7 +343,7 @@ export default function Stats() {
 
       <div className="card mb-4 border border-green-200 bg-gradient-to-r from-green-50 to-blue-50">
         <h3 className="mb-3 flex items-center gap-2 font-bold">
-          <FileDown className="text-green-600" size={18} /> Xu?t b?o c?o Excel
+          <FileDown className="text-green-600" size={18} /> Xu?t báo cáo Excel
         </h3>
         <div className="flex flex-wrap items-end gap-3">
           <div>
@@ -370,14 +370,14 @@ export default function Stats() {
                 <h3 className="font-bold text-gray-800 mb-2">C?ch d?c m?n h?nh</h3>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Ch?n m?c th?i gian theo ng?y, tu?n, th?ng ho?c nam.</li>
-                  <li>Xem c?c th? t?ng quan d? ki?m tra doanh thu v? l?i nhu?n.</li>
-                  <li>D?ng n?t xu?t Excel d? t?i b?o c?o chi ti?t.</li>
+                  <li>Xem c?c th? t?ng quan d? ki?m tra doanh thu v? lợi nhuận.</li>
+                  <li>D?ng n?t xu?t Excel d? t?i báo cáo chi ti?t.</li>
                 </ul>
               </div>
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>B?o c?o t? l?m m?i khi d? li?u don h?ng thay d?i.</li>
+                  <li>B?o c?o t? l?m m?i khi dữ liệu don h?ng thay d?i.</li>
                   <li>C? th? m? r?ng t?ng ng?y d? xem chi ti?t don h?ng.</li>
                 </ul>
               </div>
@@ -408,11 +408,11 @@ export default function Stats() {
 
       <div className="card">
         <h3 className="mb-4 flex items-center gap-2 font-bold">
-          <Package className="text-gray-600" size={18} /> B?o c?o chi ti?t l?i nhu?n
+          <Package className="text-gray-600" size={18} /> B?o c?o chi ti?t lợi nhuận
         </h3>
         {error && <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
         {loading ? (
-          <div className="py-8 text-center text-gray-400">?ang t?i...</div>
+          <div className="py-8 text-center text-gray-400">đang t?i...</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -438,7 +438,7 @@ export default function Stats() {
                   );
                 })}
                 {dailyRows.length === 0 && (
-                  <tr><td colSpan={5} className="py-10 text-center text-gray-400">Chua c? d? li?u</td></tr>
+                  <tr><td colSpan={5} className="py-10 text-center text-gray-400">Chua c? dữ liệu</td></tr>
                 )}
                 {dailyRows.length > 0 && (
                   <tr className="bg-emerald-50 font-bold text-emerald-700">

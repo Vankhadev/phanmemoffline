@@ -8,7 +8,7 @@ import HelpModal from '../components/HelpModal';
 
 const API = resolveApiUrl('');
 
-const SUPPLIER_CHANGE_CONFIRM_MESSAGE = '??i nh? cung c?p s? x?a danh s?ch s?n ph?m hi?n t?i. B?n c? mu?n ti?p t?c?';
+const SUPPLIER_CHANGE_CONFIRM_MESSAGE = '??i nh? cung c?p s? x?a danh s?ch s?n ph?m hi?n t?i. B?n c? mu?n tiếp tục?';
 const PRODUCT_SEARCH_LIMIT = 80;
 const IMPORT_PICKER_QUANTITY_STEP = 1;
 
@@ -784,7 +784,7 @@ const Nhaphang = ({ store }) => {
     ));
     if (duplicatedOrder) {
       const supplierName = duplicatedOrder.nhaCungCap?.tenNCC || 'nh? cung c?p kh?c';
-      return `M? phi?u ${normalizedImportCodeInput} d? t?n t?i ? phi?u c?a ${supplierName}. Kh?ng d?ng chung m?t m? phi?u cho nhi?u nh? cung c?p.`;
+      return `M? phi?u ${normalizedImportCodeInput} d? t?n t?i ? phi?u c?a ${supplierName}. Khứng dụng chung m?t m? phi?u cho nhi?u nh? cung c?p.`;
     }
     return '';
   }, [currentOrder?.id, currentOrder?.maDonHang, normalizedImportCodeInput, orderHistory]);
@@ -866,7 +866,7 @@ const Nhaphang = ({ store }) => {
         setOrderHistory((Array.isArray(data) ? data : []).map(mapImportToOrder));
       }
     } catch (err) {
-      console.error('L?i t?i l?ch s? nh?p h?ng:', err);
+      console.error('L?i t?i lịch sử nh?p h?ng:', err);
     }
   }, []);
 
@@ -1361,7 +1361,7 @@ const Nhaphang = ({ store }) => {
     setSelectedProduct(null);
     setEditingProductIndex(null);
     setError(null);
-    setSuccess(changes.length > 0 ? `?? c?p nh?t ${changes.length} d?ng s?n ph?m v?o phi?u nh?p.` : 'Danh s?ch ch?n t?m d? du?c gi? nguy?n, kh?ng c?ng tr?ng s?n ph?m.');
+    setSuccess(changes.length > 0 ? `?? cập nhật ${changes.length} d?ng s?n ph?m v?o phi?u nh?p.` : 'Danh s?ch ch?n t?m d? du?c gi? nguy?n, kh?ng c?ng tr?ng s?n ph?m.');
     setTimeout(() => setSuccess(null), 3000);
   };
 
@@ -1606,7 +1606,7 @@ const Nhaphang = ({ store }) => {
             {selectedSupplier && (
               <span className="min-w-0 truncate text-slate-400">Nh? cung c?p: {selectedSupplier.tenNCC}</span>
             )}
-            {loading && <span className="text-sky-600">?ang t?i d? li?u...</span>}
+            {loading && <span className="text-sky-600">đang t?i dữ liệu...</span>}
           </div>
           <div className="min-h-[240px] flex-1 overflow-y-auto border-y border-slate-100 bg-white sm:min-h-[380px]">
             {hasRows ? (
@@ -1753,7 +1753,7 @@ const Nhaphang = ({ store }) => {
       setProducts(prev => prev.map((product, index) => (
         index === editingProductIndex ? normalizedProduct : product
       )));
-      setSuccess('?? c?p nh?t s?n ph?m cho d?ng dang ch?n.');
+      setSuccess('?? cập nhật s?n ph?m cho d?ng dang ch?n.');
       setTimeout(() => setSuccess(null), 3000);
     } else if (duplicateIndex >= 0) {
       const duplicateName = products[duplicateIndex]?.tenSP || normalizedProduct.tenSP || normalizedProduct.maSP;
@@ -2102,10 +2102,10 @@ const Nhaphang = ({ store }) => {
     const isEditing = Boolean(isEditingOrder && editingImportKey);
     const nextImportCode = isEditing ? (currentOrder.maDonHang || normalizedImportCodeInput || '') : normalizedImportCodeInput;
     const confirmMessage = isEditing
-      ? `C?p nh?t phi?u nh?p ${nextImportCode || currentOrder.maDonHang || 'm? t? d?ng'}? H? th?ng s? s?a d?ng phi?u hi?n t?i, kh?ng t?o phi?u/m? m?i.`
+      ? `Cập nhật phi?u nh?p ${nextImportCode || currentOrder.maDonHang || 'm? t? d?ng'}? H? th?ng s? s?a d?ng phi?u hi?n t?i, kh?ng t?o phi?u/m? m?i.`
       : status === 'received'
-        ? 'T?o v? nh?p h?ng? H?nh d?ng n?y s? c?p nh?t s? lu?ng t?n kho.'
-        : 'T?o don h?ng (chua nh?p)? ?on h?ng s? du?c luu v?o h? th?ng.';
+        ? 'T?o v? nh?p h?ng? H?nh d?ng n?y s? cập nhật s? lu?ng tồn kho.'
+        : 'T?o don h?ng (chua nh?p)? ?on h?ng s? du?c luu v?o hệ thống.';
     if (!window.confirm(confirmMessage)) return;
 
     setSaving(true);
@@ -2116,14 +2116,14 @@ const Nhaphang = ({ store }) => {
       const result = await apiJsonChecked(endpoint, {
         method: isEditing ? 'PUT' : 'POST',
         body: buildImportPayload(status, nextImportCode),
-      }, isEditing ? 'Kh?ng th? c?p nh?t phi?u nh?p.' : 'Kh?ng th? t?o phi?u nh?p.');
+      }, isEditing ? 'Kh?ng th? cập nhật phi?u nh?p.' : 'Kh?ng th? t?o phi?u nh?p.');
       const savedOrder = buildLocalOrderData(status, nextImportCode, result);
       setOrderHistory(prev => [savedOrder, ...prev.filter(o => o.maDonHang !== savedOrder.maDonHang && o.id !== savedOrder.id)]);
       setImportCodeInput(savedOrder.maDonHang || nextImportCode || '');
 
       setSuccess(
         isEditing
-          ? `Phi?u ${savedOrder.maDonHang} d? du?c c?p nh?t. Tr?ng th?i thanh to?n: ${getPaymentLabel(savedOrder.payment_status)}.`
+          ? `Phi?u ${savedOrder.maDonHang} d? du?c cập nhật. Tr?ng th?i thanh to?n: ${getPaymentLabel(savedOrder.payment_status)}.`
           : `?on h?ng ${savedOrder.maDonHang} d? du?c t?o${status === 'received' ? ', nh?p kho th?nh c?ng' : ' v? luu t?m'}; thanh to?n: ${getPaymentLabel(savedOrder.payment_status)}.`
       );
       setCurrentOrder(savedOrder);
@@ -2165,7 +2165,7 @@ const Nhaphang = ({ store }) => {
   // Exit/Reset
   const handleExit = () => {
     if (products.length > 0 || note || tags.length > 0) {
-      const confirmExit = window.confirm('B?n c? ch?c ch?n mu?n tho?t? D? li?u chua luu s? b? m?t.');
+      const confirmExit = window.confirm('B?n c? ch?c ch?n mu?n tho?t? Dữ liệu chua luu s? b? m?t.');
       if (!confirmExit) return;
     }
     handleReset();
@@ -2255,7 +2255,7 @@ const Nhaphang = ({ store }) => {
       setSearchQuery('');
       setFilteredProducts([]);
       setShowSearchResults(false);
-      setSuccess(edit ? `?ang s?a phi?u ${fullOrder.maDonHang}. Khi luu s? g?i API c?p nh?t, kh?ng t?o phi?u m?i.` : `?? t?i phi?u ${fullOrder.maDonHang} d? xem.`);
+      setSuccess(edit ? `đang s?a phi?u ${fullOrder.maDonHang}. Khi luu s? g?i API cập nhật, kh?ng t?o phi?u m?i.` : `?? t?i phi?u ${fullOrder.maDonHang} d? xem.`);
     } catch (err) {
       console.error('Error loading import order:', err);
       setError('Kh?ng th? t?i chi ti?t phi?u nh?p.');
@@ -2271,8 +2271,8 @@ const Nhaphang = ({ store }) => {
 
     const confirmCancel = window.confirm(
       `H?y don h?ng ${order.maDonHang}?\n\n` +
-      'N?u phi?u n?y d? nh?p kho, h? th?ng s? t? d?ng tr? l?i d?ng s? lu?ng d? c?ng v? ch? rollback m?t l?n.\n' +
-      'N?u phi?u chua t?ng nh?p kho, t?n kho s? kh?ng b? thay d?i.\n\n' +
+      'N?u phi?u n?y d? nh?p kho, hệ thống s? t? d?ng trở lại d?ng s? lu?ng d? c?ng v? ch? rollback m?t l?n.\n' +
+      'N?u phi?u chua t?ng nh?p kho, tồn kho s? kh?ng b? thay d?i.\n\n' +
       `L? do: ${reason || 'Kh?ng c?'}\n\n` +
       'B?n c? ch?c ch?n?'
     );
@@ -2287,7 +2287,7 @@ const Nhaphang = ({ store }) => {
         method: 'POST',
         body: { lyDo: reason, rollbackStock: true }
       }, 'Kh?ng th? h?y don h?ng');
-      setSuccess(`?on h?ng ${order.maDonHang} d? du?c h?y${result.rollback_stock ? ' v? d? rollback t?n kho' : ''}.`);
+      setSuccess(`?on h?ng ${order.maDonHang} d? du?c h?y${result.rollback_stock ? ' v? d? rollback tồn kho' : ''}.`);
 
       // Remove from local history if present
       if (currentOrder?.maDonHang === order.maDonHang) {
@@ -2322,7 +2322,7 @@ const Nhaphang = ({ store }) => {
   const handleDeleteOrder = async (order) => {
     const confirmDelete = window.confirm(
       `X?a phi?u nh?p ${order.maDonHang}?\n\n` +
-      'N?u phi?u d? nh?p kho, backend s? rollback t?n kho d?ng m?t l?n tru?c khi ?n kh?i danh s?ch.\n' +
+      'N?u phi?u d? nh?p kho, backend s? rollback tồn kho d?ng m?t l?n tru?c khi ?n kh?i danh s?ch.\n' +
       'Thao t?c n?y kh?ng t?o phi?u m?i v? kh?ng rollback l?p n?u g?i l?i.'
     );
     if (!confirmDelete) return;
@@ -2344,7 +2344,7 @@ const Nhaphang = ({ store }) => {
       if (currentOrder?.maDonHang === order.maDonHang || currentOrder?.id === order.id) {
         handleReset();
       }
-      setSuccess(`Phi?u ${order.maDonHang} d? du?c x?a${result.rollback_stock ? ' v? d? rollback t?n kho' : ''}.`);
+      setSuccess(`Phi?u ${order.maDonHang} d? du?c x?a${result.rollback_stock ? ' v? d? rollback tồn kho' : ''}.`);
       fetchAllProducts();
     } catch (err) {
       console.error('Error deleting import order:', err);
@@ -2367,7 +2367,7 @@ const Nhaphang = ({ store }) => {
     if (selectedHistoryIds.length === 0) return;
     const confirmDelete = window.confirm(
       `X?a ${selectedHistoryIds.length} phi?u nh?p d? ch?n?\n\n` +
-      'Backend s? rollback t?n kho d?ng m?t l?n cho t?ng phi?u d? nh?p kho v? b? qua rollback l?p.'
+      'Backend s? rollback tồn kho d?ng m?t l?n cho t?ng phi?u d? nh?p kho v? b? qua rollback l?p.'
     );
     if (!confirmDelete) return;
 
@@ -2389,7 +2389,7 @@ const Nhaphang = ({ store }) => {
         handleReset();
       }
       setSelectedHistoryIds([]);
-      setSuccess(`?? x?a ${result.deleted_count || 0} phi?u nh?p${result.rollback_count ? `, rollback t?n kho ${result.rollback_count} phi?u` : ''}.`);
+      setSuccess(`?? x?a ${result.deleted_count || 0} phi?u nh?p${result.rollback_count ? `, rollback tồn kho ${result.rollback_count} phi?u` : ''}.`);
       fetchAllProducts();
     } catch (err) {
       console.error('Error bulk deleting import orders:', err);
@@ -2406,7 +2406,7 @@ const Nhaphang = ({ store }) => {
       return;
     }
     if (hasUnsavedPaymentAffectingChanges) {
-      setError('Phi?u nh?p dang c? thay d?i s?n ph?m ho?c t?ng ti?n chua luu. Vui l?ng c?p nh?t phi?u tru?c khi thanh to?n d? tr?nh sai c?ng n?.');
+      setError('Phi?u nh?p dang c? thay d?i s?n ph?m ho?c t?ng ti?n chua luu. Vui l?ng cập nhật phi?u tru?c khi thanh to?n d? tr?nh sai c?ng n?.');
       setTimeout(() => setError(null), 5000);
       return;
     }
@@ -2418,7 +2418,7 @@ const Nhaphang = ({ store }) => {
 
     const confirmPay = window.confirm(
       `Thanh to?n phi?u nh?p ${currentOrder?.maDonHang || editingImportKey}?\n\n` +
-      'Thao t?c n?y ch? c?p nh?t phi?u hi?n t?i sang d? thanh to?n v? ghi nh?n s? qu?/c?ng n? li?n quan, kh?ng t?o phi?u m?i v? kh?ng thay d?i t?n kho.'
+      'Thao t?c n?y ch? cập nhật phi?u hi?n t?i sang d? thanh to?n v? ghi nh?n s? qu?/c?ng n? li?n quan, kh?ng t?o phi?u m?i v? kh?ng thay d?i tồn kho.'
     );
     if (!confirmPay) return;
 
@@ -2470,7 +2470,7 @@ const Nhaphang = ({ store }) => {
         return { ...order, ...nextPayment };
       }));
       fetchImportHistory();
-      setSuccess(`Phi?u ${result.import_code || editingImportKey} d? du?c thanh to?n, kh?ng t?o phi?u m?i v? kh?ng d?i t?n kho.`);
+      setSuccess(`Phi?u ${result.import_code || editingImportKey} d? du?c thanh to?n, kh?ng t?o phi?u m?i v? kh?ng d?i tồn kho.`);
     } catch (err) {
       console.error('Error paying import order:', err);
       setError(err.message || 'Kh?ng th? thanh to?n phi?u nh?p. Vui l?ng th? l?i sau.');
@@ -2526,7 +2526,7 @@ const Nhaphang = ({ store }) => {
         >
           <span className="text-xl leading-none text-gray-400">?</span>
           Quay l?i danh s?ch don nh?p
-          {currentOrder && <span className="text-xs font-medium text-gray-400">{isEditingOrder ? '?ang s?a' : '?ang xem'} {currentOrder.maDonHang}</span>}
+          {currentOrder && <span className="text-xs font-medium text-gray-400">{isEditingOrder ? 'đang s?a' : 'đang xem'} {currentOrder.maDonHang}</span>}
         </button>
         <div className="sapo-actions">
           <button
@@ -2545,14 +2545,14 @@ const Nhaphang = ({ store }) => {
             disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError || hasImportCodeError}
             className="sapo-btn"
           >
-            {isEditingOrder ? 'C?p nh?t phi?u' : 'T?o & chua nh?p'}
+            {isEditingOrder ? 'Cập nhật phi?u' : 'T?o & chua nh?p'}
           </button>
           <button
             onClick={handleCreateAndReceive}
             disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError || hasImportCodeError}
             className="sapo-btn sapo-btn-primary"
           >
-            {isEditingOrder ? 'C?p nh?t & nh?p h?ng' : 'T?o & nh?p h?ng'}
+            {isEditingOrder ? 'Cập nhật & nh?p h?ng' : 'T?o & nh?p h?ng'}
           </button>
         </div>
       </div>
@@ -2619,7 +2619,7 @@ const Nhaphang = ({ store }) => {
                       >
                         {(supplierSearchQuery || showAllSuppliers) ? (
                           loading && supplierSearchQuery ? (
-                            <div className="p-3 text-center text-sm text-gray-500">?ang t?m ki?m...</div>
+                            <div className="p-3 text-center text-sm text-gray-500">đang t?m ki?m...</div>
                           ) : filteredSuppliers.length > 0 ? (
                             filteredSuppliers.map(supplier => (
                               <div
@@ -2702,7 +2702,7 @@ const Nhaphang = ({ store }) => {
                     disabled={saving}
                   />
                   {!importCodeInputError && !isEditingOrder && (
-                    <p className="mt-1 text-xs text-gray-400">Nh?p m? phi?u nh? cung c?p n?u c?; d? tr?ng h? th?ng t? sinh m? PN.</p>
+                    <p className="mt-1 text-xs text-gray-400">Nh?p m? phi?u nh? cung c?p n?u c?; d? tr?ng hệ thống t? sinh m? PN.</p>
                   )}
                   {importCodeInputError && <p className="mt-1 text-xs font-medium text-red-600">{importCodeInputError}</p>}
                 </label>
@@ -2775,7 +2775,7 @@ const Nhaphang = ({ store }) => {
                       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
                         <div className="max-h-72 overflow-y-auto rounded-sm border border-gray-100 bg-white">
                           {loading ? (
-                            <div className="p-3 text-center text-sm text-gray-500">?ang t?m ki?m...</div>
+                            <div className="p-3 text-center text-sm text-gray-500">đang t?m ki?m...</div>
                           ) : filteredProducts.length > 0 ? (
                             filteredProducts.map(product => {
                               const price = product.retail_price || product.import_price || product.giaNhap || 0;
@@ -2820,7 +2820,7 @@ const Nhaphang = ({ store }) => {
                             })
                           ) : (
                             <div className="p-3 text-center text-sm text-gray-500">
-                              {searchQuery.trim() ? 'Kh?ng c? s?n ph?m ph? h?p' : 'Chua c? s?n ph?m trong h? th?ng'}
+                              {searchQuery.trim() ? 'Kh?ng c? s?n ph?m ph? h?p' : 'Chua c? s?n ph?m trong hệ thống'}
                             </div>
                           )}
                         </div>
@@ -2957,7 +2957,7 @@ const Nhaphang = ({ store }) => {
                   <div className="min-w-0">
                     <h2 className="flex items-center gap-2 text-base font-semibold text-blue-900">
                       <Package className="h-4 w-4 shrink-0" />
-                      {editingProductIndex !== null ? `C?p nh?t d?ng #${editingProductIndex + 1}` : 'Th?m s?n ph?m v?o phi?u'}
+                      {editingProductIndex !== null ? `Cập nhật d?ng #${editingProductIndex + 1}` : 'Th?m s?n ph?m v?o phi?u'}
                     </h2>
                     <p className="mt-0.5 truncate text-sm text-blue-700" title={selectedProduct.tenSP}>{selectedProduct.tenSP} ? M?: {selectedProduct.maSP || 'N/A'}</p>
                   </div>
@@ -3079,7 +3079,7 @@ const Nhaphang = ({ store }) => {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button onClick={() => handleAddProduct({ keepSearching: false })} disabled={saving || Boolean(selectedProductQuantityError)} className="flex w-full items-center justify-center gap-2 rounded-sm bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-400">
                     <Plus className="h-4 w-4" />
-                    {editingProductIndex !== null ? 'C?p nh?t d?ng s?n ph?m' : 'Th?m v?o danh s?ch'}
+                    {editingProductIndex !== null ? 'Cập nhật d?ng s?n ph?m' : 'Th?m v?o danh s?ch'}
                   </button>
                   <button onClick={() => handleAddProduct({ keepSearching: true })} disabled={saving || Boolean(selectedProductQuantityError)} className="flex w-full items-center justify-center gap-2 rounded-sm bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:bg-emerald-400" title="Th?m s?n ph?m v? gi? ? t?m ki?m d? nh?p ti?p">
                     <Search className="h-4 w-4" />
@@ -3250,7 +3250,7 @@ const Nhaphang = ({ store }) => {
                         {/* Show filtered results if typing or show all if focus without typing */}
                         {(supplierSearchQuery || showAllSuppliers) ? (
                           loading && supplierSearchQuery ? (
-                            <div className="p-3 text-center text-sm text-gray-500">?ang t?m ki?m...</div>
+                            <div className="p-3 text-center text-sm text-gray-500">đang t?m ki?m...</div>
                           ) : filteredSuppliers.length > 0 ? (
                             filteredSuppliers.map(supplier => (
                               <div
@@ -3369,7 +3369,7 @@ const Nhaphang = ({ store }) => {
                         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
                           <div className="max-h-72 overflow-y-auto scroll-smooth rounded-lg border border-gray-100 bg-white">
                             {loading ? (
-                              <div className="p-3 text-center text-sm text-gray-500">?ang t?m ki?m...</div>
+                              <div className="p-3 text-center text-sm text-gray-500">đang t?m ki?m...</div>
                             ) : filteredProducts.length > 0 ? (
                               filteredProducts.map(product => {
                                 // Map price from API field
@@ -3417,7 +3417,7 @@ const Nhaphang = ({ store }) => {
                               })
                             ) : (
                               <div className="p-3 text-sm text-gray-500 text-center">
-                                {searchQuery.trim() ? 'Kh?ng c? s?n ph?m ph? h?p' : 'Chua c? s?n ph?m trong h? th?ng'}
+                                {searchQuery.trim() ? 'Kh?ng c? s?n ph?m ph? h?p' : 'Chua c? s?n ph?m trong hệ thống'}
                               </div>
                             )}
                           </div>
@@ -3443,7 +3443,7 @@ const Nhaphang = ({ store }) => {
                   <div className="min-w-0">
                     <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">
                       <Package className="w-4 h-4 shrink-0" />
-                      {editingProductIndex !== null ? `C?p nh?t d?ng #${editingProductIndex + 1}` : 'Th?m s?n ph?m v?o phi?u'}
+                      {editingProductIndex !== null ? `Cập nhật d?ng #${editingProductIndex + 1}` : 'Th?m s?n ph?m v?o phi?u'}
                     </h2>
                     <p className="text-sm text-blue-700 mt-0.5 truncate" title={selectedProduct.tenSP}>{selectedProduct.tenSP} ? M?: {selectedProduct.maSP || 'N/A'}</p>
                   </div>
@@ -3570,7 +3570,7 @@ const Nhaphang = ({ store }) => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button onClick={() => handleAddProduct({ keepSearching: false })} disabled={saving || Boolean(selectedProductQuantityError)} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm">
                       <Plus className="w-4 h-4" />
-                      {editingProductIndex !== null ? 'C?p nh?t d?ng s?n ph?m' : 'Th?m v?o danh s?ch'}
+                      {editingProductIndex !== null ? 'Cập nhật d?ng s?n ph?m' : 'Th?m v?o danh s?ch'}
                     </button>
                     <button onClick={() => handleAddProduct({ keepSearching: true })} disabled={saving || Boolean(selectedProductQuantityError)} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm" title="Th?m s?n ph?m v? gi? nguy?n ? t?m ki?m d? nh?p ti?p">
                       <Search className="w-4 h-4" />
@@ -3751,9 +3751,9 @@ const Nhaphang = ({ store }) => {
                   </button>
                   <p className={`mt-2 text-xs ${hasUnsavedPaymentAffectingChanges ? 'text-orange-600' : 'text-gray-500'}`}>
                     {hasUnsavedPaymentAffectingChanges
-                      ? 'Phi?u d? d?i s?n ph?m ho?c t?ng ti?n; h?y c?p nh?t phi?u tru?c khi thanh to?n l?i d? c?ng n? ch?nh x?c.'
+                      ? 'Phi?u d? d?i s?n ph?m ho?c t?ng ti?n; h?y cập nhật phi?u tru?c khi thanh to?n l?i d? c?ng n? ch?nh x?c.'
                       : editingImportKey
-                      ? 'N?t n?y ch? c?p nh?t phi?u hi?n t?i, kh?ng t?o phi?u m?i v? kh?ng thay d?i t?n kho.'
+                      ? 'N?t n?y ch? cập nhật phi?u hi?n t?i, kh?ng t?o phi?u m?i v? kh?ng thay d?i tồn kho.'
                       : 'C?n t?o ho?c ch?n phi?u nh?p tru?c khi thanh to?n.'}
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
@@ -3789,7 +3789,7 @@ const Nhaphang = ({ store }) => {
                       className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2.5 px-4 rounded-md flex items-center justify-center gap-2 text-sm shadow-sm"
                     >
                       <Package className="w-4 h-4" />
-                      {isEditingOrder ? 'C?p nh?t & Nh?p h?ng' : 'T?o & Nh?p h?ng'}
+                      {isEditingOrder ? 'Cập nhật & Nh?p h?ng' : 'T?o & Nh?p h?ng'}
                     </button>
                   )}
                   <button
@@ -3798,7 +3798,7 @@ const Nhaphang = ({ store }) => {
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 px-4 rounded-md flex items-center justify-center gap-2 text-sm shadow-sm"
                   >
                     <Save className="w-4 h-4" />
-                    {isEditingOrder ? 'C?p nh?t phi?u' : 'T?o & Luu t?m'}
+                    {isEditingOrder ? 'Cập nhật phi?u' : 'T?o & Luu t?m'}
                   </button>
                 </div>
 
@@ -3826,14 +3826,14 @@ const Nhaphang = ({ store }) => {
                     <li>Ch?n nh? cung c?p v? nh?p m? phi?u n?u c?n.</li>
                     <li>Th?m s?n ph?m, s? lu?ng nh?p, gi? nh?p, chi?t kh?u v? thu?.</li>
                     <li>Ki?m tra t?ng ti?n, tr?ng th?i thanh to?n v? th?ng tin phi?u.</li>
-                    <li>D?ng T?o & Nh?p h?ng d? c?p nh?t t?n kho ho?c T?o & Luu t?m d? luu phi?u.</li>
+                    <li>D?ng T?o & Nh?p h?ng d? cập nhật tồn kho ho?c T?o & Luu t?m d? luu phi?u.</li>
                   </ol>
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
                   <ul className="list-disc pl-5 space-y-1">
                     <li>Kh?ng th? luu phi?u n?u chua ch?n nh? cung c?p ho?c chua c? s?n ph?m.</li>
-                    <li>Phi?u d? nh?p kho khi x?a s? du?c backend rollback t?n kho d?ng m?t l?n.</li>
+                    <li>Phi?u d? nh?p kho khi x?a s? du?c backend rollback tồn kho d?ng m?t l?n.</li>
                   </ul>
                 </div>
               </div>
@@ -3976,7 +3976,7 @@ const Nhaphang = ({ store }) => {
             {orderHistory.length > 0 && (
               <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
                 <p className="text-xs text-gray-500">
-                  Luu ?: Khi h?y phi?u d? nh?p kho, backend s? t? d?ng rollback t?n kho d?ng m?t l?n; phi?u luu t?m chua nh?p kho s? kh?ng d?i t?n kho.
+                  Luu ?: Khi h?y phi?u d? nh?p kho, backend s? t? d?ng rollback tồn kho d?ng m?t l?n; phi?u luu t?m chua nh?p kho s? kh?ng d?i tồn kho.
                 </p>
               </div>
             )}

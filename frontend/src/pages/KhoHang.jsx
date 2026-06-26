@@ -24,7 +24,7 @@ const STOCK_CHANGE_TABLES = ['products', 'import_logs', 'import_details', 'invoi
 const INVENTORY_TABS = [
   { key: 'all', label: 'T?t c? s?n ph?m' },
   { key: 'in-stock', label: 'C?n h?ng' },
-  { key: 'low-stock', label: 'S?p h?t h?ng' },
+  { key: 'low-stock', label: 'S?p hết hạng' },
   { key: 'out-of-stock', label: 'H?t h?ng' },
   { key: 'negative', label: '?m kho' },
   { key: 'negative-quantity', label: 'S? lu?ng ?m' },
@@ -413,7 +413,7 @@ export default function KhoHang() {
       const changes = detectChanges(productsRef.current, nextProducts);
       if (changes.length > 0) {
         if (alertTimeoutRef.current) window.clearTimeout(alertTimeoutRef.current);
-        setAlertMsg(`?? C?p nh?t kho: ${changes.slice(0, 5).join(', ')}${changes.length > 5 ? '?' : ''}`);
+        setAlertMsg(`?? Cập nhật kho: ${changes.slice(0, 5).join(', ')}${changes.length > 5 ? '?' : ''}`);
         alertTimeoutRef.current = window.setTimeout(() => {
           setAlertMsg('');
           alertTimeoutRef.current = null;
@@ -426,7 +426,7 @@ export default function KhoHang() {
 
   const fetchProducts = (isAutoRefresh = false) => {
     if (!isAutoRefresh) setProductsLoading(true);
-    return apiJsonChecked('/products/all/with-variants', {}, 'Kh?ng th? t?i danh s?ch t?n kho.')
+    return apiJsonChecked('/products/all/with-variants', {}, 'Kh?ng th? t?i danh s?ch tồn kho.')
       .then(data => applyProducts(data, isAutoRefresh))
       .catch(() => { })
       .finally(() => {
@@ -696,7 +696,7 @@ export default function KhoHang() {
 
   const emptyMessage = isNegativeStockTab
     ? (negativeStockError && !isUsingNegativeStockFallback
-      ? 'Kh?ng th? t?i danh s?ch ?m kho t? API. D? li?u fallback hi?n kh?ng kh? d?ng.'
+      ? 'Kh?ng th? t?i danh s?ch ?m kho t? API. Dữ liệu fallback hi?n kh?ng kh? d?ng.'
       : 'Kh?ng c? s?n ph?m ?m kho ph? h?p v?i b? l?c hi?n t?i.')
     : selectedCategory?.key !== 'all'
       ? `Danh m?c ?${selectedCategory.label}? chua c? s?n ph?m ph? h?p.`
@@ -870,7 +870,7 @@ export default function KhoHang() {
 
   const negativeStockSummaryText = isNegativeStockTab
     ? `${negativeStockTotal.toLocaleString('vi-VN')} s?n ph?m ?m kho t? API${isUsingNegativeStockFallback ? ' (fallback local)' : ''}`
-    : `${totalInventoryRows.toLocaleString('vi-VN')} d?ng t?n kho (${totalParentProducts.toLocaleString('vi-VN')} cha, ${totalChildProducts.toLocaleString('vi-VN')} bi?n th?)`;
+    : `${totalInventoryRows.toLocaleString('vi-VN')} d?ng tồn kho (${totalParentProducts.toLocaleString('vi-VN')} cha, ${totalChildProducts.toLocaleString('vi-VN')} bi?n th?)`;
 
   return (
     <div className="min-w-0">
@@ -918,11 +918,11 @@ export default function KhoHang() {
         {/* B?N PH?I: Th?ng k? */}
         <div className="grid w-full grid-cols-2 gap-2 text-sm sm:grid-cols-3 xl:w-auto xl:grid-cols-8 xl:gap-3">
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-center">
-            <div className="text-xs text-blue-500 font-medium">T?ng d?ng t?n kho</div>
+            <div className="text-xs text-blue-500 font-medium">Tứng dụng tồn kho</div>
             <div className="text-lg font-bold text-blue-700">{totalInventoryRows}</div>
           </div>
           <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-center">
-            <div className="text-xs text-green-500 font-medium">T?ng t?n kho SP cha</div>
+            <div className="text-xs text-green-500 font-medium">T?ng tồn kho SP cha</div>
             <div className="text-lg font-bold text-green-700">{totalParentStock.toLocaleString('vi-VN')}</div>
           </div>
           <div className="bg-pink-50 border border-pink-200 rounded-lg px-4 py-2 text-center">
@@ -930,11 +930,11 @@ export default function KhoHang() {
             <div className="text-lg font-bold text-pink-700">{totalChildProducts}</div>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2 text-center">
-            <div className="text-xs text-yellow-500 font-medium">T?ng t?n kho bi?n th?</div>
+            <div className="text-xs text-yellow-500 font-medium">T?ng tồn kho bi?n th?</div>
             <div className="text-lg font-bold text-yellow-700">{totalVariantStock.toLocaleString('vi-VN')}</div>
           </div>
           <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-2 text-center">
-            <div className="text-xs text-purple-500 font-medium">T?ng t?n kho</div>
+            <div className="text-xs text-purple-500 font-medium">T?ng tồn kho</div>
             <div className="text-lg font-bold text-purple-700">{totalCombinedStock.toLocaleString('vi-VN')}</div>
           </div>
           <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-center">
@@ -946,7 +946,7 @@ export default function KhoHang() {
             <div className="text-lg font-bold text-orange-700">{nearNegativeLimitRows}</div>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2 text-center">
-            <div className="text-xs text-yellow-600 font-medium">S?p h?t h?ng</div>
+            <div className="text-xs text-yellow-600 font-medium">S?p hết hạng</div>
             <div className="text-lg font-bold text-yellow-700">{lowStock}</div>
           </div>
         </div>
@@ -1001,8 +1001,8 @@ export default function KhoHang() {
                 type="button"
                 onClick={() => setStockSortDirection('asc')}
                 className={stockSortButtonClass('asc')}
-                title="S?p x?p t?n kho tang d?n"
-                aria-label="S?p x?p t?n kho tang d?n"
+                title="S?p x?p tồn kho tang d?n"
+                aria-label="S?p x?p tồn kho tang d?n"
               >
                 <ArrowUp size={16} />
               </button>
@@ -1022,8 +1022,8 @@ export default function KhoHang() {
                 type="button"
                 onClick={() => setStockSortDirection('desc')}
                 className={stockSortButtonClass('desc')}
-                title="S?p x?p t?n kho gi?m d?n"
-                aria-label="S?p x?p t?n kho gi?m d?n"
+                title="S?p x?p tồn kho gi?m d?n"
+                aria-label="S?p x?p tồn kho gi?m d?n"
               >
                 <ArrowDown size={16} />
               </button>
@@ -1071,7 +1071,7 @@ export default function KhoHang() {
 
       <div className="mb-3 text-xs text-gray-500 flex flex-wrap gap-2 items-center">
         <span className="px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-100">
-          ?ang xem: {INVENTORY_TABS.find(tab => tab.key === activeStockTab)?.label || 'T?t c? s?n ph?m'}
+          đang xem: {INVENTORY_TABS.find(tab => tab.key === activeStockTab)?.label || 'T?t c? s?n ph?m'}
         </span>
         <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
           Danh m?c: {selectedCategory?.label || 'T?t c? danh m?c'}
@@ -1089,7 +1089,7 @@ export default function KhoHang() {
 
       {isUsingNegativeStockFallback && (
         <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-          Kh?ng g?i du?c API ?m kho ({negativeStockError}). ?ang t?m hi?n th? fallback t? danh s?ch s?n ph?m d? t?i d? tr?nh gi?n do?n UI.
+          Kh?ng g?i du?c API ?m kho ({negativeStockError}). đang t?m hi?n th? fallback t? danh s?ch s?n ph?m d? t?i d? tr?nh gi?n do?n UI.
         </div>
       )}
 
@@ -1115,7 +1115,7 @@ export default function KhoHang() {
             <div className="text-center text-gray-400 py-16 px-4">
               <div className="text-5xl mb-3 opacity-20">{isNegativeStockTab ? '??' : '??'}</div>
               <div className="font-medium text-gray-500">{emptyMessage}</div>
-              <div className="text-xs mt-2">{isNegativeStockTab ? 'H?y th? x?a t? kh?a, d?i danh m?c/kho ho?c ch? d? li?u realtime c?p nh?t.' : 'H?y ch?n tab, danh m?c, kho h?ng kh?c ho?c x?a b?t t? kh?a t?m ki?m.'}</div>
+              <div className="text-xs mt-2">{isNegativeStockTab ? 'H?y th? x?a t? kh?a, d?i danh m?c/kho ho?c ch? dữ liệu realtime cập nhật.' : 'H?y ch?n tab, danh m?c, kho h?ng kh?c ho?c x?a b?t t? kh?a t?m ki?m.'}</div>
             </div>
           )}
 
@@ -1149,7 +1149,7 @@ export default function KhoHang() {
                         type="button"
                         onClick={() => toggleExpanded(row.id)}
                         className={`inline-flex items-center justify-center w-7 h-7 rounded-full border transition ${isExpanded ? 'bg-orange-100 border-orange-300 text-orange-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                        title={isExpanded ? 'Thu g?n chi ti?t t?n kho' : 'M? chi ti?t t?n kho'}
+                        title={isExpanded ? 'Thu g?n chi ti?t tồn kho' : 'M? chi ti?t tồn kho'}
                       >
                         {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                       </button>
@@ -1202,7 +1202,7 @@ export default function KhoHang() {
                   <div className="bg-orange-50/40 border-t border-orange-100 px-3 py-3 sm:px-12 sm:py-4">
                     <div className="bg-white border border-orange-100 rounded-lg overflow-hidden">
                       <div className="px-3 py-2 bg-orange-100/70 text-xs font-semibold text-orange-800 flex items-center justify-between">
-                        <span>Bi?n th? v? t?n kho t?ng bi?n th?</span>
+                        <span>Bi?n th? v? tồn kho t?ng bi?n th?</span>
                         <span>{variantCount} bi?n th?</span>
                       </div>
                       <div className="divide-y divide-orange-50">
@@ -1271,24 +1271,24 @@ export default function KhoHang() {
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? T?ng quan</h3>
-                <p>Trang Kho h?ng hi?n th? to?n b? s?n ph?m v? t?n kho theo th?i gian th?c. C?c tab gi?p xem nhanh t?n kho theo tr?ng th?i: t?t c?, c?n h?ng, s?p h?t h?ng, h?t h?ng, ?m kho v? s? lu?ng ?m.</p>
+                <p>Trang Kho h?ng hi?n th? to?n b? s?n ph?m v? tồn kho theo th?i gian th?c. C?c tab gi?p xem nhanh tồn kho theo tr?ng th?i: t?t c?, c?n h?ng, s?p hết hạng, hết hạng, ?m kho v? s? lu?ng ?m.</p>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? T?m ki?m v? l?c</h3>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Ch?n danh m?c trong ? <strong>Danh m?c</strong> d? xem t?t c? s?n ph?m thu?c danh m?c d?.</li>
-                  <li>D?ng ? <strong>Kho h?ng</strong> d? l?c theo kho n?u d? li?u s?n ph?m/API c? th?ng tin kho.</li>
+                  <li>D?ng ? <strong>Kho h?ng</strong> d? l?c theo kho n?u dữ liệu s?n ph?m/API c? th?ng tin kho.</li>
                   <li>C? th? nh?p t? kh?a d? l?c theo <strong>T?n s?n ph?m</strong>, <strong>M? s?n ph?m</strong>, <strong>SKU</strong>, <strong>Danh m?c</strong>, nh?m, size/m?u/variant.</li>
-                  <li>? tab <strong>?m kho</strong> ho?c <strong>S? lu?ng ?m</strong>, b? l?c du?c g?i l?n API d? tr?nh t?i/l?c to?n b? d? li?u tr?n tr?nh duy?t.</li>
+                  <li>? tab <strong>?m kho</strong> ho?c <strong>S? lu?ng ?m</strong>, b? l?c du?c g?i l?n API d? tr?nh t?i/l?c to?n b? dữ liệu tr?n tr?nh duy?t.</li>
                 </ul>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Tab ?m kho / s? lu?ng ?m</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Khi m? tab <strong>?m kho</strong> ho?c <strong>S? lu?ng ?m</strong>, h? th?ng g?i <strong>/api/inventory/negative-stock</strong> v?i page, limit, search, category_id/category, warehouse_id/warehouse v? sort stock.</li>
-                  <li>M?c d?nh s?p x?p <strong>?m s?u nh?t tru?c</strong> d? s?n ph?m c? t?n kho ?m n?ng nh?t n?m tr?n d?u danh s?ch.</li>
+                  <li>Khi m? tab <strong>?m kho</strong> ho?c <strong>S? lu?ng ?m</strong>, hệ thống g?i <strong>/api/inventory/negative-stock</strong> v?i page, limit, search, category_id/category, warehouse_id/warehouse v? sort stock.</li>
+                  <li>M?c d?nh s?p x?p <strong>?m s?u nh?t tru?c</strong> d? s?n ph?m c? tồn kho ?m n?ng nh?t n?m tr?n d?u danh s?ch.</li>
                   <li>N?u API ?m kho t?m l?i, m?n h?nh d?ng fallback nh? t? danh s?ch s?n ph?m d? t?i d? UI kh?ng b? crash.</li>
                 </ul>
               </div>
@@ -1296,9 +1296,9 @@ export default function KhoHang() {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Th?ng k? nhanh</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li><strong>T?ng d?ng t?n kho:</strong> S? d?ng dang hi?n th? theo tab v? b? l?c hi?n t?i.</li>
-                  <li><strong>T?ng t?n kho:</strong> T?ng t?n kho s?n ph?m cha c?ng t?n kho bi?n th? dang hi?n th?.</li>
-                  <li><strong>S?p h?t:</strong> S? d?ng c? t?n kho t? 0 d?n {'<'} 5; s?n ph?m cha c? bi?n th? s? t?nh theo t?ng bi?n th?.</li>
+                  <li><strong>Tứng dụng tồn kho:</strong> S? d?ng dang hi?n th? theo tab v? b? l?c hi?n t?i.</li>
+                  <li><strong>T?ng tồn kho:</strong> T?ng tồn kho s?n ph?m cha c?ng tồn kho bi?n th? dang hi?n th?.</li>
+                  <li><strong>S?p h?t:</strong> S? d?ng c? tồn kho t? 0 d?n {'<'} 5; s?n ph?m cha c? bi?n th? s? t?nh theo t?ng bi?n th?.</li>
                   <li><strong>?m kho:</strong> S? s?n ph?m c? stock {'<'} 0, l?y t? API ?m kho khi dang xem tab ?m kho.</li>
                 </ul>
               </div>
@@ -1307,7 +1307,7 @@ export default function KhoHang() {
                 <h3 className="font-bold text-gray-800 mb-2">?? M?u s?c c?nh b?o</h3>
                 <ul className="list-disc pl-5 space-y-1">
                   <li><span className="text-red-600 font-medium">?? ?m kho:</span> T?n kho t? {negativeStockLimitLabel} d?n -1, hi?n th? d?ng ?T?n: -5? v? badge d? ??M KHO?.</li>
-                  <li><span className="text-orange-600 font-medium">?? G?n ngu?ng:</span> T?n kho trong v?ng c?nh b?o g?n {negativeStockLimitLabel} c?n x? l? s?m.</li>
+                  <li><span className="text-orange-600 font-medium">?? G?n ngu?ng:</span> T?n kho trong v?ng c?nh b?o g?n {negativeStockLimitLabel} c?n xử lý s?m.</li>
                   <li><span className="text-red-500 font-medium">?? S?p h?t:</span> T?n kho t? 0 d?n {'<'} 5</li>
                   <li><span className="text-yellow-600 font-medium">?? C?n ?t:</span> T?n kho t? 5?30</li>
                   <li><span className="text-green-600 font-medium">?? C?n nhi?u:</span> T?n kho = 30</li>
@@ -1317,23 +1317,23 @@ export default function KhoHang() {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? C?ch d?c b?ng</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li><strong>Mui t?n ? c?t CT:</strong> M?/thu g?n chi ti?t t?n kho c?a t?ng s?n ph?m.</li>
-                  <li><strong>Chi ti?t s?n ph?m:</strong> Hi?n th? t?n, m? s?n ph?m, SKU, danh m?c, kho h?ng, t?n kho hi?n t?i, gi? nh?p, gi? b?n v? tr?ng th?i t?n kho.</li>
-                  <li><strong>Bi?n th?:</strong> Khi s?n ph?m c? bi?n th?, b?ng chi ti?t hi?n th? t?n kho c?a t?ng bi?n th?.</li>
+                  <li><strong>Mui t?n ? c?t CT:</strong> M?/thu g?n chi ti?t tồn kho c?a t?ng s?n ph?m.</li>
+                  <li><strong>Chi ti?t s?n ph?m:</strong> Hi?n th? t?n, m? s?n ph?m, SKU, danh m?c, kho h?ng, tồn kho hi?n t?i, gi? nh?p, gi? b?n v? tr?ng th?i tồn kho.</li>
+                  <li><strong>Bi?n th?:</strong> Khi s?n ph?m c? bi?n th?, b?ng chi ti?t hi?n th? tồn kho c?a t?ng bi?n th?.</li>
                   <li><strong>TT:</strong> S? th? t? theo b? l?c hi?n t?i; tab ?m kho c? ph?n trang theo API.</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? C?p nh?t t? d?ng</h3>
-                <p>Kho t? c?p nh?t khi c? don h?ng, phi?u nh?p ho?c s? ki?n d?ng b? l?m d?i t?n kho. Ri?ng tab ?m kho c?n t? l?m m?i khi c?a s? du?c focus, khi quay l?i tab tr?nh duy?t v? theo interval nh? trong l?c dang xem tab ?m kho.</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? Cập nhật t? d?ng</h3>
+                <p>Kho t? cập nhật khi c? don h?ng, phi?u nh?p ho?c s? ki?n d?ng b? l?m d?i tồn kho. Ri?ng tab ?m kho c?n t? l?m m?i khi c?a s? du?c focus, khi quay l?i tab tr?nh duy?t v? theo interval nh? trong l?c dang xem tab ?m kho.</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                 <h3 className="font-bold text-blue-800 mb-2">?? M?o</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
                   <li>Ch?n danh m?c nhu <strong>K? h?p</strong> d? xem nhanh to?n b? s?n ph?m trong danh m?c d?.</li>
-                  <li>D?ng mui t?n m? chi ti?t d? ki?m tra t?n kho t?ng bi?n th? m? kh?ng r?i m?n h?nh Kho h?ng.</li>
+                  <li>D?ng mui t?n m? chi ti?t d? ki?m tra tồn kho t?ng bi?n th? m? kh?ng r?i m?n h?nh Kho h?ng.</li>
                   <li>S?n ph?m ?m kho s? hi?n th? badge d? ??M KHO? v? gi? tr? nhu ?T?n: -5?; gi?i h?n ?m l?y t? c?i d?t hi?n t?i ({negativeStockLimitLabel}).</li>
                 </ul>
               </div>

@@ -349,7 +349,7 @@ function getConfiguredBackendConnection() {
   const host = readEnvText(readEnvValue('VITE_BACKEND_HOST')) || readEnvText(readEnvValue('VITE_API_HOST'));
   const port = readPortValue(readEnvValue('VITE_BACKEND_PORT'))
     || readPortValue(readEnvValue('VITE_API_PORT'))
-    || '3001';
+    || '7000';
   return { host, port };
 }
 
@@ -811,7 +811,7 @@ function buildLoopbackRetryUrls(url) {
   addPort(localOverride.port);
   addPort(configured.port);
   addPort(parsed.port);
-  addPort('3001');
+  addPort('7000');
   addPort('3101');
 
   return retryPorts
@@ -869,7 +869,7 @@ export async function apiFetch(input, init = {}) {
   const response = await executeApiRequest(fetchImpl, url, requestInit);
   if (response.status === 401 && shouldTreatAsExpiredSession(url, requestInit)) {
     handleUnauthorizedResponse({ status: response.status, url });
-    throw new ApiError('Phi?n dang nh?p d? h?t h?n. Vui l?ng dang nh?p l?i.', {
+    throw new ApiError('Phi?n đăng nhập d? hết hạn. Vui l?ng đăng nhập l?i.', {
       status: response.status,
       response,
       isAuthError: true,

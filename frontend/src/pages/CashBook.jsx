@@ -122,12 +122,12 @@ export default function CashBook() {
       await apiJsonChecked(url, {
         method,
         body: form,
-      }, editing ? 'Kh?ng th? c?p nh?t giao d?ch.' : 'Kh?ng th? th?m giao d?ch.');
-      alert(editing ? '? ?? c?p nh?t!' : '? ?? th?m giao d?ch!');
+      }, editing ? 'Kh?ng th? cập nhật giao d?ch.' : 'Kh?ng th? th?m giao d?ch.');
+      alert(editing ? '? ?? cập nhật!' : '? ?? th?m giao d?ch!');
       setShowForm(false);
       fetchTransactions();
     } catch (err) {
-      alert('L?i k?t n?i: ' + err.message);
+      alert('L?i kết nối: ' + err.message);
     } finally {
       setSaving(false);
     }
@@ -159,7 +159,7 @@ export default function CashBook() {
       alert('? ?? x?a!');
       fetchTransactions();
     } catch (err) {
-      alert('L?i k?t n?i: ' + err.message);
+      alert('L?i kết nối: ' + err.message);
     }
   };
 
@@ -271,7 +271,7 @@ export default function CashBook() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="text-center text-gray-400 py-10">?ang t?i...</td></tr>
+              <tr><td colSpan={7} className="text-center text-gray-400 py-10">đang t?i...</td></tr>
             ) : transactions.length === 0 ? (
               <tr><td colSpan={7} className="text-center text-gray-400 py-10">Chua c? giao d?ch</td></tr>
             ) : (
@@ -364,7 +364,7 @@ export default function CashBook() {
 
             <div className="flex gap-2 mt-4">
               <button onClick={handleSubmit} disabled={saving} className="btn-success flex-1 disabled:opacity-50">
-                ?? {saving ? '?ang luu...' : 'Luu'}
+                ?? {saving ? 'đang luu...' : 'Luu'}
               </button>
               <button onClick={() => setShowForm(false)} className="btn-danger flex-1">H?y</button>
             </div>
@@ -381,12 +381,12 @@ export default function CashBook() {
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? T?ng quan</h3>
-                <p>S? qu? gi?p b?n ghi nh?n v? theo d?i c?c kho?n thu chi c?a c?a h?ng. D? li?u du?c luu t? d?ng v? kh?ng m?t khi t?t m?y.</p>
+                <p>S? qu? gi?p b?n ghi nh?n v? theo d?i c?c kho?n thu chi c?a c?a h?ng. Dữ liệu du?c luu t? d?ng v? kh?ng m?t khi t?t m?y.</p>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Thu nh?p t? d?ng t? don h?ng</h3>
-                <p className="text-blue-600">Khi b?n x?c nh?n don h?ng (tr?ng th?i "?? thanh to?n"), h? th?ng s? t? d?ng t?o giao d?ch thu v?o s? qu? v?i:</p>
+                <p className="text-blue-600">Khi b?n x?c nh?n don h?ng (tr?ng th?i "?? thanh to?n"), hệ thống s? t? d?ng t?o giao d?ch thu v?o s? qu? v?i:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>Danh m?c: "Doanh thu t? don h?ng"</li>
                   <li>S? ti?n: T?ng gi? tr? h?a don</li>
@@ -427,7 +427,7 @@ export default function CashBook() {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Ch?nh s?a & X?a</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nh?n icon <strong>?? S?a</strong> d? ch?nh s?a giao d?ch</li>
+                  <li>Nh?n icon <strong>?? S?a</strong> d? chỉnh sửa giao d?ch</li>
                   <li>Nh?n icon <strong>??? X?a</strong> d? x?a giao d?ch</li>
                 </ul>
               </div>

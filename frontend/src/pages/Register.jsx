@@ -52,28 +52,28 @@ export default function Register({ onLogin, bootstrapStatus }) {
   const pageContent = useMemo(() => {
     if (checkingSetup) {
       return {
-        title: '?ang ki?m tra h? th?ng',
-        description: 'Vui l?ng d?i trong gi?y l?t tru?c khi dang k? t?i kho?n',
+        title: 'đang ki?m tra hệ thống',
+        description: 'Vui l?ng d?i trong gi?y l?t tru?c khi dang k? tài khoản',
       };
     }
 
     if (registeredData) {
       return {
-        title: 'T?o t?i kho?n th?nh c?ng',
+        title: 'T?o tài khoản th?nh c?ng',
         description: 'T?i kho?n c?a b?n d? s?n s?ng s? d?ng',
       };
     }
 
     if (isFirstAccount) {
       return {
-        title: '?ang k? t?i kho?n ',
-        description: 'Ch?o M?ng B?n ??n H? Th?ng ?ang K? T?i Kho?n C?a Ph?n M?m',
+        title: 'đang k? tài khoản ',
+        description: 'Ch?o M?ng B?n ??n H? Th?ng đang K? T?i Kho?n C?a Ph?n M?m',
       };
     }
 
     return {
-      title: '?ang k? t?i kho?n',
-      description: 'Ch?o M?ng B?n ??n H? Th?ng ?ang K? T?i Kho?n C?a Ph?n M?m',
+      title: 'đang k? tài khoản',
+      description: 'Ch?o M?ng B?n ??n H? Th?ng đang K? T?i Kho?n C?a Ph?n M?m',
     };
   }, [checkingSetup, isFirstAccount, registeredData]);
 
@@ -95,7 +95,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
 
   const completeLogin = async (payload) => {
     if (!payload?.token || !payload?.user) {
-      throw new Error('Server kh?ng tr? d? th?ng tin dang nh?p.');
+      throw new Error('Server kh?ng tr? d? th?ng tin đăng nhập.');
     }
     const result = await onLogin?.(payload);
     navigate(result?.defaultRoute || '/', { replace: true });
@@ -110,7 +110,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
       applyBootstrapStatus(data);
     } catch (err) {
       setCurrentBootstrapStatus(current => ({ ...current, nextRole: 'USER', needsSetup: false }));
-      setError(getApiErrorMessage(err?.data, err.message || 'Kh?ng th? k?t n?i server d? ki?m tra tr?ng th?i h? th?ng.'));
+      setError(getApiErrorMessage(err?.data, err.message || 'Kh?ng th? kết nối server d? ki?m tra tr?ng th?i hệ thống.'));
     } finally {
       setCheckingSetup(false);
     }
@@ -127,7 +127,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
 
   const validateForm = () => {
     if (checkingSetup) {
-      setError('?ang ki?m tra tr?ng th?i h? th?ng, vui l?ng d?i trong gi?y l?t.');
+      setError('đang ki?m tra tr?ng th?i hệ thống, vui l?ng d?i trong gi?y l?t.');
       return false;
     }
 
@@ -201,10 +201,10 @@ export default function Register({ onLogin, bootstrapStatus }) {
     setLoading(true);
     try {
       const data = await authApi.register(payload);
-      setSuccess('T?o t?i kho?n th?nh c?ng');
+      setSuccess('T?o tài khoản th?nh c?ng');
       setRegisteredData(data);
     } catch (err) {
-      setError(getApiErrorMessage(err?.data, err.message || 'Kh?ng th? k?t n?i server d? dang k? t?i kho?n.'));
+      setError(getApiErrorMessage(err?.data, err.message || 'Kh?ng th? kết nối server d? dang k? tài khoản.'));
     } finally {
       setLoading(false);
     }
@@ -252,14 +252,14 @@ export default function Register({ onLogin, bootstrapStatus }) {
         {checkingSetup && (
           <div className="text-center py-8 text-gray-500 text-sm">
             <RefreshCw className="animate-spin mx-auto mb-3 text-blue-600" size={28} />
-            ?ang ki?m tra tr?ng th?i dang k?...
+            đang ki?m tra tr?ng th?i dang k?...
           </div>
         )}
 
         {registeredData ? (
           <div className="space-y-6 text-center py-4">
             <div className="text-gray-600 text-base font-medium">
-              B?n c? mu?n dang nh?p t? d?ng b?ng t?i kho?n v?a t?o hay quay v? trang dang nh?p?
+              B?n c? mu?n đăng nhập t? d?ng b?ng tài khoản v?a t?o hay quay v? trang đăng nhập?
             </div>
             
             <div className="space-y-3">
@@ -270,7 +270,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                     setLoading(true);
                     await completeLogin(registeredData);
                   } catch (err) {
-                    setError(err.message || 'Kh?ng th? t? d?ng dang nh?p.');
+                    setError(err.message || 'Kh?ng th? t? d?ng đăng nhập.');
                     setRegisteredData(null);
                   } finally {
                     setLoading(false);
@@ -280,7 +280,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2"
               >
                 {loading ? <RefreshCw size={20} className="animate-spin" /> : null}
-                T? d?ng dang nh?p
+                T? d?ng đăng nhập
               </button>
               
               <button
@@ -289,7 +289,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
                 disabled={loading}
                 className="w-full border border-gray-300 hover:bg-gray-50 text-gray-700 py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2"
               >
-                Chuy?n t?i ?ang Nh?p
+                Chuy?n t?i đang Nh?p
               </button>
             </div>
           </div>
@@ -403,11 +403,11 @@ export default function Register({ onLogin, bootstrapStatus }) {
               className={`${isFirstAccount ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'} w-full disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2`}
             >
               {loading ? (
-                <><RefreshCw size={20} className="animate-spin" /> ?ang dang k?...</>
+                <><RefreshCw size={20} className="animate-spin" /> đang dang k?...</>
               ) : isFirstAccount ? (
-                <><ShieldCheck size={20} /> ?ang k?</>
+                <><ShieldCheck size={20} /> đang k?</>
               ) : (
-                <><UserPlus size={20} /> ?ang k?</>
+                <><UserPlus size={20} /> đang k?</>
               )}
             </button>
           </form>
@@ -416,7 +416,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
         {!registeredData && (
           <div className="mt-4 text-center">
             <Link to="/" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium">
-              <ArrowLeft size={14} /> ?? c? t?i kho?n? ?ang nh?p
+              <ArrowLeft size={14} /> ?? c? tài khoản? đang nh?p
             </Link>
           </div>
         )}

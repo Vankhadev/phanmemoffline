@@ -173,7 +173,7 @@ export default function Home({ user, store = {} }) {
         setStatsMessage('T?i kho?n hi?n t?i chua du?c c?p quy?n xem th?ng k?. Trang ch? v?n hi?n th? d?y d? c?c khu v?c c?n l?i.');
         setStatsMessageTone('warning');
       } else {
-        setStatsMessage('Kh?ng th? t?i th?ng k? l?c n?y. D? li?u s? t? d?ng b? l?i khi k?t n?i ?n d?nh.');
+        setStatsMessage('Kh?ng th? t?i th?ng k? l?c n?y. Dữ liệu s? t? d?ng b? l?i khi kết nối ?n d?nh.');
         setStatsMessageTone('info');
       }
     } finally {
@@ -224,7 +224,7 @@ export default function Home({ user, store = {} }) {
       bgColor: 'bg-purple-50',
     },
     {
-      title: 'C?nh b?o t?n kho',
+      title: 'C?nh b?o tồn kho',
       value: (stats.outOfStock + stats.lowStock + stats.negativeStockCount).toLocaleString('vi-VN'),
       sub: `${stats.lowStock.toLocaleString('vi-VN')} s?p h?t ? ${stats.negativeStockCount.toLocaleString('vi-VN')} ?m kho`,
       icon: AlertCircle,
@@ -333,7 +333,7 @@ export default function Home({ user, store = {} }) {
               <span className="capitalize">{todayLabel}</span>
             </p>
             <p className="max-w-3xl text-sm leading-6 text-gray-500">
-              Theo d?i nhanh doanh thu, t?n kho v? truy c?p c?c khu v?c l?m vi?c quan tr?ng t? m?t m?n h?nh t?ng quan th?ng nh?t.
+              Theo d?i nhanh doanh thu, tồn kho v? truy c?p c?c khu v?c l?m vi?c quan tr?ng t? m?t m?n h?nh t?ng quan th?ng nh?t.
             </p>
           </div>
 
@@ -348,7 +348,7 @@ export default function Home({ user, store = {} }) {
             <div className="rounded-2xl bg-gray-50 px-4 py-3 text-left sm:min-w-[220px] sm:text-right">
               <div className="text-sm text-gray-500">Xin ch?o</div>
               <div className="truncate text-base font-semibold text-gray-800">{user?.name || 'Ngu?i d?ng'}</div>
-              <div className="truncate text-xs text-gray-400">{user?.email || store?.phone || '?ang l?m vi?c tr?n h? th?ng b?n h?ng'}</div>
+              <div className="truncate text-xs text-gray-400">{user?.email || store?.phone || 'đang l?m vi?c tr?n hệ thống b?n h?ng'}</div>
             </div>
           </div>
         </div>
@@ -472,12 +472,12 @@ export default function Home({ user, store = {} }) {
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="mb-2 font-bold text-gray-800">?? Th?ng k? nhanh</h3>
-                <p>4 th? th?ng k? hi?n th? th?ng tin quan tr?ng nh?t:</p>
+                <p>4 thệ thống k? hi?n thệ thống tin quan tr?ng nh?t:</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
                   <li><strong>Doanh thu h?m nay:</strong> T?ng ti?n t? c?c don h?ng d? thanh to?n trong ng?y</li>
                   <li><strong>?on h?ng h?m nay:</strong> S? lu?ng don t?o trong ng?y v? s? d? thanh to?n</li>
                   <li><strong>T?ng s?n ph?m:</strong> T?ng s? s?n ph?m trong kho, c? s?n ph?m cha v? bi?n th?</li>
-                  <li><strong>C?nh b?o t?n kho:</strong> S? lu?ng s?n ph?m t?n 0, s?p h?t ho?c dang ?m kho</li>
+                  <li><strong>C?nh b?o tồn kho:</strong> S? lu?ng s?n ph?m t?n 0, s?p h?t ho?c dang ?m kho</li>
                   <li><strong>?m kho:</strong> S?n ph?m c? t?n ?m, c?nh b?o g?n ngu?ng {negativeStockLimitLabel}</li>
                 </ul>
               </div>
@@ -487,12 +487,12 @@ export default function Home({ user, store = {} }) {
                 <p>7 n?t truy c?p nhanh d?n c?c ch?c nang ch?nh:</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
                   <li><strong>Qu?n l? s?n ph?m:</strong> Th?m, s?a, x?a s?n ph?m v? bi?n th?</li>
-                  <li><strong>?on h?ng:</strong> Xem danh s?ch don h?ng, l?c v? x? l? tr?ng th?i</li>
+                  <li><strong>?on h?ng:</strong> Xem danh s?ch don h?ng, l?c v? xử lý tr?ng th?i</li>
                   <li><strong>Th?ng k?:</strong> Xem bi?u d? doanh thu theo ng?y/tu?n/th?ng</li>
-                  <li><strong>B?o c?o don h?ng:</strong> Xem b?o c?o theo don h?ng</li>
-                  <li><strong>Kho h?ng:</strong> Theo d?i t?n kho v? c?nh b?o h?ng h?a</li>
+                  <li><strong>B?o c?o don h?ng:</strong> Xem báo cáo theo don h?ng</li>
+                  <li><strong>Kho h?ng:</strong> Theo d?i tồn kho v? c?nh b?o h?ng h?a</li>
                   <li><strong>Nh? cung c?p:</strong> Qu?n l? th?ng tin nh? cung c?p</li>
-                  <li><strong>B?o c?o s?n ph?m:</strong> Xem b?o c?o theo s?n ph?m</li>
+                  <li><strong>B?o c?o s?n ph?m:</strong> Xem báo cáo theo s?n ph?m</li>
                 </ul>
               </div>
 
@@ -500,8 +500,8 @@ export default function Home({ user, store = {} }) {
                 <h3 className="mb-2 font-bold text-blue-800">?? M?o</h3>
                 <ul className="list-disc space-y-1 pl-5 text-blue-700">
                   <li>Ki?m tra trang ch? m?i ng?y d? n?m b?t t?nh h?nh kinh doanh</li>
-                  <li>Click v?o c?c s? li?u d? xem chi ti?t khi t?i kho?n c? quy?n truy c?p</li>
-                  <li>D? li?u s? t? c?p nh?t sau khi t?o don ho?c khi h? th?ng d?ng b? thay d?i</li>
+                  <li>Click v?o c?c s? li?u d? xem chi ti?t khi tài khoản c? quy?n truy c?p</li>
+                  <li>Dữ liệu s? t? cập nhật sau khi t?o don ho?c khi hệ thống d?ng b? thay d?i</li>
                 </ul>
               </div>
             </div>

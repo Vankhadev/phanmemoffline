@@ -49,8 +49,8 @@ function resolveRange(filters) {
     const range = getMonthRange(filters.month);
     return range ? { valid: true, ...range } : { valid: false, message: 'Vui l?ng ch?n th?ng h?p l?.' };
   }
-  if (!filters.from || !filters.to) return { valid: false, message: 'Vui l?ng ch?n d? ng?y b?t d?u v? ng?y k?t th?c.' };
-  if (filters.from > filters.to) return { valid: false, message: 'Ng?y b?t d?u kh?ng du?c l?n hon ng?y k?t th?c.' };
+  if (!filters.from || !filters.to) return { valid: false, message: 'Vui l?ng ch?n d? ng?y b?t d?u v? ng?y kết thúc.' };
+  if (filters.from > filters.to) return { valid: false, message: 'Ng?y b?t d?u kh?ng du?c l?n hon ng?y kết thúc.' };
   return { valid: true, from: filters.from, to: filters.to };
 }
 
@@ -118,7 +118,7 @@ function SourceTable({ title, rows, type }) {
                 <td className="whitespace-nowrap px-4 py-3">{formatDate(row.invoice_date || row.date)}</td>
                 <td className="px-4 py-3">
                   <div className="font-semibold text-gray-800">{row.invoice_no || row.source_code || '?'}</div>
-                  <div className="mt-0.5 text-xs text-gray-400">{row.source || 'D? li?u k? to?n'}</div>
+                  <div className="mt-0.5 text-xs text-gray-400">{row.source || 'Dữ liệu k? to?n'}</div>
                 </td>
                 <td className="px-4 py-3 text-gray-600">{isInput ? (row.supplier_name || '?') : (row.buyer_name || '?')}</td>
                 <td className="px-4 py-3 text-right">{formatVND(row.taxable_amount)}</td>
@@ -168,7 +168,7 @@ export default function TaxReport() {
       return true;
     } catch (requestError) {
       setReport(null);
-      setError(extractError(requestError, 'Kh?ng th? t?i b?o c?o thu? GTGT.'));
+      setError(extractError(requestError, 'Kh?ng th? t?i báo cáo thu? GTGT.'));
       return false;
     } finally {
       setLoading(false);
@@ -185,10 +185,10 @@ export default function TaxReport() {
     setNotice('');
     try {
       await accountingApi.generateTaxReport({ from: activeRange.from, to: activeRange.to });
-      setNotice(`?? luu snapshot b?o c?o thu? t? ${formatDate(activeRange.from)} d?n ${formatDate(activeRange.to)}.`);
+      setNotice(`?? luu snapshot báo cáo thu? t? ${formatDate(activeRange.from)} d?n ${formatDate(activeRange.to)}.`);
       await loadReport(filters);
     } catch (requestError) {
-      setError(extractError(requestError, 'Kh?ng th? t?o snapshot b?o c?o thu? GTGT.'));
+      setError(extractError(requestError, 'Kh?ng th? t?o snapshot báo cáo thu? GTGT.'));
     } finally {
       setGenerating(false);
     }
@@ -225,12 +225,12 @@ export default function TaxReport() {
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-blue-200/80">K? to?n ? Thu? GTGT</div>
               <h1 className="mt-1 text-2xl font-bold">B?o c?o thu? GTGT</h1>
-              <p className="mt-1 max-w-3xl text-sm text-blue-100/75">T?ng h?p thu? d?u v?o, thu? d?u ra v? s? thu? ph?i n?p t? h?a don, phi?u nh?p v? d? li?u k? to?n trong k?.</p>
+              <p className="mt-1 max-w-3xl text-sm text-blue-100/75">T?ng h?p thu? d?u v?o, thu? d?u ra v? s? thu? ph?i n?p t? h?a don, phi?u nh?p v? dữ liệu k? to?n trong k?.</p>
             </div>
           </div>
           <button type="button" onClick={generateSnapshot} disabled={generating || loading || !activeRange.valid} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60">
             {generating ? <Loader2 size={17} className="animate-spin" /> : <FileCheck2 size={17} />}
-            {generating ? '?ang luu...' : 'Luu snapshot k? n?y'}
+            {generating ? 'đang luu...' : 'Luu snapshot k? n?y'}
           </button>
         </div>
       </section>
@@ -239,22 +239,22 @@ export default function TaxReport() {
         <HelpModal
           show={showHelp}
           onClose={() => setShowHelp(false)}
-          title="Hu?ng d?n b?o c?o thu? GTGT"
+          title="Hu?ng d?n báo cáo thu? GTGT"
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">Quy tr?nh s? d?ng</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Ch?n k? b?o c?o theo th?ng ho?c kho?ng ng?y.</li>
-                  <li>Nh?n Xem b?o c?o d? n?p d? li?u.</li>
-                  <li>D?ng Luu snapshot k? n?y d? luu tr?ng th?i b?o c?o.</li>
+                  <li>Ch?n k? báo cáo theo th?ng ho?c kho?ng ng?y.</li>
+                  <li>Nh?n Xem báo cáo d? n?p dữ liệu.</li>
+                  <li>D?ng Luu snapshot k? n?y d? luu tr?ng th?i báo cáo.</li>
                   <li>Ki?m tra b?ng d?u v?o v? d?u ra tru?c khi k?t xu?t.</li>
                 </ul>
               </div>
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>B?o c?o d?a tr?n h?a don v? phi?u nh?p trong h? th?ng.</li>
+                  <li>B?o c?o d?a tr?n h?a don v? phi?u nh?p trong hệ thống.</li>
                 </ul>
               </div>
             </div>
@@ -273,7 +273,7 @@ export default function TaxReport() {
           </div>
           {filters.period === 'month' ? (
             <div className="md:col-span-2">
-              <label className="mb-1 block text-xs font-semibold text-gray-500">Th?ng b?o c?o</label>
+              <label className="mb-1 block text-xs font-semibold text-gray-500">Th?ng báo cáo</label>
               <input type="month" className="input-field" value={filters.month} onChange={event => setFilters(current => ({ ...current, month: event.target.value }))} />
             </div>
           ) : (
@@ -290,7 +290,7 @@ export default function TaxReport() {
           )}
           <div className="flex items-end gap-2">
             <button type="button" onClick={() => loadReport()} disabled={loading || !activeRange.valid} className="btn-primary min-h-11 flex-1 xl:flex-none">
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Xem b?o c?o
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Xem báo cáo
             </button>
             <button type="button" onClick={() => loadReport()} disabled={loading} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50" title="T?i l?i">
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -299,7 +299,7 @@ export default function TaxReport() {
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
           <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 font-semibold text-blue-700"><CalendarDays size={13} /> {activeRange.valid ? `${formatDate(activeRange.from)} - ${formatDate(activeRange.to)}` : activeRange.message}</span>
-          {lastUpdated && <span>C?p nh?t: {lastUpdated.toLocaleString('vi-VN')}</span>}
+          {lastUpdated && <span>Cập nhật: {lastUpdated.toLocaleString('vi-VN')}</span>}
         </div>
         {error && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
         {notice && <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{notice}</div>}
@@ -308,7 +308,7 @@ export default function TaxReport() {
       {loading && !report ? (
         <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white text-gray-500">
           <Loader2 size={32} className="animate-spin text-blue-500" />
-          <span className="font-semibold">?ang l?p b?o c?o thu? GTGT...</span>
+          <span className="font-semibold">đang l?p báo cáo thu? GTGT...</span>
         </div>
       ) : report ? (
         <>
@@ -322,7 +322,7 @@ export default function TaxReport() {
           <SourceTable title="Chi ti?t thu? GTGT d?u v?o" rows={inputRows} type="input" />
         </>
       ) : !error ? (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-16 text-center text-gray-400">Ch?n k? v? nh?n ?Xem b?o c?o? d? t?i d? li?u.</div>
+        <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-16 text-center text-gray-400">Ch?n k? v? nh?n ?Xem báo cáo? d? t?i dữ liệu.</div>
       ) : null}
     </div>
   );

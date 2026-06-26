@@ -147,15 +147,15 @@ export default function Customers() {
         });
         setShowForm(false);
         await fetchCustomers();
-        alert(editing ? '? ?? c?p nh?t kh?ch h?ng!' : '? ?? th?m kh?ch h?ng!');
+        alert(editing ? '? ?? cập nhật kh?ch h?ng!' : '? ?? th?m kh?ch h?ng!');
       }
     } catch (err) {
-      alert(getErrorMessage(err, editing ? 'Kh?ng th? c?p nh?t kh?ch h?ng.' : 'Kh?ng th? th?m kh?ch h?ng.'));
+      alert(getErrorMessage(err, editing ? 'Kh?ng th? cập nhật kh?ch h?ng.' : 'Kh?ng th? th?m kh?ch h?ng.'));
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('X?a kh?ch h?ng n?y? D? li?u don h?ng li?n quan s? du?c gi? nguy?n.')) return;
+    if (!confirm('X?a kh?ch h?ng n?y? Dữ liệu don h?ng li?n quan s? du?c gi? nguy?n.')) return;
     try {
       const data = await customersApi.remove(id);
       if (data.ok) {
@@ -179,7 +179,7 @@ export default function Customers() {
         : await customerTypesApi.create(typeForm);
       if (data.ok) { setShowTypeForm(false); fetchCustomerTypes(); }
     } catch (err) {
-      alert(getErrorMessage(err, editingType ? 'Kh?ng th? c?p nh?t lo?i kh?ch h?ng.' : 'Kh?ng th? th?m lo?i kh?ch h?ng.'));
+      alert(getErrorMessage(err, editingType ? 'Kh?ng th? cập nhật lo?i kh?ch h?ng.' : 'Kh?ng th? th?m lo?i kh?ch h?ng.'));
     }
   };
   const handleTypeDelete = async (id) => {
@@ -243,7 +243,7 @@ export default function Customers() {
       .map(c => `? ${c.name || `#${c.id}`}`)
       .join('\n');
     const moreText = selectedCustomerIds.length > 5 ? `\n... v? ${selectedCustomerIds.length - 5} kh?ch h?ng kh?c` : '';
-    if (!confirm(`X?a ${selectedCustomerIds.length} kh?ch h?ng d? ch?n?\n\n${selectedNames}${moreText}\n\nD? li?u don h?ng li?n quan s? du?c gi? nguy?n.`)) return;
+    if (!confirm(`X?a ${selectedCustomerIds.length} kh?ch h?ng d? ch?n?\n\n${selectedNames}${moreText}\n\nDữ liệu don h?ng li?n quan s? du?c gi? nguy?n.`)) return;
 
     setIsBulkDeleting(true);
     try {
@@ -293,7 +293,7 @@ export default function Customers() {
       const workbook = XLSX.read(buffer, { type: 'array' });
       const firstSheetName = workbook.SheetNames[0];
       if (!firstSheetName) {
-        alert('File Excel kh?ng c? sheet d? li?u.');
+        alert('File Excel kh?ng c? sheet dữ liệu.');
         return;
       }
 
@@ -334,7 +334,7 @@ export default function Customers() {
       }
 
       const confirmed = confirm(
-        `T?m th?y ${validCustomers.length} kh?ch h?ng h?p l?. L?i/b? qua: ${skipped}.\nB?n c? mu?n nh?p d? li?u n?y kh?ng?`
+        `T?m th?y ${validCustomers.length} kh?ch h?ng h?p l?. L?i/b? qua: ${skipped}.\nB?n c? mu?n nh?p dữ liệu n?y kh?ng?`
       );
       if (!confirmed) return;
 
@@ -386,7 +386,7 @@ export default function Customers() {
       'Nh?m/Lo?i': getTypeLabel(customer.customer_type),
       'Ghi ch?': customer.note || '',
       'Ng?y t?o': formatExcelDateTime(customer.created_at),
-      'Ng?y c?p nh?t': formatExcelDateTime(customer.updated_at),
+      'Ng?y cập nhật': formatExcelDateTime(customer.updated_at),
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -414,7 +414,7 @@ export default function Customers() {
     XLSX.writeFile(wb, `danh_sach_khach_hang_${getExportTimestamp()}.xlsx`);
   };
 
-  // ===== Xu?t Excel b?o c?o kh?ch h?ng =====
+  // ===== Xu?t Excel báo cáo kh?ch h?ng =====
   const exportCustomersReport = async () => {
     const [year, month] = reportMonth.split('-');
 
@@ -480,7 +480,7 @@ export default function Customers() {
           <button type="button" onClick={openImportFilePicker}
             disabled={importing}
             className="px-3 py-2 border border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
-            <UploadCloud size={13} /> {importing ? '?ang nh?p...' : 'Nh?p Excel'}
+            <UploadCloud size={13} /> {importing ? 'đang nh?p...' : 'Nh?p Excel'}
           </button>
           <button type="button" onClick={exportCustomersList}
             className="px-3 py-2 border border-yellow-300 text-yellow-600 hover:bg-yellow-50 rounded-lg text-xs font-medium flex items-center gap-1">
@@ -499,7 +499,7 @@ export default function Customers() {
       {/* Xu?t Excel */}
       <div className="card mb-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 p-4">
         <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
-          <FileDown className="text-blue-600" size={16} /> Xu?t b?o c?o kh?ch h?ng theo th?ng
+          <FileDown className="text-blue-600" size={16} /> Xu?t báo cáo kh?ch h?ng theo th?ng
         </h3>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <div className="sm:w-auto">
@@ -533,7 +533,7 @@ export default function Customers() {
       )}
 
       <div className="md:hidden space-y-3">
-        {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> ?ang t?i...</div>}
+        {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> đang t?i...</div>}
         {!loading && filtered.length === 0 && <div className="rounded-xl border-2 border-dashed bg-white p-8 text-center text-gray-400">Kh?ng c? kh?ch h?ng n?o</div>}
         {!loading && filtered.length > 0 && (
           <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
@@ -660,7 +660,7 @@ export default function Customers() {
             })}
           </tbody>
         </table>
-        {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> ?ang t?i...</div>}
+        {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> đang t?i...</div>}
         {!loading && filtered.length === 0 && <div className="text-center text-gray-400 py-10">Kh?ng c? kh?ch h?ng n?o</div>}
       </div>
 
@@ -817,7 +817,7 @@ export default function Customers() {
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? T?ng quan</h3>
-                <p>Trang Qu?n l? Kh?ch h?ng gi?p b?n luu tr? th?ng tin kh?ch h?ng, ph?n lo?i theo nh?m, v? theo d?i l?ch s? mua h?ng. Th?ng tin kh?ch h?ng s? xu?t hi?n khi t?o don h?ng.</p>
+                <p>Trang Qu?n l? Kh?ch h?ng gi?p b?n luu tr? th?ng tin kh?ch h?ng, ph?n lo?i theo nh?m, v? theo d?i lịch sử mua h?ng. Th?ng tin kh?ch h?ng s? xu?t hi?n khi t?o don h?ng.</p>
               </div>
 
               <div>
@@ -833,7 +833,7 @@ export default function Customers() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Ch?nh s?a kh?ch h?ng</h3>
-                <p>Nh?n n?t <strong>"S?a"</strong> ? c?t H?nh d?ng d? c?p nh?t th?ng tin kh?ch h?ng. C? th? thay d?i: S?T, Email, MST, Lo?i kh?ch h?ng.</p>
+                <p>Nh?n n?t <strong>"S?a"</strong> ? c?t H?nh d?ng d? cập nhật th?ng tin kh?ch h?ng. C? th? thay d?i: S?T, Email, MST, Lo?i kh?ch h?ng.</p>
               </div>
 
               <div>
@@ -862,8 +862,8 @@ export default function Customers() {
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? Xu?t b?o c?o kh?ch h?ng</h3>
-                <p>Ch?n th?ng v? nh?n "Xu?t Excel" d? t?i b?o c?o kh?ch h?ng v?i th?ng k? s? don h?ng v? t?ng chi ti?u trong th?ng.</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? Xu?t báo cáo kh?ch h?ng</h3>
+                <p>Ch?n th?ng v? nh?n "Xu?t Excel" d? t?i báo cáo kh?ch h?ng v?i th?ng k? s? don h?ng v? t?ng chi ti?u trong th?ng.</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">

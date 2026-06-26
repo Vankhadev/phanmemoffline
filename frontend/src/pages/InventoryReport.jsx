@@ -21,14 +21,14 @@ const PAGE_SIZE = 20;
 const STATUS_OPTIONS = [
   { value: 'all', label: 'T?t c? tr?ng th?i' },
   { value: 'in_stock', label: 'C?n h?ng' },
-  { value: 'low', label: 'S?p h?t h?ng' },
+  { value: 'low', label: 'S?p hết hạng' },
   { value: 'out', label: 'H?t h?ng' },
   { value: 'negative', label: '?m kho' },
 ];
 
 const STATUS_META = {
   in_stock: { label: 'C?n h?ng', className: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: CircleCheck },
-  low: { label: 'S?p h?t h?ng', className: 'border-amber-200 bg-amber-50 text-amber-700', icon: AlertTriangle },
+  low: { label: 'S?p hết hạng', className: 'border-amber-200 bg-amber-50 text-amber-700', icon: AlertTriangle },
   out: { label: 'H?t h?ng', className: 'border-red-200 bg-red-50 text-red-700', icon: PackageX },
   negative: { label: '?m kho', className: 'border-rose-300 bg-rose-600 text-white', icon: AlertOctagon },
 };
@@ -131,7 +131,7 @@ export default function InventoryReport() {
       setData(normalizeResponse(response));
     } catch (requestError) {
       setData(normalizeResponse());
-      setError(getApiErrorMessage(requestError?.data || requestError, requestError?.message || 'Kh?ng th? t?i b?o c?o t?n kho.'));
+      setError(getApiErrorMessage(requestError?.data || requestError, requestError?.message || 'Kh?ng th? t?i báo cáo tồn kho.'));
     } finally {
       setLoading(false);
     }
@@ -183,8 +183,8 @@ export default function InventoryReport() {
             <div className="rounded-2xl border border-white/20 bg-white/15 p-3"><Boxes size={27} /></div>
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-orange-50/80">Kho h?ng ? B?o c?o</div>
-              <h1 className="mt-1 text-2xl font-bold">B?o c?o t?n kho</h1>
-              <p className="mt-1 max-w-3xl text-sm text-white/85">Theo d?i s? lu?ng t?n, gi? v?n, gi? tr? t?n kho v? c?c c?nh b?o s?p h?t, h?t h?ng ho?c ?m kho.</p>
+              <h1 className="mt-1 text-2xl font-bold">B?o c?o tồn kho</h1>
+              <p className="mt-1 max-w-3xl text-sm text-white/85">Theo d?i s? lu?ng t?n, giá vốn, gi? tr? tồn kho v? c?c c?nh b?o s?p h?t, hết hạng ho?c ?m kho.</p>
             </div>
           </div>
           <button type="button" onClick={() => loadReport()} disabled={loading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-white/15 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/25 disabled:opacity-60">
@@ -247,7 +247,7 @@ export default function InventoryReport() {
           <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">T?ng t?n: <strong>{formatNumber(summary.total_stock)}</strong></span>
           <span className="rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-amber-700">Ngu?ng c?nh b?o: = <strong>{threshold}</strong></span>
           {appliedSearch && <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">T? kh?a: ?{appliedSearch}?</span>}
-          {data.generated_at && <span>C?p nh?t: {new Date(data.generated_at).toLocaleString('vi-VN')}</span>}
+          {data.generated_at && <span>Cập nhật: {new Date(data.generated_at).toLocaleString('vi-VN')}</span>}
         </div>
         {error && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
       </section>
@@ -255,7 +255,7 @@ export default function InventoryReport() {
       <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-1 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-bold text-gray-800">Chi ti?t t?n kho</h2>
+            <h2 className="font-bold text-gray-800">Chi ti?t tồn kho</h2>
             <p className="text-xs text-gray-500">Hi?n th? {rows.length.toLocaleString('vi-VN')} / {pagination.total.toLocaleString('vi-VN')} d?ng ph? h?p.</p>
           </div>
           <div className="text-xs font-semibold text-gray-500">Trang {pagination.page}/{Math.max(1, pagination.total_pages)}</div>
@@ -299,7 +299,7 @@ export default function InventoryReport() {
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-2 border-t border-gray-100 py-14 text-gray-500"><Loader2 size={30} className="animate-spin text-orange-500" /><span className="font-semibold">?ang t?i b?o c?o t?n kho...</span></div>
+          <div className="flex flex-col items-center justify-center gap-2 border-t border-gray-100 py-14 text-gray-500"><Loader2 size={30} className="animate-spin text-orange-500" /><span className="font-semibold">đang t?i báo cáo tồn kho...</span></div>
         ) : rows.length === 0 ? (
           <div className="border-t border-gray-100 px-4 py-14 text-center text-gray-400">
             <div className="mb-2 text-4xl opacity-30">??</div>

@@ -289,7 +289,7 @@ export default function PrintTemplateEditorModal({
   const markRevisionConflict = useCallback((error, fallback) => {
     const currentRevision = error?.data?.details?.current_revision || error?.data?.current_revision || null;
     const suffix = currentRevision ? ` Revision hi?n t?i tr?n server: ${currentRevision}.` : '';
-    setNotice(buildNotice('error', `${getErrorMessage(error, fallback)}${suffix} B?m ?T?i l?i? ?? l?y b?n m?i nh?t tr??c khi ti?p t?c.`));
+    setNotice(buildNotice('error', `${getErrorMessage(error, fallback)}${suffix} B?m ?T?i l?i? ?? l?y b?n m?i nh?t tr??c khi tiếp tục.`));
   }, []);
 
   const handleFitZoom = useCallback(() => {
@@ -302,7 +302,7 @@ export default function PrintTemplateEditorModal({
 
   const handleSave = useCallback(async () => {
     if (!activeTemplate?.id) {
-      setNotice(buildNotice('error', 'M?u demo ch?a c? tr?n server. H?y t?o m?u in tr??c khi l?u.'));
+      setNotice(buildNotice('error', 'M?u demo ch?a c? tr?n server. H?y t?o mẫu in tr??c khi l?u.'));
       return null;
     }
     setBusy('save');
@@ -321,18 +321,18 @@ export default function PrintTemplateEditorModal({
       });
       const item = normalizeApiItem(data);
       if (item) {
-        // Ch? c?p nh?t metadata, KH?NG g?i setTemplateFromServer ?? gi? canvas hi?n t?i.
+        // Ch? cập nhật metadata, KH?NG g?i setTemplateFromServer ?? gi? canvas hi?n t?i.
         editor.setRevision(item.revision || editor.revision);
         editor.setTemplate(current => ({ ...current, ...item }));
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', '?? l?u m?u in. Layout hi?n t?i ???c gi? nguy?n.'));
+      setNotice(buildNotice('success', '?? l?u mẫu in. Layout hi?n t?i ???c gi? nguy?n.'));
       return item;
     } catch (error) {
       if (isRevisionConflict(error)) {
-        markRevisionConflict(error, 'Kh?ng th? l?u m?u in: ?? ???c c?p nh?t ? phi?n kh?c.');
+        markRevisionConflict(error, 'Kh?ng th? l?u mẫu in: ?? ???c cập nhật ? phi?n kh?c.');
       } else {
-        setNotice(buildNotice('error', getErrorMessage(error, 'Kh?ng th? l?u m?u in.')));
+        setNotice(buildNotice('error', getErrorMessage(error, 'Kh?ng th? l?u mẫu in.')));
       }
       return null;
     } finally {
@@ -615,7 +615,7 @@ export default function PrintTemplateEditorModal({
         <div className="invoice-editor-topbar">
           <div>
             <h1 id="invoice-editor-title">Chỉnh sửa mẫu in đơn hàng</h1>
-            <p>{editorMode === 'sapo' ? 'So?n n?i dung m?u in, ch?n t? kh?a v? xem tr??c A4 theo d? li?u h?a ??n th?t.' : 'K?o th?, resize, snap grid. B?m ?L?u? ?? l?u layout, b?m ?Publish? ?? ??nh d?u b?n in.'}</p>
+            <p>{editorMode === 'sapo' ? 'So?n n?i dung mẫu in, ch?n t? kh?a v? xem tr??c A4 theo dữ liệu hóa đơn th?t.' : 'K?o th?, resize, snap grid. B?m ?L?u? ?? l?u layout, b?m ?Publish? ?? định d?u b?n in.'}</p>
           </div>
           <div className="invoice-editor-topbar-actions">
             <div className="invoice-editor-mode-toggle" role="tablist" aria-label="Chế độ chỉnh sửa mẫu in">

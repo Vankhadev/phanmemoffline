@@ -1081,7 +1081,7 @@ function getDocumentSource(template = {}, preferDraft = false) {
 }
 
 export function getActiveEditorDocument(template = {}, options = {}) {
-  // M?c ??nh load b?n PUBLISHED (kh?ng ?u ti?n draft c?).
+  // M?c định load b?n PUBLISHED (kh?ng ?u ti?n draft c?).
   const preferDraft = options.preferDraft === true;
   const { source, payload, hasDraft } = getDocumentSource(template, preferDraft);
   const revision = Math.max(1, Math.trunc(Number(template.revision || template.editor_document?.revision || payload?.settings_json?.publish?.revision || 1)));

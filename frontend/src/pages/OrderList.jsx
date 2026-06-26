@@ -695,7 +695,7 @@ export default function OrderList() {
     });
   }, [customers, repriceEditDetailsForCustomer]);
 
-  const editProductsStateLabel = { loading: '?ang t?i d? li?u s?n ph?m...', loaded: '', empty: 'Kh?ng c? d? li?u s?n ph?m d? ki?m tra t?n kho.', error: 'Kh?ng t?i du?c d? li?u s?n ph?m, v?n cho ph?p luu.' }[editProductsState] || '';
+  const editProductsStateLabel = { loading: 'đang t?i dữ liệu s?n ph?m...', loaded: '', empty: 'Kh?ng c? dữ liệu s?n ph?m d? ki?m tra tồn kho.', error: 'Kh?ng t?i du?c dữ liệu s?n ph?m, v?n cho ph?p luu.' }[editProductsState] || '';
 
   const filteredEditCustomers = useMemo(() => {
     const query = String(editCustomerSearch || '').trim().toLowerCase();
@@ -1029,7 +1029,7 @@ export default function OrderList() {
         ));
         setShowEdit(null);
         setEditBaselineDetails([]);
-        alert('? Don offline d? du?c c?p nh?t!');
+        alert('? Don offline d? du?c cập nhật!');
       } catch {
         alert('⚠️ Lỗi khi lưu đơn offline!');
       } finally {
@@ -1367,7 +1367,7 @@ export default function OrderList() {
               )}
             </div>
             <div className="text-xs text-gray-400">
-              Uu ti?n d? li?u server khi tr?ng m? don, v?n gi? don local d? thao t?c ti?p.
+              Uu ti?n dữ liệu server khi tr?ng m? don, v?n gi? don local d? thao t?c ti?p.
             </div>
           </div>
         </div>
@@ -2013,7 +2013,7 @@ export default function OrderList() {
               </button>
               {showEdit && !editProductsReady && (
                 <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                  {editProductsStateLabel || '?ang t?i d? li?u s?n ph?m...'}
+                  {editProductsStateLabel || 'đang t?i dữ liệu s?n ph?m...'}
                 </div>
               )}
               <button onClick={handleSaveEdit}
