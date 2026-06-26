@@ -404,7 +404,7 @@ function V2Element({ element, data, template }) {
         {showDiscount && <MoneyLine label="Chiết khấu" value={totals.discount_amount} negative hiddenWhenZero />}
         <MoneyLine label="Phí giao hàng" value={totals.delivery_fee} hiddenWhenZero />
         {showGrandTotal && <MoneyLine label="Tổng tiền" value={totals.total ?? totals.grand_total} highlight />}
-        <MoneyLine label="D? thanh to?n" value={paidAmount} hiddenWhenZero />
+        <MoneyLine label="D? thanh toán" value={paidAmount} hiddenWhenZero />
         {showDebt && <MoneyLine label="Công nợ" value={remainingAmount} hiddenWhenZero />}
         <MoneyLine label="Tiền thừa" value={totals.change_amount} hiddenWhenZero />
       </div>
@@ -420,7 +420,7 @@ function V2Element({ element, data, template }) {
     return (
       <div className="invoice-template-v2-signatures" style={getElementCssStyle(element, { '--invoice-signature-gap': `${style.signatureGapMm || 10}mm`, '--invoice-signature-blank': `${style.blankHeightMm || 10}mm` })}>
         <div>
-          <h3>{style.buyerLabel || signatures.buyer?.label || 'Kh?ch h?ng'}</h3>
+          <h3>{style.buyerLabel || signatures.buyer?.label || 'Khách hàng'}</h3>
           <p>{style.buyerHint || '(Ký và ghi rõ họ tên)'}</p>
         </div>
         <div>
@@ -928,7 +928,7 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
           {settings.showSignature && (
             <div className="invoice-template-signatures">
               <div>
-                <h3>{signatures.buyer?.label || 'Kh?ch h?ng'}</h3>
+                <h3>{signatures.buyer?.label || 'Khách hàng'}</h3>
                 <p>(Ký và ghi rõ họ tên)</p>
               </div>
               <div>

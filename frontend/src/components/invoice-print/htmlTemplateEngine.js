@@ -306,7 +306,7 @@ export const DEFAULT_SAPO_TEMPLATE_HTML = `
     <div><span>Giảm giá</span><strong>{{totals.discount_amount_text}}</strong></div>
     <div><span>Phí giao hàng</span><strong>{{totals.delivery_fee_text}}</strong></div>
     <div class="grand-total"><span>Khách phải trả</span><strong>{{totals.total_text}}</strong></div>
-    <div><span>Kh?ch d? tr?</span><strong>{{totals.paid_amount_text}}</strong></div>
+    <div><span>Khách d? tr?</span><strong>{{totals.paid_amount_text}}</strong></div>
     <div><span>Còn nợ</span><strong>{{totals.remaining_amount_text}}</strong></div>
   </section>
 

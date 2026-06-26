@@ -381,7 +381,7 @@ function buildScreenGuide(navGroups, currentPath) {
     ],
     '/kho-hang': [
       'Xem tồn kho theo kho hoặc theo nhóm hàng.',
-      'D?ng t?m ki?m d? ki?m tra nhanh m?, t?n ho?c SKU.',
+      'Dùng tìm kiếm d? kiểm tra nhanh m?, t?n ho?c SKU.',
       'Theo dõi cảnh báo sắp hết hàng, hết hàng và âm kho.',
       'Dùng kiểm kê để đối chiếu số liệu thực tế với hệ thống.',
     ],
@@ -402,7 +402,7 @@ function buildScreenGuide(navGroups, currentPath) {
       'Dùng bộ lọc để xem lại lịch sử theo khoảng ngày mong muốn.',
     ],
     '/nhap-hang': [
-      'Ch?n nh? cung c?p v? m? phi?u nh?p n?u c?n.',
+      'Chọn nh? cung cấp v? m? phiếu nhập n?u c?n.',
       'Thêm từng sản phẩm vào phiếu, nhập số lượng và giá nhập.',
       'Kiểm tra tổng tiền, chiết khấu và trạng thái thanh toán.',
       'Bấm lưu để cập nhật tồn kho hoặc lưu tạm khi chưa hoàn tất.',
@@ -414,7 +414,7 @@ function buildScreenGuide(navGroups, currentPath) {
       'Kiểm tra công nợ và lịch sử nhập hàng của nhà cung cấp.',
     ],
     '/danh-sach-don-hang': [
-      'D?ng b? l?c d? t?m don theo m?, kh?ch h?ng, tr?ng th?i ho?c th?i gian.',
+      'Dùng bộ lọc d? t?m don theo m?, khách hàng, trạng thái ho?c thời gian.',
       'Bấm Xem để mở chi tiết từng đơn hàng.',
       'Bấm In để in hóa đơn hoặc bấm PDF để lưu file.',
       'Kiểm tra trạng thái đơn trước khi thực hiện thao tác tiếp theo.',
@@ -446,7 +446,7 @@ function buildScreenGuide(navGroups, currentPath) {
     '/bang-luong-nhan-vien': [
       'Chọn tháng cần xem bảng lương.',
       'Kiểm tra doanh thu, hoa hồng, thưởng và trạng thái chi trả.',
-      'Cập nhật tr?ng th?i d? thanh to?n khi ho?n t?t chi tr?.',
+      'Cập nhật trạng thái d? thanh toán khi ho?n tốt chi tr?.',
       'Xuất file nếu cần lưu hoặc gửi cho kế toán.',
     ],
     '/bao-cao-theo-don-hang': [
@@ -1043,7 +1043,7 @@ function DesktopApp() {
         let payload = await authApi.profile();
 
         if (!mounted) return;
-        // Profile d? tr? v? d?y d? user + permissions + syncVersions
+        // Profile d? tr? v? đầy đủ user + permissions + syncVersions
         await applyServerPayload(payload, { persistMode: 'snapshot', redirect: true, sync: true });
         setBootstrapStatus(null);
       } catch (err) {

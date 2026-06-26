@@ -869,7 +869,7 @@ export async function apiFetch(input, init = {}) {
   const response = await executeApiRequest(fetchImpl, url, requestInit);
   if (response.status === 401 && shouldTreatAsExpiredSession(url, requestInit)) {
     handleUnauthorizedResponse({ status: response.status, url });
-    throw new ApiError('Phi?n đăng nhập d? hết hạn. Vui l?ng đăng nhập l?i.', {
+    throw new ApiError('Phiên đăng nhập d? hết hạn. Vui lòng đăng nhập lại.', {
       status: response.status,
       response,
       isAuthError: true,

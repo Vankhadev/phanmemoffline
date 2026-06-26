@@ -154,7 +154,7 @@ export default function Stats() {
   const fetchSummary = useCallback(async () => {
     const response = await fetch(`${API}/stats/summary`);
     const data = await response.json();
-    if (!response.ok) throw new Error(data?.error || 'Kh?ng th? t?i th?ng k? t?ng quan.');
+    if (!response.ok) throw new Error(data?.error || 'Không thử lại th?ng k? t?ng quan.');
     setSummary(data);
   }, []);
 
@@ -174,8 +174,8 @@ export default function Stats() {
       ]);
       const statsData = await statsResponse.json();
       const profitData = await profitResponse.json();
-      if (!statsResponse.ok) throw new Error(statsData?.error || 'Kh?ng th? t?i báo cáo doanh thu.');
-      if (!profitResponse.ok) throw new Error(profitData?.error || 'Kh?ng th? t?i lợi nhuận u?c t?nh.');
+      if (!statsResponse.ok) throw new Error(statsData?.error || 'Không thử lại báo cáo doanh thu.');
+      if (!profitResponse.ok) throw new Error(profitData?.error || 'Không thử lại lợi nhuận u?c t?nh.');
 
       const rows = Array.isArray(statsData) ? statsData : [];
       setDailyStats(rows);
@@ -193,7 +193,7 @@ export default function Stats() {
         return next;
       });
     } catch (err) {
-      setError(err?.message || 'Kh?ng th? t?i th?ng k?.');
+      setError(err?.message || 'Không thử lại th?ng k?.');
       setDailyStats([]);
       setProfitReport(null);
     } finally {
@@ -237,13 +237,13 @@ export default function Stats() {
 
   const exportRows = (rows, fileName, title) => {
     if (rows.length === 0) {
-      alert('Kh?ng c? dữ liệu d? xu?t.');
+      alert('Không có dữ liệu d? xu?t.');
       return;
     }
 
     let csv = '\uFEFF';
     csv += `${title}\n`;
-    csv += 'Ng?y,S? don,Doanh thu,Gi? v?n u?c t?nh,L?i nhu?n u?c t?nh\n';
+    csv += 'Ngày,S? don,Doanh thu,Gi? v?n u?c t?nh,Lỗi nhu?n u?c t?nh\n';
     rows.forEach(row => {
       csv += [
         formatDateLong(row.stat_date),
@@ -260,8 +260,8 @@ export default function Stats() {
       acc.profit += toNumber(row.estimatedProfit);
       return acc;
     }, { orders: 0, revenue: 0, cost: 0, profit: 0 });
-    csv += ['T?ng c?ng', total.orders, Math.round(total.revenue), Math.round(total.cost), Math.round(total.profit)].map(escapeCsv).join(',') + '\n';
-    csv += `Ng?y xu?t,${escapeCsv(new Date().toLocaleString('vi-VN'))}\n`;
+    csv += ['Tổng c?ng', total.orders, Math.round(total.revenue), Math.round(total.cost), Math.round(total.profit)].map(escapeCsv).join(',') + '\n';
+    csv += `Ngày xu?t,${escapeCsv(new Date().toLocaleString('vi-VN'))}\n`;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -289,14 +289,14 @@ export default function Stats() {
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-xl font-bold">
-          <TrendingUp className="text-green-600" size={24} /> Th?ng k? Doanh thu
+          <TrendingUp className="text-green-600" size={24} /> Tháng k? Doanh thu
         </h1>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => setShowHelp(true)} className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100">
-            <HelpCircle size={16} /> Hu?ng d?n
+            <HelpCircle size={16} /> Hướng dẫn
           </button>
           <div className="flex gap-2">
-            {[['day', 'H?m nay'], ['week', 'Tu?n'], ['month', 'Th?ng'], ['year', 'Nam']].map(([key, label]) => (
+            {[['day', 'H?m nay'], ['week', 'Tu?n'], ['month', 'Tháng'], ['year', 'Nam']].map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -343,15 +343,15 @@ export default function Stats() {
 
       <div className="card mb-4 border border-green-200 bg-gradient-to-r from-green-50 to-blue-50">
         <h3 className="mb-3 flex items-center gap-2 font-bold">
-          <FileDown className="text-green-600" size={18} /> Xu?t báo cáo Excel
+          <FileDown className="text-green-600" size={18} /> Xuất báo cáo Excel
         </h3>
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="mb-1 block text-xs text-gray-500">Ch?n th?ng</label>
+            <label className="mb-1 block text-xs text-gray-500">Chọn th?ng</label>
             <input type="month" className="input-field" value={monthExport} onChange={event => setMonthExport(event.target.value)} />
           </div>
           <button type="button" onClick={exportMonthlyReport} className="btn-success flex items-center gap-1">
-            <FileDown size={16} /> Xu?t Excel th?ng
+            <FileDown size={16} /> Xuất Excel th?ng
           </button>
           <button type="button" onClick={exportCurrentRangeReport} className="flex items-center gap-1 rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-700">
             <FileDown size={16} /> tổng lợi nhận
@@ -363,22 +363,22 @@ export default function Stats() {
         <HelpModal
           show={showHelp}
           onClose={() => setShowHelp(false)}
-          title="Hu?ng d?n th?ng k? doanh thu"
+          title="Hướng dẫn th?ng k? doanh thu"
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">C?ch d?c m?n h?nh</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Ch?n m?c th?i gian theo ng?y, tu?n, th?ng ho?c nam.</li>
-                  <li>Xem c?c th? t?ng quan d? ki?m tra doanh thu v? lợi nhuận.</li>
-                  <li>D?ng n?t xu?t Excel d? t?i báo cáo chi ti?t.</li>
+                  <li>Chọn m?c thời gian theo ngày, tu?n, th?ng ho?c nam.</li>
+                  <li>Xem c?c th? t?ng quan d? kiểm tra doanh thu v? lợi nhuận.</li>
+                  <li>Dùng n?t xu?t Excel đã tải báo cáo chi tiết.</li>
                 </ul>
               </div>
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>B?o c?o t? l?m m?i khi dữ liệu don h?ng thay d?i.</li>
-                  <li>C? th? m? r?ng t?ng ng?y d? xem chi ti?t don h?ng.</li>
+                  <li>Báo cáo t? l?m mới khi dữ liệu đơn hàng thay đổi.</li>
+                  <li>C? th? m? r?ng t?ng ngày d? xem chi tiết đơn hàng.</li>
                 </ul>
               </div>
             </div>
@@ -408,7 +408,7 @@ export default function Stats() {
 
       <div className="card">
         <h3 className="mb-4 flex items-center gap-2 font-bold">
-          <Package className="text-gray-600" size={18} /> B?o c?o chi ti?t lợi nhuận
+          <Package className="text-gray-600" size={18} /> Báo cáo chi tiết lợi nhuận
         </h3>
         {error && <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
         {loading ? (
@@ -418,11 +418,11 @@ export default function Stats() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-100 text-gray-600">
-                  <th className="p-2 text-left">Ng?y</th>
+                  <th className="p-2 text-left">Ngày</th>
                   <th className="p-2 text-right">S? don</th>
                   <th className="p-2 text-right">Doanh thu</th>
                   <th className="p-2 text-right">Gi? v?n u?c t?nh</th>
-                  <th className="p-2 text-right">L?i nhu?n u?c t?nh</th>
+                  <th className="p-2 text-right">Lỗi nhu?n u?c t?nh</th>
                 </tr>
               </thead>
               <tbody>
@@ -442,7 +442,7 @@ export default function Stats() {
                 )}
                 {dailyRows.length > 0 && (
                   <tr className="bg-emerald-50 font-bold text-emerald-700">
-                    <td className="p-2">T?ng kho?ng dang xem</td>
+                    <td className="p-2">Tổng kho?ng dang xem</td>
                     <td className="p-2 text-right">{formatNumber(periodTotals.orders)}</td>
                     <td className="p-2 text-right">{formatVND(periodTotals.revenue)}</td>
                     <td className="p-2 text-right">{formatVND(periodTotals.cost)}</td>
@@ -477,7 +477,7 @@ function FragmentRow({ row, expanded, onToggle }) {
         <tr className="border-b bg-slate-50">
           <td colSpan={5} className="p-3">
             {row.orders.length === 0 ? (
-              <div className="text-sm text-gray-500">Chua c? chi ti?t don h?ng cho ng?y n?y.</div>
+              <div className="text-sm text-gray-500">Chua c? chi tiết đơn hàng cho ngày n?y.</div>
             ) : (
               <div className="space-y-3">
                 <div className="overflow-x-auto rounded border border-slate-200 bg-white">
@@ -487,7 +487,7 @@ function FragmentRow({ row, expanded, onToggle }) {
                         <th className="px-3 py-2 text-left">M? don</th>
                         <th className="px-3 py-2 text-right">Doanh thu</th>
                         <th className="px-3 py-2 text-right">Gi? v?n</th>
-                        <th className="px-3 py-2 text-right">L?i nhu?n</th>
+                        <th className="px-3 py-2 text-right">Lỗi nhu?n</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -503,8 +503,8 @@ function FragmentRow({ row, expanded, onToggle }) {
                   </table>
                 </div>
                 <div className="flex flex-wrap justify-end gap-4 border-t border-slate-200 pt-2 text-sm font-bold text-emerald-700">
-                  <span>T?ng {formatNumber(row.orders.length)} don</span>
-                  <span>L?i nhu?n ng?y: {formatVND(row.estimatedProfit)}</span>
+                  <span>Tổng {formatNumber(row.orders.length)} don</span>
+                  <span>Lỗi nhu?n ngày: {formatVND(row.estimatedProfit)}</span>
                 </div>
               </div>
             )}

@@ -9,7 +9,7 @@ import useNegativeStockSettings from '../utils/useNegativeStockSettings';
 const IMPORT_FIELDS = {
   products: [
     { key: 'row_type', label: 'Loại dòng' },
-    { key: 'sku', label: 'SKU / M? s?n ph?m', required: true },
+    { key: 'sku', label: 'SKU / M? sản phẩm', required: true },
     { key: 'parent_sku', label: 'Parent SKU' },
     { key: 'name', label: 'Tên sản phẩm / biến thể', required: true },
     { key: 'barcode', label: 'M? v?ch' },
@@ -30,8 +30,8 @@ const IMPORT_FIELDS = {
     { key: 'active', label: 'Trạng thái' },
   ],
   invoices: [
-    { key: 'invoice_code', label: 'M? don/h?a don', required: true },
-    { key: 'customer_code', label: 'M? kh?ch h?ng' },
+    { key: 'invoice_code', label: 'M? don/hóa đơn', required: true },
+    { key: 'customer_code', label: 'M? khách hàng' },
     { key: 'customer_name', label: 'Tên khách hàng' },
     { key: 'customer_phone', label: 'SĐT khách' },
     { key: 'customer_email', label: 'Email khách' },
@@ -44,7 +44,7 @@ const IMPORT_FIELDS = {
     { key: 'discount_percent', label: '% giảm giá' },
     { key: 'line_total', label: 'Thành tiền dòng' },
     { key: 'total', label: 'Tổng tiền đơn' },
-    { key: 'paid_amount', label: 'D? thanh to?n' },
+    { key: 'paid_amount', label: 'D? thanh toán' },
     { key: 'payment_status', label: 'Trạng thái thanh toán' },
     { key: 'payment_method', label: 'Phương thức thanh toán' },
     { key: 'status', label: 'Trạng thái đơn' },
@@ -56,7 +56,7 @@ const IMPORT_FIELDS = {
 const IMPORT_ALIASES = {
   products: {
     row_type: ['loai dong', 'row_type', 'type', 'loại dòng', 'loại'],
-    sku: ['sku', 'ma sku', 'ma san pham', 'ma bien the', 'product code', 'variant code', 'm? sku', 'm? s?n ph?m', 'm? bi?n th?'],
+    sku: ['sku', 'ma sku', 'ma san pham', 'ma bien the', 'product code', 'variant code', 'm? sku', 'm? sản phẩm', 'm? biến thể'],
     parent_sku: ['parent sku', 'parent_sku', 'sku cha', 'ma sku cha', 'ma cha', 'sku parent', 'm? sku cha', 'm? cha'],
     name: ['name', 'ten san pham', 'ten bien the', 'ten hang', 'product name', 'variant name', 'tên sản phẩm', 'tên biến thể', 'tên hàng'],
     barcode: ['barcode', 'ma vach', 'm? v?ch'],
@@ -77,13 +77,13 @@ const IMPORT_ALIASES = {
     active: ['active', 'hoat dong', 'trang thai', 'status', 'dang ban', 'hoạt động', 'trạng thái', 'đang bán'],
   },
   invoices: {
-    invoice_code: ['invoice_code', 'order_code', 'ma don hang', 'ma hoa don', 'code', 'order code', 'm? don h?ng', 'm? h?a don'],
-    customer_code: ['customer_code', 'ma khach hang', 'ma kh', 'm? kh?ch h?ng', 'm? kh'],
+    invoice_code: ['invoice_code', 'order_code', 'ma don hang', 'ma hoa don', 'code', 'order code', 'm? đơn hàng', 'm? hóa đơn'],
+    customer_code: ['customer_code', 'ma khach hang', 'ma kh', 'm? khách hàng', 'm? kh'],
     customer_name: ['customer_name', 'ten khach hang', 'khach hang', 'customer', 'tên khách hàng', 'khách hàng'],
     customer_phone: ['customer_phone', 'sdt', 'so dien thoai', 'phone', 'sđt', 'số điện thoại'],
     customer_email: ['customer_email', 'email khach hang', 'email khách hàng', 'email'],
     customer_type: ['customer_type', 'loai khach', 'nhom khach', 'group', 'type', 'loại khách', 'nhóm khách'],
-    product_sku: ['product_sku', 'sku', 'ma san pham', 'ma hang', 'variant sku', 'm? s?n ph?m', 'm? h?ng'],
+    product_sku: ['product_sku', 'sku', 'ma san pham', 'ma hang', 'variant sku', 'm? sản phẩm', 'm? h?ng'],
     product_name: ['product_name', 'ten san pham', 'san pham', 'item name', 'tên sản phẩm', 'sản phẩm'],
     quantity: ['quantity', 'qty', 'so luong', 'sl', 'số lượng'],
     unit_price: ['unit_price', 'don gia', 'gia ban', 'price', 'đơn giá', 'giá bán'],
@@ -91,7 +91,7 @@ const IMPORT_ALIASES = {
     discount_percent: ['discount_percent', 'giam gia %', 'chiet khau %', '% giảm giá', '% chiết khấu'],
     line_total: ['line_total', 'thanh tien dong', 'tong dong', 'line total', 'thành tiền dòng', 'tổng dòng'],
     total: ['total', 'tong tien', 'tong don', 'tổng tiền', 'tổng đơn'],
-    paid_amount: ['paid_amount', 'da thanh toan', 'paid', 'd? thanh to?n'],
+    paid_amount: ['paid_amount', 'da thanh toan', 'paid', 'd? thanh toán'],
     payment_status: ['payment_status', 'trang thai thanh toan', 'payment status', 'trạng thái thanh toán'],
     payment_method: ['payment_method', 'phuong thuc thanh toan', 'payment method', 'phương thức thanh toán'],
     status: ['status', 'trang thai don', 'trang thai', 'trạng thái đơn', 'trạng thái'],
@@ -149,8 +149,8 @@ const TEMPLATE_ROWS = {
   ],
   invoices: [
     {
-      'M? don h?ng': 'HDIMPORT001',
-      'M? kh?ch h?ng': 'KHLE001',
+      'M? đơn hàng': 'HDIMPORT001',
+      'M? khách hàng': 'KHLE001',
       'Tên khách hàng': 'Khách lẻ',
       'SĐT khách': '',
       'Email khách': '',
@@ -163,16 +163,16 @@ const TEMPLATE_ROWS = {
       '% giảm giá': 0,
       'Thành tiền dòng': 300000,
       'Tổng tiền': 300000,
-      'D? thanh to?n': 300000,
+      'D? thanh toán': 300000,
       'Trạng thái thanh toán': 'paid',
       'Phương thức thanh toán': 'cash',
       'Trạng thái đơn': 'completed',
       'Thời gian tạo': '2026-05-10 09:00:00',
-      'Ghi ch?': 'M?t don c? th? c? nhi?u d?ng c?ng m? don h?ng',
+      'Ghi ch?': 'Một don c? th? c? nhi?u d?ng c?ng m? đơn hàng',
     },
     {
-      'M? don h?ng': 'HDIMPORT002',
-      'M? kh?ch h?ng': 'KHSI001',
+      'M? đơn hàng': 'HDIMPORT002',
+      'M? khách hàng': 'KHSI001',
       'Tên khách hàng': 'Khách sỉ',
       'SĐT khách': '',
       'Email khách': '',
@@ -185,7 +185,7 @@ const TEMPLATE_ROWS = {
       '% giảm giá': 0,
       'Thành tiền dòng': 110000,
       'Tổng tiền': 110000,
-      'D? thanh to?n': 0,
+      'D? thanh toán': 0,
       'Trạng thái thanh toán': 'unpaid',
       'Phương thức thanh toán': 'debt',
       'Trạng thái đơn': 'pending',
@@ -200,8 +200,8 @@ function buildGuideRows(dataType, negativeStockLimitLabel = '0') {
     products: [
       ['Cột', 'Bắt buộc', 'Ghi chú'],
       ['Loại dòng', 'Khuyến nghị', 'PARENT cho sản phẩm cha, VARIANT cho biến thể; có Parent SKU thì backend suy luận là VARIANT.'],
-      ['SKU', 'C?', 'SKU/m? s?n ph?m ho?c SKU bi?n th?, kh?ng du?c tr?ng sai lo?i.'],
-      ['Parent SKU', 'C? v?i VARIANT', 'Ph?i kh?p SKU s?n ph?m cha trong file ho?c d? c? trong hệ thống.'],
+      ['SKU', 'C?', 'SKU/m? sản phẩm ho?c SKU biến thể, không được tr?ng sai loại.'],
+      ['Parent SKU', 'C? v?i VARIANT', 'Phải kh?p SKU sản phẩm cha trong file ho?c d? c? trong hệ thống.'],
       ['Tên sản phẩm', 'Có với bản ghi mới', 'Tên sản phẩm cha hoặc tên biến thể.'],
       ['Giá/Tồn kho', 'Không', `Giá nhập số không âm; tồn kho có thể âm đến ${negativeStockLimitLabel} (ví dụ -5, -20) và phải là số nguyên; thấp hơn ngưỡng sẽ bị backend chặn.`],
       ['Danh mục text / Default category id', 'Không', 'Khớp danh mục hiện có theo tên/từ khóa hoặc id.'],
@@ -209,8 +209,8 @@ function buildGuideRows(dataType, negativeStockLimitLabel = '0') {
     ],
     invoices: [
       ['Cột', 'Bắt buộc', 'Ghi chú'],
-      ['M? don h?ng', 'C?', 'C?c d?ng c?ng m? don s? du?c gom th?nh m?t don nhi?u s?n ph?m.'],
-      ['M? kh?ch h?ng / T?n / SDT / Email / Nh?m kh?ch', 'N?n c? m? kh?ch h?ng', 'Kh?ch ph?i t?n t?i; n?u c? nh?m kh?ch th? ph?i kh?p lo?i kh?ch d? tr?nh import nh?m kh?ch l?/kh?ch s?.'],
+      ['M? đơn hàng', 'C?', 'Các d?ng c?ng m? don sẽ được gom th?nh một don nhi?u sản phẩm.'],
+      ['M? khách hàng / Tồn / SDT / Email / Nh?m kh?ch', 'N?n c? m? khách hàng', 'Khách ph?i t?n t?i; n?u c? nh?m kh?ch th? ph?i kh?p loại kh?ch d? tr?nh import nh?m kh?ch l?/kh?ch s?.'],
       ['SKU hoặc Tên sản phẩm', 'Có', 'Sản phẩm/biến thể phải tồn tại trong hệ thống.'],
       ['Số lượng', 'Có', `Số lượng bán phải lớn hơn 0; có thể bán khi tồn hiện tại 0/âm nếu tồn dự kiến không nhỏ hơn ${negativeStockLimitLabel}. Backend sẽ chặn nếu vượt ngưỡng.`],
       ['Đơn giá / Giảm giá / Thành tiền', 'Không', 'Nếu tổng tiền file khác tổng chi tiết, hệ thống ưu tiên tính lại từ chi tiết.'],
@@ -523,7 +523,7 @@ export default function ExcelImportPanel({
       setStatus({ tone: 'error', message: 'Vui lòng chọn ít nhất một dòng hợp lệ để import.' });
       return null;
     }
-    if (!window.confirm(`Import ${selected.length} d?ng d? ch?n? Backend s? validate l?i tru?c khi ghi dữ liệu.`)) return null;
+    if (!window.confirm(`Import ${selected.length} d?ng đã chọn? Backend s? validate lỗi trước khi ghi dữ liệu.`)) return null;
     const selectedIds = new Set(selected);
     const selectedRows = excel.previewItems
       .filter(item => selectedIds.has(`import:${item.line}:${item.rowIndex}`))
@@ -569,7 +569,7 @@ export default function ExcelImportPanel({
     <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4 space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h3 className="font-bold flex items-center gap-2"><UploadCloud size={18} className="text-blue-600" /> {title || `Import ${dataType === 'invoices' ? 'h?a ?n/?n h?ng' : 's?n ph?m'} t? Excel/CSV`}</h3>
+          <h3 className="font-bold flex items-center gap-2"><UploadCloud size={18} className="text-blue-600" /> {title || `Import ${dataType === 'invoices' ? 'h?a ?n/?n h?ng' : 'sản phẩm'} t? Excel/CSV`}</h3>
           <p className="text-xs text-gray-600 mt-1">{description || 'Frontend parse file bằng xlsx rồi gửi JSON rows cho backend preview/commit, không upload binary.'}</p>
           <p className="mt-1 text-[11px] font-medium text-orange-700">
             Nghiệp vụ âm kho: hệ thống cho phép tồn âm đến {negativeStockLimitLabel}; hóa đơn/import bị chặn nếu tồn dự kiến thấp hơn ngưỡng này.
@@ -635,7 +635,7 @@ export default function ExcelImportPanel({
           {busy('preview') ? <Loader2 size={15} className="animate-spin" /> : <Eye size={15} />} Preview import
         </button>
         <button type="button" onClick={commitImport} disabled={busyKey !== '' || selected.length === 0} className="btn-success flex items-center gap-1.5 disabled:opacity-60">
-          {busy('commit') ? <Loader2 size={15} className="animate-spin" /> : <PackageCheck size={15} />} Commit d?ng d? ch?n ({selected.length})
+          {busy('commit') ? <Loader2 size={15} className="animate-spin" /> : <PackageCheck size={15} />} Commit d?ng đã chọn ({selected.length})
         </button>
         <button type="button" onClick={() => { setExcel(prev => ({ ...prev, previewItems: [], previewSummary: null, previewErrors: [], previewWarnings: [], commitResult: null })); setSelected([]); }} className="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm flex items-center gap-1.5">
           <RefreshCw size={15} /> Reset preview
@@ -665,8 +665,8 @@ export default function ExcelImportPanel({
 
       {(excel.previewErrors.length > 0 || excel.previewWarnings.length > 0) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-sm">
-          {excel.previewErrors.length > 0 && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700"><div className="font-semibold mb-1">L?i</div><ul className="list-disc pl-5 max-h-32 overflow-auto space-y-1">{excel.previewErrors.slice(0, 30).map((error, index) => <li key={index}>{error?.line ? `D?ng ${error.line}: ` : ''}{error?.field ? `${error.field}: ` : ''}{error?.message || String(error)}</li>)}</ul></div>}
-          {excel.previewWarnings.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-800"><div className="font-semibold mb-1">C?nh b?o</div><ul className="list-disc pl-5 max-h-32 overflow-auto space-y-1">{excel.previewWarnings.slice(0, 30).map((warning, index) => <li key={index}>{warning?.line ? `D?ng ${warning.line}: ` : ''}{warning?.message || String(warning)}</li>)}</ul></div>}
+          {excel.previewErrors.length > 0 && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700"><div className="font-semibold mb-1">Lỗi</div><ul className="list-disc pl-5 max-h-32 overflow-auto space-y-1">{excel.previewErrors.slice(0, 30).map((error, index) => <li key={index}>{error?.line ? `Dùng ${error.line}: ` : ''}{error?.field ? `${error.field}: ` : ''}{error?.message || String(error)}</li>)}</ul></div>}
+          {excel.previewWarnings.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-800"><div className="font-semibold mb-1">Cảnh báo</div><ul className="list-disc pl-5 max-h-32 overflow-auto space-y-1">{excel.previewWarnings.slice(0, 30).map((warning, index) => <li key={index}>{warning?.line ? `Dùng ${warning.line}: ` : ''}{warning?.message || String(warning)}</li>)}</ul></div>}
         </div>
       )}
 
@@ -679,9 +679,9 @@ export default function ExcelImportPanel({
       {excel.previewItems.length > 0 && (
         <div className="space-y-3">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-            <input className="input-field flex-1 text-sm bg-white" placeholder="L?c d?ng import, m?, SKU, kh?ch h?ng, l?i..." value={filter.query} onChange={event => setFilter(prev => ({ ...prev, query: event.target.value }))} />
+            <input className="input-field flex-1 text-sm bg-white" placeholder="Lực d?ng import, m?, SKU, khách hàng, lỗi..." value={filter.query} onChange={event => setFilter(prev => ({ ...prev, query: event.target.value }))} />
             <select className="input-field text-sm bg-white lg:w-44" value={filter.action} onChange={event => setFilter(prev => ({ ...prev, action: event.target.value }))}>
-              {['all', 'create', 'update', 'duplicate', 'error', 'skipped'].map(action => <option key={action} value={action}>{action === 'all' ? 'T?t c? status' : actionLabel(action)}</option>)}
+              {['all', 'create', 'update', 'duplicate', 'error', 'skipped'].map(action => <option key={action} value={action}>{action === 'all' ? 'Tất cả status' : actionLabel(action)}</option>)}
             </select>
             <label className="inline-flex items-center gap-2 text-sm px-3 py-2 border rounded-lg bg-white"><input type="checkbox" checked={filter.issuesOnly} onChange={event => setFilter(prev => ({ ...prev, issuesOnly: event.target.checked }))} /> Chỉ dòng lỗi/cảnh báo</label>
           </div>

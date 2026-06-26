@@ -39,10 +39,10 @@ export default function CashBook() {
       if (activeFilter.to) params.append('to', activeFilter.to);
       if (params.toString()) url += `?${params.toString()}`;
 
-      const data = await apiJson(url, {}, 'Kh?ng th? t?i s? qu?.');
+      const data = await apiJson(url, {}, 'Không thử lại s? qu?.');
       setTransactions(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('L?i t?i s? qu?:', err);
+      console.error('Lỗi t?i s? qu?:', err);
     } finally {
       setLoading(false);
     }
@@ -72,9 +72,9 @@ export default function CashBook() {
         if (filter.to) params.append('to', filter.to);
         url += `?${params.toString()}`;
       }
-      return await apiJson(url, {}, 'Kh?ng th? t?i t?ng h?p s? qu?.');
+      return await apiJson(url, {}, 'Không thử lại tổng hợp s? qu?.');
     } catch (err) {
-      console.error('L?i t?i t?ng h?p:', err);
+      console.error('Lỗi t?i tổng hợp:', err);
       return null;
     }
   };
@@ -112,7 +112,7 @@ export default function CashBook() {
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!form.amount || parseFloat(form.amount) <= 0) {
-      alert('Vui l?ng nh?p s? ti?n h?p l?!');
+      alert('Vui lượng nhập s? ti?n hợp lệ!');
       return;
     }
     setSaving(true);
@@ -122,12 +122,12 @@ export default function CashBook() {
       await apiJsonChecked(url, {
         method,
         body: form,
-      }, editing ? 'Kh?ng th? cập nhật giao d?ch.' : 'Kh?ng th? th?m giao d?ch.');
-      alert(editing ? '? ?? cập nhật!' : '? ?? th?m giao d?ch!');
+      }, editing ? 'Không th? cập nhật giao dịch.' : 'Không th? thêm giao dịch.');
+      alert(editing ? '? ?? cập nhật!' : '? ?? thêm giao dịch!');
       setShowForm(false);
       fetchTransactions();
     } catch (err) {
-      alert('L?i kết nối: ' + err.message);
+      alert('Lỗi kết nối: ' + err.message);
     } finally {
       setSaving(false);
     }
@@ -153,13 +153,13 @@ export default function CashBook() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('X?a giao d?ch n?y?')) return;
+    if (!confirm('Xóa giao dịch n?y?')) return;
     try {
-      await apiJsonChecked(`${API}/cash-book/${id}`, { method: 'DELETE' }, 'Kh?ng th? x?a giao d?ch.');
-      alert('? ?? x?a!');
+      await apiJsonChecked(`${API}/cash-book/${id}`, { method: 'DELETE' }, 'Không th? xóa giao dịch.');
+      alert('? ?? xóa!');
       fetchTransactions();
     } catch (err) {
-      alert('L?i kết nối: ' + err.message);
+      alert('Lỗi kết nối: ' + err.message);
     }
   };
 
@@ -175,14 +175,14 @@ export default function CashBook() {
 
   const exportExcel = () => {
     const data = transactions.map(t => ({
-      'Ng?y': t.date,
+      'Ngày': t.date,
       'Gi?': t.time || '',
-      'Lo?i': t.type === 'income' ? 'Thu' : 'Chi',
-      'Danh m?c': t.category || '',
+      'Loại': t.type === 'income' ? 'Thu' : 'Chi',
+      'Danh mục': t.category || '',
       'S? ti?n': t.amount,
       'Ghi ch?': t.note || '',
       'M? tham chi?u': t.reference_id || '',
-      'Lo?i tham chi?u': t.reference_type || '',
+      'Loại tham chi?u': t.reference_type || '',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -192,7 +192,7 @@ export default function CashBook() {
 
   const formatVND = (n) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
 
-  // T?nh t?ng h?p tr?n filtered data
+  // T?nh tổng hợp tr?n filtered data
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
   const balance = totalIncome - totalExpense;
@@ -206,10 +206,10 @@ export default function CashBook() {
         </h1>
         <div className="flex gap-2">
           <button onClick={exportExcel} className="px-4 py-2 border border-green-300 text-green-600 hover:bg-green-50 rounded-lg text-sm font-medium flex items-center gap-1.5">
-            <Upload size={16} /> Xu?t Excel
+            <Upload size={16} /> Xuất Excel
           </button>
           <button onClick={openAdd} className="btn-primary flex items-center gap-1">
-            <Plus size={16} /> Th?m giao d?ch
+            <Plus size={16} /> Thêm giao dịch
           </button>
           <button onClick={handleDeleteAll} className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium flex items-center gap-1.5">
             <Trash2 size={16} /> Xóa tất cả
@@ -239,7 +239,7 @@ export default function CashBook() {
       <div className="card mb-4 bg-gray-50">
         <div className="flex items-center gap-3 flex-wrap">
           <select className="input-field w-32" value={filter.type} onChange={e => setFilter({ ...filter, type: e.target.value })}>
-            <option value="">T?t c?</option>
+            <option value="">Tất cả</option>
             <option value="income">Thu</option>
             <option value="expense">Chi</option>
           </select>
@@ -247,10 +247,10 @@ export default function CashBook() {
           <span className="text-gray-500">-</span>
           <input type="date" className="input-field w-36" value={filter.to} onChange={e => setFilter({ ...filter, to: e.target.value })} />
           <button onClick={applyFilter} className="px-4 py-2 bg-blue-600 text-white rounded text-sm flex items-center gap-1">
-            <Filter size={14} /> L?c
+            <Filter size={14} /> Lực
           </button>
           <button onClick={clearFilter} className="px-4 py-2 bg-gray-300 text-gray-700 rounded text-sm">
-            X?a b? l?c
+            Xóa bộ lọc
           </button>
         </div>
       </div>
@@ -260,10 +260,10 @@ export default function CashBook() {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-100 text-gray-600">
-              <th className="p-2 text-left">Ng?y</th>
+              <th className="p-2 text-left">Ngày</th>
               <th className="p-2 text-left">Gi?</th>
-              <th className="p-2 text-left">Lo?i</th>
-              <th className="p-2 text-left">Danh m?c</th>
+              <th className="p-2 text-left">Loại</th>
+              <th className="p-2 text-left">Danh mục</th>
               <th className="p-2 text-right">S? ti?n</th>
               <th className="p-2 text-left">Ghi ch?</th>
               <th className="p-2 text-center">H?nh d?ng</th>
@@ -273,7 +273,7 @@ export default function CashBook() {
             {loading ? (
               <tr><td colSpan={7} className="text-center text-gray-400 py-10">đang t?i...</td></tr>
             ) : transactions.length === 0 ? (
-              <tr><td colSpan={7} className="text-center text-gray-400 py-10">Chua c? giao d?ch</td></tr>
+              <tr><td colSpan={7} className="text-center text-gray-400 py-10">Chua c? giao dịch</td></tr>
             ) : (
               transactions.map(t => (
                 <tr key={t.id} className="border-b hover:bg-gray-50">
@@ -311,7 +311,7 @@ export default function CashBook() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <DollarSign size={20} className="text-green-600" />
-                {editing ? 'S?a giao d?ch' : 'Th?m giao d?ch m?i'}
+                {editing ? 'Sửa giao dịch' : 'Thêm giao dịch mới'}
               </h2>
               <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
@@ -321,7 +321,7 @@ export default function CashBook() {
             <form onSubmit={handleSubmit} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Ng?y <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-gray-500 block mb-1">Ngày <span className="text-red-500">*</span></label>
                   <input type="date" className="input-field w-full" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required />
                 </div>
                 <div>
@@ -331,15 +331,15 @@ export default function CashBook() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Lo?i <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-gray-500 block mb-1">Loại <span className="text-red-500">*</span></label>
                   <select className="input-field w-full" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
                     <option value="income">Thu</option>
                     <option value="expense">Chi</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Danh m?c</label>
-                  <input className="input-field w-full" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="VD: B?n h?ng, Mua h?ng..." />
+                  <label className="text-xs text-gray-500 block mb-1">Danh mục</label>
+                  <input className="input-field w-full" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="VD: Bản h?ng, Mua h?ng..." />
                 </div>
               </div>
               <div>
@@ -356,7 +356,7 @@ export default function CashBook() {
                   <input className="input-field w-full" value={form.reference_id} onChange={e => setForm({ ...form, reference_id: e.target.value })} placeholder="VD: HD001" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Lo?i tham chi?u</label>
+                  <label className="text-xs text-gray-500 block mb-1">Loại tham chi?u</label>
                   <input className="input-field w-full" value={form.reference_type} onChange={e => setForm({ ...form, reference_type: e.target.value })} placeholder="invoice, return..." />
                 </div>
               </div>
@@ -366,7 +366,7 @@ export default function CashBook() {
               <button onClick={handleSubmit} disabled={saving} className="btn-success flex-1 disabled:opacity-50">
                 ?? {saving ? 'đang luu...' : 'Luu'}
               </button>
-              <button onClick={() => setShowForm(false)} className="btn-danger flex-1">H?y</button>
+              <button onClick={() => setShowForm(false)} className="btn-danger flex-1">Hủy</button>
             </div>
           </div>
         </div>
@@ -375,74 +375,74 @@ export default function CashBook() {
       {/* Help Modal */}
       {showHelp && (
         <HelpModal
-          title="Hu?ng d?n s? d?ng S? qu?"
+          title="Hướng dẫn sử dụng S? qu?"
           onClose={() => setShowHelp(false)}
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? T?ng quan</h3>
-                <p>S? qu? gi?p b?n ghi nh?n v? theo d?i c?c kho?n thu chi c?a c?a h?ng. Dữ liệu du?c luu t? d?ng v? kh?ng m?t khi t?t m?y.</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? Tổng quan</h3>
+                <p>S? qu? gi?p b?n ghi nhân v? theo dài c?c kho?n thu chi của cửa hàng. Dữ liệu được luu tự động v? không một khi tốt m?y.</p>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? Thu nh?p t? d?ng t? don h?ng</h3>
-                <p className="text-blue-600">Khi b?n x?c nh?n don h?ng (tr?ng th?i "?? thanh to?n"), hệ thống s? t? d?ng t?o giao d?ch thu v?o s? qu? v?i:</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? Thu nh?p tự động t? đơn hàng</h3>
+                <p className="text-blue-600">Khi b?n xác nhận đơn hàng (trạng thái "?? thanh toán"), hệ thống s? tự động tạo giao dịch thu v?o s? qu? v?i:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
-                  <li>Danh m?c: "Doanh thu t? don h?ng"</li>
-                  <li>S? ti?n: T?ng gi? tr? h?a don</li>
-                  <li>Ghi ch?: Ch?a m? h?a don (v? d?: "H?a don HD00001")</li>
-                  <li>Li?n k?t: C? th? trace v? don h?ng g?c qua m? tham chi?u</li>
+                  <li>Danh mục: "Doanh thu t? đơn hàng"</li>
+                  <li>S? ti?n: Tổng gi? tr? hóa đơn</li>
+                  <li>Ghi ch?: Ch?a m? hóa đơn (v? d?: "Hóa don HD00001")</li>
+                  <li>Li?n k?t: C? th? trace v? đơn hàng g?c qua m? tham chi?u</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">? Th?m giao d?ch th? c?ng</h3>
+                <h3 className="font-bold text-gray-800 mb-2">? Thêm giao dịch th? c?ng</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nh?n n?t <strong>"Th?m giao d?ch"</strong> ? g?c tr?n ph?i</li>
-                  <li>Ch?n lo?i: <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Thu</span> ho?c <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">Chi</span></li>
-                  <li>Nh?p ng?y, gi? (m?c d?nh l? hi?n t?i)</li>
-                  <li>Nh?p s? ti?n v? danh m?c (VD: "B?n h?ng", "Mua h?ng", "Ti?n di?n"...)</li>
-                  <li>C? th? th?m ghi ch? v? m? tham chi?u (HD001...)</li>
+                  <li>Nhân n?t <strong>"Thêm giao dịch"</strong> ? g?c tr?n ph?i</li>
+                  <li>Chọn loại: <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Thu</span> ho?c <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">Chi</span></li>
+                  <li>Nhập ngày, gi? (mặc định l? hiện tại)</li>
+                  <li>Nhập s? ti?n v? danh mục (VD: "Bản h?ng", "Mua h?ng", "Tiền di?n"...)</li>
+                  <li>C? th? thêm ghi ch? v? m? tham chi?u (HD001...)</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? C?c s? li?u hi?n th?</h3>
+                <h3 className="font-bold text-gray-800 mb-2">?? Các s? li?u hiển thị</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li><strong>T?ng thu:</strong> T?t c? kho?n thu (lo?i income)</li>
-                  <li><strong>T?ng chi:</strong> T?t c? kho?n chi (lo?i expense)</li>
-                  <li><strong>S? du:</strong> T?ng thu - T?ng chi</li>
+                  <li><strong>Tổng thu:</strong> Tất cả kho?n thu (loại income)</li>
+                  <li><strong>Tổng chi:</strong> Tất cả kho?n chi (loại expense)</li>
+                  <li><strong>S? du:</strong> Tổng thu - Tổng chi</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? L?c danh s?ch</h3>
+                <h3 className="font-bold text-gray-800 mb-2">?? Lực danh sách</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Ch?n lo?i (Thu/Chi) d? l?c</li>
-                  <li>Ch?n kho?ng ng?y d? xem giao d?ch trong th?i gian c? th?</li>
-                  <li>Nh?n "L?c" d? ?p d?ng, "X?a b? l?c" d? xem t?t c?</li>
+                  <li>Chọn loại (Thu/Chi) d? l?c</li>
+                  <li>Chọn kho?ng ngày d? xem giao dịch trong thời gian c? th?</li>
+                  <li>Nhân "Lực" d? ?p d?ng, "Xóa bộ lọc" d? xem tất cả</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? Ch?nh s?a & X?a</h3>
+                <h3 className="font-bold text-gray-800 mb-2">?? Chỉnh sửa & Xóa</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nh?n icon <strong>?? S?a</strong> d? chỉnh sửa giao d?ch</li>
-                  <li>Nh?n icon <strong>??? X?a</strong> d? x?a giao d?ch</li>
+                  <li>Nhân icon <strong>?? Sửa</strong> d? chỉnh sửa giao dịch</li>
+                  <li>Nhân icon <strong>??? Xóa</strong> d? xóa giao dịch</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? Xu?t Excel</h3>
-                <p>Nh?n n?t "Xu?t Excel" d? t?i to?n b? danh s?ch giao d?ch ra file .xlsx. File ch?a c?c c?t: Ng?y, Gi?, Lo?i, Danh m?c, S? ti?n, Ghi ch?...</p>
+                <h3 className="font-bold text-gray-800 mb-2">?? Xuất Excel</h3>
+                <p>Nhân n?t "Xuất Excel" đã tải to?n b? danh sách giao dịch ra file .xlsx. File ch?a c?c c?t: Ngày, Gi?, Loại, Danh mục, S? ti?n, Ghi ch?...</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                 <h3 className="font-bold text-blue-800 mb-2">?? M?o hay</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
-                  <li>T?o quy d?nh: Nh?p chi ph? v?i danh m?c r? r?ng (Ti?n di?n, Ti?n nu?c, Thu? m?t b?ng...)</li>
-                  <li>Ghi ch? m? h?a don v?o "M? tham chi?u" d? d? theo d?i</li>
-                  <li>Ki?m tra s? qu? h?ng tu?n d? d?i chi?u</li>
+                  <li>Tạo quy d?nh: Nhập chi ph? v?i danh mục r? r?ng (Tiền di?n, Tiền nu?c, Thu? một b?ng...)</li>
+                  <li>Ghi ch? m? hóa đơn v?o "M? tham chi?u" d? d? theo dài</li>
+                  <li>Kiểm tra s? qu? h?ng tu?n d? dài chi?u</li>
                 </ul>
               </div>
             </div>

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiJson, apiJsonChecked, resolveApiUrl, requestSyncCheck } from '../utils/apiClient';
 import { globalSyncEmitter } from '../utils/eventEmitter';
@@ -15,6 +15,12 @@ import {
   getStockDisplayMeta,
 } from '../utils/negativeStock';
 import useNegativeStockSettings from '../utils/useNegativeStockSettings';
+import OrderColumnCustomizer from '../components/OrderColumnCustomizer';
+import {
+  loadOrderColumnSettings,
+  saveOrderColumnSettings,
+  normalizeOrderColumnSettings,
+} from '../utils/orderColumnSettings';
 
 const API = resolveApiUrl('');
 
@@ -40,7 +46,7 @@ function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
 }
 
-// Chuy?n m? don h?ng th?nh d?nh d?ng "DH000001"
+// Chuy?n m? đơn hàng th?nh định dạngg "DH000001"
 function displayOrderCode(code) {
   if (!code) return '—';
   const raw = String(code).trim();
@@ -238,6 +244,7 @@ export default function OrderList() {
   const [editProducts, setEditProducts] = useState([]);
   const [editProductsState, setEditProductsState] = useState('idle');
   const [editBaselineDetails, setEditBaselineDetails] = useState([]);
+  const [editVisibleColumns, setEditVisibleColumns] = useState(() => loadOrderColumnSettings());
   const [editProductSearch, setEditProductSearch] = useState('');
   const [editCustomerSearch, setEditCustomerSearch] = useState('');
   const [showProductPicker, setShowProductPicker] = useState(false);
@@ -532,7 +539,7 @@ export default function OrderList() {
 
   const handleBulkDelete = async () => {
     if (selectedOrders.length === 0) return;
-    if (!confirm(`H?y ${selectedOrders.length} don h?ng d? ch?n?\n\nH?ng s? du?c ho?n v? kho.`)) return;
+    if (!confirm(`Hủy ${selectedOrders.length} đơn hàng đã chọn?\n\nH?ng sẽ được ho?n v? kho.`)) return;
 
     setIsBulkDeleting(true);
     try {
@@ -556,7 +563,7 @@ export default function OrderList() {
       }
 
       const totalAffected = successCount + offlineOrders.length;
-      alert(`? D? h?y ${totalAffected} don h?ng! Don d? h?y s? t? d?ng x?a sau 24 gi?.`);
+      alert(`? D? h?y ${totalAffected} đơn hàng! Don d? h?y s? tự động xóa sau 24 gi?.`);
       setSelectedOrders([]);
       // Refresh data - cancelled online orders remain visible for 24h before automatic cleanup.
       notifyOrderChanged({ reason: 'orders-cancelled' });
@@ -689,13 +696,13 @@ export default function OrderList() {
         const disc = Number(f.discount_percent) ? sub * Number(f.discount_percent) / 100 : (Number(f.discount_amount) || 0);
         const total = sub + vat - disc + (Number(f.delivery_fee) || 0);
         const paid = Number(f.paid_amount) || 0;
-        return { ...f, customer_id: customerId, customer_name: customer?.name || (customerId ? f.customer_name : 'Kh?ch l?'), customer_type: customer?.customer_type || customer?.customer_type_name || (customerId ? f.customer_type : 'Kh?ch l?'), subtotal: sub, vat_amount: vat, total, remaining_amount: Math.max(0, total - paid), change_amount: Math.max(0, paid - total) };
+        return { ...f, customer_id: customerId, customer_name: customer?.name || (customerId ? f.customer_name : 'Khách lẻ'), customer_type: customer?.customer_type || customer?.customer_type_name || (customerId ? f.customer_type : 'Khách lẻ'), subtotal: sub, vat_amount: vat, total, remaining_amount: Math.max(0, total - paid), change_amount: Math.max(0, paid - total) };
       });
       return updated;
     });
   }, [customers, repriceEditDetailsForCustomer]);
 
-  const editProductsStateLabel = { loading: 'đang t?i dữ liệu s?n ph?m...', loaded: '', empty: 'Kh?ng c? dữ liệu s?n ph?m d? ki?m tra tồn kho.', error: 'Kh?ng t?i du?c dữ liệu s?n ph?m, v?n cho ph?p luu.' }[editProductsState] || '';
+  const editProductsStateLabel = { loading: 'đang t?i dữ liệu sản phẩm...', loaded: '', empty: 'Không có dữ liệu sản phẩm d? kiểm tra tồn kho.', error: 'Không tải được dữ liệu sản phẩm, v?n cho phép luu.' }[editProductsState] || '';
 
   const filteredEditCustomers = useMemo(() => {
     const query = String(editCustomerSearch || '').trim().toLowerCase();
@@ -801,8 +808,8 @@ export default function OrderList() {
       setEditProductsState('loading');
       setEditForm({
         customer_id: (findCustomerForOrder({ ...inv, ...data })?.id ?? data.customer_id ?? inv.customer_id) || null,
-        customer_name: findCustomerForOrder({ ...inv, ...data })?.name || data.customer_name || inv.customer_name || 'Kh?ch l?',
-        customer_type: findCustomerForOrder({ ...inv, ...data })?.customer_type || data.customer_type || inv.customer_type || 'Kh?ch l?',
+        customer_name: findCustomerForOrder({ ...inv, ...data })?.name || data.customer_name || inv.customer_name || 'Khách lẻ',
+        customer_type: findCustomerForOrder({ ...inv, ...data })?.customer_type || data.customer_type || inv.customer_type || 'Khách lẻ',
         payment_method: data.payment_method || inv.payment_method || 'cash',
         note: data.note || inv.note || '',
         subtotal: data.subtotal || inv.subtotal || 0,
@@ -975,8 +982,8 @@ export default function OrderList() {
           client_order_id: showEdit.client_order_id || showEdit.payload?.client_order_id || '',
           invoice_code: showEdit.invoice_code || showEdit.payload?.invoice_code || '',
           customer_id: editForm.customer_id || null,
-          customer_name: editForm.customer_name || 'Kh?ch l?',
-          customer_type: editForm.customer_type || 'Kh?ch l?',
+          customer_name: editForm.customer_name || 'Khách lẻ',
+          customer_type: editForm.customer_type || 'Khách lẻ',
           payment_method: editForm.payment_method,
           note: editForm.note || '',
           subtotal: sub,
@@ -1029,7 +1036,7 @@ export default function OrderList() {
         ));
         setShowEdit(null);
         setEditBaselineDetails([]);
-        alert('? Don offline d? du?c cập nhật!');
+        alert('? Don offline đã được cập nhật!');
       } catch {
         alert('⚠️ Lỗi khi lưu đơn offline!');
       } finally {
@@ -1042,8 +1049,8 @@ export default function OrderList() {
     try {
       const payload = {
         customer_id: editForm.customer_id || null,
-        customer_name: editForm.customer_name || 'Kh?ch l?',
-        customer_type: editForm.customer_type || 'Kh?ch l?',
+        customer_name: editForm.customer_name || 'Khách lẻ',
+        customer_type: editForm.customer_type || 'Khách lẻ',
         payment_method: editForm.payment_method,
         note: editForm.note || '',
         subtotal: editForm.subtotal || 0,
@@ -1183,7 +1190,7 @@ export default function OrderList() {
       } else {
         // Gọi API xác nhận đơn hàng (PATCH /invoices/:id/confirm)
         await apiJsonChecked(`/invoices/${inv.id}/confirm`, { method: 'PATCH' }, 'Không thể xác nhận thanh toán.');
-        alert('? D? x?c nh?n thanh to?n!');
+        alert('? D? xác nhận thanh toán!');
         notifyOrderChanged({ reason: 'order-paid', invoice_id: inv.id || null, invoice_code: inv.invoice_code || '' });
         await fetchInvoices();
         apiJson('/products/all/with-variants').catch(() => { });
@@ -1294,7 +1301,7 @@ export default function OrderList() {
         <ExcelImportPanel
           dataType="invoices"
           title="Import hóa đơn/đơn hàng từ Excel/CSV"
-          description={`Preview/validate don h?ng v? chi ti?t s?n ph?m tru?c khi commit; cho ph?p b?n khi t?n 0/?m n?u t?n d? ki?n kh?ng th?p hon ${negativeStockLimitLabel}, m?t don nhi?u d?ng du?c gom theo m? don.`}
+          description={`Preview/validate đơn hàng v? chi tiết sản phẩm trước khi commit; cho phép b?n khi t?n 0/?m n?u t?n d? ki?n không th?p hon ${negativeStockLimitLabel}, một don nhi?u d?ng được gom theo m? don.`}
           negativeStockSettings={negativeStockSettings}
           onCommitted={async () => {
             setLoading(true);
@@ -1360,7 +1367,7 @@ export default function OrderList() {
             <div className="flex flex-wrap items-center gap-2 text-gray-500">
               <span className="rounded-full bg-blue-50 text-blue-700 px-3 py-1 font-medium">Hiển thị {filtered.length} đơn</span>
               {selectedOrders.length > 0 && (
-                <span className="rounded-full bg-amber-50 text-amber-700 px-3 py-1 font-medium">D? ch?n {selectedOrders.length} don</span>
+                <span className="rounded-full bg-amber-50 text-amber-700 px-3 py-1 font-medium">D? chọn {selectedOrders.length} don</span>
               )}
               {!serverOnline && (
                 <span className="rounded-full bg-red-50 text-red-600 px-3 py-1 font-medium">Đang ở chế độ offline</span>
@@ -1408,7 +1415,7 @@ export default function OrderList() {
                   title={selectedAll ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
                 >
                   {selectedAll ? <CheckSquare size={16} /> : <Square size={16} />}
-                  <span>{selectedAll ? 'B? ch?n t?t c?' : 'Ch?n t?t c?'}</span>
+                  <span>{selectedAll ? 'B? chọn tất cả' : 'Chọn tất cả'}</span>
                 </button>
                 <span className="text-xs text-gray-400">{filtered.length} đơn</span>
               </div>
@@ -1454,7 +1461,7 @@ export default function OrderList() {
                               <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`}></span>
                               {st.text}
                             </span>
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">{isUnpaid ? 'Ch?a thanh to?n' : formatPaymentMethod(inv.payment_method)}</span>
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">{isUnpaid ? 'Ch?a thanh toán' : formatPaymentMethod(inv.payment_method)}</span>
                           </div>
                           {isCancelled && cancelRemainingText && (
                             <div className="mt-1 inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">
@@ -1814,7 +1821,7 @@ export default function OrderList() {
                   <input
                     className="input-field w-full text-sm"
                     value={editCustomerSearch}
-                    placeholder="T?m kh?ch h?ng theo t?n, SDT, m?..."
+                    placeholder="Tạm khách hàng theo tồn, SDT, m?..."
                     onFocus={() => setEditCustomerSearch(editForm.customer_name || "")}
                     onChange={e => {
                       const value = e.target.value;
@@ -1876,22 +1883,28 @@ export default function OrderList() {
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-gray-100 px-4 py-2 flex items-center justify-between">
                   <span className="text-sm font-semibold text-gray-700">Chi tiết sản phẩm</span>
-                  <button
-                    onClick={() => setShowProductPicker(true)}
-                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium flex items-center gap-1">
-                    <Plus size={13} /> Thêm sản phẩm
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <OrderColumnCustomizer
+                      visibleColumns={editVisibleColumns}
+                      onChange={(next) => { setEditVisibleColumns(normalizeOrderColumnSettings(next)); saveOrderColumnSettings(next); }}
+                    />
+                    <button
+                      onClick={() => setShowProductPicker(true)}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium flex items-center gap-1">
+                      <Plus size={13} /> Thêm sản phẩm
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[760px] text-sm">
                     <thead>
                       <tr className="bg-gray-50 text-gray-500 text-xs border-b">
-                        <th className="py-2 px-3 text-center w-8">STT</th>
-                        <th className="py-2 px-3 text-left">Tên sản phẩm</th>
-                        <th className="py-2 px-3 text-center w-20">SL</th>
-                        <th className="py-2 px-3 text-right w-28">Giá (VND)</th>
-                        <th className="py-2 px-3 text-center w-16">CK%</th>
-                        <th className="py-2 px-3 text-right w-28">Tổng (VND)</th>
+                        {editVisibleColumns.stt && <th className="py-2 px-3 text-center w-8">STT</th>}
+                        {editVisibleColumns.productName && <th className="py-2 px-3 text-left">Tên sản phẩm</th>}
+                        {editVisibleColumns.quantity && <th className="py-2 px-3 text-center w-20">SL</th>}
+                        {editVisibleColumns.unitPrice && <th className="py-2 px-3 text-right w-28">Giá (VND)</th>}
+                        {editVisibleColumns.discount && <th className="py-2 px-3 text-center w-16">CK%</th>}
+                        {editVisibleColumns.lineTotal && <th className="py-2 px-3 text-right w-28">Tổng (VND)</th>}
                         <th className="py-2 px-3 w-8"></th>
                       </tr>
                     </thead>
@@ -1902,48 +1915,48 @@ export default function OrderList() {
                         const rowNearLimit = Boolean(stockState?.nearLimit);
                         return (
                         <tr key={`${d.id || d.product_id || d.product_sku || 'edit-detail'}-${idx}`} className={`border-b last:border-b-0 hover:bg-gray-50 text-xs ${rowStockInvalid ? 'bg-red-50 ring-1 ring-red-200' : rowNearLimit ? 'bg-orange-50' : ''}`}>
-                          <td className="py-2 px-3 text-center text-gray-400">{idx + 1}</td>
-                          <td className="py-2 px-3">
-                            <div className="font-medium text-gray-800">{getProductDisplayName(d)}</div>
-                            <div className="text-[10px] text-gray-400">{d.product_sku}</div>
-                            {stockState && (
-                              <div className={`text-[10px] font-semibold mt-0.5 ${rowStockInvalid ? 'text-red-600' : rowNearLimit ? 'text-orange-700' : 'text-gray-500'}`}>
-                                Dự kiến {formatStockValue(stockState.projectedStock)}{rowStockInvalid ? ` · ${NEGATIVE_STOCK_LIMIT_MESSAGE}` : rowNearLimit ? ` · ${negativeStockNearLimitLabel || `gần ngưỡng ${negativeStockLimitLabel}`}` : ''}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-2 px-3 text-center">
-                            <input type="number" min="1"
-                              value={d.quantity}
-                              onChange={e => updateDetail(idx, 'quantity', +e.target.value)}
-                              className={`w-16 text-center border rounded px-1 py-1 text-sm ${rowStockInvalid ? 'bg-red-100 text-red-700 border-red-300' : rowNearLimit ? 'bg-orange-50 text-orange-700 border-orange-300' : ''}`} />
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            <input type="number" min="0"
-                              value={d.unit_price}
-                              onChange={e => updateDetail(idx, 'unit_price', +e.target.value)}
-                              className="w-24 text-right border rounded px-2 py-1 text-sm" />
-                          </td>
-                          <td className="py-2 px-3 text-center">
-                            <input type="number" min="0" max="100"
-                              value={d.discount_percent}
-                              onChange={e => updateDetail(idx, 'discount_percent', +e.target.value)}
-                              className="w-14 text-center border rounded px-1 py-1 text-sm" />
-                          </td>
-                          <td className="py-2 px-3 text-right font-semibold text-blue-700">
-                            {formatVND(d.line_total)}
-                          </td>
-                          <td className="py-2 px-3 text-center">
-                            <button onClick={() => removeDetail(idx)} className="text-red-400 hover:text-red-600 p-1">
-                              <Trash2 size={13} />
-                            </button>
-                          </td>
+                          {editVisibleColumns.stt && <td className="py-2 px-3 text-center text-gray-400">{idx + 1}</td>}
+{editVisibleColumns.productName && <td className="py-2 px-3">
+  <div className="font-medium text-gray-800">{getProductDisplayName(d)}</div>
+  <div className="text-[10px] text-gray-400">{d.product_sku}</div>
+  {stockState && (
+    <div className={`text-[10px] font-semibold mt-0.5 ${rowStockInvalid ? 'text-red-600' : rowNearLimit ? 'text-orange-700' : 'text-gray-500'}`}>
+      Dự kiến {formatStockValue(stockState.projectedStock)}{rowStockInvalid ? ` · ${NEGATIVE_STOCK_LIMIT_MESSAGE}` : rowNearLimit ? ` · ${negativeStockNearLimitLabel || `gần ngưỡng ${negativeStockLimitLabel}`}` : ''}
+    </div>
+  )}
+</td>}
+{editVisibleColumns.quantity && <td className="py-2 px-3 text-center">
+  <input type="number" min="1"
+    value={d.quantity}
+    onChange={e => updateDetail(idx, 'quantity', +e.target.value)}
+    className={`w-16 text-center border rounded px-1 py-1 text-sm ${rowStockInvalid ? 'bg-red-100 text-red-700 border-red-300' : rowNearLimit ? 'bg-orange-50 text-orange-700 border-orange-300' : ''}`} />
+</td>}
+{editVisibleColumns.unitPrice && <td className="py-2 px-3 text-right">
+  <input type="number" min="0"
+    value={d.unit_price}
+    onChange={e => updateDetail(idx, 'unit_price', +e.target.value)}
+    className="w-24 text-right border rounded px-2 py-1 text-sm" />
+</td>}
+{editVisibleColumns.discount && <td className="py-2 px-3 text-center">
+  <input type="number" min="0" max="100"
+    value={d.discount_percent}
+    onChange={e => updateDetail(idx, 'discount_percent', +e.target.value)}
+    className="w-14 text-center border rounded px-1 py-1 text-sm" />
+</td>}
+{editVisibleColumns.lineTotal && <td className="py-2 px-3 text-right font-semibold text-blue-700">
+  {formatVND(d.line_total)}
+</td>}
+<td className="py-2 px-3 text-center">
+  <button onClick={() => removeDetail(idx)} className="text-red-400 hover:text-red-600 p-1">
+    <Trash2 size={13} />
+  </button>
+</td>
                         </tr>
                         );
                       })}
                       {editDetails.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="text-center text-gray-400 py-8">
+                          <td colSpan={[editVisibleColumns.stt, editVisibleColumns.productName, editVisibleColumns.quantity, editVisibleColumns.unitPrice, editVisibleColumns.discount, editVisibleColumns.lineTotal].filter(Boolean).length + 1} className="text-center text-gray-400 py-8">
                             Chưa có sản phẩm nào
                           </td>
                         </tr>
@@ -2013,7 +2026,7 @@ export default function OrderList() {
               </button>
               {showEdit && !editProductsReady && (
                 <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                  {editProductsStateLabel || 'đang t?i dữ liệu s?n ph?m...'}
+                  {editProductsStateLabel || 'đang t?i dữ liệu sản phẩm...'}
                 </div>
               )}
               <button onClick={handleSaveEdit}
@@ -2038,7 +2051,7 @@ export default function OrderList() {
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input className="input-field pl-9 w-full text-sm"
-                  placeholder="T?m theo t?n, m? SKU..."
+                  placeholder="Tạm theo tồn, m? SKU..."
                   value={editProductSearch}
                   onChange={e => setEditProductSearch(e.target.value)} autoFocus />
               </div>
@@ -2161,7 +2174,7 @@ export default function OrderList() {
                 <ul className="list-disc pl-5 space-y-1">
                   <li><span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">⏳ Chờ xác nhận</span> - Đơn mới tạo, chờ duyệt</li>
                   <li><span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">🔄 Đang xử lý</span> - Đang chuẩn bị hàng</li>
-                  <li><span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">? Ho?n th?nh</span> - D? thanh to?n v? giao h?ng</li>
+                  <li><span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">? Ho?n th?nh</span> - D? thanh toán v? giao h?ng</li>
                   <li><span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">? D? h?y</span> - Don b? h?y</li>
                   <li><span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">📡 Offline</span> - Đơn tạo khi server offline</li>
                 </ul>
@@ -2170,7 +2183,7 @@ export default function OrderList() {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">🔍 Lọc & Tìm kiếm</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>T?m ki?m theo m? don (DH XXXXX) ho?c t?n kh?ch h?ng</li>
+                  <li>Tìm kiếm theo m? don (DH XXXXX) ho?c t?n khách hàng</li>
                   <li>Lọc theo trạng thái từ dropdown</li>
                   <li>Kết hợp cả hai để tìm nhanh</li>
                 </ul>
@@ -2189,7 +2202,7 @@ export default function OrderList() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">✅ Xác nhận thanh toán</h3>
-                <p>Nh?n icon <CheckSquare size={14} className="inline" /> d? d?nh d?u don d? thanh to?n. Tr?ng th?i s? chuy?n sang "Ho?n th?nh" v? hi?n th? phuong th?c thanh to?n.</p>
+                <p>Nhân icon <CheckSquare size={14} className="inline" /> d? d?nh d?u don d? thanh toán. Trạng thái s? chuy?n sang "Ho?n th?nh" v? hiển thị phuong th?c thanh toán.</p>
               </div>
 
               <div>

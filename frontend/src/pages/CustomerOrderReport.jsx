@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 const STATUS_LABELS = {
-  pending: 'Ch? x?c nh?n',
+  pending: 'Ch? xác nhận',
   processing: 'đang xử lý',
   completed: 'Ho?n th?nh',
   cancelled: '?? h?y',
@@ -90,7 +90,7 @@ function normalizeCustomerSearch(value) {
 }
 
 function customerDisplayName(customer = {}) {
-  return [customer.name, customer.phone].filter(Boolean).join(' - ') || 'Kh?ch h?ng';
+  return [customer.name, customer.phone].filter(Boolean).join(' - ') || 'Khách hàng';
 }
 
 function InvoiceDetailModal({ invoice, onClose }) {
@@ -118,7 +118,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
       pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
       pdf.save(`HoaDon_${invoice.invoice_code || invoice.id}.pdf`);
     } catch (err) {
-      console.error('L?i khi t?i PDF:', err);
+      console.error('Lỗi khi t?i PDF:', err);
     } finally {
       setDownloading(false);
     }
@@ -134,7 +134,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-5 py-4">
           <div>
-            <h3 className="text-lg font-bold text-gray-950">Chi ti?t don h?ng</h3>
+            <h3 className="text-lg font-bold text-gray-950">Chi tiết đơn hàng</h3>
             <p className="text-xs text-gray-500">M? don: {invoice.invoice_code}</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
@@ -155,13 +155,13 @@ function InvoiceDetailModal({ invoice, onClose }) {
             {/* Invoice Meta */}
             <div className="grid grid-cols-2 gap-y-2 gap-x-4 py-4 text-xs border-b border-dashed border-gray-200">
               <div>
-                <span className="text-gray-400">Kh?ch h?ng:</span>{' '}
-                <span className="font-semibold text-gray-900">{invoice.customer_name || 'Kh?ch l?'}</span>
+                <span className="text-gray-400">Khách hàng:</span>{' '}
+                <span className="font-semibold text-gray-900">{invoice.customer_name || 'Khách lẻ'}</span>
               </div>
               <div>
                 <span className="text-gray-400">Phuong th?c:</span>{' '}
                 <span className="font-semibold text-gray-950">
-                  {invoice.payment_method === 'cash' ? 'Ti?n m?t' : invoice.payment_method === 'bank' ? 'Chuy?n kho?n' : 'C?ng n?'}
+                  {invoice.payment_method === 'cash' ? 'Tiền một' : invoice.payment_method === 'bank' ? 'Chuy?n kho?n' : 'Cùng n?'}
                 </span>
               </div>
               {invoice.customer_phone && (
@@ -171,7 +171,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
                 </div>
               )}
               <div>
-                <span className="text-gray-400">Tr?ng th?i:</span>{' '}
+                <span className="text-gray-400">Trạng thái:</span>{' '}
                 <span className={`font-semibold ${invoice.status === 'completed' ? 'text-emerald-600' : invoice.status === 'cancelled' ? 'text-red-500' : 'text-amber-600'}`}>
                   {statusLabel(invoice.status)}
                 </span>
@@ -189,10 +189,10 @@ function InvoiceDetailModal({ invoice, onClose }) {
               <table className="w-full text-xs text-left">
                 <thead>
                   <tr className="border-b border-gray-200 text-gray-500 font-semibold uppercase tracking-wider">
-                    <th className="py-2">S?n ph?m</th>
+                    <th className="py-2">Sản phẩm</th>
                     <th className="py-2 text-right">SL</th>
                     <th className="py-2 text-right">?on gi?</th>
-                    <th className="py-2 text-right">Th?nh ti?n</th>
+                    <th className="py-2 text-right">Thành ti?n</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -214,7 +214,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
             {/* Invoice Footer Summary */}
             <div className="pt-4 border-t border-dashed border-gray-200 text-xs space-y-1.5 ml-auto w-2/3">
               <div className="flex justify-between text-gray-500">
-                <span>T?m t?nh:</span>
+                <span>Tạm t?nh:</span>
                 <span className="font-semibold text-gray-800">{formatVND(invoice.subtotal)}</span>
               </div>
               {invoice.discount_amount > 0 && (
@@ -236,7 +236,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
                 </div>
               )}
               <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-100 pt-1.5">
-                <span>T?ng c?ng:</span>
+                <span>Tổng c?ng:</span>
                 <span className="text-blue-700">{formatVND(invoice.total)}</span>
               </div>
             </div>
@@ -247,11 +247,11 @@ function InvoiceDetailModal({ invoice, onClose }) {
         <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-5 py-4">
           <button type="button" onClick={handleDownload} disabled={downloading} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
             {downloading ? <Loader size={15} className="animate-spin" /> : <Download size={15} />}
-            T?i PDF
+            Tải PDF
           </button>
           <button type="button" onClick={handlePrint} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
             <Printer size={15} />
-            In h?a don
+            In hóa đơn
           </button>
           <button type="button" onClick={onClose} className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800">
             ??ng
@@ -284,10 +284,10 @@ export default function CustomerOrderReport() {
     setLoadingCustomers(true);
     setError('');
     try {
-      const data = await apiJson(`/customers?q=${encodeURIComponent(searchQuery)}`, {}, 'Kh?ng t?i du?c danh s?ch kh?ch h?ng');
+      const data = await apiJson(`/customers?q=${encodeURIComponent(searchQuery)}`, {}, 'Không tải được danh sách khách hàng');
       setCustomers(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message || 'Kh?ng t?i du?c danh s?ch kh?ch h?ng');
+      setError(err.message || 'Không tải được danh sách khách hàng');
     } finally {
       setLoadingCustomers(false);
     }
@@ -364,15 +364,15 @@ export default function CustomerOrderReport() {
 
   const fetchReport = useCallback(async () => {
     if (!customerId) {
-      setError('Vui l?ng ch?n kh?ch h?ng d? xem báo cáo.');
+      setError('Vui lòng chọn khách hàng d? xem báo cáo.');
       return;
     }
     if (!from || !to) {
-      setError('Vui l?ng ch?n d?y d? ng?y b?t d?u v? ng?y kết thúc.');
+      setError('Vui lòng chọn đầy đủ ngày bắt đầu v? ngày kết thúc.');
       return;
     }
     if (from > to) {
-      setError('Ng?y b?t d?u kh?ng du?c l?n hon ng?y kết thúc.');
+      setError('Ngày bắt đầu không được l?n hon ngày kết thúc.');
       return;
     }
 
@@ -380,11 +380,11 @@ export default function CustomerOrderReport() {
     setError('');
     try {
       const params = new URLSearchParams({ customer_id: customerId, from, to });
-      const data = await apiJson(`/invoices/reports/customer-orders?${params.toString()}`, {}, 'Kh?ng l?p du?c báo cáo');
+      const data = await apiJson(`/invoices/reports/customer-orders?${params.toString()}`, {}, 'Không l?p được báo cáo');
       setReport(data);
     } catch (err) {
       setReport(null);
-      setError(err.message || 'Kh?ng l?p du?c báo cáo');
+      setError(err.message || 'Không l?p được báo cáo');
     } finally {
       setLoadingReport(false);
     }
@@ -439,7 +439,7 @@ export default function CustomerOrderReport() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Kh?ng t?i du?c báo cáo Excel.');
+        throw new Error(errorData.error || 'Không tải được báo cáo Excel.');
       }
 
       const blob = await response.blob();
@@ -462,7 +462,7 @@ export default function CustomerOrderReport() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err.message || 'L?i khi t?i file báo cáo Excel');
+      setError(err.message || 'Lỗi khi t?i file báo cáo Excel');
     } finally {
       setLoadingReport(false);
     }
@@ -488,17 +488,17 @@ export default function CustomerOrderReport() {
         <p style="margin: 5px 0 0; font-size: 11px; color: #718096;">M?: ${invoice.invoice_code} ? ${formatDateTime(invoice.created_at)}</p>
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 15px 0; font-size: 11px; border-bottom: 1px dashed #e2e8f0; color: #2d3748;">
-        <div><strong>Kh?ch h?ng:</strong> ${invoice.customer_name || 'Kh?ch l?'}</div>
-        <div><strong>Phuong th?c:</strong> ${invoice.payment_method === 'cash' ? 'Ti?n m?t' : invoice.payment_method === 'bank' ? 'Chuy?n kho?n' : 'C?ng n?'}</div>
-        <div><strong>Tr?ng th?i:</strong> ${statusLabel(invoice.status)}</div>
+        <div><strong>Khách hàng:</strong> ${invoice.customer_name || 'Khách lẻ'}</div>
+        <div><strong>Phuong th?c:</strong> ${invoice.payment_method === 'cash' ? 'Tiền một' : invoice.payment_method === 'bank' ? 'Chuy?n kho?n' : 'Cùng n?'}</div>
+        <div><strong>Trạng thái:</strong> ${statusLabel(invoice.status)}</div>
       </div>
       <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 15px;">
         <thead>
           <tr style="border-bottom: 1px solid #cbd5e0; text-align: left; color: #718096;">
-            <th style="padding: 6px 0;">S?n ph?m</th>
+            <th style="padding: 6px 0;">Sản phẩm</th>
             <th style="padding: 6px 0; text-align: right;">SL</th>
             <th style="padding: 6px 0; text-align: right;">?on gi?</th>
-            <th style="padding: 6px 0; text-align: right;">Th?nh ti?n</th>
+            <th style="padding: 6px 0; text-align: right;">Thành ti?n</th>
           </tr>
         </thead>
         <tbody>
@@ -513,10 +513,10 @@ export default function CustomerOrderReport() {
         </tbody>
       </table>
       <div style="margin-top: 15px; border-top: 1px dashed #e2e8f0; padding-top: 10px; font-size: 11px; margin-left: auto; width: 60%; text-align: right; color: #4a5568;">
-        <div style="margin-bottom: 4px;">T?m t?nh: <strong>${formatVND(invoice.subtotal)}</strong></div>
+        <div style="margin-bottom: 4px;">Tạm t?nh: <strong>${formatVND(invoice.subtotal)}</strong></div>
         ${invoice.discount_amount > 0 ? `<div style="margin-bottom: 4px; color: #e53e3e;">Gi?m gi?: -${formatVND(invoice.discount_amount)}</div>` : ''}
         ${invoice.vat_amount > 0 ? `<div style="margin-bottom: 4px;">VAT: +${formatVND(invoice.vat_amount)}</div>` : ''}
-        <div style="font-size: 13px; font-weight: bold; color: #2b6cb0; margin-top: 6px;">T?ng c?ng: ${formatVND(invoice.total)}</div>
+        <div style="font-size: 13px; font-weight: bold; color: #2b6cb0; margin-top: 6px;">Tổng c?ng: ${formatVND(invoice.total)}</div>
       </div>
     `;
     
@@ -539,7 +539,7 @@ export default function CustomerOrderReport() {
       pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
       pdf.save(`HoaDon_${invoice.invoice_code || invoice.id}.pdf`);
     } catch (err) {
-      console.error('Kh?ng th? xu?t PDF:', err);
+      console.error('Không th? xu?t PDF:', err);
     } finally {
       document.body.removeChild(tempDiv);
     }
@@ -557,11 +557,11 @@ export default function CustomerOrderReport() {
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-[0.25em] text-blue-200/80">Customer Orders Report</div>
-                  <h1 className="text-2xl font-bold">B?o c?o don h?ng theo kh?ch h?ng</h1>
+                  <h1 className="text-2xl font-bold">Báo cáo đơn hàng theo khách hàng</h1>
                 </div>
               </div>
               <p className="text-sm text-blue-100/80 max-w-3xl">
-                Ch?n kh?ch h?ng v? kho?ng ng?y d? xem d?y d? h?a don b?n h?ng trong k?. Kho?ng ng?y du?c t?nh t? 00:00 ng?y b?t d?u d?n 23:59:59 ng?y kết thúc theo ng?y local.
+                Chọn khách hàng v? kho?ng ngày d? xem đầy đủ hóa đơn b?n h?ng trong k?. Kho?ng ngày được t?nh t? 00:00 ngày bắt đầu d?n 23:59:59 ngày kết thúc theo ngày local.
               </p>
             </div>
 
@@ -570,7 +570,7 @@ export default function CustomerOrderReport() {
               disabled={!canExport}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/60"
             >
-              <Download size={16} /> Xu?t Excel
+              <Download size={16} /> Xuất Excel
             </button>
           </div>
         </div>
@@ -578,7 +578,7 @@ export default function CustomerOrderReport() {
         <div className="p-5 bg-gray-50 border-t border-white/10 rounded-b-2xl">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(240px,1fr)_180px_180px_auto]">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-500">Kh?ch h?ng</label>
+              <label className="mb-1 block text-xs font-semibold text-gray-500">Khách hàng</label>
               <div ref={customerSearchRef} className="relative">
                 <div className="flex min-w-0 gap-2">
                   <div className="relative min-w-0 flex-1">
@@ -601,7 +601,7 @@ export default function CustomerOrderReport() {
                       }}
                       onFocus={handleInputFocus}
                       onClick={handleInputFocus}
-                      placeholder={loadingCustomers ? 'đang t?i kh?ch h?ng...' : 'T?m t?n, S?T, email, m? KH...'}
+                      placeholder={loadingCustomers ? 'đang t?i khách hàng...' : 'Tạm t?n, S?T, email, m? KH...'}
                     />
                     {customerSearch && (
                       <button
@@ -623,7 +623,7 @@ export default function CustomerOrderReport() {
                 {showCustomerResults && (
                   <div className="absolute right-0 left-0 z-30 mt-2 max-h-80 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-2xl">
                     <div className="border-b border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                      Danh s?ch g?i ? (A-Z)
+                      Danh sách g?i ? (A-Z)
                     </div>
                     {loadingCustomers && customers.length === 0 ? (
                       <div className="px-3 py-3 text-xs text-gray-400 flex items-center gap-2">
@@ -638,18 +638,18 @@ export default function CustomerOrderReport() {
                           className={`block w-full px-3 py-2 text-left transition hover:bg-blue-50 ${Number(customer.id) === Number(customerId) ? 'bg-blue-50' : 'bg-white'}`}
                         >
                           <div className="flex items-center justify-between">
-                            <div className="truncate text-sm font-semibold text-gray-800">{customer.name || 'Kh?ch h?ng'}</div>
+                            <div className="truncate text-sm font-semibold text-gray-800">{customer.name || 'Khách hàng'}</div>
                             <div className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full whitespace-nowrap">
                               {customer.invoice_count || 0} don
                             </div>
                           </div>
                           <div className="mt-0.5 truncate text-[11px] text-gray-500">
-                            {[customer.customer_code ? `M?: ${customer.customer_code}` : '', customer.phone, customer.email].filter(Boolean).join(' ? ') || 'Chua c? th?ng tin li?n h?'}
+                            {[customer.customer_code ? `M?: ${customer.customer_code}` : '', customer.phone, customer.email].filter(Boolean).join(' ? ') || 'Chua c? thông tin li?n h?'}
                           </div>
                         </button>
                       ))
                     ) : (
-                      <div className="px-3 py-3 text-sm text-gray-400">Kh?ng t?m th?y kh?ch h?ng ph? h?p</div>
+                      <div className="px-3 py-3 text-sm text-gray-400">Không t?m th?y khách hàng phù hợp</div>
                     )}
                   </div>
                 )}
@@ -657,7 +657,7 @@ export default function CustomerOrderReport() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-500">T? ng?y</label>
+              <label className="mb-1 block text-xs font-semibold text-gray-500">T? ngày</label>
               <div className="relative">
                 <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="date" className="input-field w-full pl-9" value={from} onChange={e => setFrom(e.target.value)} />
@@ -665,7 +665,7 @@ export default function CustomerOrderReport() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-500">??n ng?y</label>
+              <label className="mb-1 block text-xs font-semibold text-gray-500">??n ngày</label>
               <div className="relative">
                 <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="date" className="input-field w-full pl-9" value={to} onChange={e => setTo(e.target.value)} />
@@ -692,7 +692,7 @@ export default function CustomerOrderReport() {
                   setTo(defaultRange.to);
                 }}
                 className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-500 hover:bg-gray-100"
-                title="??t l?i b? l?c"
+                title="??t lỗi bộ lọc"
               >
                 <RefreshCw size={16} />
               </button>
@@ -710,24 +710,24 @@ export default function CustomerOrderReport() {
       {selectedCustomer && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-4 shadow-sm">
           <div>
-            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Kh?ch h?ng</span>
+            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Khách hàng</span>
             <span className="mt-1 block font-bold text-gray-900">{selectedCustomer.name}</span>
             <span className="mt-0.5 block text-xs text-gray-500">{[selectedCustomer.phone, selectedCustomer.email].filter(Boolean).join(' ? ') || 'Chua c? S?T/Email'}</span>
           </div>
           <div>
             <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">M? / Nh?m kh?ch</span>
             <span className="mt-1 block font-bold text-gray-900">{selectedCustomer.customer_code || '?'}</span>
-            <span className="mt-0.5 block text-xs text-gray-500">{selectedCustomer.customer_type_name || 'Kh?ch l?'}</span>
+            <span className="mt-0.5 block text-xs text-gray-500">{selectedCustomer.customer_type_name || 'Khách lẻ'}</span>
           </div>
           <div>
-            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Ng?y tham gia</span>
+            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Ngày tham gia</span>
             <span className="mt-1 block font-bold text-gray-900">{formatDateOnly(selectedCustomer.created_at)}</span>
-            <span className="mt-0.5 block text-xs text-gray-500">L?ch s? hệ thống</span>
+            <span className="mt-0.5 block text-xs text-gray-500">Lịch sử hệ thống</span>
           </div>
           <div>
-            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Doanh thu tr?n d?i</span>
+            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Doanh thu tr?n dài</span>
             <span className="mt-1 block font-bold text-blue-700">{formatVND(selectedCustomer.total_revenue || 0)}</span>
-            <span className="mt-0.5 block text-xs text-emerald-600 font-semibold">{selectedCustomer.invoice_count || 0} don h?ng th?nh c?ng</span>
+            <span className="mt-0.5 block text-xs text-emerald-600 font-semibold">{selectedCustomer.invoice_count || 0} đơn hàng thành công</span>
           </div>
         </div>
       )}
@@ -737,7 +737,7 @@ export default function CustomerOrderReport() {
           <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3.5 text-blue-700 shadow-sm flex items-start gap-3">
             <div className="mt-0.5 rounded-lg bg-blue-100 p-2"><ShoppingCart size={17} /></div>
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">S? don h?ng</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">S? đơn hàng</div>
               <div className="mt-1 text-xl font-extrabold">{reportStats.totalInvoices}</div>
               <div className="text-[10px] opacity-75">Trong k? l?c</div>
             </div>
@@ -745,17 +745,17 @@ export default function CustomerOrderReport() {
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3.5 text-emerald-700 shadow-sm flex items-start gap-3">
             <div className="mt-0.5 rounded-lg bg-emerald-100 p-2"><DollarSign size={17} /></div>
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">T?ng ti?n mua</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">Tổng ti?n mua</div>
               <div className="mt-1 text-xl font-extrabold">{formatVND(reportStats.totalAmount)}</div>
-              <div className="text-[10px] opacity-75">Kh?ng t?nh don h?y</div>
+              <div className="text-[10px] opacity-75">Không t?nh don h?y</div>
             </div>
           </div>
           <div className="rounded-2xl border border-purple-100 bg-purple-50 px-4 py-3.5 text-purple-700 shadow-sm flex items-start gap-3">
             <div className="mt-0.5 rounded-lg bg-purple-100 p-2"><Package size={17} /></div>
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">S? s?n ph?m</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">S? sản phẩm</div>
               <div className="mt-1 text-xl font-extrabold">{reportStats.totalProducts}</div>
-              <div className="text-[10px] opacity-75">T?ng lu?ng h?ng nh?p</div>
+              <div className="text-[10px] opacity-75">Tổng lu?ng h?ng nh?p</div>
             </div>
           </div>
           <div className="rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3.5 text-orange-700 shadow-sm flex items-start gap-3">
@@ -769,9 +769,9 @@ export default function CustomerOrderReport() {
           <div className="rounded-2xl border border-pink-100 bg-pink-50 px-4 py-3.5 text-pink-750 shadow-sm flex items-start gap-3 col-span-2 sm:col-span-1">
             <div className="mt-0.5 rounded-lg bg-pink-100 p-2"><Clock size={17} className="text-pink-600" /></div>
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85 text-pink-700">Ng?y mua cu?i</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85 text-pink-700">Ngày mua cu?i</div>
               <div className="mt-1 text-base font-extrabold text-pink-700">{reportStats.latestDate ? formatDateTime(reportStats.latestDate) : '?'}</div>
-              <div className="text-[10px] text-pink-600 opacity-75">Th?i gian thanh to?n</div>
+              <div className="text-[10px] text-pink-600 opacity-75">Thời gian thanh toán</div>
             </div>
           </div>
         </div>
@@ -780,12 +780,12 @@ export default function CustomerOrderReport() {
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="flex flex-col gap-2 border-b border-gray-100 px-5 py-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-bold text-gray-800">Danh s?ch h?a don mua h?ng</h2>
-            <p className="text-xs text-gray-500">Hi?n th? chi ti?t s?n ph?m, don gi?, s? lu?ng v? t?ng ti?n c?a t?ng h?a don.</p>
+            <h2 className="font-bold text-gray-800">Danh sách hóa đơn mua h?ng</h2>
+            <p className="text-xs text-gray-500">Hiện th? chi tiết sản phẩm, don gi?, số lượng v? t?ng ti?n của t?ng hóa đơn.</p>
           </div>
           {report && (
             <div className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
-              {summary.total_invoices || 0} h?a don ? {formatVND(summary.total_amount)}
+              {summary.total_invoices || 0} hóa đơn ? {formatVND(summary.total_amount)}
             </div>
           )}
         </div>
@@ -795,10 +795,10 @@ export default function CustomerOrderReport() {
             <thead>
               <tr className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-3 text-left w-32">M? don</th>
-                <th className="px-4 py-3 text-left w-44">Ng?y b?n</th>
-                <th className="px-4 py-3 text-left">S?n ph?m & chi ti?t</th>
-                <th className="px-4 py-3 text-right w-40">T?ng c?ng</th>
-                <th className="px-4 py-3 text-left w-36">Tr?ng th?i</th>
+                <th className="px-4 py-3 text-left w-44">Ngày b?n</th>
+                <th className="px-4 py-3 text-left">Sản phẩm & chi tiết</th>
+                <th className="px-4 py-3 text-right w-40">Tổng c?ng</th>
+                <th className="px-4 py-3 text-left w-36">Trạng thái</th>
                 <th className="px-4 py-3 text-center w-48 no-print">Thao t?c</th>
               </tr>
             </thead>
@@ -812,18 +812,18 @@ export default function CustomerOrderReport() {
                       {invoice.details && invoice.details.length > 0 ? (
                         invoice.details.map((detail, index) => (
                           <div key={index} className="flex flex-col text-xs bg-gray-50 rounded-lg p-2 border border-gray-100/70">
-                            <div className="font-semibold text-gray-900">{detail.product_name || 'S?n ph?m'}</div>
+                            <div className="font-semibold text-gray-900">{detail.product_name || 'Sản phẩm'}</div>
                             <div className="mt-0.5 text-gray-500 flex flex-wrap items-center gap-1.5">
-                              <span>S? lu?ng: <strong className="text-gray-800">{detail.quantity}</strong></span>
+                              <span>Số lượng: <strong className="text-gray-800">{detail.quantity}</strong></span>
                               <span>?</span>
                               <span>?on gi?: <strong className="text-gray-800">{formatVND(detail.unit_price)}</strong></span>
                               <span>?</span>
-                              <span>Th?nh ti?n: <strong className="text-blue-600 font-semibold">{formatVND(detail.line_total)}</strong></span>
+                              <span>Thành ti?n: <strong className="text-blue-600 font-semibold">{formatVND(detail.line_total)}</strong></span>
                             </div>
                           </div>
                         ))
                       ) : (
-                        <div className="text-xs text-gray-400 italic">Kh?ng c? chi ti?t h?ng h?a</div>
+                        <div className="text-xs text-gray-400 italic">Không có chi tiết h?ng h?a</div>
                       )}
                     </div>
                   </td>
@@ -845,7 +845,7 @@ export default function CustomerOrderReport() {
                         type="button"
                         onClick={() => setSelectedInvoice(invoice)}
                         className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        title="Xem chi ti?t"
+                        title="Xem chi tiết"
                       >
                         <Eye size={12} /> Xem
                       </button>
@@ -861,7 +861,7 @@ export default function CustomerOrderReport() {
                         type="button"
                         onClick={() => handleDownloadRowPdf(invoice)}
                         className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        title="T?i PDF"
+                        title="Tải PDF"
                       >
                         <Download size={12} /> PDF
                       </button>
@@ -871,7 +871,7 @@ export default function CustomerOrderReport() {
               ))}
               {invoices.length > 0 && (
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                  <td className="px-4 py-3" colSpan={3}>T?ng c?ng t?t c? c?c don trong k?</td>
+                  <td className="px-4 py-3" colSpan={3}>Tổng c?ng tất cả c?c don trong k?</td>
                   <td className="px-4 py-3 text-right text-blue-700 text-base font-extrabold">{formatVND(summary.total_amount)}</td>
                   <td className="px-4 py-3" colSpan={2}></td>
                 </tr>
@@ -883,19 +883,19 @@ export default function CustomerOrderReport() {
         {loadingReport ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
             <Loader size={32} className="animate-spin text-blue-400" />
-            <div className="font-semibold text-gray-600">đang th?ng k? dữ liệu don h?ng...</div>
+            <div className="font-semibold text-gray-600">đang th?ng k? dữ liệu đơn hàng...</div>
           </div>
         ) : report && invoices.length === 0 ? (
           <div className="py-16 text-center">
             <div className="mb-3 text-5xl opacity-20">??</div>
-            <div className="font-semibold text-gray-600">Kh?ng t?m th?y don h?ng trong kho?ng th?i gian d? ch?n</div>
-            <div className="mt-1 text-sm text-gray-400">H?y di?u ch?nh l?i kho?ng th?i gian l?c ho?c ch?n kh?ch h?ng kh?c.</div>
+            <div className="font-semibold text-gray-600">Không t?m th?y đơn hàng trong kho?ng thời gian đã chọn</div>
+            <div className="mt-1 text-sm text-gray-400">Hủy di?u ch?nh lỗi kho?ng thời gian l?c ho?c chọn khách hàng kh?c.</div>
           </div>
         ) : !report ? (
           <div className="py-16 text-center">
             <div className="mb-3 text-5xl opacity-20">??</div>
             <div className="font-semibold text-gray-600">Chua c? dữ liệu báo cáo</div>
-            <div className="mt-1 text-sm text-gray-400 font-medium">Nh?p th?ng tin kh?ch h?ng v? ch?n kho?ng th?i gian d? t?o báo cáo chi ti?t.</div>
+            <div className="mt-1 text-sm text-gray-400 font-medium">Nhập thông tin khách hàng v? chọn kho?ng thời gian d? tạo báo cáo chi tiết.</div>
           </div>
         ) : null}
       </div>
@@ -911,13 +911,13 @@ export default function CustomerOrderReport() {
         <HelpModal
           show={showHelp}
           onClose={() => setShowHelp(false)}
-          title="Hu?ng d?n báo cáo theo don h?ng"
+          title="Hướng dẫn báo cáo theo đơn hàng"
           content={[
-            'Bu?c 1: Ch?n kh?ch h?ng v? kho?ng th?i gian c?n xem lịch sử mua h?ng.',
-            'Bu?c 2: Nh?n t?o ho?c l?m m?i báo cáo d? t?i d?ng dữ liệu don h?ng theo b? l?c.',
-            'Bu?c 3: Xem ph?n t?ng h?p d? n?m s? don, doanh thu, s?n ph?m v? th?i di?m mua g?n nh?t.',
-            'Bu?c 4: D?ng n?t Xem d? m? chi ti?t t?ng don ngay trong popup m? kh?ng r?i m?n h?nh.',
-            'Bu?c 5: C? th? in ho?c t?i PDF t?ng don tr?c ti?p t? b?ng kết quả khi c?n d?i chi?u.',
+            'Bu?c 1: Chọn khách hàng v? kho?ng thời gian c?n xem lịch sử mua h?ng.',
+            'Bu?c 2: Nhân tạo ho?c l?m mới báo cáo đã tải d?ng dữ liệu đơn hàng theo bộ lọc.',
+            'Bu?c 3: Xem ph?n tổng hợp d? n?m s? don, doanh thu, sản phẩm v? th?i di?m mua g?n nh?t.',
+            'Bu?c 4: Dùng n?t Xem d? m? chi tiết t?ng don ngay trong popup m? không r?i m?n h?nh.',
+            'Bu?c 5: C? th? in ho?c t?i PDF t?ng don tr?c ti?p t? b?ng kết quả khi c?n dài chi?u.',
           ]}
         />
       )}
