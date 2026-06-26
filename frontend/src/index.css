@@ -9,7 +9,7 @@
     min-width: 320px;
     overflow-x: hidden;
     /* Thêm font hỗ trợ tiếng Việt đầy đủ */
-    font-family: 'Segoe UI', 'Roboto', 'Noto Sans', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Inter', 'Segoe UI', 'Roboto', 'Noto Sans', Arial, Tahoma, Geneva, Verdana, sans-serif; /* PHẦN 10.3: font tiếng Việt */
     -webkit-tap-highlight-color: transparent;
     background: #f3f4f6;
   }

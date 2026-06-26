@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+﻿const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('path');
 const net = require('net');
 const http = require('http');
@@ -7,6 +7,7 @@ const { spawn } = require('child_process');
 const { randomUUID } = require('crypto');
 const { createUpdateManager } = require('./updater');
 const { upgradeShortcuts } = require('./shortcutManager');
+const electronLogger = require('./electronLogger'); // PHẦN 13.3: log electron vào logs/electron.log
 
 const DEFAULT_BACKEND_PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || process.env.PHANMEM_PORT || 7000);
 const BACKEND_HOST = String(process.env.KHA_BACKEND_HOST || process.env.PHANMEM_HOST || process.env.HOST || '127.0.0.1').trim() || '127.0.0.1';
@@ -822,6 +823,11 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+// PHẦN 13: log lỗi electron main process, không crash trắng màn đỏ
+process.on('unhandledRejection', (reason) => { electronLogger.error('unhandledRejection', { message: reason && reason.message ? reason.message : String(reason) }); });
+process.on('uncaughtException', (err) => { electronLogger.error('uncaughtException', { message: err && err.message, stack: err && err.stack }); });
+electronLogger.info('Electron main logger initialized', { logFile: electronLogger.LOG_FILE });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

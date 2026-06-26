@@ -1,4 +1,4 @@
-/**
+﻿/**
  *  Bán hàng offline - by Van kha mmo
  *  Backend: Node.js + Express + JSON file database
  */
@@ -793,7 +793,20 @@ process.on('exit', () => {
   try { shutdownGuardian(); } catch (_) {}
 });
 
+// PHẦN 13: log lỗi runtime vào logs/app.log, không crash trắng màn đỏ
+const fileLogger = require('./utils/fileLogger');
+process.on('unhandledRejection', (reason, promise) => {
+  fileLogger.error('unhandledRejection', { message: reason && reason.message ? reason.message : String(reason), stack: reason && reason.stack });
+});
+process.on('uncaughtException', (err) => {
+  fileLogger.error('uncaughtException', { message: err && err.message, stack: err && err.stack });
+  // Không exit ngay để cho phép log; exit sau 1s để tránh treo
+  setTimeout(() => process.exit(1), 1000);
+});
+fileLogger.info('KHA Backend logger initialized', { logFile: fileLogger.LOG_FILE });
+
 startServer().catch(error => {
+  fileLogger.error('Lỗi khởi động không mong muốn', { message: error && error.message, stack: error && error.stack });
   console.error('[KHA SERVER] Lỗi khởi động không mong muốn:', error);
   process.exit(1);
 });
