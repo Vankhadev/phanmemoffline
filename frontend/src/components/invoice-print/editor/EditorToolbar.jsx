@@ -17,20 +17,9 @@
   ZoomOut,
 } from 'lucide-react';
 
-function statusText(status, lastSavedAt) {
-  if (status === 'saving') return 'Đang lưu...';
-  if (status === 'dirty') return 'Có thay đổi chưa lưu';
-  if (status === 'saved' && lastSavedAt) return `Đã lưu ${new Date(lastSavedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
-  if (status === 'conflict') return 'Xung đột revision';
-  if (status === 'error') return 'Lưu lỗi';
-  return 'Sẵn sàng';
-}
-
 export default function EditorToolbar({
   template,
   settings,
-  autosaveStatus,
-  lastSavedAt,
   busy = '',
   canManage = true,
   selectedId = '',
@@ -41,9 +30,8 @@ export default function EditorToolbar({
   onToggleRuler,
   onToggleSnap,
   onFitZoom,
-  onSaveDraft,
+  onSave,
   onPublish,
-  onDiscardDraft,
   onReload,
   onLogoChange,
   onRemoveLogo,
@@ -63,9 +51,7 @@ export default function EditorToolbar({
       <div className="invoice-editor-toolbar-main">
         <div>
           <h2>{template?.template_name || template?.name || 'Mẫu in hóa đơn'}</h2>
-          <p>Revision {template?.revision || settings?.publish?.revision || 1} - {template?.has_draft ? 'Có draft' : 'Published'}</p>
         </div>
-        <span className={`invoice-editor-save-status is-${autosaveStatus || 'idle'}`}>{statusText(autosaveStatus, lastSavedAt)}</span>
       </div>
 
       <div className="invoice-editor-toolbar-actions">
@@ -132,8 +118,8 @@ export default function EditorToolbar({
         </div>
 
         {/* PHẦN 9: chỉ giữ Lưu + Publish, bỏ "Lưu draft"/"Bỏ draft" */}
-        <button type="button" onClick={onSaveDraft} disabled={!canManage || busy === 'draft'}>
-          {busy === 'draft' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Lưu
+        <button type="button" onClick={onSave} disabled={!canManage || busy === 'save'}>
+          {busy === 'save' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} L?u
         </button>
         <button type="button" className="invoice-editor-toolbar-publish" onClick={onPublish} disabled={!canManage || !onPublish || busy === 'publish'}>
           {busy === 'publish' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} Publish

@@ -33,7 +33,8 @@ function snapshotsMatch(left, right) {
 }
 
 export default function useTemplateEditorState(initialTemplate = {}) {
-  const initial = useMemo(() => getActiveEditorDocument(initialTemplate, { preferDraft: true }), [initialTemplate]);
+  // M?c ??nh load b?n PUBLISHED (kh?ng ?u ti?n draft c?).
+  const initial = useMemo(() => getActiveEditorDocument(initialTemplate, { preferDraft: false }), [initialTemplate]);
   const [template, setTemplate] = useState(initialTemplate);
   const [document, setDocument] = useState(initial.document);
   const [settings, setSettings] = useState(initial.settings);
@@ -55,7 +56,8 @@ export default function useTemplateEditorState(initialTemplate = {}) {
 
   const setTemplateFromServer = useCallback((nextTemplate, options = {}) => {
     if (!nextTemplate) return;
-    const next = getActiveEditorDocument(nextTemplate, { preferDraft: options.preferDraft !== false });
+    // M?c ??nh ?u ti?n b?n published tr? khi caller y?u c?u draft.
+    const next = getActiveEditorDocument(nextTemplate, { preferDraft: options.preferDraft === true });
     setTemplate(nextTemplate);
     documentRef.current = next.document;
     settingsRef.current = next.settings;
