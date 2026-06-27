@@ -1,3 +1,28 @@
+## v2.3.4 - 2026-06-27
+
+### Sửa lỗi Electron production không khởi động được backend nội bộ (ECONNREFUSED 127.0.0.1:7000)
+
+Bản 2.3.4 kế thừa toàn bộ fix từ 2.3.3 (đã verify end-to-end trên bản cài thật) và phát hành làm bản stable mới:
+
+- Sửa lỗi Electron production không khởi động được backend nội bộ.
+- Sửa lỗi health check backend ECONNREFUSED 127.0.0.1:7000.
+- Đảm bảo backend được đóng gói đúng trong installer (sửa pattern loại trừ `!**/release/**` và `!**/tmp/**` quá rộng gây thiếu bluebird/tmp; thêm transitive deps exceljs/unzipper).
+- Đảm bảo app production mở lên tự start backend (sửa window-all-closed race).
+- Thêm log backend production tại `userData/logs/backend.log` (backendEntry, port, stdout, stderr, exit code) để dễ kiểm tra lỗi.
+- `resolveDBPath()`: KHA_DB_PATH (Electron production) có quyền cao nhất, không để config.json cũ override; bỏ qua deep scan + old-db migration khi envPath set để backend mở port nhanh.
+- Tăng timeout health check backend lên 30 giây.
+- Màn hình "Đang khởi động backend nội bộ..." thay vì trắng màn hình.
+- Kiểm tra `fs.existsSync(backendEntry)` trước khi spawn backend, báo rõ nếu thiếu.
+- Giữ auto-update tắt trong môi trường dev/localhost (không check/download/quitAndInstall; production chỉ check khi người dùng bấm "Kiểm tra cập nhật").
+- Giữ lại toàn bộ chức năng đã khôi phục: login, register, sản phẩm, đơn hàng, dịch vụ khác trong sửa đơn, bật/tắt cột sửa đơn, mẫu in hóa đơn kéo thả, bật/tắt thông tin sản phẩm trong mẫu in, báo cáo/thống kê.
+- Không reset database, không xóa dữ liệu.
+
+### Đã test trước khi release
+1. Frontend build: PASS
+2. Backend dev: port 7000 healthy, không EADDRINUSE, không crash — PASS
+3. Auto-update tắt trong dev/localhost — PASS
+4. Electron-builder đóng gói backend đúng — PASS
+5. Bản cài thật (win-unpacked): backend tự start port 7000, không ECONNREFUSED, login form "Bán Hàng Pos" hiện — PASS
 ## v2.3.3 - 2026-06-27
 
 ### Sửa lỗi nghiêm trọng: Electron production không khởi động được backend nội bộ (ECONNREFUSED 127.0.0.1:7000)
