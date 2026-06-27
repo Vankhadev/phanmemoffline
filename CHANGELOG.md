@@ -1,3 +1,15 @@
+## v2.3.2 - 2026-06-27
+
+- S?a l?i Register.jsx sai JSX closing tag (?? kh?i ph?c ? 2.3.1, gi? ?n ??nh).
+- Kh?i ph?c form login/register, c? toggle hi?n/?n m?t kh?u.
+- T?t auto-update trong m?i tr??ng dev/localhost (log `[AUTO_UPDATE] Disabled in development mode`).
+- S?a c? ch? backend port tr?nh EADDRINUSE (portManager t? ch?n 7000 -> 7001 -> ... -> 7100).
+- Frontend t? probe /api/health tr?n c?c port ?? nh?n ??ng backend ?ang ch?y.
+- S?a n?t mojibake ti?ng Vi?t c?n s?t trong src/main.js v? package.json (shortcutName).
+- Gi? l?i c?c ch?c n?ng ?? kh?i ph?c: s?n ph?m, ??n h?ng, d?ch v? kh?c, m?u in h?a ??n, b?o c?o.
+- formatCurrencyVND d?ng Intl.NumberFormat('vi-VN'), kh?ng d?ng parseFloat tr?c ti?p v?i ti?n Vi?t Nam.
+- C?i thi?n ki?m tra build tr??c khi ph?t h?nh (healthcheck 18/18 pass).
+
 ## v2.3.1 - 2026-06-27
 
 - Khôi phục form đăng nhập.
