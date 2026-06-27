@@ -23,6 +23,7 @@ import TaxReport from './pages/TaxReport';
 import InventoryReport from './pages/InventoryReport';
 import AccountingLogs from './pages/AccountingLogs';
 import HelpModal from './components/HelpModal';
+import ErrorBoundary from './components/ErrorBoundary'; // page-level error guard
 import {
   BadgeDollarSign,
   BarChart3,
@@ -850,26 +851,26 @@ function AppLayout({
             </button>
           </div>
           <Routes>
-            <Route path={HOME_ROUTE} element={<Home user={user} store={store} />} />
-            <Route path="/tao-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/tao-don-hang"><CreateOrder user={user} store={store} /></ProtectedRoute>} />
-            <Route path="/danh-sach-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/danh-sach-don-hang"><OrderList store={store} /></ProtectedRoute>} />
-            <Route path="/hoa-don-in/:idOrCode" element={<ProtectedRoute user={user} permissions={permissions} path="/hoa-don-in"><InvoicePrint /></ProtectedRoute>} />
-            <Route path="/kho-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/kho-hang"><KhoHang /></ProtectedRoute>} />
-            <Route path="/nha-cung-cap" element={<ProtectedRoute user={user} permissions={permissions} path="/nha-cung-cap"><NhaCungCap /></ProtectedRoute>} />
-            <Route path="/nhap-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/nhap-hang"><Nhaphang store={store} /></ProtectedRoute>} />
-            <Route path="/san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/san-pham"><Products store={store} /></ProtectedRoute>} />
-            <Route path="/khach-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/khach-hang"><Customers /></ProtectedRoute>} />
-            <Route path="/thong-ke" element={<ProtectedRoute user={user} permissions={permissions} path="/thong-ke"><Stats /></ProtectedRoute>} />
-            <Route path="/so-quy" element={<ProtectedRoute user={user} permissions={permissions} path="/so-quy"><CashBook /></ProtectedRoute>} />
-            <Route path="/ke-toan" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan"><AccountingDashboard user={user} /></ProtectedRoute>} />
-            <Route path="/ke-toan/bao-cao-thue" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-thue"><TaxReport /></ProtectedRoute>} />
-            <Route path="/ke-toan/bao-cao-ton-kho" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-ton-kho"><InventoryReport /></ProtectedRoute>} />
-            <Route path="/ke-toan/nhat-ky" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/nhat-ky"><AccountingLogs /></ProtectedRoute>} />
-            <Route path="/bang-luong-nhan-vien" element={<ProtectedRoute user={user} permissions={permissions} path="/bang-luong-nhan-vien"><Payroll /></ProtectedRoute>} />
-            <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><CustomerOrderReport /></ProtectedRoute>} />
-            <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ProductReport /></ProtectedRoute>} />
+            <Route path={HOME_ROUTE} element={<ErrorBoundary><Home user={user} store={store} /></ErrorBoundary>} />
+            <Route path="/tao-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/tao-don-hang"><ErrorBoundary><CreateOrder user={user} store={store} /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/danh-sach-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/danh-sach-don-hang"><ErrorBoundary><OrderList store={store} /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/hoa-don-in/:idOrCode" element={<ProtectedRoute user={user} permissions={permissions} path="/hoa-don-in"><ErrorBoundary><InvoicePrint /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/kho-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/kho-hang"><ErrorBoundary><KhoHang /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/nha-cung-cap" element={<ProtectedRoute user={user} permissions={permissions} path="/nha-cung-cap"><ErrorBoundary><NhaCungCap /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/nhap-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/nhap-hang"><ErrorBoundary><Nhaphang store={store} /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/san-pham"><ErrorBoundary><Products store={store} /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/khach-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/khach-hang"><ErrorBoundary><Customers /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/thong-ke" element={<ProtectedRoute user={user} permissions={permissions} path="/thong-ke"><ErrorBoundary><Stats /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/so-quy" element={<ProtectedRoute user={user} permissions={permissions} path="/so-quy"><ErrorBoundary><CashBook /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/ke-toan" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan"><ErrorBoundary><AccountingDashboard user={user} /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/ke-toan/bao-cao-thue" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-thue"><ErrorBoundary><TaxReport /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/ke-toan/bao-cao-ton-kho" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-ton-kho"><ErrorBoundary><InventoryReport /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/ke-toan/nhat-ky" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/nhat-ky"><ErrorBoundary><AccountingLogs /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/bang-luong-nhan-vien" element={<ProtectedRoute user={user} permissions={permissions} path="/bang-luong-nhan-vien"><ErrorBoundary><Payroll /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><ErrorBoundary><CustomerOrderReport /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ErrorBoundary><ProductReport /></ErrorBoundary></ProtectedRoute>} />
 
-            <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><Settings store={store} onStoreChange={onStoreChange} permissions={permissions} user={user} /></ProtectedRoute>} />
+            <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><ErrorBoundary><Settings store={store} onStoreChange={onStoreChange} permissions={permissions} user={user} /></ErrorBoundary></ProtectedRoute>} />
             <Route path={LOGIN_REGISTER_ROUTE} element={<Navigate to={firstAccessibleRoute(user, permissions)} replace />} />
             {Object.entries(ROUTE_ALIASES).map(([from, to]) => (
               <Route key={from} path={from} element={<Navigate to={canAccess(to) ? to : firstAccessibleRoute(user, permissions)} replace />} />
