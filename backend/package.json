@@ -1,32 +1,32 @@
 {
-    "name":  "phanmienoffline-backend",
-    "version": "2.2.8",
-    "description": "Backend for Bán Hàng Pos",
-    "main":  "src/server.js",
-    "scripts":  {
-                    "start":  "node src/server.js",
-                    "dev":  "nodemon src/server.js",
-                    "reset-local-admin":  "node scripts/reset-local-admin.js",
-                    "init-print-templates-mysql":  "node scripts/init-print-templates-mysql.js",
-                    "test:repeat-sku-orders":  "node scripts/test-repeat-sku-orders.js"
-                },
-    "dependencies":  {
-                         "bcryptjs":  "^2.4.3",
-                         "cors":  "^2.8.5",
-                         "dayjs":  "^1.11.13",
-                         "dotenv":  "^16.4.5",
-                         "exceljs":  "^4.4.0",
-                         "express":  "^5.0.1",
-                         "express-rate-limit":  "^7.4.1",
-                         "helmet":  "^8.1.0",
-                         "jsonwebtoken":  "^9.0.2",
-                         "multer":  "^2.0.1",
-                         "mysql2":  "^3.22.4",
-                         "node-cron":  "^3.0.3",
-                         "nodemailer":  "^6.10.1",
-                         "uuid":  "^11.1.0"
-                     },
-    "devDependencies":  {
-                            "nodemon":  "^3.1.10"
-                        }
+  "name": "phanmienoffline-backend",
+  "version": "2.3.0",
+  "description": "Backend for Bán Hàng Pos",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "reset-local-admin": "node scripts/reset-local-admin.js",
+    "init-print-templates-mysql": "node scripts/init-print-templates-mysql.js",
+    "test:repeat-sku-orders": "node scripts/test-repeat-sku-orders.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "express": "^5.0.1",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.1",
+    "mysql2": "^3.22.4",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.10.1",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
 }
