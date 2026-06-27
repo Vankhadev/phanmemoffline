@@ -863,19 +863,39 @@ async function executeApiRequest(fetchImpl, url, requestInit) {
   }
 }
 
+// PHẦN 4.4: timeout mẻc đểnh cho mọi request API (tránh treo khi backend không phản hồi)
+const DEFAULT_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS) || 30000;
+
 export async function apiFetch(input, init = {}) {
   const fetchImpl = getFetchImplementation();
-  const [url, requestInit] = buildInterceptedRequest(input, init);
-  const response = await executeApiRequest(fetchImpl, url, requestInit);
-  if (response.status === 401 && shouldTreatAsExpiredSession(url, requestInit)) {
-    handleUnauthorizedResponse({ status: response.status, url });
-    throw new ApiError('Phiên đăng nhập d? hết hạn. Vui lòng đăng nhập lại.', {
-      status: response.status,
-      response,
-      isAuthError: true,
-    });
+  let signal = init && init.signal;
+  let timer = null;
+  if (!signal && typeof AbortController !== 'undefined' && DEFAULT_API_TIMEOUT_MS > 0) {
+    const controller = new AbortController();
+    signal = controller.signal;
+    timer = setTimeout(() => controller.abort(), DEFAULT_API_TIMEOUT_MS);
   }
-  return response;
+  const effectiveInit = signal ? { ...init, signal } : init;
+  const [url, requestInit] = buildInterceptedRequest(input, effectiveInit);
+  try {
+    const response = await executeApiRequest(fetchImpl, url, requestInit);
+    if (timer) clearTimeout(timer);
+    if (response.status === 401 && shouldTreatAsExpiredSession(url, requestInit)) {
+      handleUnauthorizedResponse({ status: response.status, url });
+      throw new ApiError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', {
+        status: response.status,
+        response,
+        isAuthError: true,
+      });
+    }
+    return response;
+  } catch (err) {
+    if (timer) clearTimeout(timer);
+    if (err && err.name === 'AbortError') {
+      throw new ApiError('Yêu cầu API quá thời gian (${DEFAULT_API_TIMEOUT_MS / 1000}s). Vui lòng kiểm tra backend và thử lại.', { timeout: true, cause: err });
+    }
+    throw err;
+  }
 }
 
 export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu API thất bại.') {
