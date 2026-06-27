@@ -699,7 +699,7 @@ export default function KhoHang() {
       ? 'Không thử lại danh sách ?m kho t? API. Dữ liệu fallback hiện không kh? d?ng.'
       : 'Không có sản phẩm ?m kho phù hợp v?i bộ lọc hiện tại.')
     : selectedCategory?.key !== 'all'
-      ? `Danh mục ?${selectedCategory.label}? chua c? sản phẩm phù hợp.`
+      ? `Danh mục ?${selectedCategory.label}? chưa c? sản phẩm phù hợp.`
       : 'Không có sản phẩm n?o phù hợp.';
 
   const negativeStockFilterSignature = useMemo(() => [

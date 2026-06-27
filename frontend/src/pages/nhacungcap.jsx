@@ -17,7 +17,7 @@ const toPaymentNumber = (value, fallback = 0) => {
 const normalizePaymentStatus = (status) => {
   const value = String(status || '').trim().toLowerCase();
   if (['paid', 'da_thanh_toan', 'd? thanh toán', 'da thanh toan'].includes(value)) return 'paid';
-  if (['unpaid', 'chua_thanh_toan', 'chua thanh toán', 'chua thanh toan'].includes(value)) return 'unpaid';
+  if (['unpaid', 'chưa_thanh_toan', 'chưa thanh toán', 'chưa thanh toan'].includes(value)) return 'unpaid';
   return '';
 };
 
@@ -719,7 +719,7 @@ export default function NhaCungCap() {
                   <li><strong>Loại hóa đơn:</strong> Chọn "C? hóa đơn di?n t?" n?u nh? cung cấp cung cấp hóa đơn GTGT, chọn "Không hóa đơn di?n t?" cho hóa đơn thu?ng</li>
                   <li><strong>MST:</strong> Nhập đầy đủ 10-13 s? d? d? tra c?u v? xu?t hóa đơn</li>
                   <li>Thông tin nh? cung cấp s? hiển thị trong trang Sản phẩm khi chọn nh? cung cấp cho sản phẩm mới</li>
-                  <li>Giá nhập sản phẩm c? th? kh?c nhau t?y theo nh? cung cấp - n?n thêm nhi?u nh? cung cấp d? c? nhi?u l?a chọn</li>
+                  <li>Giá nhập sản phẩm c? th? kh?c nhau t?y theo nh? cung cấp - n?n thêm nhi?u nh? cung cấp đã có nhi?u l?a chọn</li>
                 </ul>
               </div>
             </div>

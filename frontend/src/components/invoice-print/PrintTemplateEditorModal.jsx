@@ -342,7 +342,7 @@ export default function PrintTemplateEditorModal({
 
   const handlePublish = useCallback(async () => {
     if (!activeTemplate?.id) {
-      setNotice(buildNotice('error', 'M?u demo chua c? tr?n server. Hủy tạo mẫu in tr?n server trước khi publish.'));
+      setNotice(buildNotice('error', 'M?u demo chưa c? tr?n server. Hủy tạo mẫu in tr?n server trước khi publish.'));
       return;
     }
     setBusy('publish');

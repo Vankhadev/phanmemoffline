@@ -161,7 +161,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
               <div>
                 <span className="text-gray-400">Phuong th?c:</span>{' '}
                 <span className="font-semibold text-gray-950">
-                  {invoice.payment_method === 'cash' ? 'Tiền một' : invoice.payment_method === 'bank' ? 'Chuy?n kho?n' : 'Cùng n?'}
+                  {invoice.payment_method === 'cash' ? 'Tiền một' : invoice.payment_method === 'bank' ? 'Chuyển khoản' : 'Cùng n?'}
                 </span>
               </div>
               {invoice.customer_phone && (
@@ -489,7 +489,7 @@ export default function CustomerOrderReport() {
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 15px 0; font-size: 11px; border-bottom: 1px dashed #e2e8f0; color: #2d3748;">
         <div><strong>Khách hàng:</strong> ${invoice.customer_name || 'Khách lẻ'}</div>
-        <div><strong>Phuong th?c:</strong> ${invoice.payment_method === 'cash' ? 'Tiền một' : invoice.payment_method === 'bank' ? 'Chuy?n kho?n' : 'Cùng n?'}</div>
+        <div><strong>Phuong th?c:</strong> ${invoice.payment_method === 'cash' ? 'Tiền một' : invoice.payment_method === 'bank' ? 'Chuyển khoản' : 'Cùng n?'}</div>
         <div><strong>Trạng thái:</strong> ${statusLabel(invoice.status)}</div>
       </div>
       <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 15px;">

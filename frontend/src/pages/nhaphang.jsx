@@ -1037,7 +1037,7 @@ const Nhaphang = ({ store }) => {
     products.forEach((product, index) => {
       const productErrors = validateProduct(product);
       if (productErrors.length > 0) {
-        errors.push(`Sản phẩm #${index + 1} (${product.tenSP || product.maSP || 'chua r?'}): ${productErrors.join(', ')}`);
+        errors.push(`Sản phẩm #${index + 1} (${product.tenSP || product.maSP || 'chưa r?'}): ${productErrors.join(', ')}`);
       }
     });
 
@@ -1743,7 +1743,7 @@ const Nhaphang = ({ store }) => {
     if (isEditingExistingRow && duplicateIndex >= 0) {
       const duplicateName = products[duplicateIndex]?.tenSP || normalizedProduct.tenSP || normalizedProduct.maSP;
       setSuccess(null);
-      setError(`Sản phẩm ${duplicateName} d? c? ? d?ng #${duplicateIndex + 1}. Vui lòng sửa số lượng ? d?ng d? ho?c chọn sản phẩm kh?c.`);
+      setError(`Sản phẩm ${duplicateName} đã có ? d?ng #${duplicateIndex + 1}. Vui lòng sửa số lượng ? d?ng d? ho?c chọn sản phẩm kh?c.`);
       setTimeout(() => setError(null), 4000);
       return;
     }
@@ -2105,7 +2105,7 @@ const Nhaphang = ({ store }) => {
       ? `Cập nhật phiếu nhập ${nextImportCode || currentOrder.maDonHang || 'm? tự động'}? Hệ thống s? sửa d?ng phiếu hiện tại, không tạo phiếu/m? mới.`
       : status === 'received'
         ? 'Tạo v? nhập hàng? H?nh d?ng n?y s? cập nhật số lượng tồn kho.'
-        : 'Tạo đơn hàng (chua nh?p)? ?on h?ng sẽ được luu vào hệ thống.';
+        : 'Tạo đơn hàng (chưa nh?p)? ?on h?ng sẽ được luu vào hệ thống.';
     if (!window.confirm(confirmMessage)) return;
 
     setSaving(true);
@@ -2165,7 +2165,7 @@ const Nhaphang = ({ store }) => {
   // Exit/Reset
   const handleExit = () => {
     if (products.length > 0 || note || tags.length > 0) {
-      const confirmExit = window.confirm('Bản c? ch?c chọn mu?n tho?t? Dữ liệu chua luu s? b? một.');
+      const confirmExit = window.confirm('Bản c? ch?c chọn mu?n tho?t? Dữ liệu chưa luu s? b? một.');
       if (!confirmExit) return;
     }
     handleReset();
@@ -2173,7 +2173,7 @@ const Nhaphang = ({ store }) => {
 
   const handleOpenReturns = () => {
     setError(null);
-    setSuccess('Ch?c nang ho?n tr? h?ng chua được cấu hình tr?n giao di?n. Vui lòng kiểm tra lu?ng ho?n tr? hiện c? ho?c cấu hình route ho?n tr?.');
+    setSuccess('Ch?c nang ho?n tr? h?ng chưa được cấu hình tr?n giao di?n. Vui lòng kiểm tra lu?ng ho?n tr? hiện c? ho?c cấu hình route ho?n tr?.');
   };
 
   // Reset form
@@ -2271,8 +2271,8 @@ const Nhaphang = ({ store }) => {
 
     const confirmCancel = window.confirm(
       `Hủy đơn hàng ${order.maDonHang}?\n\n` +
-      'Nếu phiếu n?y đã nhập kho, hệ thống s? tự động trở lại d?ng số lượng d? c?ng v? ch? rollback một l?n.\n' +
-      'Nếu phiếu chua tổng nh?p kho, tồn kho s? không b? thay đổi.\n\n' +
+      'Nếu phiếu n?y đã nhập kho, hệ thống s? tự động trở lại d?ng số lượng đã cóng v? ch? rollback một l?n.\n' +
+      'Nếu phiếu chưa tổng nh?p kho, tồn kho s? không b? thay đổi.\n\n' +
       `L? do: ${reason || 'Không có'}\n\n` +
       'Bản c? ch?c chọn?'
     );
@@ -2406,7 +2406,7 @@ const Nhaphang = ({ store }) => {
       return;
     }
     if (hasUnsavedPaymentAffectingChanges) {
-      setError('Phiếu nhập dang c? thay đổi sản phẩm ho?c tổng ti?n chua luu. Vui lòng cập nhật phiếu trước khi thanh toán d? tr?nh sai c?ng n?.');
+      setError('Phiếu nhập dang c? thay đổi sản phẩm ho?c tổng ti?n chưa luu. Vui lòng cập nhật phiếu trước khi thanh toán d? tr?nh sai công nợ.');
       setTimeout(() => setError(null), 5000);
       return;
     }
@@ -2418,7 +2418,7 @@ const Nhaphang = ({ store }) => {
 
     const confirmPay = window.confirm(
       `Thanh toán phiếu nhập ${currentOrder?.maDonHang || editingImportKey}?\n\n` +
-      'Thao t?c n?y ch? cập nhật phiếu hiện tại sang d? thanh toán v? ghi nhân s? qu?/c?ng n? li?n quan, không tạo phiếu mới v? không thay đổi tồn kho.'
+      'Thao t?c n?y ch? cập nhật phiếu hiện tại sang d? thanh toán v? ghi nhân s? qu?/công nợ li?n quan, không tạo phiếu mới v? không thay đổi tồn kho.'
     );
     if (!confirmPay) return;
 
@@ -2545,7 +2545,7 @@ const Nhaphang = ({ store }) => {
             disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError || hasImportCodeError}
             className="sapo-btn"
           >
-            {isEditingOrder ? 'Cập nhật phiếu' : 'Tạo & chua nh?p'}
+            {isEditingOrder ? 'Cập nhật phiếu' : 'Tạo & chưa nh?p'}
           </button>
           <button
             onClick={handleCreateAndReceive}
@@ -2663,7 +2663,7 @@ const Nhaphang = ({ store }) => {
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-gray-900">{selectedSupplier.tenNCC}</div>
                         <div className="mt-1 text-xs text-gray-600">M?: {selectedSupplier.maNCC || 'N/A'}</div>
-                        <div className="mt-0.5 truncate text-xs text-gray-600">{selectedSupplier.diaChi || 'Chua c? d?a ch?'}</div>
+                        <div className="mt-0.5 truncate text-xs text-gray-600">{selectedSupplier.diaChi || 'Chua c? địa chỉ'}</div>
                       </div>
                       <button
                         type="button"
@@ -2926,7 +2926,7 @@ const Nhaphang = ({ store }) => {
                       <td colSpan="10" className="px-4 py-16 text-center text-sm text-gray-400">
                         <div className="sticky left-0 mx-auto flex min-h-[180px] w-[560px] max-w-[calc(100vw-4rem)] flex-col items-center justify-center">
                           <Package className="mb-3 h-12 w-12 text-gray-200" />
-                          <div className="mb-4">?on nhập hàng của b?n chua c? sản phẩm n?o</div>
+                          <div className="mb-4">?on nhập hàng của b?n chưa c? sản phẩm n?o</div>
                           <button type="button" onClick={handleStartAddProduct} disabled={saving || !selectedSupplier} className="sapo-btn">
                             Thêm sản phẩm
                           </button>
@@ -3632,7 +3632,7 @@ const Nhaphang = ({ store }) => {
                           <td colSpan="10" className="px-4 py-16 text-center text-sm text-gray-400">
                             <div className="sticky left-0 flex w-[520px] max-w-[calc(100vw-4rem)] flex-col items-center">
                               <Package className="mb-3 h-12 w-12 text-gray-200" />
-                              <div className="mb-4">?on h?ng nh?p của b?n chua c? sản phẩm n?o</div>
+                              <div className="mb-4">?on h?ng nh?p của b?n chưa c? sản phẩm n?o</div>
                               <button type="button" onClick={handleStartAddProduct} disabled={saving || !selectedSupplier} className="sapo-btn">
                                 Thêm sản phẩm
                               </button>
@@ -3751,7 +3751,7 @@ const Nhaphang = ({ store }) => {
                   </button>
                   <p className={`mt-2 text-xs ${hasUnsavedPaymentAffectingChanges ? 'text-orange-600' : 'text-gray-500'}`}>
                     {hasUnsavedPaymentAffectingChanges
-                      ? 'Phiếu d? dài sản phẩm ho?c tổng ti?n; h?y cập nhật phiếu trước khi thanh toán lỗi d? c?ng n? ch?nh x?c.'
+                      ? 'Phiếu d? dài sản phẩm ho?c tổng ti?n; h?y cập nhật phiếu trước khi thanh toán lỗi d? công nợ ch?nh x?c.'
                       : editingImportKey
                       ? 'N?t n?y ch? cập nhật phiếu hiện tại, không tạo phiếu mới v? không thay đổi tồn kho.'
                       : 'C?n tạo ho?c chọn phiếu nhập trước khi thanh toán.'}
@@ -3832,7 +3832,7 @@ const Nhaphang = ({ store }) => {
                 <div>
                   <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
                   <ul className="list-disc pl-5 space-y-1">
-                    <li>Không th? luu phiếu n?u chua chọn nh? cung cấp ho?c chua c? sản phẩm.</li>
+                    <li>Không th? luu phiếu n?u chưa chọn nh? cung cấp ho?c chưa c? sản phẩm.</li>
                     <li>Phiếu đã nhập kho khi xóa sẽ được backend rollback tồn kho d?ng một l?n.</li>
                   </ul>
                 </div>
@@ -3976,7 +3976,7 @@ const Nhaphang = ({ store }) => {
             {orderHistory.length > 0 && (
               <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
                 <p className="text-xs text-gray-500">
-                  Luu ?: Khi h?y phiếu đã nhập kho, backend s? tự động rollback tồn kho d?ng một l?n; phiếu luu t?m chua nh?p kho s? không dài tồn kho.
+                  Luu ?: Khi h?y phiếu đã nhập kho, backend s? tự động rollback tồn kho d?ng một l?n; phiếu luu t?m chưa nh?p kho s? không dài tồn kho.
                 </p>
               </div>
             )}

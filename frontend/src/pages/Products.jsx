@@ -242,7 +242,7 @@ const ProductFormModal = memo(function ProductFormModal({
             <div>
               <label className="text-xs text-gray-500">M? sản phẩm</label>
               <input className="input-field bg-gray-100 text-gray-500 cursor-not-allowed" value={form.sku} readOnly disabled placeholder="T? sinh SP00001" />
-              <span className="text-[10px] text-blue-500">{editing ? 'M? d? c?p được gi? nguy?n.' : 'Hệ thống t? c?p m? sau khi luu.'}</span>
+              <span className="text-[10px] text-blue-500">{editing ? 'M? đã cóp được gi? nguy?n.' : 'Hệ thống t? c?p m? sau khi luu.'}</span>
             </div>
             <div><label className="text-xs text-gray-500">Danh mục d?ng text</label><input className="input-field w-full" value={form.category} onChange={e => updateField('category', e.target.value)} placeholder="nh?p t?n danh mục n?u c?n" /></div>
           </div>
@@ -366,7 +366,7 @@ const VariantFormModal = memo(function VariantFormModal({
             <div>
               <label className="text-xs text-gray-500">SKU biến thể (hệ thống t? sinh)</label>
               <input className="input-field w-full bg-gray-100 text-gray-500 cursor-not-allowed" value={editingVariant ? (form.sku || '') : ''} readOnly disabled placeholder="T? sinh sau khi luu" />
-              <span className="text-[10px] text-blue-500">{editingVariant ? 'M? d? c?p được gi? nguy?n.' : 'Hệ thống t? c?p m? SP ti?p theo sau khi luu.'}</span>
+              <span className="text-[10px] text-blue-500">{editingVariant ? 'M? đã cóp được gi? nguy?n.' : 'Hệ thống t? c?p m? SP ti?p theo sau khi luu.'}</span>
             </div>
             <div><label className="text-xs text-gray-500">?on v? t?nh</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="cái" /></div>
           </div>
@@ -1026,7 +1026,7 @@ export default function Products({ store }) {
         const failedReasons = failedResults
           .map(result => result.reason?.message || 'Không r? lỗi')
           .join('\n');
-        alert(`?? ?? xóa ${deletedIds.length}/${idsToDelete.length} sản phẩm. Một s? sản phẩm chua xóa được:\n${failedReasons}`);
+        alert(`?? ?? xóa ${deletedIds.length}/${idsToDelete.length} sản phẩm. Một s? sản phẩm chưa xóa được:\n${failedReasons}`);
       }
     } catch (err) {
       alert(`?? Lỗi khi xóa: ${err.message}`);
@@ -1426,7 +1426,7 @@ export default function Products({ store }) {
       const receivedColumns = collectExcelReceivedColumns(rows);
       const displayColumns = receivedColumns.length > 0 ? receivedColumns : headerColumns;
       if (displayColumns.length === 0) {
-        alert(`?? Sheet "${sheetName}" không có h?ng ti?u d? c?t. Vui lứng dụng sheet "Sản phẩm" trong file m?u.`);
+        alert(`?? Sheet "${sheetName}" không có h?ng ti?u đã cót. Vui lứng dụng sheet "Sản phẩm" trong file m?u.`);
         return;
       }
 
@@ -2331,10 +2331,10 @@ export default function Products({ store }) {
                   <li>Sheet chu?n l? <strong>"Sản phẩm"</strong>; n?u file không có sheet n?y, hệ thống s? d?c sheet đầu ti?n.</li>
                   <li>C?t chu?n: <strong>Loại d?ng</strong>, <strong>SKU</strong>, <strong>Parent SKU</strong>, <strong>Tồn sản phẩm</strong>, các c?t gi?, <strong>Tồn kho</strong>, <strong>?on v?</strong>, <strong>Danh mục text</strong>, <strong>Default category id</strong>, <strong>Supplier id</strong>, <strong>Ho?t d?ng</strong>.</li>
                   <li><strong>Loại d?ng</strong>: nh?p <strong>PARENT</strong> cho sản phẩm cha, <strong>VARIANT</strong> cho biến thể. Nếu b? tr?ng, backend t? suy lu?n: c? Parent SKU l? VARIANT, không có Parent SKU l? PARENT.</li>
-                  <li><strong>Parent SKU</strong> l? kh?a gi? quan h? cha-con; SKU n?y ph?i tr?ng SKU của d?ng sản phẩm cha trong file ho?c sản phẩm cha d? c? trong hệ thống. Khi tạo mới, backend c?p m? SP ti?p theo.</li>
+                  <li><strong>Parent SKU</strong> l? kh?a gi? quan h? cha-con; SKU n?y ph?i tr?ng SKU của d?ng sản phẩm cha trong file ho?c sản phẩm cha đã có trong hệ thống. Khi tạo mới, backend c?p m? SP ti?p theo.</li>
                   <li>C? th? nh?p file c? alias ph? bi?n nhu <strong>M? SKU</strong>, <strong>Ma SKU</strong>, <strong>M? sản phẩm</strong>, <strong>Tồn</strong>, <strong>SL h?ng</strong>, <strong>So luong</strong>, <strong>Gi? v?n</strong>, <strong>Gi? b?n</strong>, <strong>?VT</strong>, <strong>Danh mục</strong>, <strong>ParentSKU</strong>, <strong>SKU cha</strong>, <strong>M? cha</strong>.</li>
                   <li><strong>Tồn kho</strong> c? th? ?m đến <strong>{negativeStockLimitLabel}</strong>; hệ thống cảnh báo ??m kho? v? backend s? chọn mới tồn kho th?p hon ngu?ng n?y.</li>
-                  <li>Import s? validate to?n b? file trước khi ghi. Nếu c? lỗi, thông báo s? ch? r? d?ng/c?t v? dữ liệu chua được cập nhật.</li>
+                  <li>Import s? validate to?n b? file trước khi ghi. Nếu c? lỗi, thông báo s? ch? r? d?ng/c?t v? dữ liệu chưa được cập nhật.</li>
                   <li>Các c?t <strong>ID</strong>, <strong>Parent ID</strong>, <strong>Default category name</strong>, <strong>Supplier name</strong>, <strong>Ghi ch?</strong> ch? d? tham kh?o khi xu?t file; backend b? qua khi import.</li>
                 </ul>
                 <div className="mt-3 flex gap-2">

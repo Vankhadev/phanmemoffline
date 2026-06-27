@@ -48,7 +48,7 @@ const INITIAL_EMP_FORM = Object.freeze({
 
 const USER_ROLE_OPTIONS = Object.freeze([
   { value: 'admin', label: 'Admin', description: 'Toán quy?n hệ thống v? kế toán.' },
-  { value: 'accountant', label: 'Kế toán', description: '??y d? module kế toán, thu?, tồn kho, c?ng n? v? nhật ký.' },
+  { value: 'accountant', label: 'Kế toán', description: '??y d? module kế toán, thu?, tồn kho, công nợ v? nhật ký.' },
   { value: 'cashier', label: 'Thu ng?n', description: 'Ch? xem doanh thu trong module kế toán.' },
   { value: 'employee', label: 'Nhân viên', description: 'Không có quy?n module kế toán.' },
   { value: 'user', label: 'User cu', description: 'Vai tr? legacy được gi? tuong th?ch.' },
@@ -174,12 +174,12 @@ function getUpdateErrorMessage(error) {
     ELECTRON_UPDATER_ERROR: 'electron-updater b?o lỗi trong qu? tr?nh kiểm tra/t?i cập nhật.',
     CHECK_FAILED: 'Kiểm tra cập nhật th?t b?i.',
     UPDATE_GITHUB_ATOM_FEED_NOT_AVAILABLE: 'Endpoint GitHub releases.atom không phù hợp ho?c không kh? d?ng. Bản mới s? d?c tr?c ti?p latest.yml public thay v? ph? thu?c Atom feed.',
-    UPDATE_REPOSITORY_NOT_ACCESSIBLE: 'Không truy c?p được GitHub Releases/latest. Repo c? th? private, owner/repo sai, URL feed sai ho?c chua c? release latest public.',
+    UPDATE_REPOSITORY_NOT_ACCESSIBLE: 'Không truy c?p được GitHub Releases/latest. Repo c? th? private, owner/repo sai, URL feed sai ho?c chưa c? release latest public.',
     UPDATE_FEED_UNAUTHORIZED_OR_PRIVATE: 'GitHub Release/feed y?u c?u xác thực, token sai/thi?u quy?n ho?c repo dang private. Client Electron không được nh?ng token n?n không th? t? cập nhật t? asset private.',
     UPDATE_FEED_METADATA_NOT_FOUND: 'Không t?m th?y latest.yml trong GitHub Release latest ho?c release latest không public.',
     UPDATE_METADATA_INVALID: 'Metadata cập nhật tr?n GitHub Release không hợp l? ho?c r?ng.',
-    UPDATE_RUNTIME_ARCH_UNSUPPORTED: 'M?y Windows hiện tại chua c? b? cái phù hợp. Hủy t?i d?ng b?n x64 ho?c ia32 t? GitHub Release.',
-    UPDATE_METADATA_MISSING_RUNTIME_INSTALLER: 'GitHub Release chua c? installer ri?ng cho ki?n tr?c m?y n?y. C?n upload asset cấu hình t? -x64.exe ho?c -ia32.exe v? cập nhật latest.yml.',
+    UPDATE_RUNTIME_ARCH_UNSUPPORTED: 'M?y Windows hiện tại chưa c? b? cái phù hợp. Hủy t?i d?ng b?n x64 ho?c ia32 t? GitHub Release.',
+    UPDATE_METADATA_MISSING_RUNTIME_INSTALLER: 'GitHub Release chưa c? installer ri?ng cho ki?n tr?c m?y n?y. C?n upload asset cấu hình t? -x64.exe ho?c -ia32.exe v? cập nhật latest.yml.',
     UPDATE_METADATA_SELECTED_INSTALLER_MISMATCH: 'Metadata cập nhật dang chọn installer không kh?p ki?n tr?c m?y. Không t?i d? tr?nh lỗi Windows không ch?y được ứng dụng.',
     UPDATE_ASSET_NOT_ACCESSIBLE_OR_PRIVATE: 'Không tải được installer/blockmap. Asset c? th? thi?u, t?n không kh?p latest.yml ho?c repo private tr? 404.',
     UPDATE_RELEASE_NOT_PUBLISHED: 'Chua c? production release d? publish d? electron-updater chọn l?m latest.',
@@ -715,7 +715,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       }
       return items;
     } catch (error) {
-      const message = getErrorMessage(error, 'API mẫu in hóa đơn dang ? trạng thái an to?n; chua tải được danh sách mẫu in t? /api/print-templates.');
+      const message = getErrorMessage(error, 'API mẫu in hóa đơn dang ? trạng thái an to?n; chưa tải được danh sách mẫu in t? /api/print-templates.');
       if (mountedRef.current) {
         setPrintTemplates([]);
         setTimedNotice('print-templates', setPrintTemplatesNotice, { tone: 'info', message });
@@ -785,7 +785,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       if (failures.length > 0) {
         setTimedNotice('page', setPageNotice, {
           tone: 'error',
-          message: `Một s? dữ liệu cài đặt chua tải được. ${failures.join(' | ')}`,
+          message: `Một s? dữ liệu cài đặt chưa tải được. ${failures.join(' | ')}`,
         }, 8000);
       }
 
@@ -1103,7 +1103,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     const demo = normalizePrintTemplate({
       id: null,
       template_name: 'M?u thi?t k? th?',
-      description: 'Bản demo local d? thi?t k? k?o th? khi chua c? MySQL mẫu in.',
+      description: 'Bản demo local d? thi?t k? k?o th? khi chưa c? MySQL mẫu in.',
       shop_name: storeForm.name,
       shop_address: storeForm.address,
       shop_phone: storeForm.phone,
@@ -2046,7 +2046,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-wrap justify-end gap-2">
                           <button type="button" className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium hover:bg-gray-50" onClick={() => window.open(resolveApiUrl(`/data-guardian/download?path=${encodeURIComponent(item.path || '')}`), '_blank')}>Tải xu?ng</button>
-                          <button type="button" className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-100" onClick={async () => { if (!window.confirm(`Khởi ph?c t? backup ${item.file || item.backup_name}?`)) return; setRestoringBackup(item.path); try { await dataGuardianApi.restore({ path: item.path }); setBackupNotice({ tone: 'success', message: '?? kh?i ph?c backup.' }); await loadBackups(); } catch (error) { setBackupNotice({ tone: 'error', message: getErrorMessage(error, 'Không th? kh?i ph?c backup.') }); } finally { setRestoringBackup(''); } }} disabled={restoringBackup === item.path}>Khởi ph?c</button>
+                          <button type="button" className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-100" onClick={async () => { if (!window.confirm(`Khởi ph?c t? backup ${item.file || item.backup_name}?`)) return; setRestoringBackup(item.path); try { await dataGuardianApi.restore({ path: item.path }); setBackupNotice({ tone: 'success', message: '?? khôi phục backup.' }); await loadBackups(); } catch (error) { setBackupNotice({ tone: 'error', message: getErrorMessage(error, 'Không th? khôi phục backup.') }); } finally { setRestoringBackup(''); } }} disabled={restoringBackup === item.path}>Khởi ph?c</button>
                         </div>
                       </td>
                     </tr>
@@ -2464,7 +2464,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div>
               <h3 className="mb-2 font-bold text-gray-800">Tab Cửa hàng</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Cập nhật t?n cửa hàng, d?a ch?, s? điện thoại, email, m? s? thu? v? thông tin ng?n h?ng.</li>
+                <li>Cập nhật t?n cửa hàng, địa chỉ, s? điện thoại, email, m? s? thu? v? thông tin ng?n h?ng.</li>
                 <li>Ph?n logo, ghi ch? v? slogan d?ng cho nhân di?n cửa hàng trong hệ thống.</li>
                 <li>Sau khi chỉnh sửa, nhân <strong>Luu thay đổi</strong> d? ghi xu?ng backend.</li>
               </ul>

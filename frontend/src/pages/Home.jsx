@@ -170,7 +170,7 @@ export default function Home({ user, store = {} }) {
       setStats(EMPTY_STATS);
 
       if (error instanceof ApiError && Number(error.status) === 403) {
-        setStatsMessage('Tài khoản hiện tại chua được c?p quy?n xem tháng k?. Trang ch? v?n hiển thị đầy đủ các khu v?c c?n lỗi.');
+        setStatsMessage('Tài khoản hiện tại chưa được c?p quy?n xem tháng k?. Trang ch? v?n hiển thị đầy đủ các khu v?c c?n lỗi.');
         setStatsMessageTone('warning');
       } else {
         setStatsMessage('Không thử lại tháng k? l?c n?y. Dữ liệu s? tự động b? lỗi khi kết nối ?n d?nh.');

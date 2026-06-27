@@ -1,125 +1,930 @@
 [
-  ["kh?ng","không"],["Kh?ng","Không"],["KH?NG","KHÔNG"],
-  ["th?m","thêm"],["Th?m","Thêm"],
-  ["x?a","xóa"],["X?a","Xóa"],
-  ["s?a","sửa"],["S?a","Sửa"],
-  ["c?p nh?t","cập nhật"],["C?p nh?t","Cập nhật"],
-  ["d? li?u","dữ liệu"],["D? li?u","Dữ liệu"],
-  ["d?ch v?","dịch vụ"],["D?ch v?","Dịch vụ"],
-  ["?ang","đang"],["Đang","Đang"],
-  ["Kh?i","Khởi"],
-  ["H?ng","Hàng"],
-  ["Phi?n","Phiên"],
-  ["dang nh?p","đăng nhập"],["Dang nh?p","Đăng nhập"],
-  ["h?t h?n","hết hạn"],
-  ["gi? h?n","giới hạn"],
-  ["t?i kho?n","tài khoản"],["T?i kho?n","Tài khoản"],
-  ["k?t n?i","kết nối"],
-  ["k?t qu?","kết quả"],["K?t qu?","Kết quả"],
-  ["k?t th?c","kết thúc"],
-  ["b?o c?o","báo cáo"],["B?o c?o","Báo cáo"],
-  ["x? l?","xử lý"],
-  ["x?c th?c","xác thực"],
-  ["th?c hi?n","thực hiện"],["Th?c hi?n","Thực hiện"],
-  ["th?ng b?o","thông báo"],["Th?ng b?o","Thông báo"],
-  ["v?n h?nh","vận hành"],
-  ["h? th?ng","hệ thống"],["H? th?ng","Hệ thống"],
-  ["ch?c n?ng","chức năng"],
-  ["l?i nhu?n","lợi nhuận"],
-  ["gi? v?n","giá vốn"],
-  ["h?a don","hóa đơn"],["h?a ??n","hóa đơn"],["H?a ??n","Hóa đơn"],
-  ["m?u in","mẫu in"],["M?u in","Mẫu in"],
-  ["t?n kho","tồn kho"],["T?n kho","Tồn kho"],
-  ["l?ch s?","lịch sử"],["L?ch s?","Lịch sử"],
-  ["c?u h?nh","cấu hình"],
-  ["ti?p t?c","tiếp tục"],["Ti?p t?c","Tiếp tục"],
-  ["tr? l?i","trở lại"],
-  ["ch?nh s?a","chỉnh sửa"],["Ch?nh s?a","Chỉnh sửa"],
-  ["ph?c h?i","phục hồi"],
-  ["b?o m?t","bảo mật"],
-  ["t?c d?","tốc độ"],
-  ["?ng d?ng","ứng dụng"],
-  ["c?m ?n","cảm ơn"],["C?m ?n","Cảm ơn"],
-  ["d?u hi?u","dấu hiệu"],
-  ["ghi d?","ghi đè"],
-  ["b?ng","bằng"],
-  ["d?nh","định"],
-  ["?i?u","điều"],["Du?c","Được"],["du?c","được"],
-  ["M?c","Mặc"],
-  ["Kh?ch","Khách"],["kh?ch","khách"],
-  ["D?ng","Dùng"],
-  ["T?m","Tạm"],
-  ["T?ng","Tổng"],["t?ng","tổng"],
-  ["Lo?i","Loại"],["lo?i","loại"],
-  ["s?n ph?m","sản phẩm"],["S?n ph?m","Sản phẩm"],
-  ["kh?ch h?ng","khách hàng"],["Kh?ch h?ng","Khách hàng"],
-  ["cung c?p","cung cấp"],["Cung c?p","Cung cấp"],
-  ["bi?n th?","biến thể"],["Bi?n th?","Biến thể"],
-  ["Vui l?ng","Vui lòng"],
-  ["don h?ng","đơn hàng"],["Don h?ng","Đơn hàng"],
-  ["danh s?ch","danh sách"],["Danh s?ch","Danh sách"],
-  ["thanh to?n","thanh toán"],["Thanh to?n","Thanh toán"],
-  ["h?p l?","hợp lệ"],["H?p l?","Hợp lệ"],
-  ["danh m?c","danh mục"],["Danh m?c","Danh mục"],
-  ["ki?m tra","kiểm tra"],["Ki?m tra","Kiểm tra"],
-  ["phi?u nh?p","phiếu nhập"],["Phi?u nh?p","Phiếu nhập"],
-  ["nh?n vi?n","nhân viên"],["Nh?n vi?n","Nhân viên"],
-  ["th?ng tin","thông tin"],["Th?ng tin","Thông tin"],
-  ["S? lu?ng","Số lượng"],["s? lu?ng","số lượng"],
-  ["di?n tho?i","điện thoại"],["Di?n tho?i","Điện thoại"],
-  ["hi?n t?i","hiện tại"],["Hi?n t?i","Hiện tại"],
-  ["l?ng nh?p","lượng nhập"],
-  ["b?ng luong","bảng lương"],
-  ["tr?ng th?i","trạng thái"],["Tr?ng th?i","Trạng thái"],
-  ["chi ti?t","chi tiết"],["Chi ti?t","Chi tiết"],
-  ["m?c d?nh","mặc định"],["M?c d?nh","Mặc định"],
-  ["thay d?i","thay đổi"],["Thay d?i","Thay đổi"],
-  ["th?nh c?ng","thành công"],["Th?nh c?ng","Thành công"],
-  ["m?t kh?u","mật khẩu"],["M?t kh?u","Mật khẩu"],
-  ["tru?c khi","trước khi"],["Tru?c khi","Trước khi"],
-  ["Hu?ng d?n","Hướng dẫn"],["hu?ng d?n","hướng dẫn"],
-  ["S? di?n","Số điện"],
-  ["Gi? nh?p","Giá nhập"],["gi? nh?p","giá nhập"],
-  ["k? to?n","kế toán"],["K? to?n","Kế toán"],
-  ["Qu?n l?","Quản lý"],["qu?n l?","quản lý"],
-  ["th?i gian","thời gian"],["Th?i gian","Thời gian"],
-  ["b?t d?u","bắt đầu"],["B?t d?u","Bắt đầu"],
-  ["giao d?ch","giao dịch"],["Giao d?ch","Giao dịch"],
-  ["T?t c?","Tất cả"],["t?t c?","tất cả"],
-  ["Xu?t Excel","Xuất Excel"],
-  ["Kh?ch l?","Khách lẻ"],
-  ["b? l?c","bộ lọc"],["B? l?c","Bộ lọc"],
-  ["nh?t k?","nhật ký"],["Nh?t k?","Nhật ký"],
-  ["c?a h?ng","cửa hàng"],["C?a h?ng","Cửa hàng"],
-  ["t? d?ng","tự động"],["T? d?ng","Tự động"],
-  ["c?i d?t","cài đặt"],["C?i d?t","Cài đặt"],
-  ["t?m ki?m","tìm kiếm"],["T?m ki?m","Tìm kiếm"],
-  ["s? d?ng","sử dụng"],["S? d?ng","Sử dụng"],
-  ["x?c nh?n","xác nhận"],["X?c nh?n","Xác nhận"],
-  ["d?y d?","đầy đủ"],["D?y d?","Đầy đủ"],
-  ["c?nh b?o","cảnh báo"],["C?nh b?o","Cảnh báo"],
-  ["t?ng h?p","tổng hợp"],["T?ng h?p","Tổng hợp"],
-  ["Kho h?ng","Kho hàng"],["kho h?ng","kho hàng"],
-  ["nh?p h?ng","nhập hàng"],["Nh?p h?ng","Nhập hàng"],
-  ["cho ph?p","cho phép"],
-  ["theo t?n","theo tồn"],
-  ["in h?a","in hóa"],
-  ["S?a d?n","Sửa đơn"],
-  ["d? ch?n","đã chọn"],
-  ["ph? h?p","phù hợp"],
-  ["hi?n th?","hiển thị"],
-  ["Kh?ng c?","Không có"],["kh?ng c?","không có"],
-  ["d? t?i","đã tải"],
-  ["d? du?c","đã được"],
-  ["t?i du?c","tải được"],
-  ["s? du?c","sẽ được"],
-  ["kh?ng h?p","không hợp"],
-  ["d? nh?p","đã nhập"],
-  ["d?nh d?n","định dạng"],
-  ["th? t?i","thử lại"],
-  ["xu?t ?m","xuất âm"],
-  ["h?nh d?ng","hình dạng"],
-  ["lu?ng ?m","lượng âm"],
-  ["H?y b?","Hủy bỏ"],
-  ["nh?p xu?t","nhập xuất"]
+  [
+    "kh?ng",
+    "không"
+  ],
+  [
+    "Kh?ng",
+    "Không"
+  ],
+  [
+    "KH?NG",
+    "KHÔNG"
+  ],
+  [
+    "th?m",
+    "thêm"
+  ],
+  [
+    "Th?m",
+    "Thêm"
+  ],
+  [
+    "x?a",
+    "xóa"
+  ],
+  [
+    "X?a",
+    "Xóa"
+  ],
+  [
+    "s?a",
+    "sửa"
+  ],
+  [
+    "S?a",
+    "Sửa"
+  ],
+  [
+    "c?p nh?t",
+    "cập nhật"
+  ],
+  [
+    "C?p nh?t",
+    "Cập nhật"
+  ],
+  [
+    "d? li?u",
+    "dữ liệu"
+  ],
+  [
+    "D? li?u",
+    "Dữ liệu"
+  ],
+  [
+    "d?ch v?",
+    "dịch vụ"
+  ],
+  [
+    "D?ch v?",
+    "Dịch vụ"
+  ],
+  [
+    "?ang",
+    "đang"
+  ],
+  [
+    "Đang",
+    "Đang"
+  ],
+  [
+    "Kh?i",
+    "Khởi"
+  ],
+  [
+    "H?ng",
+    "Hàng"
+  ],
+  [
+    "Phi?n",
+    "Phiên"
+  ],
+  [
+    "dang nh?p",
+    "đăng nhập"
+  ],
+  [
+    "Dang nh?p",
+    "Đăng nhập"
+  ],
+  [
+    "h?t h?n",
+    "hết hạn"
+  ],
+  [
+    "gi? h?n",
+    "giới hạn"
+  ],
+  [
+    "t?i kho?n",
+    "tài khoản"
+  ],
+  [
+    "T?i kho?n",
+    "Tài khoản"
+  ],
+  [
+    "k?t n?i",
+    "kết nối"
+  ],
+  [
+    "k?t qu?",
+    "kết quả"
+  ],
+  [
+    "K?t qu?",
+    "Kết quả"
+  ],
+  [
+    "k?t th?c",
+    "kết thúc"
+  ],
+  [
+    "b?o c?o",
+    "báo cáo"
+  ],
+  [
+    "B?o c?o",
+    "Báo cáo"
+  ],
+  [
+    "x? l?",
+    "xử lý"
+  ],
+  [
+    "x?c th?c",
+    "xác thực"
+  ],
+  [
+    "th?c hi?n",
+    "thực hiện"
+  ],
+  [
+    "Th?c hi?n",
+    "Thực hiện"
+  ],
+  [
+    "th?ng b?o",
+    "thông báo"
+  ],
+  [
+    "Th?ng b?o",
+    "Thông báo"
+  ],
+  [
+    "v?n h?nh",
+    "vận hành"
+  ],
+  [
+    "h? th?ng",
+    "hệ thống"
+  ],
+  [
+    "H? th?ng",
+    "Hệ thống"
+  ],
+  [
+    "ch?c n?ng",
+    "chức năng"
+  ],
+  [
+    "l?i nhu?n",
+    "lợi nhuận"
+  ],
+  [
+    "gi? v?n",
+    "giá vốn"
+  ],
+  [
+    "h?a don",
+    "hóa đơn"
+  ],
+  [
+    "h?a ??n",
+    "hóa đơn"
+  ],
+  [
+    "H?a ??n",
+    "Hóa đơn"
+  ],
+  [
+    "m?u in",
+    "mẫu in"
+  ],
+  [
+    "M?u in",
+    "Mẫu in"
+  ],
+  [
+    "t?n kho",
+    "tồn kho"
+  ],
+  [
+    "T?n kho",
+    "Tồn kho"
+  ],
+  [
+    "l?ch s?",
+    "lịch sử"
+  ],
+  [
+    "L?ch s?",
+    "Lịch sử"
+  ],
+  [
+    "c?u h?nh",
+    "cấu hình"
+  ],
+  [
+    "ti?p t?c",
+    "tiếp tục"
+  ],
+  [
+    "Ti?p t?c",
+    "Tiếp tục"
+  ],
+  [
+    "tr? l?i",
+    "trở lại"
+  ],
+  [
+    "ch?nh s?a",
+    "chỉnh sửa"
+  ],
+  [
+    "Ch?nh s?a",
+    "Chỉnh sửa"
+  ],
+  [
+    "ph?c h?i",
+    "phục hồi"
+  ],
+  [
+    "b?o m?t",
+    "bảo mật"
+  ],
+  [
+    "t?c d?",
+    "tốc độ"
+  ],
+  [
+    "?ng d?ng",
+    "ứng dụng"
+  ],
+  [
+    "c?m ?n",
+    "cảm ơn"
+  ],
+  [
+    "C?m ?n",
+    "Cảm ơn"
+  ],
+  [
+    "d?u hi?u",
+    "dấu hiệu"
+  ],
+  [
+    "ghi d?",
+    "ghi đè"
+  ],
+  [
+    "b?ng",
+    "bằng"
+  ],
+  [
+    "d?nh",
+    "định"
+  ],
+  [
+    "?i?u",
+    "điều"
+  ],
+  [
+    "Du?c",
+    "Được"
+  ],
+  [
+    "du?c",
+    "được"
+  ],
+  [
+    "M?c",
+    "Mặc"
+  ],
+  [
+    "Kh?ch",
+    "Khách"
+  ],
+  [
+    "kh?ch",
+    "khách"
+  ],
+  [
+    "D?ng",
+    "Dùng"
+  ],
+  [
+    "T?m",
+    "Tạm"
+  ],
+  [
+    "T?ng",
+    "Tổng"
+  ],
+  [
+    "t?ng",
+    "tổng"
+  ],
+  [
+    "Lo?i",
+    "Loại"
+  ],
+  [
+    "lo?i",
+    "loại"
+  ],
+  [
+    "s?n ph?m",
+    "sản phẩm"
+  ],
+  [
+    "S?n ph?m",
+    "Sản phẩm"
+  ],
+  [
+    "kh?ch h?ng",
+    "khách hàng"
+  ],
+  [
+    "Kh?ch h?ng",
+    "Khách hàng"
+  ],
+  [
+    "cung c?p",
+    "cung cấp"
+  ],
+  [
+    "Cung c?p",
+    "Cung cấp"
+  ],
+  [
+    "bi?n th?",
+    "biến thể"
+  ],
+  [
+    "Bi?n th?",
+    "Biến thể"
+  ],
+  [
+    "Vui l?ng",
+    "Vui lòng"
+  ],
+  [
+    "don h?ng",
+    "đơn hàng"
+  ],
+  [
+    "Don h?ng",
+    "Đơn hàng"
+  ],
+  [
+    "danh s?ch",
+    "danh sách"
+  ],
+  [
+    "Danh s?ch",
+    "Danh sách"
+  ],
+  [
+    "thanh to?n",
+    "thanh toán"
+  ],
+  [
+    "Thanh to?n",
+    "Thanh toán"
+  ],
+  [
+    "h?p l?",
+    "hợp lệ"
+  ],
+  [
+    "H?p l?",
+    "Hợp lệ"
+  ],
+  [
+    "danh m?c",
+    "danh mục"
+  ],
+  [
+    "Danh m?c",
+    "Danh mục"
+  ],
+  [
+    "ki?m tra",
+    "kiểm tra"
+  ],
+  [
+    "Ki?m tra",
+    "Kiểm tra"
+  ],
+  [
+    "phi?u nh?p",
+    "phiếu nhập"
+  ],
+  [
+    "Phi?u nh?p",
+    "Phiếu nhập"
+  ],
+  [
+    "nh?n vi?n",
+    "nhân viên"
+  ],
+  [
+    "Nh?n vi?n",
+    "Nhân viên"
+  ],
+  [
+    "th?ng tin",
+    "thông tin"
+  ],
+  [
+    "Th?ng tin",
+    "Thông tin"
+  ],
+  [
+    "S? lu?ng",
+    "Số lượng"
+  ],
+  [
+    "s? lu?ng",
+    "số lượng"
+  ],
+  [
+    "di?n tho?i",
+    "điện thoại"
+  ],
+  [
+    "Di?n tho?i",
+    "Điện thoại"
+  ],
+  [
+    "hi?n t?i",
+    "hiện tại"
+  ],
+  [
+    "Hi?n t?i",
+    "Hiện tại"
+  ],
+  [
+    "l?ng nh?p",
+    "lượng nhập"
+  ],
+  [
+    "b?ng luong",
+    "bảng lương"
+  ],
+  [
+    "tr?ng th?i",
+    "trạng thái"
+  ],
+  [
+    "Tr?ng th?i",
+    "Trạng thái"
+  ],
+  [
+    "chi ti?t",
+    "chi tiết"
+  ],
+  [
+    "Chi ti?t",
+    "Chi tiết"
+  ],
+  [
+    "m?c d?nh",
+    "mặc định"
+  ],
+  [
+    "M?c d?nh",
+    "Mặc định"
+  ],
+  [
+    "thay d?i",
+    "thay đổi"
+  ],
+  [
+    "Thay d?i",
+    "Thay đổi"
+  ],
+  [
+    "th?nh c?ng",
+    "thành công"
+  ],
+  [
+    "Th?nh c?ng",
+    "Thành công"
+  ],
+  [
+    "m?t kh?u",
+    "mật khẩu"
+  ],
+  [
+    "M?t kh?u",
+    "Mật khẩu"
+  ],
+  [
+    "tru?c khi",
+    "trước khi"
+  ],
+  [
+    "Tru?c khi",
+    "Trước khi"
+  ],
+  [
+    "Hu?ng d?n",
+    "Hướng dẫn"
+  ],
+  [
+    "hu?ng d?n",
+    "hướng dẫn"
+  ],
+  [
+    "S? di?n",
+    "Số điện"
+  ],
+  [
+    "Gi? nh?p",
+    "Giá nhập"
+  ],
+  [
+    "gi? nh?p",
+    "giá nhập"
+  ],
+  [
+    "k? to?n",
+    "kế toán"
+  ],
+  [
+    "K? to?n",
+    "Kế toán"
+  ],
+  [
+    "Qu?n l?",
+    "Quản lý"
+  ],
+  [
+    "qu?n l?",
+    "quản lý"
+  ],
+  [
+    "th?i gian",
+    "thời gian"
+  ],
+  [
+    "Th?i gian",
+    "Thời gian"
+  ],
+  [
+    "b?t d?u",
+    "bắt đầu"
+  ],
+  [
+    "B?t d?u",
+    "Bắt đầu"
+  ],
+  [
+    "giao d?ch",
+    "giao dịch"
+  ],
+  [
+    "Giao d?ch",
+    "Giao dịch"
+  ],
+  [
+    "T?t c?",
+    "Tất cả"
+  ],
+  [
+    "t?t c?",
+    "tất cả"
+  ],
+  [
+    "Xu?t Excel",
+    "Xuất Excel"
+  ],
+  [
+    "Kh?ch l?",
+    "Khách lẻ"
+  ],
+  [
+    "b? l?c",
+    "bộ lọc"
+  ],
+  [
+    "B? l?c",
+    "Bộ lọc"
+  ],
+  [
+    "nh?t k?",
+    "nhật ký"
+  ],
+  [
+    "Nh?t k?",
+    "Nhật ký"
+  ],
+  [
+    "c?a h?ng",
+    "cửa hàng"
+  ],
+  [
+    "C?a h?ng",
+    "Cửa hàng"
+  ],
+  [
+    "t? d?ng",
+    "tự động"
+  ],
+  [
+    "T? d?ng",
+    "Tự động"
+  ],
+  [
+    "c?i d?t",
+    "cài đặt"
+  ],
+  [
+    "C?i d?t",
+    "Cài đặt"
+  ],
+  [
+    "t?m ki?m",
+    "tìm kiếm"
+  ],
+  [
+    "T?m ki?m",
+    "Tìm kiếm"
+  ],
+  [
+    "s? d?ng",
+    "sử dụng"
+  ],
+  [
+    "S? d?ng",
+    "Sử dụng"
+  ],
+  [
+    "x?c nh?n",
+    "xác nhận"
+  ],
+  [
+    "X?c nh?n",
+    "Xác nhận"
+  ],
+  [
+    "d?y d?",
+    "đầy đủ"
+  ],
+  [
+    "D?y d?",
+    "Đầy đủ"
+  ],
+  [
+    "c?nh b?o",
+    "cảnh báo"
+  ],
+  [
+    "C?nh b?o",
+    "Cảnh báo"
+  ],
+  [
+    "t?ng h?p",
+    "tổng hợp"
+  ],
+  [
+    "T?ng h?p",
+    "Tổng hợp"
+  ],
+  [
+    "Kho h?ng",
+    "Kho hàng"
+  ],
+  [
+    "kho h?ng",
+    "kho hàng"
+  ],
+  [
+    "nh?p h?ng",
+    "nhập hàng"
+  ],
+  [
+    "Nh?p h?ng",
+    "Nhập hàng"
+  ],
+  [
+    "cho ph?p",
+    "cho phép"
+  ],
+  [
+    "theo t?n",
+    "theo tồn"
+  ],
+  [
+    "in h?a",
+    "in hóa"
+  ],
+  [
+    "S?a d?n",
+    "Sửa đơn"
+  ],
+  [
+    "d? ch?n",
+    "đã chọn"
+  ],
+  [
+    "ph? h?p",
+    "phù hợp"
+  ],
+  [
+    "hi?n th?",
+    "hiển thị"
+  ],
+  [
+    "Kh?ng c?",
+    "Không có"
+  ],
+  [
+    "kh?ng c?",
+    "không có"
+  ],
+  [
+    "d? t?i",
+    "đã tải"
+  ],
+  [
+    "d? du?c",
+    "đã được"
+  ],
+  [
+    "t?i du?c",
+    "tải được"
+  ],
+  [
+    "s? du?c",
+    "sẽ được"
+  ],
+  [
+    "kh?ng h?p",
+    "không hợp"
+  ],
+  [
+    "d? nh?p",
+    "đã nhập"
+  ],
+  [
+    "d?nh d?n",
+    "định dạng"
+  ],
+  [
+    "th? t?i",
+    "thử lại"
+  ],
+  [
+    "xu?t ?m",
+    "xuất âm"
+  ],
+  [
+    "h?nh d?ng",
+    "hình dạng"
+  ],
+  [
+    "lu?ng ?m",
+    "lượng âm"
+  ],
+  [
+    "H?y b?",
+    "Hủy bỏ"
+  ],
+  [
+    "nh?p xu?t",
+    "nhập xuất"
+  ],
+  [
+    "kh?i ph?c",
+    "khôi phục"
+  ],
+  [
+    "Kh?i ph?c",
+    "Khôi phục"
+  ],
+  [
+    "kh?i",
+    "khởi"
+  ],
+  [
+    "ph?c",
+    "phục"
+  ],
+  [
+    "di?n s?n",
+    "điền sẵn"
+  ],
+  [
+    "B?m",
+    "Bấm"
+  ],
+  [
+    "b?m",
+    "bấm"
+  ],
+  [
+    "d?ng",
+    "dùng"
+  ],
+  [
+    "di?n",
+    "điền"
+  ],
+  [
+    "phi?n",
+    "phiên"
+  ],
+  [
+    "tr?ng",
+    "trống"
+  ],
+  [
+    "Tr?ng",
+    "Trống"
+  ],
+  [
+    "l?n đ?u",
+    "lần đầu"
+  ],
+  [
+    "đ?u ti?n",
+    "đầu tiên"
+  ],
+  [
+    "ti?n",
+    "tiền"
+  ],
+  [
+    "Ti?n",
+    "Tiền"
+  ],
+  [
+    "ti?n m?t",
+    "tiền mặt"
+  ],
+  [
+    "Ti?n m?t",
+    "Tiền mặt"
+  ],
+  [
+    "chuy?n kho?n",
+    "chuyển khoản"
+  ],
+  [
+    "Chuy?n kho?n",
+    "Chuyển khoản"
+  ],
+  [
+    "C?ng n?",
+    "Công nợ"
+  ],
+  [
+    "c?ng n?",
+    "công nợ"
+  ],
+  [
+    "Đi?n tho?i",
+    "Điện thoại"
+  ],
+  [
+    "d?a ch?",
+    "địa chỉ"
+  ],
+  [
+    "Đ?a ch?",
+    "Địa chỉ"
+  ],
+  [
+    "d? c?",
+    "đã có"
+  ],
+  [
+    "h? t?ng",
+    "hệ thống"
+  ],
+  [
+    "H? t?ng",
+    "Hệ thống"
+  ],
+  [
+    "thi?t l?p",
+    "thiết lập"
+  ],
+  [
+    "Thi?t l?p",
+    "Thiết lập"
+  ],
+  [
+    "d?ng d?a",
+    "dùng địa"
+  ],
+  [
+    "đi?n",
+    "điền"
+  ],
+  [
+    "đ?ng",
+    "đồng"
+  ],
+  [
+    "k? c?",
+    "kể cả"
+  ],
+  [
+    "chua",
+    "chưa"
+  ]
 ]

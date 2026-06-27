@@ -68,14 +68,14 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       const data = await authApi.restoreScan();
       if (data.ok) {
         setRestoreStats(data);
-        setSuccess('?? kh?i ph?c dữ liệu database tốt nh?t thành công!');
+        setSuccess('?? khôi phục dữ liệu database tốt nh?t thành công!');
         const status = await authApi.bootstrapStatus();
         applyBootstrapStatus(status);
       } else {
         setRestoreError(data.message || 'Không t?m th?y file database ch?a dữ liệu ho?c backup.');
       }
     } catch (err) {
-      setRestoreError(getApiErrorMessage(err?.data, err.message || 'Lỗi kh?i ph?c dữ liệu.'));
+      setRestoreError(getApiErrorMessage(err?.data, err.message || 'Lỗi khôi phục dữ liệu.'));
     } finally {
       setRestoreLoading(false);
     }
@@ -114,7 +114,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       applyBootstrapStatus(data);
     } catch (err) {
       setNeedsSetup(false);
-      setError(getApiErrorMessage(err?.data, err.message || 'Không th? kết nối server d? kiểm tra trạng thái thi?t l?p.'));
+      setError(getApiErrorMessage(err?.data, err.message || 'Không th? kết nối server d? kiểm tra trạng thái thiết lập.'));
       onBootstrapStatus?.({ ok: false, needsSetup: false, message: err.message });
     } finally {
       setCheckingSetup(false);
@@ -139,7 +139,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       } catch (err) {
         if (!mounted) return;
         setNeedsSetup(false);
-        setError(getApiErrorMessage(err?.data, err.message || 'Không th? kết nối server d? kiểm tra trạng thái thi?t l?p.'));
+        setError(getApiErrorMessage(err?.data, err.message || 'Không th? kết nối server d? kiểm tra trạng thái thiết lập.'));
         onBootstrapStatus?.({ ok: false, needsSetup: false, message: err.message });
       } finally {
         if (mounted) setCheckingSetup(false);
@@ -250,7 +250,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       const data = await loginWithCredentials(form.email, form.password);
       setSuccess(data.localOnly
         ? 'đang nh?p các b? tr?n điện thoại thành công.'
-        : 'đang nh?p thành công. đang kh?i ph?c phi?n t? server...');
+        : 'đang nh?p thành công. đang khôi phục phi?n t? server...');
       await completeLogin(data);
     } catch (err) {
       setError(getApiErrorMessage(err?.data, err.message || 'Không th? kết nối server d? đăng nhập.'));
@@ -265,7 +265,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     setSuccess('');
 
     if (!needsSetup) {
-      setError('Hệ thống d? c? tài khoản qu?n tr? vi?n. Vui lòng đăng nhập.');
+      setError('Hệ thống đã có tài khoản qu?n tr? vi?n. Vui lòng đăng nhập.');
       return;
     }
 
@@ -343,7 +343,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
           </div>
           <h1 className="text-2xl font-bold text-gray-800">Bản Hàng Pos</h1>
           <p className="text-blue-600 font-semibold mt-1">
-            {checkingSetup ? 'đang kiểm tra hệ thống...' : showSetupForm ? 'Thi?t l?p l?n đầu' : 'đang nh?p hệ thống'}
+            {checkingSetup ? 'đang kiểm tra hệ thống...' : showSetupForm ? 'Thiết lập l?n đầu' : 'đang nh?p hệ thống'}
           </p>
           {isNativeAppRuntime() && (
             <div className="mt-2 text-xs font-bold text-emerald-700">{MOBILE_APP_DISPLAY_NAME} {MOBILE_APP_VERSION}</div>
@@ -353,7 +353,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
         {checkingSetup ? (
           <div className="text-center py-8 text-gray-500 text-sm">
             <RefreshCw className="animate-spin mx-auto mb-3 text-blue-600" size={28} />
-            đang kiểm tra trạng thái thi?t l?p...
+            đang kiểm tra trạng thái thiết lập...
           </div>
         ) : (
           <>
@@ -397,7 +397,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 onClick={() => switchAuthMode('login')}
                 className={`rounded-lg px-3 py-2 text-sm font-bold transition ${authMode === 'login' ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-700 hover:bg-blue-50'}`}
               >
-                đang nh?p tài khoản d? c?
+                đang nh?p tài khoản đã có
               </button>
               {/* Thiết lập admin nếu cần */}
               {needsSetup && (
@@ -406,7 +406,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   onClick={() => switchAuthMode('setup')}
                   className={`rounded-lg px-3 py-2 text-sm font-bold transition ${authMode === 'setup' ? 'bg-amber-600 text-white shadow-sm' : 'text-amber-800 hover:bg-amber-100'}`}
                 >
-                  Thi?t l?p m?y n?y
+                  Thiết lập m?y n?y
                 </button>
               )}
             </div>
@@ -416,8 +416,8 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
                   <AlertTriangle size={18} className="shrink-0 mt-0.5" />
                   <div>
-                    <div className="font-semibold">Hệ thống chua c? qu?n tr? vi?n.</div>
-                    <div>Vui lòng tạo tài khoản admin đầu ti?n. Sau khi tạo thành công, phi?n sẽ được kh?i ph?c v? d?ng b? t? server.</div>
+                    <div className="font-semibold">Hệ thống chưa c? qu?n tr? vi?n.</div>
+                    <div>Vui lòng tạo tài khoản admin đầu ti?n. Sau khi tạo thành công, phi?n sẽ được khôi phục v? d?ng b? t? server.</div>
                   </div>
                 </div>
 
@@ -657,7 +657,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm"
               >
                 {restoreLoading ? (
-                  <><RefreshCw size={16} className="animate-spin" /> đang kh?i ph?c dữ liệu...</>
+                  <><RefreshCw size={16} className="animate-spin" /> đang khôi phục dữ liệu...</>
                 ) : (
                   <>Khởi ph?c dữ liệu</>
                 )}
@@ -694,9 +694,9 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
               {showSetupForm ? (
                 <div>L?n đầu sử dụng: tài khoản đầu ti?n sẽ được server tự động c?p quy?n ADMIN.</div>
               ) : needsSetup ? (
-                <div>Server hiện tại dang tr?ng dữ liệu. ?? đăng nhập tài khoản d? c?, h?y nh?p d?ng d?a ch? server dang luu tài khoản r?i b?m Kiểm tra ho?c đang nh?p.</div>
+                <div>Server hiện tại dang tr?ng dữ liệu. ?? đăng nhập tài khoản đã có, h?y nh?p dùng địa ch? server dang luu tài khoản r?i b?m Kiểm tra ho?c đang nh?p.</div>
               ) : (
-                <div>Tài khoản mặc định đã được di?n s?n. B?m đang nh?p d? d?ng tr?n điện thoại, k? c? khi chua kết nối m?y t?nh.</div>
+                <div>Tài khoản mặc định đã được điền sẵn. B?m đang nh?p d? d?ng tr?n điện thoại, kể cả khi chưa kết nối m?y t?nh.</div>
               )}
             </div>
           </>

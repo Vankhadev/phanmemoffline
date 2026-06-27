@@ -838,7 +838,7 @@ export default function Customers() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">??? Xóa khách hàng</h3>
-                <p>Nhân n?t <strong>"Xóa"</strong> ? c?t H?nh d?ng d? xóa khách hàng. <strong className="text-red-600">Luu ?:</strong> Không th? xóa n?u khách hàng d? c? đơn hàng.</p>
+                <p>Nhân n?t <strong>"Xóa"</strong> ? c?t H?nh d?ng d? xóa khách hàng. <strong className="text-red-600">Luu ?:</strong> Không th? xóa n?u khách hàng đã có đơn hàng.</p>
               </div>
 
               <div>
@@ -872,7 +872,7 @@ export default function Customers() {
                   <li><strong>Loại khách hàng:</strong> Dùng d? ph?n nh?m (VIP, S?, L?...), mới loại c? m?u ri?ng</li>
                   <li><strong>MST:</strong> Nhập đầy đủ cho khách doanh nghi?p d? xu?t hóa đơn</li>
                   <li>Khách hàng s? hiển thị trong trang POS khi tạo đơn hàng</li>
-                  <li>C? th? thêm khách hàng tr?c ti?p trong trang POS n?u chua c?</li>
+                  <li>C? th? thêm khách hàng tr?c ti?p trong trang POS n?u chưa c?</li>
                 </ul>
               </div>
             </div>

@@ -201,7 +201,7 @@ function buildGuideRows(dataType, negativeStockLimitLabel = '0') {
       ['Cột', 'Bắt buộc', 'Ghi chú'],
       ['Loại dòng', 'Khuyến nghị', 'PARENT cho sản phẩm cha, VARIANT cho biến thể; có Parent SKU thì backend suy luận là VARIANT.'],
       ['SKU', 'C?', 'SKU/m? sản phẩm ho?c SKU biến thể, không được tr?ng sai loại.'],
-      ['Parent SKU', 'C? v?i VARIANT', 'Phải kh?p SKU sản phẩm cha trong file ho?c d? c? trong hệ thống.'],
+      ['Parent SKU', 'C? v?i VARIANT', 'Phải kh?p SKU sản phẩm cha trong file ho?c đã có trong hệ thống.'],
       ['Tên sản phẩm', 'Có với bản ghi mới', 'Tên sản phẩm cha hoặc tên biến thể.'],
       ['Giá/Tồn kho', 'Không', `Giá nhập số không âm; tồn kho có thể âm đến ${negativeStockLimitLabel} (ví dụ -5, -20) và phải là số nguyên; thấp hơn ngưỡng sẽ bị backend chặn.`],
       ['Danh mục text / Default category id', 'Không', 'Khớp danh mục hiện có theo tên/từ khóa hoặc id.'],
