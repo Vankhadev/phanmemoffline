@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('path');
 const net = require('net');
 const http = require('http');
@@ -23,10 +23,12 @@ const GUARDIAN_ALERT_CHANNEL = 'kha:guardian:alert';
 const GUARDIAN_STATUS_CHANNEL = 'kha:guardian:status';
 const APP_USER_MODEL_ID = 'com.vankhammo.phanmienoffline';
 const MIN_INSTALLER_DOWNLOAD_BYTES = 10 * 1024 * 1024;
-const BACKEND_HEALTH_TIMEOUT_MS = Math.max(15000, Number(process.env.KHA_BACKEND_HEALTH_TIMEOUT_MS) || 60000);
+const BACKEND_HEALTH_TIMEOUT_MS = Math.max(30000, Number(process.env.KHA_BACKEND_HEALTH_TIMEOUT_MS) || 30000);
 
 let mainWindow = null;
 let backendProcess = null;
+let backendFileLogStream = null;
+let backendStartupWindow = null;
 let backendPort = null;
 let backendApiBase = '';
 let backendHealth = null;
@@ -232,6 +234,88 @@ function stopBackend() {
   }
 }
 
+// KHA FIX 2.3.3: ghi log backend production ra file userData/logs/backend.log
+// để khi báo "Không thể chạy backend / ECONNREFUSED" người dùng có thể xem lý do thật.
+function getBackendLogFile() {
+  try {
+    const logsDir = path.join(app.getPath('userData'), 'logs');
+    if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+    return path.join(logsDir, 'backend.log');
+  } catch (_) {
+    return null;
+  }
+}
+
+function appendBackendLog(line) {
+  try {
+    const logFile = getBackendLogFile();
+    if (!logFile) return;
+    const ts = new Date().toISOString();
+    fs.appendFileSync(logFile, `[${ts}] ${line}\n`, 'utf8');
+  } catch (_) {
+    // Best-effort logging only.
+  }
+}
+
+function openBackendFileLogStream() {
+  closeBackendFileLogStream();
+  try {
+    const logFile = getBackendLogFile();
+    if (!logFile) return;
+    backendFileLogStream = fs.createWriteStream(logFile, { flags: 'a' });
+    backendFileLogStream.on('error', () => { backendFileLogStream = null; });
+  } catch (_) {
+    backendFileLogStream = null;
+  }
+}
+
+function closeBackendFileLogStream() {
+  if (backendFileLogStream) {
+    try { backendFileLogStream.end(); } catch (_) {}
+    backendFileLogStream = null;
+  }
+}
+
+function writeBackendLogLine(text) {
+  const trimmed = String(text || '').replace(/\r?\n$/, '');
+  if (!trimmed) return;
+  if (backendFileLogStream) {
+    try { backendFileLogStream.write(trimmed + '\n'); return; } catch (_) {}
+  }
+  appendBackendLogLine(trimmed);
+}
+
+// KHA FIX 2.3.3: màn hình "Đang khởi động backend..." thay vì trắng màn hình / quit ngay.
+function showBackendStartupWindow() {
+  if (backendStartupWindow && !backendStartupWindow.isDestroyed()) return;
+  try {
+    backendStartupWindow = new BrowserWindow({
+      width: 480,
+      height: 240,
+      frame: false,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      show: true,
+      alwaysOnTop: false,
+      backgroundColor: '#ffffff',
+      webPreferences: { contextIsolation: true, nodeIntegration: false },
+    });
+    backendStartupWindow.setMenuBarVisibility(false);
+    backendStartupWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Đang khởi động</title><style>html,body{margin:0;height:100%;font-family:'Segoe UI',Inter,Arial,sans-serif;background:#fff;color:#1f2937;display:flex;align-items:center;justify-content:center} .box{text-align:center;padding:24px} .sp{width:42px;height:42px;border:4px solid #e5e7eb;border-top-color:#2563eb;border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 18px} @keyframes sp{to{transform:rotate(360deg)}} h2{margin:0 0 6px;font-size:18px} p{margin:0;color:#6b7280;font-size:13px}</style></head><body><div class="box"><div class="sp"></div><h2>Đang khởi động backend nội bộ...</h2><p>Vui lòng đợi trong giây lát. Ứng dụng sẽ mở tự động khi sẵn sàng.</p></div></body></html>`));
+    backendStartupWindow.on('closed', () => { backendStartupWindow = null; });
+  } catch (_) {
+    // Best-effort splash window.
+  }
+}
+
+function closeBackendStartupWindow() {
+  if (backendStartupWindow && !backendStartupWindow.isDestroyed()) {
+    try { backendStartupWindow.destroy(); } catch (_) {}
+  }
+  backendStartupWindow = null;
+}
+
 async function startBackend(options = {}) {
   const userData = app.getPath('userData');
   const dbPath = path.join(userData, 'phanmienoffline.db.json');
@@ -243,6 +327,18 @@ async function startBackend(options = {}) {
   const apiBase = `http://${getBackendClientHost(BACKEND_HOST)}:${port}/api`;
   const backendEntry = getBackendEntryPath();
   const backendCwd = getBackendCwd();
+
+  // KHA FIX 2.3.3: kiểm tra file backend tồn tại + ghi log production đầy đủ.
+  openBackendFileLogStream();
+  const startLine = `[START] backendEntry=${backendEntry} | cwd=${backendCwd} | port=${port} | host=${BACKEND_HOST} | apiBase=${apiBase} | packaged=${app.isPackaged} | nodeExe=${process.execPath} | dbPath=${dbPath}`;
+  writeBackendLogLine(startLine);
+  console.log(`[KHA Electron] ${startLine}`);
+  if (!fs.existsSync(backendEntry)) {
+    const msg = `Không tìm thấy file backend nội bộ tại: ${backendEntry}`;
+    writeBackendLogLine(`[ERROR] ${msg}`);
+    closeBackendFileLogStream();
+    throw new Error(msg);
+  }
 
   const env = {
     ...process.env,
@@ -274,11 +370,13 @@ async function startBackend(options = {}) {
   let healthConfirmed = false;
 
   backendProcess = child;
-  pipeBackendLog(child.stdout, message => console.log(message));
-  pipeBackendLog(child.stderr, message => console.error(message));
+  pipeBackendLog(child.stdout, message => { console.log(message); writeBackendLogLine(message); });
+  pipeBackendLog(child.stderr, message => { console.error(message); writeBackendLogLine(message); });
 
   child.once('error', err => {
-    console.error('[KHA Electron] Backend process error:', err);
+    const msg = `Backend process error: ${err && err.message ? err.message : err}`;
+    console.error('[KHA Electron] ' + msg);
+    writeBackendLogLine(`[ERROR] ${msg}`);
   });
 
   child.once('exit', (code, signal) => {
@@ -291,6 +389,7 @@ async function startBackend(options = {}) {
     if (!app.isQuitting) {
       const reason = `Backend process exited (code=${code}, signal=${signal || 'none'})`;
       console.warn(`[KHA Electron] ${reason}`);
+      writeBackendLogLine(`[EXIT] ${reason} | healthConfirmed=${healthConfirmed}`);
       if (healthConfirmed) {
         quitAfterBackendFatalError('Backend nội bộ đã dừng bất thường', new Error(reason));
       }
@@ -352,10 +451,18 @@ function getBackendInfo() {
 function showBackendFatalError(title, err) {
   const detail = err?.stack || err?.message || String(err || 'Unknown backend error');
   console.error(`[KHA Electron] ${title}:`, err);
+  let logHint = '';
+  try {
+    const logFile = getBackendLogFile();
+    if (logFile) {
+      logHint = `\n\nNhật ký backend:\n${logFile}`;
+      writeBackendLogLine(`[FATAL] ${title}: ${detail}`);
+    }
+  } catch (_) {}
   try {
     dialog.showErrorBox(
       'Không thể chạy backend',
-      `${title}.\n\nỨng dụng desktop cần backend nội bộ hoạt động để đọc/ghi dữ liệu. Ứng dụng sẽ dừng thay vì mở giao diện không có kết nối.\n\nChi tiết:\n${detail}`
+      `${title}.\n\nỨng dụng desktop cần backend nội bộ hoạt động để đọc/ghi dữ liệu. Ứng dụng sẽ dừng thay vì mở giao diện không có kết nối.\n\nChi tiết:\n${detail}${logHint}`
     );
   } catch (_) {
     // Ignore dialog failures in headless/test environments.
@@ -836,13 +943,20 @@ app.whenReady().then(async () => {
   updateManager = createUpdateManager({ app, getMainWindow: () => mainWindow });
   updateManager.registerIpc(ipcMain);
 
+  // KHA FIX 2.3.3: hiển thị màn hình "Đang khởi động backend..." ngay lập tức thay vì trắng màn hình.
+  let mainReady = false;
+  showBackendStartupWindow();
   try {
     await startBackend();
   } catch (err) {
+    closeBackendStartupWindow();
     quitAfterBackendFatalError('Không thể khởi động backend nội bộ', err);
     return;
   }
+  // Tạo cửa sổ chính TRƯỚC khi đóng splash, tránh window-all-closed -> app.quit() race.
   createWindow();
+  mainReady = true;
+  closeBackendStartupWindow();
   void upgradeShortcuts(mainWindow);
 
   app.on('activate', () => {
@@ -861,6 +975,8 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
+  closeBackendStartupWindow();
   stopBackend();
+  closeBackendFileLogStream();
 });
 

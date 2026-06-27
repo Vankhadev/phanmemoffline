@@ -1,3 +1,29 @@
+## v2.3.3 - 2026-06-27
+
+### Sửa lỗi nghiêm trọng: Electron production không khởi động được backend nội bộ (ECONNREFUSED 127.0.0.1:7000)
+
+**Nguyên nhân gốc (đã tái hiện):**
+- Khi Electron production spawn backend, nó truyền `KHA_DB_PATH` trỏ tới `%APPDATA%\Bán Hàng Pos\phanmienoffline.db.json`.
+- Nhưng `resolveDBPath()` trong `backend/src/db/database.js` lại để `config.json` (file cũ tại `%APPDATA%\Ban hang offline - Van kha mmo\config.json`, trỏ tới `E:\backup_du_lieu_phan_mem_no_del\...`) **lấn ưu tiên** so với `KHA_DB_PATH`.
+- Khi DB do config.json trỏ tới bị thiếu/rỗng (máy mới, cài lại, hoặc backup bị xóa), backend tự động chạy `performDeepScan()` quét toàn bộ ổ đĩa `C:\,D:\,E:\,F:\` và parse hàng chục file JSON lớn để "chọn database tốt nhất".
+- Quá trình quét này mất nhiều phút -> backend không kịp mở cổng 7000 -> Electron health check timeout -> báo **"Không thể chạy backend / Backend did not become healthy at http://127.0.0.1:7000/api/health / ECONNREFUSED 127.0.0.1:7000"**.
+
+**Đã sửa:**
+1. `backend/src/db/database.js` — `resolveDBPath()`: khi Electron đã set `KHA_DB_PATH` (production), biến env này có quyền cao nhất, **không** để `config.json` override. Nếu DB rỗng/thiếu thì tạo DB trống tại đúng path Electron chỉ định và **bỏ qua deep scan toàn ổ đĩa khi khởi động** (nút "Khôi phục dữ liệu" trong app vẫn chạy scan theo yêu cầu người dùng). Deep scan chỉ giữ cho chế độ chạy backend độc lập (npm start).
+2. `src/main.js` — ghi log backend production đầy đủ ra `userData/logs/backend.log` (backendEntry, cwd, port, host, stdout, stderr, exit code). Khi báo lỗi "Không thể chạy backend", hộp thoại hiện kèm đường dẫn file log để xem nguyên nhân thật.
+3. `src/main.js` — kiểm tra file backend nội bộ tồn tại trước khi spawn, báo rõ nếu thiếu.
+4. `src/main.js` — tăng timeout health check backend lên 30 giây (trước đó có thể báo lỗi quá sớm).
+5. `src/main.js` — hiển thị màn hình **"Đang khởi động backend nội bộ..."** thay vì trắng màn hình / quit ngay khi backend chưa sẵn sàng.
+6. Giữ nguyên mọi chức năng: login/register, sản phẩm, đơn hàng, báo cáo, mẫu in hóa đơn, in silent, Data Guardian, backup.
+7. **Không reset database, không xóa dữ liệu, không đổi key nghiệp vụ.**
+
+### Cách xem log khi gặp lỗi backend
+- Log backend: `%APPDATA%\Bán Hàng Pos\logs\backend.log`
+- Log electron: `logs/electron.log` (cùng thư mục app dev) / `%APPDATA%\Bán Hàng Pos\logs\electron.log`
+
+### Lưu ý nâng cấp
+- Bản 2.3.2 đã lỗi production (backend không start). Bản 2.3.3 sửa lỗi này.
+- Người dùng đang ở 2.2.8 (hoặc cũ hơn) khi auto-update lên 2.3.3 sẽ dùng lại DB hiện tại (config.json không còn override KHA_DB_PATH nữa).
 ## v2.3.2 - 2026-06-27
 
 - S?a l?i Register.jsx sai JSX closing tag (?? kh?i ph?c ? 2.3.1, gi? ?n ??nh).

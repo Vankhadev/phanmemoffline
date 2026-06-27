@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Lightweight JSON database layer for the offline-first backend.
  *
  * The helpers in this module intentionally keep a small synchronous API because
@@ -347,13 +347,26 @@ function resolveDBPath() {
   const envPath = process.env.KHA_DB_PATH || process.env.DB_PATH || process.env.DATABASE_PATH;
   const defaultPath = envPath ? path.resolve(envPath) : path.resolve(__dirname, '..', '..', 'data', 'phanmienoffline.db.json');
 
+  // KHA FIX 2.3.3 (backend production startup hang):
+  // Khi Electron production chạy backend, nó luôn set KHA_DB_PATH (trỏ vào userData
+  // của app, vd %APPDATA%\Bán Hàng Pos\phanmienoffline.db.json). Biến env này PHẢI có
+  // quyền cao nhất - không để config.json cũ (có thể trỏ tới backup ở E:\...) lấn
+  // ưu tiên và gây quét toàn bộ ổ đĩa khi backup đó bị thiếu/rỗng.
+  // Trước đây `activePath = currentConfigPath || defaultPath` để config.json override
+  // KHA_DB_PATH -> backend khởi động lại dùng DB cũ, và khi DB đó rỗng thì
+  // performDeepScan() quét C:\D:\E:\F:\ parse hàng chục file JSON lớn -> backend
+  // không kịp mở port 7000 -> Electron báo ECONNREFUSED 127.0.0.1:7000.
+  const electronOwned = Boolean(envPath);
+
   const config = readDatabaseConfig();
   let currentConfigPath = null;
   if (config && config.database_path) {
     currentConfigPath = path.resolve(config.database_path);
   }
 
-  const activePath = currentConfigPath || defaultPath;
+  // Ưu tiên: env KHA_DB_PATH (Electron production) > config.json > default project.
+  // config.json CHỈ được dùng khi KHÔNG có envPath (chạy backend độc lập npm start).
+  const activePath = electronOwned ? defaultPath : (currentConfigPath || defaultPath);
   const activeStats = getDbFileStats(activePath);
 
   // High-performance optimization: if current database already has data, skip startup scan
@@ -362,7 +375,16 @@ function resolveDBPath() {
     return activePath;
   }
 
-  // Perform the scan on startup ONLY if active database is empty
+  // Khi Electron sở hữu DB path (envPath được set), KHÔNG chạy deep scan toàn ổ đĩa
+  // khi khởi động - đây là nguồn gây treo backend production. Nếu DB rỗng/thiếu thì
+  // tạo DB trống tại activePath và để API /api/database/restore-scan chạy theo yêu
+  // cầu người dùng (nút Khôi phục dữ liệu). Tránh block port binding.
+  if (electronOwned) {
+    console.log(`[INFO] Chế độ Electron production (KHA_DB_PATH đã set). Bỏ qua quét ổ đĩa khi khởi động: ${activePath}`);
+    return activePath;
+  }
+
+  // Perform the scan on startup ONLY if active database is empty (chỉ dev/standalone)
   const statsList = performDeepScan();
 
   if (statsList.length === 0) {
@@ -2283,7 +2305,16 @@ function migrateDB() {
   normalizeInvoiceCodeUniqueness();
   ensureAllDocumentSequenceCounters();
   rebuildAllDailyStatsFromInvoices();
-  importOldCustomerDatabase();
+  // KHA FIX 2.3.3: bỏ qua migration "old customer database" (quét C:\D:\E:\F:\backup
+  // parse từng file JSON để tìm dongphuongqc@gmail.com) khi chạy trong Electron
+  // production (KHA_DB_PATH đã set). Quá trình này mất nhiều phút và là nguyên nhân
+  // thứ hai gây treo startup backend production. Người dùng đã có dữ liệu trong DB
+  // hiện tại; việc khôi phục dữ liệu cũ nên làm thủ công qua nút "Khôi phục dữ liệu".
+  if (!process.env.KHA_DB_PATH && !process.env.DB_PATH && !process.env.DATABASE_PATH) {
+    importOldCustomerDatabase();
+  } else if (process.env.KHA_SKIP_OLD_DB_MIGRATION !== '0') {
+    console.log('[MIGRATION 1.6.8] Bỏ qua quét old customer database khi khởi động (chế độ Electron production).');
+  }
   recalculateNextIds();
 }
 
