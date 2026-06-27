@@ -211,7 +211,10 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
   const product_name = displayFields.product_name;
   const product_sku = displayFields.product_sku;
   const quantity = +detail.quantity || 1;
-  const explicitUnitPrice = toNumber(detail.sale_price_at_sale ?? detail.unit_price ?? detail.sale_price, Number.NaN);
+  // Ưu tiên unit_price (giá dòng đơn hiện tại người dùng đang thấy/sửa) hơn sale_price_at_sale
+  // (snapshot cũ). Khi sửa đơn, frontend gửi unit_price mới; nếu ưu tiên sale_price_at_sale
+  // thì giá cũ sẽ lấn giá mới và giá không bao giờ lưu được.
+  const explicitUnitPrice = toNumber(detail.unit_price ?? detail.sale_price_at_sale ?? detail.sale_price ?? detail.price, Number.NaN);
   const unit_price = Number.isFinite(explicitUnitPrice) ? Math.max(0, explicitUnitPrice) : 0;
   const discount_amount = +detail.discount_amount || 0;
 

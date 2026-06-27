@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiJson, apiJsonChecked, resolveApiUrl, requestSyncCheck } from '../utils/apiClient';
+import { apiJson, apiJsonChecked, clearApiCache, resolveApiUrl, requestSyncCheck } from '../utils/apiClient';
 import { globalSyncEmitter } from '../utils/eventEmitter';
 import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud, Printer, FileDown } from 'lucide-react';
 import { getProductDisplayName, scoreProductMatch } from '../utils/productSearch';
@@ -289,6 +289,12 @@ export default function OrderList() {
         if (i !== lineIndex) return d;
         const newItem = { ...d, unit_price: price };
         newItem.line_total = newItem.quantity * price - (newItem.discount_amount || 0);
+        // Giữ snapshot giá bán khớp với giá dòng mới để backend lưu đúng.
+        newItem.sale_price_at_sale = price;
+        const costPrice = newItem.cost_price_at_sale != null
+          ? Number(newItem.cost_price_at_sale)
+          : (newItem.import_price != null ? Number(newItem.import_price) : 0);
+        newItem.profit_at_sale = (Number(price) - costPrice) * (Number(newItem.quantity) || 1);
         return newItem;
       });
       // recalc order totals
@@ -662,18 +668,20 @@ export default function OrderList() {
       const quantity = Number(line.quantity) || 1;
       const discountPercent = Number(line.discount_percent) || 0;
       const discountAmount = discountPercent > 0 ? quantity * currentUnitPrice * discountPercent / 100 : (Number(line.discount_amount) || 0);
-      // Preserve historic cost/sale prices if they already exist; otherwise set them based on current product price.
-      const costPrice = line.cost_price_at_sale != null ? line.cost_price_at_sale : (line.import_price != null ? line.import_price : currentUnitPrice);
-      const salePrice = line.sale_price_at_sale != null ? line.sale_price_at_sale : currentUnitPrice;
-      const profit = line.profit_at_sale != null ? line.profit_at_sale : (salePrice - costPrice) * quantity;
+      // Ưu tiên unit_price hiện tại của dòng (giá user đang thấy/sửa). sale_price_at_sale
+      // (snapshot cũ) KHÔNG được lấn unit_price, nếu không sửa giá sẽ không bao giờ lưu.
+      const resolvedUnitPrice = line.unit_price != null ? Number(line.unit_price) : currentUnitPrice;
+      // Giá vốn: giữ snapshot cost_price_at_sale/import_price nếu có, nếu không lấy giá vốn product.
+      const costPrice = line.cost_price_at_sale != null ? Number(line.cost_price_at_sale) : (line.import_price != null ? Number(line.import_price) : (source && source.import_price != null ? Number(source.import_price) : 0));
+      const profit = (resolvedUnitPrice - costPrice) * quantity;
       return {
         ...line,
-        unit_price: line.unit_price != null ? line.unit_price : currentUnitPrice,
+        unit_price: resolvedUnitPrice,
         cost_price_at_sale: costPrice,
-        sale_price_at_sale: salePrice,
+        sale_price_at_sale: resolvedUnitPrice,
         profit_at_sale: profit,
         discount_amount: discountAmount,
-        line_total: quantity * (line.unit_price != null ? line.unit_price : currentUnitPrice) - discountAmount,
+        line_total: quantity * resolvedUnitPrice - discountAmount,
       };
     });
   }, [getLineProductSource]);
@@ -856,6 +864,16 @@ export default function OrderList() {
           newItem.discount_amount = newItem.quantity * newItem.unit_price * newItem.discount_percent / 100;
         }
         newItem.line_total = newItem.quantity * newItem.unit_price - (newItem.discount_amount || 0);
+        // Đồng bộ snapshot giá tại thời điểm bán theo giá dòng hiện tại.
+        // sale_price_at_sale phải khớp unit_price để backend lưu đúng giá mới
+        // (backend ưu tiên unit_price, nhưng giữ snapshot khớp tránh lệch dữ liệu).
+        if (field === 'unit_price' || field === 'quantity') {
+          newItem.sale_price_at_sale = newItem.unit_price;
+          const costPrice = newItem.cost_price_at_sale != null
+            ? Number(newItem.cost_price_at_sale)
+            : (newItem.import_price != null ? Number(newItem.import_price) : 0);
+          newItem.profit_at_sale = (Number(newItem.unit_price) - costPrice) * (Number(newItem.quantity) || 1);
+        }
         return newItem;
       });
       const sub = updated.reduce((s, d) => s + (d.line_total || 0), 0);
@@ -1094,6 +1112,15 @@ export default function OrderList() {
         // Nếu sản phẩm không tồn tại trong danh mục hiện tại, bỏ product_id / variant_id để server không trả lỗi
         const productExists = product_id && editProducts.some(p => Number(p.id) === Number(product_id));
         const variantExists = variant_id && editProducts.some(p => Number(p.id) === Number(variant_id));
+        // Quy chuẩn giá tại thời điểm bán: sale_price_at_sale phải khớp unit_price hiện tại
+        // của dòng đơn hàng (giá user đang thấy/sửa). Đây là giá riêng của dòng đơn, không lấy
+        // lại từ bảng products. Backend ưu tiên unit_price, nhưng giữ snapshot khớp để load lại
+        // hiển thị đúng và báo cáo lợi nhuận lấy đúng giá đã bán.
+        const finalUnitPrice = Math.max(0, Number(unit_price) || 0);
+        const finalCostPrice = Math.max(0, Number(cost_price_at_sale != null ? cost_price_at_sale : (import_price != null ? import_price : 0)) || 0);
+        const finalQuantity = Number(quantity) || 1;
+        const finalLineTotal = Math.max(0, Number(line_total) || (finalQuantity * finalUnitPrice - (Number(discount_amount) || 0)));
+        const finalProfit = (finalUnitPrice - finalCostPrice) * finalQuantity;
         return {
           type: type || item_type || (is_service || isService ? 'service' : undefined),
           item_type: item_type || type || (is_service || isService ? 'service' : undefined),
@@ -1108,22 +1135,46 @@ export default function OrderList() {
           product_sku: product_sku || sku || '',
           name: name || product_name || '',
           sku: sku || product_sku || '',
-          quantity,
-          unit_price,
-          import_price: import_price ?? cost_price_at_sale ?? 0,
-          cost_price_at_sale: cost_price_at_sale ?? import_price ?? 0,
-          sale_price_at_sale: sale_price_at_sale ?? unit_price ?? 0,
-          profit_at_sale: profit_at_sale ?? ((sale_price_at_sale ?? unit_price ?? 0) - (cost_price_at_sale ?? import_price ?? 0)) * (quantity || 1),
-          discount_amount,
-          discount_percent,
-          line_total,
+          quantity: finalQuantity,
+          unit_price: finalUnitPrice,
+          import_price: finalCostPrice,
+          cost_price_at_sale: finalCostPrice,
+          sale_price_at_sale: finalUnitPrice,
+          profit_at_sale: finalProfit,
+          discount_amount: Math.max(0, Number(discount_amount) || 0),
+          discount_percent: Math.max(0, Number(discount_percent) || 0),
+          line_total: finalLineTotal,
         };
       }),
       };
+      // Log payload để kiểm tra giá gửi lên (yêu cầu debug nghiệp vụ sửa đơn).
+      try { console.log('UPDATE_ORDER_PAYLOAD', payload); } catch {}
       await apiJsonChecked(`/invoices/${showEdit.id}`, { method: 'PUT', body: payload }, 'Không thể lưu đơn hàng.');
+      // Verify dữ liệu vừa lưu: gọi GET order detail để chắc chắn database đã cập nhật thật.
+      try {
+        clearApiCache();
+        const verified = await apiJson(`/invoices/${showEdit.id}?_verify=${Date.now()}`, {}, 'Không tải lại được đơn hàng để kiểm tra.');
+        const sentPrices = (payload.details || []).map(d => ({ key: `${d.type || d.item_type || 'product'}:${d.product_id || d.variant_id || d.combo_id || ''}:${d.product_name || d.name || ''}`, unit_price: Math.max(0, Number(d.unit_price) || 0) }));
+        const gotDetails = Array.isArray(verified?.details) ? verified.details : [];
+        const mismatches = [];
+        for (const sent of sentPrices) {
+          const got = gotDetails.find(g => `${g.type || g.item_type || 'product'}:${g.product_id || g.variant_id || g.combo_id || ''}:${g.product_name || g.name || ''}` === sent.key);
+          if (!got) { mismatches.push({ key: sent.key, reason: 'dòng không tồn nay sau lưu' }); continue; }
+          const gotPrice = Math.max(0, Number(got.unit_price) || 0);
+          if (gotPrice !== sent.unit_price) mismatches.push({ key: sent.key, sent: sent.unit_price, got: gotPrice });
+        }
+        if (mismatches.length > 0) {
+          throw new Error('Lưu thất bại: giá đơn hàng chưa được cập nhật vào database. ' + JSON.stringify(mismatches));
+        }
+      } catch (verifyErr) {
+        // Không đóng form, báo lỗi rõ ràng để user biết database chưa cập nhật thật.
+        alert(verifyErr?.message || 'Lưu thất bại: giá đơn hàng chưa được cập nhật vào database.');
+        return;
+      }
       setShowEdit(null);
       setEditBaselineDetails([]);
       notifyOrderChanged({ reason: 'order-updated', invoice_id: showEdit.id });
+      clearApiCache();
       await fetchInvoices();
       apiJson('/products/all/with-variants').catch(() => { });
     } catch (err) {

@@ -745,13 +745,36 @@ router.put('/:id', async (req, res) => {
           ...detail,
           ...resolveInvoiceDetailDisplayFields(detail, id => getOne('products', product => Number(product.id) === Number(id))),
         }));
-      syncInvoiceAccounting(updatedInvoice, { skipSave: true, previousCreatedAt, timestamp: now(), userId: req.user?.id || updatedInvoice.user_id || null });
+      // Tính lại tổng tiền từ các dòng chi tiết THỰC TẾ đã lưu vào database (không tin tưởng
+      // subtotal/total do client gửi) để đảm bảo tổng luôn khớp giá dòng. Giá dòng đã được
+      // normalize với unit_price mới, nên subtotal/profit tính theo giá mới.
+      const persistedSubtotal = updatedDetails.reduce((sum, d) => sum + (Number(d.line_total) || 0), 0);
+      const persistedProfit = updatedDetails.reduce((sum, d) => sum + (Number(d.profit_at_sale) || 0), 0);
+      const vatPct = Math.max(0, Number(updatedInvoice.vat_percent) || 0);
+      const persistedVatAmount = persistedSubtotal * vatPct / 100;
+      const persistedDiscountAmount = Number(updatedInvoice.discount_percent) > 0
+        ? persistedSubtotal * Number(updatedInvoice.discount_percent) / 100
+        : Math.max(0, Number(updatedInvoice.discount_amount) || 0);
+      const persistedDeliveryFee = Math.max(0, Number(updatedInvoice.delivery_fee) || 0);
+      const persistedTotal = Math.max(0, persistedSubtotal + persistedVatAmount - persistedDiscountAmount + persistedDeliveryFee);
+      const persistedPaid = Math.max(0, Number(updatedInvoice.paid_amount) || 0);
+      update('invoices', updatedInvoice.id, {
+        subtotal: persistedSubtotal,
+        vat_amount: persistedVatAmount,
+        discount_amount: persistedDiscountAmount,
+        total: persistedTotal,
+        remaining_amount: Math.max(0, persistedTotal - persistedPaid),
+        change_amount: Math.max(0, persistedPaid - persistedTotal),
+        total_profit: persistedProfit,
+      }, { skipSave: true });
+      const recalculatedInvoice = getOne('invoices', i => Number(i.id) === Number(inv.id));
+      syncInvoiceAccounting(recalculatedInvoice, { skipSave: true, previousCreatedAt, timestamp: now(), userId: req.user?.id || recalculatedInvoice.user_id || null });
       logActivity(req, 'invoice.update', {
         type: 'invoice',
-        id: updatedInvoice.id,
-        code: updatedInvoice.invoice_code,
-      }, inv, updatedInvoice, `Cập nhật đơn hàng ${updatedInvoice.invoice_code || updatedInvoice.id}`, { skipSave: true, accountId: updatedInvoice.account_id || req.accountId });
-      return { ok: true, invoice: updatedInvoice, details: updatedDetails };
+        id: recalculatedInvoice.id,
+        code: recalculatedInvoice.invoice_code,
+      }, inv, recalculatedInvoice, `Cập nhật đơn hàng ${recalculatedInvoice.invoice_code || recalculatedInvoice.id}`, { skipSave: true, accountId: recalculatedInvoice.account_id || req.accountId });
+      return { ok: true, invoice: recalculatedInvoice, details: updatedDetails };
     }));
 
     res.json(result);

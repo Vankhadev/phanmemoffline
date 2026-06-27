@@ -1,3 +1,23 @@
+## v2.3.5 - 2026-06-27
+
+### Sửa lỗi nghiêm trọng: sửa giá đơn hàng không lưu vĩnh viễn
+
+- Sửa nguyên nhân gốc khi sửa đơn hàng: sale_price_at_sale cũ không còn lấn unit_price mới trong backend.
+- Khi người dùng sửa giá trong Danh sách đơn hàng, frontend đồng bộ unit_price, sale_price_at_sale, line_total và profit_at_sale theo giá mới.
+- Backend update đơn hàng lưu lại giá riêng của từng dòng trong invoice_details.unit_price, không lấy lại giá hiện tại từ bảng products.
+- API GET chi tiết đơn hàng hiển thị giá từ dòng chi tiết đơn hàng đã lưu; chỉ dùng products để bổ sung tên/SKU khi cần.
+- Sau khi lưu, frontend gọi lại API GET chi tiết đơn hàng bằng cache-bust và báo lỗi nếu database chưa trả về đúng giá vừa gửi.
+- Backend tính lại subtotal, 	otal, emaining_amount, change_amount và 	otal_profit từ các dòng chi tiết đã lưu.
+- Giữ tương thích dịch vụ khác và sản phẩm không có trong kho.
+
+### Đã test trước khi release
+1. Tạo đơn giá 95.000, sửa xuống 90.000, GET/reload vẫn là 90.000 — PASS.
+2. Sửa tiếp lên 100.000, GET/reload vẫn là 100.000 — PASS.
+3. Kiểm tra database: invoice_details.unit_price cập nhật đúng — PASS.
+4. Dịch vụ khác giữ giá riêng sau khi lưu/reload — PASS.
+5. Sản phẩm không có trong kho vẫn lưu được giá riêng — PASS.
+6. Tổng tiền tính lại đúng theo giá mới — PASS.
+7. Backend syntax check và frontend build — PASS.
 ## v2.3.4 - 2026-06-27
 
 ### Sửa lỗi Electron production không khởi động được backend nội bộ (ECONNREFUSED 127.0.0.1:7000)
