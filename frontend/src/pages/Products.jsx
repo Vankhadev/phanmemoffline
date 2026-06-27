@@ -313,7 +313,7 @@ const VariantFormModal = memo(function VariantFormModal({
       return;
     }
     onSubmit(form);
-  }, [form, negativeStockSettings, onStockLimitError, onSubmit, serviceMode]);
+  }, [form, negativeStockSettings, onStockLimitError, onSubmit]);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">

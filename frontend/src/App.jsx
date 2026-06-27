@@ -378,11 +378,11 @@ function buildScreenGuide(navGroups, currentPath) {
       'Bấm Thêm để tạo hồ sơ khách hàng mới.',
       'Nhập tên, số điện thoại, email và địa chỉ nếu có.',
       'Bấm Sửa để cập nhật thông tin khi khách đổi liên hệ.',
-      'M? lịch sử mua h?ng d? xem các don d? ph?t sinh.',
+      'Mở lịch sử mua hàng để xem các đơn đã phát sinh.',
     ],
     '/kho-hang': [
       'Xem tồn kho theo kho hoặc theo nhóm hàng.',
-      'Dùng tìm kiếm d? kiểm tra nhanh m?, t?n ho?c SKU.',
+      'Dùng tìm kiếm để kiểm tra nhanh mã, tên hoặc SKU.',
       'Theo dõi cảnh báo sắp hết hàng, hết hàng và âm kho.',
       'Dùng kiểm kê để đối chiếu số liệu thực tế với hệ thống.',
     ],
@@ -403,7 +403,7 @@ function buildScreenGuide(navGroups, currentPath) {
       'Dùng bộ lọc để xem lại lịch sử theo khoảng ngày mong muốn.',
     ],
     '/nhap-hang': [
-      'Chọn nh? cung cấp v? m? phiếu nhập n?u c?n.',
+      'Chọn nhà cung cấp và tạo phiếu nhập nếu cần.',
       'Thêm từng sản phẩm vào phiếu, nhập số lượng và giá nhập.',
       'Kiểm tra tổng tiền, chiết khấu và trạng thái thanh toán.',
       'Bấm lưu để cập nhật tồn kho hoặc lưu tạm khi chưa hoàn tất.',
@@ -415,7 +415,7 @@ function buildScreenGuide(navGroups, currentPath) {
       'Kiểm tra công nợ và lịch sử nhập hàng của nhà cung cấp.',
     ],
     '/danh-sach-don-hang': [
-      'Dùng bộ lọc d? t?m don theo m?, khách hàng, trạng thái ho?c thời gian.',
+      'Dùng bộ lọc để tìm đơn theo mã, khách hàng, trạng thái hoặc thời gian.',
       'Bấm Xem để mở chi tiết từng đơn hàng.',
       'Bấm In để in hóa đơn hoặc bấm PDF để lưu file.',
       'Kiểm tra trạng thái đơn trước khi thực hiện thao tác tiếp theo.',
@@ -447,7 +447,7 @@ function buildScreenGuide(navGroups, currentPath) {
     '/bang-luong-nhan-vien': [
       'Chọn tháng cần xem bảng lương.',
       'Kiểm tra doanh thu, hoa hồng, thưởng và trạng thái chi trả.',
-      'Cập nhật trạng thái d? thanh toán khi ho?n tốt chi tr?.',
+      'Cập nhật trạng thái đã thanh toán khi hoàn tất chi trả.',
       'Xuất file nếu cần lưu hoặc gửi cho kế toán.',
     ],
     '/bao-cao-theo-don-hang': [

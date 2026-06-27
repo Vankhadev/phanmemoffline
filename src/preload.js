@@ -50,6 +50,8 @@ const desktopApi = {
     download: () => ipcRenderer.invoke('kha:update:download'),
     cancel: () => ipcRenderer.invoke('kha:update:cancel'),
     install: () => ipcRenderer.invoke('kha:update:install'),
+    getSettings: () => ipcRenderer.invoke('kha:update:get-settings'),
+    saveSettings: (settings) => ipcRenderer.invoke('kha:update:save-settings', settings),
     onStatus: (callback) => {
       if (typeof callback !== 'function') return () => {};
       const listener = (_event, payload) => callback(payload);

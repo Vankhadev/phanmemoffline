@@ -1,6 +1,6 @@
 # Phan mem offline
 
-## Phiên bản hiện tại: 1.5.1
+## Phiên bản hiện tại: 2.3.1
 
 Ứng dụng quản lý bán hàng offline gồm:
 
@@ -98,6 +98,33 @@ Backend hỗ trợ các biến môi trường chính:
 - `KHA_SESSION_TTL_DAYS`
 
 Nếu không cấu hình session secret, backend tự sinh secret mạnh và lưu vào `.kha-session-secret` cạnh file database runtime. File này không nên commit lên repository.
+
+## Cơ chế port backend tự chọn (chống EADDRINUSE)
+
+Backend ưu tiên port `7000`. Nếu port `7000` đang bị một ứng dụng khác chiếm
+(lỗi `EADDRINUSE`), backend **không crash** mà tự tìm port trống kế tiếp trong
+danh sách: `7000 -> 7001 -> 7002 -> 7003 -> 7004 -> 7005 -> 7010 -> 7100`.
+
+- Port ưu tiên lấy từ biến môi trường `PORT` / `KHA_BACKEND_PORT` / `PHANMEM_PORT`.
+- Khi chạy thành công, backend ghi port thực tế vào `runtime/backend-port.json`:
+  ```json
+  { "host": "127.0.0.1", "port": 7001, "baseUrl": "http://127.0.0.1:7001/api", ... }
+  ```
+- API health `GET /api/health` trả đúng `port` và `baseUrl` hiện tại.
+- Frontend (browser dev) tự probe `/api/health` trên các port 7000-7100 để tìm
+  backend đang chạy, lưu vào `localStorage` key `kha_backend_base_url`. Nếu health
+  fail thì probe lại. Trong Electron, frontend lấy `apiBase` từ main process.
+- Backend log rõ khi chuyển port: `Port 7000 đang bận, chuyển sang port 7001.`
+
+### Kiểm tra ai đang dùng port (Windows)
+
+```cmd
+netstat -ano | findstr :7000
+taskkill /PID <PID> /F
+```
+
+App **không bắt buộc** người dùng tự tắt port: backend tự chọn port trống nếu
+port cũ bận.
 
 ## Đồng bộ/offline hiện tại
 

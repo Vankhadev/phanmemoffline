@@ -4,6 +4,7 @@ const net = require('net');
 const http = require('http');
 const https = require('https');
 const { spawn } = require('child_process');
+const fs = require('fs');
 const { randomUUID } = require('crypto');
 const { createUpdateManager } = require('./updater');
 const { upgradeShortcuts } = require('./shortcutManager');
@@ -303,11 +304,36 @@ async function startBackend(options = {}) {
     ]);
     healthConfirmed = true;
     console.log(`[KHA Electron] Backend ready at ${backendApiBase} (pid=${child.pid})`);
+    writeElectronRuntimePortFile();
   } catch (err) {
     stopBackend();
     backendPort = null;
     backendApiBase = '';
     throw err;
+  }
+}
+
+// KHA: ghi runtime/backend-port.json de frontend (dev/browser) doc duoc port backend.
+function writeElectronRuntimePortFile() {
+  try {
+    if (!backendPort) return;
+    const baseDir = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
+    const runtimeDir = path.join(baseDir, 'runtime');
+    if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
+    const runtimeFile = path.join(runtimeDir, 'backend-port.json');
+    const payload = {
+      host: getBackendClientHost(BACKEND_HOST),
+      port: backendPort,
+      baseUrl: backendApiBase,
+      startedAt: new Date().toISOString(),
+      pid: backendProcess?.pid || null,
+      instanceId: backendInstanceId,
+      source: 'electron',
+    };
+    fs.writeFileSync(runtimeFile, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    console.log(`[KHA Electron] Wrote runtime/backend-port.json -> ${backendApiBase}`);
+  } catch (err) {
+    console.warn(`[KHA Electron] Cannot write runtime/backend-port.json: ${err.message}`);
   }
 }
 

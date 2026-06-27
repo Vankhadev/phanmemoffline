@@ -812,6 +812,13 @@ function buildLoopbackRetryUrls(url) {
   addPort(configured.port);
   addPort(parsed.port);
   addPort('7000');
+  addPort('7001');
+  addPort('7002');
+  addPort('7003');
+  addPort('7004');
+  addPort('7005');
+  addPort('7010');
+  addPort('7100');
   addPort('3101');
 
   return retryPorts
@@ -852,7 +859,98 @@ async function fetchWithLoopbackRecovery(fetchImpl, url, requestInit, originalEr
     }
   }
 
+  // KHA: tat ca port thu cong deu fail -> probe health chu dong tren danh sach port,
+  // neu tim duoc backend dang song thi retry request len port do roi moi throw.
+  try {
+    const probedBase = await probeBackendHealth({ host: retryHostCandidates(url), signal: requestInit?.signal });
+    if (probedBase) {
+      const retryUrl = replaceApiBaseInUrl(url, probedBase);
+      debugApiLog('Recovered API request via health probe', { from: url, to: retryUrl });
+      const response = await fetchImpl(retryUrl, requestInit);
+      persistLocalApiBaseOverride(probedBase);
+      return response;
+    }
+  } catch (probeErr) {
+    debugApiLog('Health probe failed', { error: probeErr?.message || String(probeErr) });
+  }
+
   throw buildApiNetworkError(url, originalError);
+}
+
+// KHA: tra host loopback tu url de probe.
+function retryHostCandidates(url) {
+  const parsed = parseUrl(url);
+  if (!parsed) return '127.0.0.1';
+  return isLoopbackHost(parsed.hostname) ? parsed.hostname : '127.0.0.1';
+}
+
+// KHA: thay api base trong url bang base moi (giu path/search).
+function replaceApiBaseInUrl(url, newApiBase) {
+  const parsed = parseUrl(url);
+  const baseParsed = parseUrl(newApiBase);
+  if (!parsed || !baseParsed) return url;
+  const pathname = String(parsed.pathname || '');
+  const apiIdx = pathname.toLowerCase().lastIndexOf('/api');
+  const tail = apiIdx >= 0 ? pathname.slice(apiIdx + 4) : pathname;
+  const newPath = (String(baseParsed.pathname || '').replace(/\/api$/i, '')) + '/api' + (tail.startsWith('/') ? tail : `/${tail}`);
+  return `${baseParsed.protocol}//${baseParsed.host}${newPath}${parsed.search || ''}`;
+}
+
+// KHA: probe health chu dong. Thu lan luot danh sach port, tra apiBase dau tien song.
+// Luu vao localStorage 'kha_backend_base_url' de lan sau dung lai (nhung neu health fail thi probe lai).
+const KHA_BACKEND_BASE_URL_KEY = 'kha_backend_base_url';
+const PROBE_PORTS = ['7000', '7001', '7002', '7003', '7004', '7005', '7010', '7100'];
+const PROBE_TIMEOUT_MS = 1200;
+
+let probingPromise = null;
+
+export async function probeBackendHealth({ host = '127.0.0.1', signal } = {}) {
+  if (typeof window === 'undefined') return '';
+  // Thu base da luu truoc (kha_backend_base_url) truoc.
+  const stored = readStorageValue(KHA_BACKEND_BASE_URL_KEY);
+  if (stored) {
+    try {
+      const data = await fetchJsonWithTimeout(`${stored}/health`, PROBE_TIMEOUT_MS, signal);
+      if (data && data.ok === true && data.service === 'phanmienoffline-backend') {
+        return stored;
+      }
+    } catch (_) {}
+  }
+  // Probe lan luot cac port.
+  if (probingPromise) return probingPromise;
+  probingPromise = (async () => {
+    try {
+      for (const port of PROBE_PORTS) {
+        const base = `http://${host}:${port}/api`;
+        try {
+          const data = await fetchJsonWithTimeout(`${base}/health`, PROBE_TIMEOUT_MS, signal);
+          if (data && data.ok === true && data.service === 'phanmienoffline-backend') {
+            writeStorageValue(KHA_BACKEND_BASE_URL_KEY, base);
+            debugApiLog('probeBackendHealth: found backend', { base });
+            return base;
+          }
+        } catch (_) {}
+      }
+      return '';
+    } finally {
+      probingPromise = null;
+    }
+  })();
+  return probingPromise;
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs, signal) {
+  if (typeof window === 'undefined' || typeof window.fetch !== 'function') throw new Error('no fetch');
+  const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const res = await window.fetch(url, { signal: signal || (controller ? controller.signal : undefined) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 async function executeApiRequest(fetchImpl, url, requestInit) {

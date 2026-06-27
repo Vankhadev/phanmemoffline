@@ -13,6 +13,8 @@ const CHANNELS = Object.freeze({
   cancel: 'kha:update:cancel',
   install: 'kha:update:install',
   status: 'kha:update:status',
+  getSettings: 'kha:update:get-settings',
+  saveSettings: 'kha:update:save-settings',
 });
 
 const DB_FILE_NAME = 'phanmienoffline.db.json';
@@ -30,6 +32,15 @@ const SENSITIVE_TEXT_PATTERNS = [
   /([?&](?:token|access_token|auth|authorization|signature|X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token)=)[^&\s]+/gi,
 ];
 const STARTUP_CHECK_DELAY_MS = 3500;
+
+// Cài đặt cập nhật do người dùng kiểm soát. Mặc định TẤT CẢ TẮT để tránh tự cập nhật.
+// Lưu tại userData/update-settings.json. Chỉ production mới đọc/áp dụng.
+const UPDATE_SETTINGS_FILE_NAME = 'update-settings.json';
+const DEFAULT_UPDATE_SETTINGS = Object.freeze({
+  autoCheckUpdate: false,    // Tự động kiểm tra cập nhật khi mở app: MẶC ĐỊNH TẮT
+  autoDownloadUpdate: false, // Tự động tải cập nhật: MẶC ĐỊNH TẮT
+  autoInstallUpdate: false,  // Tự động cài cập nhật: LUÔN TẮT, phải xác nhận người dùng
+});
 
 function createPublicError(code, message, details) {
   const err = new Error(message);
@@ -158,7 +169,48 @@ async function sha256File(filePath) {
   });
 }
 
+// === Cài đặt cập nhật do người dùng kiểm soát (mặc định TẮT toàn bộ auto) ===
+// Lưu tại <userData>/update-settings.json. Chỉ đọc trong production (app.isPackaged).
+function getUpdateSettingsFilePath(app) {
+  return path.join(app.getPath('userData'), UPDATE_SETTINGS_FILE_NAME);
+}
+
+function readUpdateSettings(app) {
+  try {
+    const filePath = getUpdateSettingsFilePath(app);
+    if (!fs.existsSync(filePath)) return { ...DEFAULT_UPDATE_SETTINGS };
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(raw || '{}');
+    return {
+      autoCheckUpdate: parsed.autoCheckUpdate === true,
+      autoDownloadUpdate: parsed.autoDownloadUpdate === true,
+      autoInstallUpdate: false, // Luôn TẮT, không cho phép tự cài đặt
+    };
+  } catch (_) {
+    return { ...DEFAULT_UPDATE_SETTINGS };
+  }
+}
+
+function writeUpdateSettings(app, settings) {
+  try {
+    const filePath = getUpdateSettingsFilePath(app);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const payload = {
+      autoCheckUpdate: Boolean(settings?.autoCheckUpdate),
+      autoDownloadUpdate: Boolean(settings?.autoDownloadUpdate),
+      autoInstallUpdate: false, // Luôn TẮT
+      savedAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 let packageConfigCache = null;
+
 
 function getPackageConfig() {
   if (packageConfigCache) return packageConfigCache;
@@ -860,6 +912,7 @@ function createUpdateManager({ app, getMainWindow }) {
     lastCheckedAt: '',
     lastError: null,
     devUpdateForced: isDevUpdaterForced(),
+    updateSettings: readUpdateSettings(app),
   };
 
   function getPublicState() {
@@ -894,6 +947,7 @@ function createUpdateManager({ app, getMainWindow }) {
       lastError: sanitizeForPublic(state.lastError),
       devUpdateForced: state.devUpdateForced,
       runtimeDiagnostics: sanitizeForPublic(getUpdateRuntimeDiagnostics(app)),
+      updateSettings: state.updateSettings,
     };
   }
 
@@ -1003,7 +1057,12 @@ function createUpdateManager({ app, getMainWindow }) {
       }
 
       const backup = await backupDatabase(app, state.updateInfo.version);
+      // Nếu backup thất bại nghiêm trọng thì không cho update (bảo vệ dữ liệu)
+      if (!backup.skipped && !backup.backupPath) {
+        throw createPublicError('BACKUP_FAILED', 'Backup dữ liệu trước cập nhật thất bại. Đã hủy cài đặt để bảo vệ dữ liệu.');
+      }
       state.backupPath = backup.backupPath;
+      console.log('[AUTO_UPDATE] Backup complete, ready to install');
       logger.info(
         backup.skipped
           ? 'Bỏ qua backup database trước cập nhật vì chưa có file dữ liệu runtime'
@@ -1251,7 +1310,18 @@ function createUpdateManager({ app, getMainWindow }) {
   }
 
   function updatesAllowed() {
-    return app.isPackaged || state.devUpdateForced;
+    const allowed = app.isPackaged || state.devUpdateForced;
+    if (!allowed) {
+      console.log('[AUTO_UPDATE] Disabled in development mode');
+      logger.info('[AUTO_UPDATE] Disabled in development mode', {
+        isPackaged: app.isPackaged,
+        devUpdateForced: state.devUpdateForced,
+        nodeEnv: process.env.NODE_ENV,
+      });
+    } else {
+      console.log('[AUTO_UPDATE] Manual check only (production mode)');
+    }
+    return allowed;
   }
 
   function getAppInfo() {
@@ -1349,6 +1419,9 @@ function createUpdateManager({ app, getMainWindow }) {
         }
 
         if (!result.isUpdateAvailable) {
+          console.log('[AUTO_UPDATE] Current version:', state.currentVersion);
+          console.log('[AUTO_UPDATE] Latest version:', normalizedInfo?.version);
+          console.log('[AUTO_UPDATE] No update available');
           state.status = 'no-update';
           state.updateAvailable = false;
           state.updateInfo = normalizedInfo;
@@ -1370,6 +1443,13 @@ function createUpdateManager({ app, getMainWindow }) {
         });
 
         if (autoDownload && !state.downloadedFile && !currentDownloadPromise) {
+        console.log('[AUTO_UPDATE] Latest version:', normalizedInfo?.version);
+        console.log('[AUTO_UPDATE] Update found but waiting for user confirmation');
+        logger.info('[AUTO_UPDATE] Update found but waiting for user confirmation', {
+          currentVersion: state.currentVersion,
+          latestVersion: normalizedInfo?.version,
+          autoDownloadAllowed: state.updateSettings?.autoDownloadUpdate === true,
+        });
           logger.info('Startup check thấy bản mới, tự bắt đầu tải cập nhật nhưng chưa cài đặt', {
             version: normalizedInfo?.version,
           });
@@ -1536,16 +1616,52 @@ function createUpdateManager({ app, getMainWindow }) {
     ipcMain.handle(CHANNELS.download, () => downloadUpdate({ source: 'manual' }));
     ipcMain.handle(CHANNELS.cancel, () => cancelDownload());
     ipcMain.handle(CHANNELS.install, () => installUpdate({ source: 'manual' }));
+    ipcMain.handle(CHANNELS.getSettings, () => {
+      state.updateSettings = readUpdateSettings(app);
+      return success({ settings: state.updateSettings, state: getPublicState() });
+    });
+    ipcMain.handle(CHANNELS.saveSettings, (_event, settings) => {
+      try {
+        // autoInstallUpdate luôn bị ép TẮT bất kể input
+        const sanitized = {
+          autoCheckUpdate: Boolean(settings?.autoCheckUpdate),
+          autoDownloadUpdate: Boolean(settings?.autoDownloadUpdate),
+          autoInstallUpdate: false,
+        };
+        const saved = writeUpdateSettings(app, sanitized);
+        state.updateSettings = readUpdateSettings(app);
+        logger.info('Đã lưu cài đặt cập nhật', { saved, settings: state.updateSettings });
+        return success({ saved, settings: state.updateSettings, state: getPublicState() });
+      } catch (err) {
+        return failure(err, getPublicState());
+      }
+    });
   }
 
   function scheduleStartupCheck(delayMs = STARTUP_CHECK_DELAY_MS) {
     if (startupCheckScheduled) return;
     startupCheckScheduled = true;
 
+    // Luôn tắt auto-update khi chạy development/unpacked/localhost.
     if (!updatesAllowed()) {
-      logger.info('Không tự kiểm tra cập nhật khi chạy development/unpacked', {
+      console.log('[AUTO_UPDATE] Disabled in development mode');
+      logger.info('[AUTO_UPDATE] Disabled in development mode', {
         isPackaged: app.isPackaged,
         devUpdateForced: state.devUpdateForced,
+        nodeEnv: process.env.NODE_ENV,
+      });
+      return;
+    }
+
+    // Tôn trọng cài đặt người dùng: autoCheckUpdate mặc định TẮT.
+    // Khi mở app KHÔNG tự kiểm tra cập nhật trừ khi người dùng đã bật tự động kiểm tra.
+    state.updateSettings = readUpdateSettings(app);
+    if (!state.updateSettings.autoCheckUpdate) {
+      console.log('[AUTO_UPDATE] Manual check only - autoCheckUpdate is OFF');
+      logger.info('[AUTO_UPDATE] Manual check only - autoCheckUpdate is OFF, không tự kiểm tra khi mở app', {
+        autoCheckUpdate: state.updateSettings.autoCheckUpdate,
+        autoDownloadUpdate: state.updateSettings.autoDownloadUpdate,
+        currentVersion: state.currentVersion,
       });
       return;
     }
@@ -1561,9 +1677,11 @@ function createUpdateManager({ app, getMainWindow }) {
     }
 
     ensureUpdaterReady();
-    logger.info('Lên lịch kiểm tra cập nhật sau khi app ready và cửa sổ chính đã hiển thị', { delayMs });
+    logger.info('Lên lịch kiểm tra cập nhật sau khi app ready (autoCheckUpdate=ON, KHÔNG tự tải)', { delayMs });
+    console.log('[AUTO_UPDATE] Current version:', state.currentVersion);
     setTimeout(() => {
-      checkForUpdates({ silent: true, source: 'startup', autoDownload: true }).catch(err => {
+      // KHÔNG tự tải: autoDownload luôn false. Chỉ kiểm tra, báo người dùng nếu có bản mới.
+      checkForUpdates({ silent: true, source: 'startup', autoDownload: false }).catch(err => {
         state.status = 'error';
         state.lastError = setClassifiedError(err, { phase: 'startup-check', fallbackCode: 'STARTUP_CHECK_FAILED' });
         logger.error('Startup update check lỗi ngoài luồng xử lý chính', {

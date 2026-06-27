@@ -9,6 +9,8 @@ const cors    = require('cors');
 const helmet  = require('helmet');
 const cron    = require('node-cron');
 const path    = require('path');
+const fs       = require('fs');
+const { getAvailablePort } = require('./utils/portManager');
 const { version: APP_VERSION } = require('../../package.json');
 const { loadEnv, getLoadedEnvFiles } = require('./utils/loadEnv');
 
@@ -80,7 +82,8 @@ const historyRoutes = require('./routes/history');
 //  EXPRESS APP
 // ============================================================
 const app  = express();
-const PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || process.env.PHANMEM_PORT || 7000);
+const PREFERRED_PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || process.env.PHANMEM_PORT || 7000);
+let   PORT = PREFERRED_PORT; // se duoc gan lai boi getAvailablePort khi startServer
 const HOST = String(
   process.env.KHA_BACKEND_HOST ||
   process.env.PHANMEM_HOST ||
@@ -115,6 +118,9 @@ function buildHealthPayload() {
     printTemplatesMySql: getPrintTemplatesMySqlStatus(),
     settingsMySql: getSettingsMySqlStatus(),
     node: process.version,
+    success: true,
+    message: 'Backend is running',
+    baseUrl: `http://${HOST}:${PORT}/api`,
   };
 }
 
@@ -744,6 +750,27 @@ function shutdownGuardian() {
   console.log('[KHA DATA GUARDIAN] Shutdown complete');
 }
 
+// KHA Runtime port file: frontend/Electron doc port backend dang chay.
+function writeRuntimePortFile(host, port) {
+  try {
+    const runtimeDir = path.resolve(__dirname, '..', '..', 'runtime');
+    if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
+    const runtimeFile = path.join(runtimeDir, 'backend-port.json');
+    const payload = {
+      host,
+      port,
+      baseUrl: `http://${host}:${port}/api`,
+      startedAt: new Date().toISOString(),
+      pid: process.pid,
+      instanceId: BACKEND_INSTANCE_ID || null,
+    };
+    fs.writeFileSync(runtimeFile, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    console.log(`[KHA RUNTIME] Đã ghi runtime/backend-port.json -> http://${host}:${port}/api`);
+  } catch (err) {
+    console.warn(`[KHA RUNTIME] Không thể ghi runtime/backend-port.json: ${err.message}`);
+  }
+}
+
 async function startServer() {
   await bootstrapSettingsSchema();
   await bootstrapPrintTemplateSchema();
@@ -757,6 +784,19 @@ async function startServer() {
   // Start Data Guardian services
   startGuardianServices();
 
+  // KHA PORT AUTO-SELECT: tu tim port trong neu port uu tien (7000) dang bi chiem.
+  // Trang EADDRINUSE: khong crash, thu lan luot 7000 -> 7001 -> 7002 -> ... -> 7100.
+  try {
+    PORT = await getAvailablePort({
+      preferredPort: PREFERRED_PORT,
+      fallbackPorts: [7000, 7001, 7002, 7003, 7004, 7005, 7010, 7100],
+      host: HOST,
+    });
+  } catch (portErr) {
+    console.error(`[KHA SERVER] ${portErr.message}`);
+    process.exit(1);
+  }
+
   const server = app.listen(PORT, HOST, () => {
     console.log(`
 ----------------------------------------------
@@ -767,11 +807,13 @@ DB path: ${dbModule.DB_PATH}
 Started: ${SERVER_STARTED_AT}
 ----------------------------------------------
 `);
+    writeRuntimePortFile(HOST, PORT);
   });
 
   server.on('error', (err) => {
     if (err && err.code === 'EADDRINUSE') {
-      console.error(`[KHA SERVER] Cổng ${PORT} đang bị một ứng dụng khác chiếm dụng (EADDRINUSE).`);
+      // Da co portManager phong ve, neu van den day thi port bi chiem giua luc listen.
+      console.error(`[KHA SERVER] Cổng ${PORT} đang bị một ứng dụng khác chiếm dụng (EADDRINUSE) ngay lúc listen.`);
       console.error('[KHA SERVER] Hãy tắt ứng dụng đang giữ cổng này, hoặc đặt biến môi trường PORT=<cổng_khác> rồi chạy lại backend.');
     } else {
       console.error('[KHA SERVER] Lỗi HTTP server:', err && err.message ? err.message : err);
