@@ -119,3 +119,6 @@ BACKUP_*/
 *.orig
 # Temp scratch dumps
 _tmp_*
+.gh_token_tmp
+*.token
+*.key
