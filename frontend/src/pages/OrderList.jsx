@@ -810,7 +810,11 @@ export default function OrderList() {
     // ── ONLINE: fetch từ server ──
     try {
       const data = await apiJson(`/invoices/${inv.id}`, {}, 'Không tải được đơn hàng!');
-      const nextDetails = mergeDuplicateProducts(data.details || []);
+      const nextDetails = Array.isArray(data.details) ? data.details.map(detail => ({
+        ...detail,
+        id: detail.id ?? detail.order_item_id ?? null,
+        order_item_id: detail.order_item_id ?? detail.id ?? null,
+      })) : [];
       setEditDetails(nextDetails);
       setEditBaselineDetails(nextDetails.map(item => ({ ...item })));
       setEditProductsState('loading');
@@ -1083,7 +1087,7 @@ export default function OrderList() {
         remaining_amount: editForm.remaining_amount || 0,
         status: editForm.status || 'pending',
         created_at: editForm.created_at || null,
-      details: editDetails.map(detail => {
+        details: editDetails.map(detail => {
         const {
           type,
           item_type,
@@ -1110,8 +1114,7 @@ export default function OrderList() {
           line_total,
         } = detail;
         // Nếu sản phẩm không tồn tại trong danh mục hiện tại, bỏ product_id / variant_id để server không trả lỗi
-        const productExists = product_id && editProducts.some(p => Number(p.id) === Number(product_id));
-        const variantExists = variant_id && editProducts.some(p => Number(p.id) === Number(variant_id));
+        const rowId = detail.id ?? detail.order_item_id ?? null;
         // Quy chuẩn giá tại thời điểm bán: sale_price_at_sale phải khớp unit_price hiện tại
         // của dòng đơn hàng (giá user đang thấy/sửa). Đây là giá riêng của dòng đơn, không lấy
         // lại từ bảng products. Backend ưu tiên unit_price, nhưng giữ snapshot khớp để load lại
@@ -1126,8 +1129,10 @@ export default function OrderList() {
           item_type: item_type || type || (is_service || isService ? 'service' : undefined),
           is_service: is_service || isService || false,
           combo_id: combo_id || null,
-          product_id: productExists ? product_id : null,
-          variant_id: variantExists ? variant_id : null,
+          id: rowId,
+          order_item_id: rowId,
+          product_id,
+          variant_id,
           parent_id: parent_id || null,
           parent_name: parent_name || '',
           variant_name: variant_name || '',

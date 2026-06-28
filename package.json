@@ -36,7 +36,9 @@
     "generate:update-manifest": "node scripts/generate-update-manifest.js",
     "test:repeat-sku-orders": "npm --prefix backend run test:repeat-sku-orders",
     "healthcheck": "node scripts/healthcheck.js",
-    "test:business": "node scripts/business-test.js"
+    "test:business": "node scripts/business-test.js",
+    "backfill:orders:dry": "node scripts/backfill-order-items-snapshot-json.js --dry-run",
+    "backfill:orders:apply": "node scripts/backfill-order-items-snapshot-json.js --apply"
   },
   "build": {
     "appId": "com.vankhammo.phanmienoffline",

@@ -86,13 +86,7 @@ function isServiceDetail(detail = {}) {
     || detail.item_type === 'custom_service'
     || detail.is_service
     || detail.isService) return true;
-  // Backward-compatible fallback: if a sale line has no product reference at all
-  // (no product_id, no variant_id, no combo_id, no SKU) we treat it as a free
-  // service line. This covers legacy invoices created before the 'service' type
-  // was persisted, so editing them does not throw 'product not found' errors.
-  const hasProductRef = detail.product_id || detail.variant_id || detail.combo_id;
-  const sku = (detail.product_sku || detail.sku || detail.variant_sku || detail.productSku || '').toString().trim();
-  if (!hasProductRef && !sku) return true;
+
   return false;
 }
 
@@ -199,13 +193,17 @@ function resolveInvoiceSaleDetailProduct(detail = {}, index = 0, options = {}) {
 }
 
 function buildDetailKey(detail = {}, index = 0) {
+  const explicitId = detail.order_item_id || detail.id;
+  if (explicitId != null && String(explicitId).trim() !== '') {
+    return `detail:${explicitId}`;
+  }
   if (isComboDetail(detail)) return `combo:${detail.combo_id || detail.id || index}:${detail.unit_price || 0}`;
   return `product:${detail.product_id || detail.variant_id || detail.id || index}:${detail.unit_price || 0}`;
 }
 
 function normalizeInvoiceDetail(detail = {}, invoice_id) {
   const comboLine = isComboDetail(detail);
-  const product_id = comboLine ? null : (detail.product_id || detail.variant_id || null);
+  const product_id = comboLine ? null : (detail.product_id ?? detail.variant_id ?? null);
   const combo_id = comboLine ? (detail.combo_id || null) : null;
   const displayFields = resolveInvoiceDetailDisplayFields(detail, id => getOne('products', p => Number(p.id) === Number(id)));
   const product_name = displayFields.product_name;
@@ -228,11 +226,20 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
     if (prod) import_price = Math.max(0, toNumber(prod.import_price, 0));
   }
   const profit_at_sale = (unit_price - import_price) * quantity;
+  const taxAmount = toNumber(detail.vat_amount ?? detail.tax_amount, 0);
+  const taxPercent = toNumber(detail.vat_percent ?? detail.tax_percent ?? detail.tax_rate, 0);
+  const lineTotal = Number.isFinite(Number(detail.line_total))
+    ? Math.max(0, toNumber(detail.line_total, 0))
+    : Math.max(0, quantity * unit_price - discount_amount + taxAmount);
+  const rowId = detail.order_item_id ?? detail.id ?? null;
+  const itemType = comboLine ? 'combo' : (detail.item_type || detail.type || (detail.is_service || detail.isService ? 'service' : 'product'));
 
   return {
+    id: rowId,
+    order_item_id: rowId,
     invoice_id,
-    type: comboLine ? 'combo' : (detail.type || detail.item_type || 'product'),
-    item_type: comboLine ? 'combo' : (detail.item_type || detail.type || 'product'),
+    type: comboLine ? 'combo' : (detail.type || itemType || 'product'),
+    item_type: itemType,
     combo_id,
     product_id,
     variant_id: comboLine ? null : (displayFields.variant_id || detail.variant_id || null),
@@ -245,13 +252,21 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
     sku: displayFields.sku || product_sku,
     quantity,
     unit_price,
+    sale_price: unit_price,
+    price: unit_price,
     import_price,
+    cost_price: import_price,
     cost_price_at_sale: import_price,
     sale_price_at_sale: unit_price,
     profit_at_sale,
     discount_amount,
     discount_percent: +detail.discount_percent || 0,
-    line_total: +detail.line_total || (quantity * unit_price - discount_amount),
+    vat_amount: taxAmount,
+    vat_percent: taxPercent,
+    tax_amount: taxAmount,
+    tax_percent: taxPercent,
+    line_total: lineTotal,
+    note: detail.note || '',
     created_at: detail.created_at || now(),
   };
 }

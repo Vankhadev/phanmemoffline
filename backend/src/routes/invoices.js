@@ -72,6 +72,10 @@ function validateStockForInvoiceEditDetails(newDetails = [], oldDetails = []) {
 }
 
 function buildDetailKey(detail = {}, index = 0) {
+  const explicitId = detail.order_item_id || detail.id;
+  if (explicitId != null && String(explicitId).trim() !== '') {
+    return `detail:${explicitId}`;
+  }
   if (isComboDetail(detail)) return `combo:${detail.combo_id || detail.id || index}:${detail.unit_price || 0}`;
   return `product:${detail.product_id || detail.id || index}:${detail.unit_price || 0}`;
 }
@@ -721,21 +725,43 @@ router.put('/:id', async (req, res) => {
       }, { skipSave: true });
 
       if (details !== undefined) {
-        const safeDetails = prepareInvoiceDetailsForPersistence(details, { allowUnlinkedOnMissingProduct: true });
+        const incomingDetails = Array.isArray(details) ? details : [];
+        const safeDetails = prepareInvoiceDetailsForPersistence(incomingDetails, { allowUnlinkedOnMissingProduct: true });
         const oldDetails = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id));
         validateStockForInvoiceEditDetails(safeDetails, oldDetails);
+
         for (const d of oldDetails) {
           const stockProductId = getInvoiceDetailProductId(d);
           if (stockProductId) restoreInvoiceStock(stockProductId, +d.quantity || 0, { skipSave: true });
         }
-        for (const detail of oldDetails) {
-          remove('invoice_details', detail.id, { skipSave: true });
+
+        const oldById = new Map(oldDetails.filter(d => d && d.id != null).map(d => [Number(d.id), d]));
+        const matchedOldIds = new Set();
+
+        for (const incoming of safeDetails) {
+          const normalizedRow = normalizeInvoiceDetail(incoming, inv.id);
+          const incomingId = normalizedRow.id != null ? Number(normalizedRow.id) : null;
+          if (incomingId != null && oldById.has(incomingId)) {
+            update('invoice_details', incomingId, normalizedRow, { skipSave: true });
+            matchedOldIds.add(incomingId);
+            continue;
+          }
+          const insertedId = insert('invoice_details', normalizedRow, { skipSave: true });
+          if (normalizedRow.id == null && insertedId != null) {
+            normalizedRow.id = insertedId;
+            normalizedRow.order_item_id = insertedId;
+          }
         }
-        for (const d of (safeDetails || [])) {
-          const detailRow = normalizeInvoiceDetail(d, inv.id);
-          insert('invoice_details', detailRow, { skipSave: true });
-          const stockProductId = getInvoiceDetailProductId(detailRow);
-          if (stockProductId) deductInvoiceStock(stockProductId, +detailRow.quantity || 1, { skipSave: true });
+
+        for (const oldDetail of oldDetails) {
+          if (oldDetail.id != null && !matchedOldIds.has(Number(oldDetail.id)) && !safeDetails.some(d => Number(d.id) === Number(oldDetail.id))) {
+            remove('invoice_details', oldDetail.id, { skipSave: true });
+          }
+        }
+
+        for (const d of safeDetails) {
+          const stockProductId = getInvoiceDetailProductId(d);
+          if (stockProductId) deductInvoiceStock(stockProductId, +d.quantity || 1, { skipSave: true });
         }
       }
 
