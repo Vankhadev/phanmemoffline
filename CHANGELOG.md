@@ -1,3 +1,27 @@
+# Changelog
+
+## [2.3.6] - 2026-06-28
+
+### Sửa lỗi
+* Sửa lỗi không lưu được khi sửa đơn hàng ở màn Danh sách đơn hàng.
+* Bỏ validate sai "dòng không tồn tại sau lưu" dựa theo product:<tên sản phẩm>.
+* Xác định dòng chi tiết đơn theo order_item_id/id, không dùng tên sản phẩm làm khóa chính.
+* Backend sửa chi tiết đơn theo id, không xoá toàn bộ rồi insert lại.
+* Lưu giá snapshot trong order_items/invoice_details, không ghi đè bằng giá sản phẩm hiện tại.
+* Sửa giá đơn từ 95.000 xuống 90.000, bấm Lưu, reload vẫn giữ 90.000.
+
+### Hỗ trợ
+* Sửa/lưu đơn có sản phẩm đã xoá khỏi kho, product_id null, dịch vụ khác/custom item.
+* Không báo "sản phẩm không tồn tại trong phần mềm" với sản phẩm đã xoá/dịch vụ khác.
+
+### Dữ liệu
+* Thêm script backfill order_items snapshot cho DB JSON, backup tự động trước khi ghi.
+* Giữ nguyên dữ liệu cũ, không tạo database mới, không xoá đơn/order_items cũ.
+* Thêm migration SQL an toàn và script kiểm tra orphan/custom item.
+
+### Kiểm tra
+* Font tiếng Việt giữ nguyên, không mojibake.
+* Backend syntax check thành công, frontend build thành công.
 ## v2.3.5 - 2026-06-27
 
 ### Sửa lỗi nghiêm trọng: sửa giá đơn hàng không lưu vĩnh viễn
