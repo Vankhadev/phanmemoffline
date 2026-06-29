@@ -8,6 +8,7 @@ import {
   Loader2,
   Package,
   Plus,
+  RotateCcw,
   Settings2,
   Star,
   Store,
@@ -597,6 +598,13 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupNotice, setBackupNotice] = useState(null);
   const [restoringBackup, setRestoringBackup] = useState('');
+
+  const [recoveryStatus, setRecoveryStatus] = useState(null);
+  const [recoveryRunning, setRecoveryRunning] = useState(false);
+  const [recoveryFoundFiles, setRecoveryFoundFiles] = useState([]);
+  const [recoveryLogs, setRecoveryLogs] = useState([]);
+  const [recoveryNotice, setRecoveryNotice] = useState(null);
+  const [recoveryLogDetail, setRecoveryLogDetail] = useState(null);
 
   const getErrorMessage = useCallback(
     (error, fallback = 'Thao t?c th?t b?i.') => getApiErrorMessage(error?.data || error, error?.message || fallback),
@@ -1448,6 +1456,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     if (canViewNegativeStock) nextTabs.push({ key: 'negative-stock', label: 'Xuất ?m', icon: <Package size={16} /> });
     if (canViewPrintTemplates) nextTabs.push({ key: 'print-templates', label: 'Mẫu in hóa đơn', icon: <FileText size={16} /> });
     if (canAccessSection(['settings.read', 'settings.manage'])) nextTabs.push({ key: 'backup', label: 'Backup', icon: <Image size={16} /> });
+    if (canAccessSection(['settings.read', 'settings.manage'])) nextTabs.push({ key: 'recovery', label: 'Khôi phục DL', icon: <RotateCcw size={16} /> });
     if (canViewUpdates) nextTabs.push({ key: 'updates', label: 'Cập nhật', icon: <Settings2 size={16} /> });
     return nextTabs;
   }, [canAccessSection, canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewPrintTemplates, canViewStore, canViewUpdates]);
@@ -2071,6 +2080,55 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               {!backupLogs.length && <div className="text-gray-500">Chua c? log backup.</div>}
             </div>
           </div>
+        </div>
+      )}
+
+      {!initialLoading && tab === 'recovery' && (
+        <div className="space-y-4">
+          <div className="card space-y-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="font-bold flex items-center gap-2"><RotateCcw size={18} /> Khôi phục dữ liệu</h2>
+                <p className="mt-1 text-sm text-gray-500">Quét toàn bộ ổ đĩa tìm backup cũ, giải nén file nén và merge vào database hiện tại, không ghi đè database.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={async () => {
+                  setRecoveryNotice(null);
+                  try {
+                    await apiJson('/api/recovery/scan-and-restore', { method: 'POST' });
+                    setRecoveryRunning(true);
+                    setRecoveryNotice({ tone: 'success', message: 'Đang quét và khôi phục nền...' });
+                    const poll = async () => {
+                      try {
+                        const st = await apiJson('/api/recovery/status');
+                        setRecoveryStatus(st);
+                        if (st.running) { setTimeout(poll, 2000); return; }
+                        setRecoveryRunning(false);
+                        if (st.lastReport) setRecoveryNotice({ tone: st.lastReport.errors?.length ? 'error' : 'success', message: st.lastReport.message || 'Hoàn tất khôi phục.' });
+                        try { const f = await apiJson('/api/recovery/found-files'); setRecoveryFoundFiles(f.files || []); } catch (_) {}
+                        try { const l = await apiJson('/api/recovery/logs?limit=10'); setRecoveryLogs(l.logs || []); } catch (_) {}
+                      } catch (_) { setTimeout(poll, 3000); }
+                    };
+                    setTimeout(poll, 2000);
+                  } catch (error) { setRecoveryNotice({ tone: 'error', message: error?.message || 'Khởi động recovery thất bại.' }); }
+                }} disabled={recoveryRunning} className="btn-success inline-flex min-h-10 items-center gap-2 disabled:opacity-60"><RotateCcw size={16} className={recoveryRunning ? 'animate-spin' : ''} /> Quét và khôi phục toàn bộ backup</button>
+                <button type="button" onClick={async () => { try { const f = await apiJson('/api/recovery/found-files'); setRecoveryFoundFiles(f.files || []); } catch (_) {} }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Xem file backup đã tìm thấy</button>
+                <button type="button" onClick={async () => { try { const l = await apiJson('/api/recovery/logs?limit=10'); setRecoveryLogs(l.logs || []); } catch (_) {} }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Xem log khôi phục</button>
+                <button type="button" onClick={() => window.open('/api/recovery/export-report', '_blank')} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Xuất báo cáo restore</button>
+                <button type="button" onClick={async () => { if (!window.confirm('Rollback về bản trước restore?')) return; try { await apiJson('/api/recovery/rollback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ backupPath: 'latest_safety' }) }); setRecoveryNotice({ tone: 'success', message: 'Đã rollback về bản trước restore.' }); } catch (error) { setRecoveryNotice({ tone: 'error', message: error?.message || 'Rollback thất bại.' }); } }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100">Khôi phục lại bản trước restore</button>
+              </div>
+            </div>
+            <SectionNotice notice={recoveryNotice} />
+            {(recoveryRunning || recoveryStatus?.running) && <div className="rounded-xl border bg-blue-50 p-4 text-sm text-blue-800"><Loader2 size={16} className="mr-2 inline-block animate-spin" />{recoveryStatus?.progress || 'Đang chạy recovery...'}</div>}
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">File backup tìm thấy</div><div className="mt-1 font-bold text-gray-900">{recoveryFoundFiles.length || recoveryStatus?.foundFiles?.length || 0}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Trạng thái</div><div className="mt-1 font-bold text-gray-900">{recoveryRunning ? 'Đang chạy' : (recoveryStatus?.progress || 'Chưa chạy')}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Log gần nhất</div><div className="mt-1 font-bold text-gray-900">{recoveryStatus?.lastLogPath ? 'Có' : 'Chưa có'}</div></div>
+            </div>
+          </div>
+          {recoveryFoundFiles.length > 0 && <div className="card space-y-4"><h3 className="font-bold">File backup đã tìm thấy ({recoveryFoundFiles.length})</h3><div className="overflow-auto rounded-xl border max-h-72"><table className="min-w-full text-sm"><thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Đường dẫn</th><th className="px-4 py-3">Kích thước</th></tr></thead><tbody>{recoveryFoundFiles.slice(0, 100).map((f, i) => <tr key={i} className="border-t"><td className="px-4 py-2 font-mono text-xs text-gray-800">{f.path}</td><td className="px-4 py-2 text-gray-600">{f.size ? formatBytes(f.size) : '-'}</td></tr>)}</tbody></table></div></div>}
+          {recoveryLogs.length > 0 && <div className="card space-y-4"><h3 className="font-bold">Log khôi phục</h3><div className="space-y-2">{recoveryLogs.map((l, i) => <div key={i} className="rounded-lg border bg-gray-50 p-3 text-sm cursor-pointer hover:bg-gray-100" onClick={async () => { try { const detail = await apiJson('/api/recovery/logs/' + l.file); setRecoveryLogDetail(detail.log); } catch (_) {} }}><span className="font-mono text-xs">{l.file}</span></div>)}</div></div>}
+          {recoveryLogDetail && <div className="card space-y-4"><div className="flex items-center justify-between"><h3 className="font-bold">Chi tiết log</h3><button type="button" onClick={() => setRecoveryLogDetail(null)} className="text-gray-500 hover:text-gray-700 text-sm">Đóng</button></div><pre className="overflow-auto rounded-xl border bg-gray-900 p-4 text-xs text-green-200 max-h-96">{JSON.stringify(recoveryLogDetail, null, 2)}</pre></div>}
         </div>
       )}
 

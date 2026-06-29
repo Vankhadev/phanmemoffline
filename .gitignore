@@ -122,3 +122,4 @@ _tmp_*
 .gh_token_tmp
 *.token
 *.key
+backups/

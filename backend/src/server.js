@@ -49,6 +49,7 @@ const selfHealing = require('./services/selfHealing');
 const integrityChecker = require('./services/integrityChecker');
 const safetyRules = require('./services/safetyRules');
 const authRepairService = require('./services/authRepairService');
+const RecoveryEngine = require('./services/RecoveryEngine');
 
 // --- Routes ---
 const storeRoutes     = require('./routes/store');
@@ -77,6 +78,7 @@ const marketplacesRoutes = require('./routes/marketplaces');
 const databaseRoutes = require('./routes/database');
 const dataGuardianRoutes = require('./routes/dataGuardian');
 const historyRoutes = require('./routes/history');
+const recoveryRoutes = require('./routes/recovery');
 
 // ============================================================
 //  EXPRESS APP
@@ -278,6 +280,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/users',          usersRoutes);
 app.use('/api',                syncRoutes);
 app.use('/api/database',       databaseRoutes);
+app.use('/api/recovery',       recoveryRoutes);
 app.use('/api/data-guardian',  dataGuardianRoutes);
 app.use('/api/store',          requireAuth, requireAnyPermission(['store.read', 'store.manage']), storeRoutes);
 app.use('/api/customers',      requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customersRoutes);
@@ -498,7 +501,10 @@ function bootstrapDataGuardian() {
     diskHealthMonitor,
   });
 
-  // 10. Maintenance Service
+  // 10. Recovery Engine
+  RecoveryEngine.initialize({ dbModule });
+
+  // 11. Maintenance Service
   maintenanceService.initialize({
     dataDir,
     dbModule,
@@ -508,17 +514,17 @@ function bootstrapDataGuardian() {
     diskHealthMonitor,
   });
 
-  // 11. Self-Healing
+  // 12. Self-Healing
   selfHealing.initialize({
     dbModule,
     alertService: adminAlertService,
   });
 
-  // 12. Realtime Sync & History Services
+  // 13. Realtime Sync & History Services
   realtimeSyncService.initialize();
   historyService.initialize({ dbModule });
 
-  // 13. Auth Repair & Self-Healing Setup
+  // 14. Auth Repair & Self-Healing Setup
   try {
     authRepairService.repairUserAuthSystem();
     authRepairService.initializeEmergencyAdmin();
@@ -808,6 +814,9 @@ Started: ${SERVER_STARTED_AT}
 ----------------------------------------------
 `);
     writeRuntimePortFile(HOST, PORT);
+    if (process.env.KHA_RECOVERY_AUTO_ON_START !== '0') {
+      RecoveryEngine.startBackgroundRecovery({ delayMs: 5000 });
+    }
   });
 
   server.on('error', (err) => {

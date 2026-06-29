@@ -652,3 +652,20 @@ Nâng cấp ổn định toàn bộ dự án theo hướng production-stable: tr
 - Windows 32-bit hoáº·c mÃ¡y bÃ¡o â€œá»¨ng dá»¥ng nÃ y khÃ´ng thá»ƒ cháº¡y trÃªn PC cá»§a báº¡nâ€: dÃ¹ng `banhangoffline-setup-v1.3.5-ia32.exe`.
 - Chá»‰ táº£i tá»« GitHub Release chÃ­nh thá»©c cá»§a repo `Vankhadev/phanmemoffline`.
 
+
+## 2026-06-29 - Sửa cơ chế khôi phục dữ liệu tự động
+
+- Thêm `RecoveryEngine` cho backend: tự tạo backup trước restore, quét backup, giải nén file nén, parse dữ liệu và merge vào database hiện tại thay vì ghi đè bằng 1 file backup mới nhất.
+- Hỗ trợ chống trùng cho đơn hàng, chi tiết đơn, sản phẩm, khách hàng, nhà cung cấp, phiếu nhập, chi tiết nhập và các bảng cấu hình/mẫu in theo khóa nghiệp vụ + hash fallback.
+- Bổ sung cơ chế merge field an toàn: không ghi đè dữ liệu tốt bằng null/rỗng; dữ liệu lịch sử giữ nguyên giá bán/giá nhập/lợi nhuận, chỉ bổ sung field thiếu.
+- Thêm rollback nếu restore lỗi hoặc validation sau restore phát hiện bảng quan trọng bị giảm số lượng.
+- Tạo log chi tiết tại `logs/recovery/recovery_YYYYMMDD_HHmmss.json` gồm file tìm thấy, file giải nén, file lỗi, số lượng restore/bỏ qua và trạng thái rollback.
+- Thêm API `/api/recovery/*` và chuyển endpoint cũ `/api/database/restore-scan` sang cơ chế merge an toàn.
+- Tích hợp chạy recovery nền khi backend mở app (`KHA_RECOVERY_AUTO_ON_START=0` để tắt nếu cần) để không làm treo giao diện.
+- Thêm tab `Cài đặt → Khôi phục DL` với các nút quét/khôi phục, xem file backup, xem log, xuất báo cáo và rollback bản trước restore.
+- Thêm script test `scripts/test-recovery.js` kiểm tra merge nhiều backup, đơn trùng, đơn thiếu, productId không tồn tại, null/rỗng và không nhân đôi khi chạy lại.
+
+## v2.3.7 - 2026-06-29
+
+- Nâng version ứng dụng lên 2.3.7.
+- Đóng gói thay đổi RecoveryEngine, giao diện Khôi phục DL, API recovery và test khôi phục dữ liệu.
