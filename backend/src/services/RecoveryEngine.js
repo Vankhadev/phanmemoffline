@@ -35,7 +35,7 @@ let initialized = false;
 // Trang thai
 let status = {
   running: false,
-  progress: "Chua chay",
+  progress: "Chưa chạy",
   phase: "idle",
   lastReport: null,
   lastLogPath: null,
@@ -83,7 +83,7 @@ function spawnWorker() {
       console.error("[RecoveryEngine] Worker exit with code:", code);
       status.running = false;
       status.phase = "error";
-      status.progress = "Worker crash, vui long thu lai.";
+      status.progress = "Worker crash, vui lòng thử lại.";
       restoreLock = false;
     }
     worker = null;
@@ -97,7 +97,7 @@ function spawnWorker() {
 
 function sendToWorker(msg) {
   return new Promise((resolve, reject) => {
-    if (!worker || !workerReady) { reject(new Error("Worker chua san sang")); return; }
+    if (!worker || !workerReady) { reject(new Error("Worker chưa sẵn sàng")); return; }
     const handler = (m) => {
       if (m.type === "progress") {
         // Update status but keep waiting
@@ -151,18 +151,77 @@ function updateStatusFromProgress(data) {
 }
 
 // ========== RESTORE LOCK ==========
-function acquireLock() {
-  if (restoreLock) return false;
-  restoreLock = true;
-  const lockPath = path.join(os.tmpdir(), "phanmienoffline", "restore.lock");
+
+// ---- Restore Lock with PID check ----
+function isProcessAlive(pid) {
   try {
-    ensureDir(path.dirname(lockPath));
-    fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), "utf8");
-    lockFile = lockPath;
+    process.kill(Number(pid), 0);
     return true;
   } catch (_) {
+    return false;
+  }
+}
+
+function readLockFile(lockPath) {
+  if (!fs.existsSync(lockPath)) return null;
+  try {
+    const raw = fs.readFileSync(lockPath, "utf8");
+    const obj = JSON.parse(raw);
+    return obj;
+  } catch (_) { return null; }
+}
+
+function isStaleLock(lockPath) {
+  const data = readLockFile(lockPath);
+  if (!data) return true; // không đọc được -> stale
+  const pid = Number(data.pid);
+  if (!pid || !isProcessAlive(pid)) return true;
+  // Nếu lock quá 10 phút không cập nhật
+  const updatedAt = data.updatedAt ? new Date(data.updatedAt).getTime() : new Date(data.startedAt || 0).getTime();
+  if (Date.now() - updatedAt > 10 * 60 * 1000) return true;
+  return false;
+}
+
+function acquireLock(label = "restore") {
+  if (restoreLock) return false;
+  const lockPath = path.join(os.tmpdir(), "phanmienoffline", label === "scan" ? "restore-scan.lock" : "restore.lock");
+  try {
+    ensureDir(path.dirname(lockPath));
+    // Kiểm tra stale lock và tự dọn
+    if (fs.existsSync(lockPath)) {
+      if (isStaleLock(lockPath)) {
+        console.log("[RESTORE_LOCK] Found stale lock, removing:", lockPath);
+        try { fs.unlinkSync(lockPath); } catch (_) {}
+      } else {
+        console.log("[RESTORE_LOCK] Active lock exists, cannot acquire:", lockPath);
+        return false;
+      }
+    }
+    restoreLock = true;
+    fs.writeFileSync(lockPath, JSON.stringify({
+      pid: process.pid,
+      type: label,
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      appVersion: VERSION,
+      status: "running",
+    }, null, 2), "utf8");
+    lockFile = lockPath;
+    console.log("[RESTORE_LOCK] Lock acquired:", lockPath);
+    return true;
+  } catch (e) {
+    console.error("[RESTORE_LOCK] Lock acquire failed:", e.message);
     restoreLock = false;
     return false;
+  }
+}
+
+function releaseLock() {
+  restoreLock = false;
+  if (lockFile) {
+    console.log("[RESTORE_LOCK] Lock released:", lockFile);
+    try { fs.unlinkSync(lockFile); } catch (_) {}
+    lockFile = null;
   }
 }
 
@@ -184,13 +243,13 @@ function initialize(options = {}) {
 // ========== BUOC 1: QUET FILE BACKUP (scan only, no import) ==========
 async function scanBackupFiles(options = {}) {
   if (!initialized) initialize();
-  if (status.running) return { ok: false, message: "Dang co tien trinh dang chay. Vui long doi hoac huy." };
+  if (status.running) return { ok: false, message: "Đang có tiến trình đang chạy. Vui lòng đợi hoặc hủy." };
 
-  if (!acquireLock()) return { ok: false, message: "Khong the khoa tien trinh restore. Co the da co tien trinh khac." };
+  if (!acquireLock()) return { ok: false, message: "Không thể khóa tiến trình restore. Có thể đã có tiến trình khác. Thử nhấn Mở khóa restore." };
 
   status.running = true;
   status.phase = "scan";
-  status.progress = "Dang quet file backup...";
+  status.progress = "Đang quét file backup...";
   status.details = {};
   status.foundFiles = [];
   status._startTime = Date.now();
@@ -221,20 +280,20 @@ async function scanBackupFiles(options = {}) {
     status.foundFiles = result.files || [];
     status.lastLogPath = logPath;
     status.phase = "scan_done";
-    status.progress = "Da quet xong: tim thay " + (result.files?.length || 0) + " file backup.";
+    status.progress = "Đã quét xong: tìm thấy " + (result.files?.length || 0) + " file backup.";
 
     return {
       ok: true,
       files: result.files || [],
       total: (result.files || []).length,
       logPath,
-      message: "Da quet xong: tim thay " + (result.files?.length || 0) + " file backup. Chon file de khoi phuc hoac bam 'Bat dau khoi phuc' de xu ly tat ca.",
+      message: "Đã quét xong: tìm thấy " + (result.files?.length || 0) + " file backup. Chon file de khoi phuc hoac bam 'Bat dau khoi phuc' de xu ly tat ca.",
     };
   } catch (error) {
     status.phase = "error";
-    status.progress = "Loi quet: " + error.message;
+    status.progress = "Lỗi quét: " + error.message;
     releaseLock();
-    return { ok: false, message: "Loi quet backup: " + error.message, error: error.message };
+    return { ok: false, message: "Lỗi quét backup: " + error.message, error: error.message };
   } finally {
     status._startTime = null;
     status.running = false;
@@ -244,13 +303,13 @@ async function scanBackupFiles(options = {}) {
 // ========== BUOC 2: KHOI PHUC BACKUP (import) ==========
 async function restoreBackups(options = {}) {
   if (!initialized) initialize();
-  if (status.running) return { ok: false, message: "Dang co tien trinh dang chay. Vui long doi hoac huy." };
+  if (status.running) return { ok: false, message: "Đang có tiến trình đang chạy. Vui lòng đợi hoặc hủy." };
 
-  if (!acquireLock()) return { ok: false, message: "Khong the khoa tien trinh restore." };
+  if (!acquireLock()) return { ok: false, message: "Không thể khóa tiến trình restore. Thử nhấn Mở khóa restore." };
 
   status.running = true;
   status.phase = "snapshot";
-  status.progress = "Dang tao snapshot database hien tai...";
+  status.progress = "Đang tạo snapshot database hiện tại...";
   status.details = {};
   status.lastReport = null;
   status._startTime = Date.now();
@@ -273,7 +332,7 @@ async function restoreBackups(options = {}) {
         safetyBackup = { path: fallbackPath, file: path.basename(fallbackPath), reason: "recovery_pre_restore_fallback", isJsonSnapshot: true, created_at: new Date().toISOString() };
       }
     } catch (e) {
-      throw new Error("Khong tao duoc backup database hien tai truoc khi khoi phuc: " + e.message);
+      throw new Error("Không tạo được backup database hiện tại trước khi khôi phục: " + e.message);
     }
 
     await spawnWorker();
@@ -333,7 +392,7 @@ async function restoreBackups(options = {}) {
         status.phase = "rolled_back";
         status.progress = "Da rollback ve ban truoc restore do bang " + t + " bi giam.";
         releaseLock();
-        return { ok: false, message: "Khoi phuc bi huy do bang " + t + " bi giam du lieu. Da rollback ve ban truoc restore.", report, logPath };
+        return { ok: false, message: "Khoi phuc bi huy do bang " + t + " bi giam du lieu. Đã rollback về bản trước restore.", report, logPath };
       }
     }
 
@@ -341,7 +400,7 @@ async function restoreBackups(options = {}) {
     status.lastReport = report;
     status.lastLogPath = logPath;
     status.phase = result.ok ? "done" : "cancelled";
-    status.progress = result.message || (result.ok ? "Hoan tat khoi phuc." : "Da huy khoi phuc.");
+    status.progress = result.message || (result.ok ? "Hoàn tất khôi phục." : "Đã hủy khôi phục.");
 
     return {
       ok: result.ok,
@@ -352,7 +411,7 @@ async function restoreBackups(options = {}) {
     };
   } catch (error) {
     status.phase = "error";
-    status.progress = "Loi khoi phuc: " + error.message;
+    status.progress = "Lỗi khôi phục: " + error.message;
 
     // Rollback neu co snapshot
     if (safetyBackup) {
@@ -364,7 +423,7 @@ async function restoreBackups(options = {}) {
       }
     }
 
-    return { ok: false, message: "Loi khoi phuc: " + error.message, error: error.message };
+    return { ok: false, message: "Lỗi khôi phục: " + error.message, error: error.message };
   } finally {
     releaseLock();
     status._startTime = null;
@@ -374,18 +433,18 @@ async function restoreBackups(options = {}) {
 
 // ========== CANCEL ==========
 function cancelRecovery() {
-  if (!status.running) return { ok: false, message: "Khong co tien trinh nao dang chay." };
+  if (!status.running) return { ok: false, message: "Không có tiến trình nào đang chạy." };
   try {
     if (worker && workerReady) {
       worker.postMessage({ type: "cancel-request" });
     }
-    return { ok: true, message: "Da yeu cau huy. Tien trinh se dung sau batch hien tai (an toan)." };
+    return { ok: true, message: "Đã yêu cầu hủy. Tiến trình sẽ dừng sau batch hiện tại (an toàn)." };
   } catch (_) {
     // Fallback: dat flag
     releaseLock();
     status.running = false;
     status.phase = "cancelled";
-    status.progress = "Da huy (fallback).";
+    status.progress = "Đã hủy (fallback).";
     return { ok: true, message: "Da huy tien trinh." };
   }
 }
@@ -437,7 +496,7 @@ async function verifyBackupFiles(files = [], options = {}) {
       logPath,
     };
   } catch (error) {
-    return { ok: false, message: "Loi kiem tra backup: " + error.message };
+    return { ok: false, message: "Lỗi kiểm tra backup: " + error.message };
   }
 }
 
@@ -465,7 +524,7 @@ function readLog(filePath) {
 // ========== ROLLBACK ==========
 function rollbackToPreRestore(backupPath) {
   if (!backupPath) throw new Error("Thieu duong dan backup rollback");
-  if (!fs.existsSync(backupPath)) throw new Error("File backup rollback khong ton tai: " + backupPath);
+  if (!fs.existsSync(backupPath)) throw new Error("File backup rollback không tồn tại: " + backupPath);
   const { readBackupData } = require("../utils/backupCodec");
   const data = readBackupData(backupPath);
 
@@ -498,11 +557,43 @@ async function runRecovery(options = {}) {
 }
 
 function startBackgroundRecovery(options = {}) {
-  if (status.running) return { ok: false, running: true, message: "Dang co tien trinh khoi phuc dang chay." };
+  if (status.running) return { ok: false, running: true, message: "Đang có tiến trình khôi phục đang chạy." };
   setTimeout(() => runRecovery(options).catch(e => console.error("[RecoveryEngine] background error:", e)), Math.max(100, Number(options.delayMs) || 300));
-  return { ok: true, started: true, message: "Da khoi dong khoi phuc nen." };
+  return { ok: true, started: true, message: "Đã khởi động khôi phục nền." };
 }
 
+
+function startupCleanupLocks() {
+  const lockPaths = [
+    path.join(os.tmpdir(), "phanmienoffline", "restore.lock"),
+    path.join(os.tmpdir(), "phanmienoffline", "restore-scan.lock"),
+  ];
+  for (const lp of lockPaths) {
+    if (fs.existsSync(lp) && isStaleLock(lp)) {
+      console.log("[RESTORE_LOCK] Startup: removing stale lock:", lp);
+      try { fs.unlinkSync(lp); } catch (_) {}
+    }
+  }
+}
+
+function forceUnlock() {
+  const lockPaths = [
+    path.join(os.tmpdir(), "phanmienoffline", "restore.lock"),
+    path.join(os.tmpdir(), "phanmienoffline", "restore-scan.lock"),
+  ];
+  const results = [];
+  for (const lp of lockPaths) {
+    if (!fs.existsSync(lp)) { results.push({ path: lp, status: 'not_found' }); continue; }
+    if (isStaleLock(lp)) {
+      try { fs.unlinkSync(lp); results.push({ path: lp, status: 'removed_stale', message: 'Đã mở khóa stale lock.' }); } catch (e) { results.push({ path: lp, status: 'error', message: e.message }); }
+    } else {
+      results.push({ path: lp, status: 'active', message: 'Lock đang được tiến trình thật giữ, không thể mở khóa.' });
+    }
+  }
+  restoreLock = false;
+  lockFile = null;
+  return results;
+}
 module.exports = {
   initialize,
   scanBackupFiles,
@@ -518,5 +609,7 @@ module.exports = {
   rollbackToPreRestore,
   VERSION,
 };
+
+
 
 

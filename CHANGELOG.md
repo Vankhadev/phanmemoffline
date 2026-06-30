@@ -1,4 +1,20 @@
-﻿## 2.4.3 - Sửa nút Quét file backup trước đăng nhập
+﻿## 2.4.4 - Sửa restore lock kẹt + tiếng Việt trong khôi phục
+
+### Sửa lỗi restore lock
+- Restore lock giờ ghi metadata (pid/startedAt/updatedAt/appVersion/status).
+- Tự phát hiện stale lock khi PID không còn sống hoặc lock quá 10 phút không cập nhật.
+- Tự xóa stale lock thay vì báo lỗi "Không thể khóa tiến trình restore" ngay.
+- Tách lock quét backup (restore-scan.lock) và lock khôi phục (restore.lock) riêng.
+- Thêm nút "Mở khóa restore" trong màn hình Khôi phục DL để dọn lock thủ công.
+- Startup dọn stale lock tự động khi mở app.
+- Hủy khôi phục và worker crash đều release lock đúng trong finally.
+- Không xóa backup gốc; chỉ xóa file lock.
+
+### Sửa lỗi ký tự tiếng Việt
+- Sửa toàn bộ text bị mojibake trong màn hình Khôi phục DL (Settings).
+- Sửa tiếng Việt trong backend RecoveryEngine messages.
+- File lưu đúng UTF-8.
+## 2.4.3 - Sửa nút Quét file backup trước đăng nhập
 
 ### Sửa lỗi
 - Sửa lỗi nút **Quét file backup** không hoạt động ở màn hình đăng nhập/đăng ký khi setupStatus lỗi.
@@ -758,6 +774,7 @@ Nâng cấp ổn định toàn bộ dự án theo hướng production-stable: tr
 
 - Nâng version ứng dụng lên 2.3.7.
 - Đóng gói thay đổi RecoveryEngine, giao diện Khôi phục DL, API recovery và test khôi phục dữ liệu.
+
 
 
 

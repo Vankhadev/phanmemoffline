@@ -277,7 +277,10 @@ app.get('/api/health', (_req, res) => {
 });
 
 // ----- Mount routes -----
-// Public auth/setup endpoints remain inside usersRoutes and syncRoutes; business routes require a valid server session.
+// v2.4.4: Cleanup stale restore locks on startup
+  RecoveryEngine.startupCleanupLocks();
+
+  // Public auth/setup endpoints remain inside usersRoutes and syncRoutes; business routes require a valid server session.
 app.use('/api/users',          usersRoutes);
 app.use('/api',                syncRoutes);
 app.use('/api/database',       databaseRoutes);
@@ -863,4 +866,5 @@ startServer().catch(error => {
   console.error('[KHA SERVER] Lỗi khởi động không mong muốn:', error);
   process.exit(1);
 });
+
 

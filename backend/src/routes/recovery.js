@@ -137,4 +137,12 @@ router.post("/rollback", (req, res) => {
   }
 });
 
+
+// M? kh?a restore (d?n stale lock th? c?ng)
+router.post("/unlock", (req, res) => {
+  ensureInit();
+  const results = RecoveryEngine.forceUnlock();
+  res.json({ ok: true, results, message: "?? ki?m tra v? d?n kh?a restore." });
+});
+
 module.exports = router;
