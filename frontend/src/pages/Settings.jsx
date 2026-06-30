@@ -2094,26 +2094,44 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={async () => {
                   setRecoveryNotice(null);
+                  setRecoveryRunning(true);
                   try {
-                    const resp = await apiJson('/api/recovery/scan-and-restore', { method: 'POST' });
-                    if (resp.running) { setRecoveryRunning(true); setRecoveryNotice({ tone: 'error', message: resp.message || 'Đang có tiến trình khôi phục đang chạy.' }); return; }
-                    setRecoveryRunning(true);
-                    setRecoveryNotice({ tone: 'success', message: 'Đã bắt đầu khôi phục ở nền. Vui lòng không tắt phần mềm.' });
-                    const poll = async () => {
-                      try {
-                        const st = await apiJson('/api/recovery/status');
-                        setRecoveryStatus(st);
-                        if (st.running) { setTimeout(poll, 1500); return; }
-                        setRecoveryRunning(false);
-                        const hasErr = st.lastReport?.errors?.length || st.lastReport?.failedFiles?.length;
-                        if (st.lastReport) setRecoveryNotice({ tone: hasErr ? 'error' : 'success', message: st.lastReport.message || (st.phase === 'cancelled' ? 'Đã hủy khôi phục.' : 'Hoàn tất khôi phục.') });
-                        try { const f = await apiJson('/api/recovery/found-files'); setRecoveryFoundFiles(f.files || []); } catch (_) {}
-                        try { const l = await apiJson('/api/recovery/logs?limit=10'); setRecoveryLogs(l.logs || []); } catch (_) {}
-                      } catch (_) { setTimeout(poll, 3000); }
-                    };
-                    setTimeout(poll, 1500);
-                  } catch (error) { setRecoveryRunning(false); setRecoveryNotice({ tone: 'error', message: error?.message || 'Khởi động khôi phục thất bại.' }); }
-                }} disabled={recoveryRunning} className="btn-success inline-flex min-h-10 items-center gap-2 disabled:opacity-60"><RotateCcw size={16} className={recoveryRunning ? 'animate-spin' : ''} /> Quét và khôi phục toàn bộ backup</button>
+                    const resp = await apiJson('/api/recovery/scan-files', { method: 'POST' });
+                    setRecoveryRunning(false);
+                    if (!resp.ok) { setRecoveryNotice({ tone: 'error', message: resp.message || 'Qu?t backup th?t b?i.' }); return; }
+                    setRecoveryFoundFiles(resp.files || []);
+                    setRecoveryStatus(current => ({ ...(current || {}), foundFiles: resp.files || [], progress: resp.message || `?? t?m th?y ${(resp.files || []).length} file backup.` }));
+                    setRecoveryNotice({ tone: 'success', message: resp.message || `?? t?m th?y ${(resp.files || []).length} file backup. B?m "B?t ??u kh?i ph?c" ?? import.` });
+                    try { const l = await apiJson('/api/recovery/logs?limit=10'); setRecoveryLogs(l.logs || []); } catch (_) {}
+                  } catch (error) { setRecoveryRunning(false); setRecoveryNotice({ tone: 'error', message: error?.message || 'Qu?t backup th?t b?i.' }); }
+                }} disabled={recoveryRunning} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-60"><Loader2 size={16} className={recoveryRunning ? 'animate-spin' : ''} /> Qu?t file backup</button>
+                <button type="button" onClick={async () => {
+                  if (!recoveryFoundFiles.length) { setRecoveryNotice({ tone: 'error', message: 'H?y qu?t file backup tr??c khi kh?i ph?c.' }); return; }
+                  if (!window.confirm(`B?t ??u kh?i ph?c ${recoveryFoundFiles.length} file backup? Database hi?n t?i s? ???c snapshot tr??c, kh?ng b? replace.`)) return;
+                  setRecoveryNotice(null);
+                  setRecoveryRunning(true);
+                  try {
+                    const resp = await apiJson('/api/recovery/restore-files', { method: 'POST', body: { files: recoveryFoundFiles } });
+                    setRecoveryRunning(false);
+                    const st = await apiJson('/api/recovery/status');
+                    setRecoveryStatus(st);
+                    const hasErr = st.lastReport?.errors?.length || st.lastReport?.failedFiles?.length;
+                    setRecoveryNotice({ tone: resp.ok && !hasErr ? 'success' : 'error', message: resp.message || (resp.ok ? 'Ho?n t?t kh?i ph?c.' : 'Kh?i ph?c th?t b?i.') });
+                    try { const l = await apiJson('/api/recovery/logs?limit=10'); setRecoveryLogs(l.logs || []); } catch (_) {}
+                  } catch (error) { setRecoveryRunning(false); setRecoveryNotice({ tone: 'error', message: error?.message || 'Kh?i ph?c th?t b?i.' }); }
+                }} disabled={recoveryRunning || !recoveryFoundFiles.length} className="btn-success inline-flex min-h-10 items-center gap-2 disabled:opacity-60"><RotateCcw size={16} className={recoveryRunning ? 'animate-spin' : ''} /> B?t ??u kh?i ph?c</button>
+                <button type="button" onClick={async () => {
+                  if (!window.confirm('Qu?t s?u to?n b? ? ??a c? th? r?t l?u. Ti?p t?c?')) return;
+                  setRecoveryNotice(null);
+                  setRecoveryRunning(true);
+                  try {
+                    const resp = await apiJson('/api/recovery/deep-scan', { method: 'POST', body: { deepScan: true } });
+                    setRecoveryRunning(false);
+                    if (!resp.ok) { setRecoveryNotice({ tone: 'error', message: resp.message || 'Qu?t s?u th?t b?i.' }); return; }
+                    setRecoveryFoundFiles(resp.files || []);
+                    setRecoveryNotice({ tone: 'success', message: resp.message || `Qu?t s?u xong: ${(resp.files || []).length} file backup.` });
+                  } catch (error) { setRecoveryRunning(false); setRecoveryNotice({ tone: 'error', message: error?.message || 'Qu?t s?u th?t b?i.' }); }
+                }} disabled={recoveryRunning} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60">Qu?t s?u to?n b? ? ??a</button>
                 <button type="button" onClick={async () => {
                   if (!window.confirm('Hủy khôi phục? Tiến trình sẽ dừng an toàn sau batch hiện tại, dữ liệu đã gộp vẫn được giữ.')) return;
                   try { await apiJson('/api/recovery/cancel', { method: 'POST' }); setRecoveryNotice({ tone: 'success', message: 'Đã yêu cầu hủy. Đang dừng an toàn...' }); }

@@ -1,7 +1,7 @@
-﻿const express = require('express');
+﻿const express = require("express");
 const router = express.Router();
-const RecoveryEngine = require('../services/RecoveryEngine');
-const dbModule = require('../db/database');
+const RecoveryEngine = require("../services/RecoveryEngine");
+const dbModule = require("../db/database");
 
 function ensureRecovery() {
   if (!RecoveryEngine.getStatus().initialized) RecoveryEngine.initialize({ dbModule });
@@ -10,21 +10,17 @@ function ensureRecovery() {
 /**
  * POST /api/database/restore-scan
  *
- * Giữ endpoint cũ nhưng đổi cơ chế sang MERGE an toàn:
- * - Không chọn 1 backup mới nhất để ghi đè DB hiện tại.
- * - Tạo backup pre-restore, quét/giải nén/merge nhiều backup từ cũ đến mới.
- * - Lỗi thì rollback trong RecoveryEngine.
+ * Endpoint cu duoc giu tuong thich nhung KHONG con khoi phuc ngay.
+ * v2.3.9: Chi quet file backup va tra danh sach. Muon import phai goi
+ * /api/recovery/restore-files voi danh sach file da xac nhan.
  */
-router.post('/restore-scan', async (req, res) => {
+router.post("/restore-scan", async (req, res) => {
   ensureRecovery();
   try {
-    if (RecoveryEngine.getStatus().running) {
-      return res.json({ ok: false, running: true, message: 'Recovery đang chạy nền. Vui lòng đợi.' });
-    }
-    const result = await RecoveryEngine.runRecovery({});
+    const result = await RecoveryEngine.scanBackupFiles(req.body || {});
     return res.status(result.ok ? 200 : 500).json(result);
   } catch (error) {
-    return res.status(500).json({ ok: false, message: 'Khôi phục thất bại, dữ liệu hiện tại đã được giữ nguyên.', error: error && error.message });
+    return res.status(500).json({ ok: false, message: "Quet backup that bai.", error: error && error.message });
   }
 });
 

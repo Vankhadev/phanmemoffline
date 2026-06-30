@@ -1,3 +1,37 @@
+﻿## 2.3.9 - Sửa triệt để lỗi treo hệ thống khi khôi phục dữ liệu
+
+### Sửa triệt để lỗi treo khi bấm Khôi phục dữ liệu
+* Viết lại toàn bộ flow khôi phục dữ liệu theo hướng chống treo: tách riêng **Quét file backup** và **Bắt đầu khôi phục**.
+* Không còn vừa quét vừa import cùng lúc; nút cũ `/api/database/restore-scan` nay chỉ quét backup để tránh tự động khôi phục ngoài ý muốn.
+* Restore chạy bằng `backend/src/workers/RecoveryWorker.js` trong `worker_threads`, không chạy trong React, renderer, hoặc main backend event loop.
+* Main process/backend chỉ điều phối qua `backend/src/services/RecoveryEngine.js`; UI chỉ nhận trạng thái/progress.
+
+### Timeout, cancel, lock, checkpoint, log realtime
+* Thêm timeout bắt buộc: quét thư mục 10s, đọc metadata 5s, kiểm tra file 30s, xử lý file 120s, giải nén 120s, import theo batch.
+* Thêm nút hủy thật sự: gửi `cancel-request` vào worker, dừng sau batch hiện tại.
+* Thêm restore lock để không cho chạy nhiều tiến trình restore chồng nhau.
+* Ghi log realtime ra `logs/recovery/restore-log-YYYYMMDD_HHmmss.txt` bằng stream, không đợi xong mới ghi.
+* Import database theo batch 150 record/lần; sau mỗi batch gửi progress về UI và yield event loop trong worker.
+
+### Giới hạn vùng quét an toàn
+* Mặc định chỉ quét các thư mục ưu tiên: database/userData, Documents, Desktop, Downloads, backup/backups/backup_du_lieu_phan_mem_no_del.
+* Không quét sâu toàn bộ ổ C mặc định, bỏ qua node_modules, .git, Windows, Program Files, Temp/cache và thư mục hệ thống.
+* Thêm chế độ riêng **Quét sâu toàn bộ ổ đĩa** kèm cảnh báo rõ ràng.
+
+### An toàn dữ liệu
+* Tạo snapshot database hiện tại trước restore, không replace database hiện tại bằng backup.
+* File lỗi/JSON lỗi/zip lỗi/timeout bị ghi log và bỏ qua, không làm treo toàn bộ.
+* Khôi phục đơn hàng theo hướng orphan-safe: không bỏ đơn vì thiếu product/customer; giữ snapshot tên sản phẩm, giá, số lượng, khách hàng.
+* Dedupe đơn hàng an toàn hơn, ưu tiên không mất dữ liệu hơn là sợ trùng.
+
+### File thay đổi chính
+* `backend/src/services/RecoveryEngine.js` — viết lại thành coordinator dùng worker thread, lock, snapshot, rollback, API 2 bước.
+* `backend/src/workers/RecoveryWorker.js` — worker riêng xử lý scan/verify/restore/parse/merge/extract.
+* `backend/src/routes/recovery.js` — thêm `/scan-files`, `/restore-files`, `/deep-scan`, `/verify-files`.
+* `backend/src/routes/database.js` — endpoint cũ `/restore-scan` chuyển thành scan-only.
+* `frontend/src/pages/Login.jsx` — nút restore thành 2 bước: Quét file backup → Bắt đầu khôi phục.
+* `frontend/src/pages/Settings.jsx` — màn hình debug restore 2 bước, có quét sâu riêng.
+* `frontend/src/utils/apiClient.js` — thêm API recovery 2 bước.
 # Changelog
 ## [2.3.8] - 2026-06-30
 
@@ -699,3 +733,4 @@ Nâng cấp ổn định toàn bộ dự án theo hướng production-stable: tr
 
 - Nâng version ứng dụng lên 2.3.7.
 - Đóng gói thay đổi RecoveryEngine, giao diện Khôi phục DL, API recovery và test khôi phục dữ liệu.
+

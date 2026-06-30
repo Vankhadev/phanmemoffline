@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   authApi,
@@ -60,36 +60,57 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const handleRestoreScan = async () => {
     setRestoreLoading(true);
     setRestoreStats(null);
+    setRestoreFiles([]);
     setRestoreError('');
     setError('');
     setSuccess('');
     try {
       if (!applyServerOverride()) return;
-      const data = await authApi.restoreScan();
+      const data = await authApi.recoveryScan.scan();
       if (data && data.ok) {
-        setRestoreStats(data);
-        setSuccess('Đã khôi phục dữ liệu database tốt nhất thành công!');
+        setRestoreFiles(data.files || []);
+        setSuccess(`Đã quét xong: tìm thấy ${data.total || 0} file backup. Bấm "Bắt đầu khôi phục" để import.`);
+      } else {
+        setRestoreError((data && data.message) || 'Không tìm thấy file backup.');
+      }
+    } catch (err) {
+      const netData = err?.data;
+      if (netData && netData.isNetworkError) setRestoreError('Không kết nối được backend.');
+      else if (netData && netData.message) setRestoreError(netData.message);
+      else if (err && err.message && /fetch|network|connect|ECONN|localhost|127\.0\.0\.1|api base/i.test(err.message)) setRestoreError('Không kết nối được backend.');
+      else setRestoreError(getApiErrorMessage(netData, 'Quét backup thất bại.'));
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
+  const handleStartRestore = async () => {
+    if (!restoreFiles.length) {
+      setRestoreError('Hãy bấm "Quét file backup" trước khi khôi phục.');
+      return;
+    }
+    if (!window.confirm(`Bắt đầu khôi phục ${restoreFiles.length} file backup? Dữ liệu hiện tại sẽ được snapshot trước, không replace database.`)) return;
+    setRestoreLoading(true);
+    setRestoreStats(null);
+    setRestoreError('');
+    setSuccess('');
+    try {
+      const data = await authApi.recoveryScan.restore({ files: restoreFiles });
+      if (data && data.ok) {
+        setRestoreStats(data.report || data);
+        setSuccess(data.message || 'Đã khôi phục dữ liệu thành công.');
         try {
           const status = await authApi.bootstrapStatus();
           applyBootstrapStatus(status);
         } catch (_) {}
       } else {
-        // Backend trả về lỗi nghiệp vụ rõ ràng (không có backup / file không hợp lệ / ...)
-        const msg = (data && data.message) || 'Không tìm thấy file backup để khôi phục.';
-        setRestoreError(msg);
+        setRestoreError((data && data.message) || 'Khôi phục thất bại, dữ liệu hiện tại đã được giữ nguyên.');
       }
     } catch (err) {
-      // Phân biệt lỗi kết nối backend (backend tắt/sai port) vs lỗi nghiệp vụ.
       const netData = err?.data;
-      if (netData && netData.isNetworkError) {
-        setRestoreError('Không kết nối được backend.');
-      } else if (netData && netData.message) {
-        setRestoreError(netData.message);
-      } else if (err && err.message && /fetch|network|connect|ECONN|localhost|127\.0\.0\.1|api base/i.test(err.message)) {
-        setRestoreError('Không kết nối được backend.');
-      } else {
-        setRestoreError(getApiErrorMessage(netData, 'Khôi phục thất bại, dữ liệu hiện tại đã được giữ nguyên.'));
-      }
+      if (netData && netData.isNetworkError) setRestoreError('Không kết nối được backend.');
+      else if (netData && netData.message) setRestoreError(netData.message);
+      else setRestoreError(getApiErrorMessage(netData, 'Khôi phục thất bại, dữ liệu hiện tại đã được giữ nguyên.'));
     } finally {
       setRestoreLoading(false);
     }
@@ -675,35 +696,56 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
             {/* Khôi phục dữ liệu section */}
             <div className="mt-4 pt-4 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={handleRestoreScan}
-                disabled={restoreLoading || loading || checkingSetup}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm"
-              >
-                {restoreLoading ? (
-                  <><RefreshCw size={16} className="animate-spin" /> Đang khôi phục dữ liệu...</>
-                ) : (
-                  <>Khôi phục dữ liệu</>
-                )}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleRestoreScan}
+                  disabled={restoreLoading || loading || checkingSetup}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm"
+                >
+                  {restoreLoading && !restoreFiles.length ? (
+                    <><RefreshCw size={16} className="animate-spin" /> Đang quét file...</>
+                  ) : (
+                    <>Quét file backup</>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartRestore}
+                  disabled={restoreLoading || !restoreFiles.length || loading || checkingSetup}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm"
+                >
+                  {restoreLoading && restoreFiles.length > 0 ? (
+                    <><RefreshCw size={16} className="animate-spin" /> Đang khôi phục...</>
+                  ) : (
+                    <>Bắt đầu khôi phục</>
+                  )}
+                </button>
+              </div>
+              {restoreFiles.length > 0 && !restoreLoading && (
+                <div className="mt-2 text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+                  <span className="font-semibold">{restoreFiles.length} file backup</span> đã quét được. Bấm "Bắt đầu khôi phục" để import.
+                </div>
+              )}
               {restoreStats && (
                 <div className="mt-3 bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-xs text-emerald-800 space-y-1">
-                  <div className="font-semibold text-emerald-950">Khôi phục thành công database:</div>
-                  <div className="font-mono text-[10px] break-all text-emerald-900">{restoreStats.path}</div>
+                  <div className="font-semibold text-emerald-950">Khôi phục hoàn tất:</div>
                   <div className="grid grid-cols-3 gap-1 pt-1.5 text-center font-semibold">
                     <div className="bg-white/80 rounded px-1.5 py-1 border border-emerald-100">
                       <div>Sản phẩm</div>
-                      <div className="text-sm font-bold text-emerald-700">{restoreStats.productsCount}</div>
+                      <div className="text-sm font-bold text-emerald-700">{restoreStats.restoredCounts?.products || 0}</div>
                     </div>
                     <div className="bg-white/80 rounded px-1.5 py-1 border border-emerald-100">
                       <div>Khách hàng</div>
-                      <div className="text-sm font-bold text-emerald-700">{restoreStats.customersCount}</div>
+                      <div className="text-sm font-bold text-emerald-700">{restoreStats.restoredCounts?.customers || 0}</div>
                     </div>
                     <div className="bg-white/80 rounded px-1.5 py-1 border border-emerald-100">
                       <div>Đơn hàng</div>
-                      <div className="text-sm font-bold text-emerald-700">{restoreStats.invoicesCount}</div>
+                      <div className="text-sm font-bold text-emerald-700">{restoreStats.restoredCounts?.invoices || 0}</div>
                     </div>
+                  </div>
+                  <div className="pt-1.5 text-[11px] text-emerald-700">
+                    File đã xử lý: {restoreStats.parsedFiles?.length || 0}; file lỗi/bỏ qua: {restoreStats.failedFiles?.length || 0}; rollback: {restoreStats.rollbackStatus || 'not_needed'}.
                   </div>
                 </div>
               )}
@@ -729,5 +771,8 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     </div>
   );
 }
+
+
+
 
 

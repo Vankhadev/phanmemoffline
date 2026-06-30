@@ -1,4 +1,4 @@
-import {
+﻿import {
   clearAuthSession,
   getAuthToken,
   getPendingLocalData,
@@ -1277,7 +1277,16 @@ export const authApi = {
   syncVersions() { return apiJson('/sync/versions', {}, 'Không thể lấy phiên bản đồng bộ.'); },
   syncPull(payload = {}) { return apiJson('/sync/pull', { method: 'POST', body: payload }, 'Không thể kéo dữ liệu đồng bộ.'); },
   syncPush(payload = {}) { return apiJson('/sync/push', { method: 'POST', body: payload }, 'Không thể đẩy dữ liệu đồng bộ.'); },
-  restoreScan() { return apiJson('/database/restore-scan', { method: 'POST' }, 'Không thể khôi phục dữ liệu.'); },
+  restoreScan() { return apiJson('/database/restore-scan', { method: 'POST' }, 'Không thể quét backup.'); },
+  recoveryScan: {
+    scan(options = {}) { return apiJson('/api/recovery/scan-files', { method: 'POST', body: options }, 'Không thể quét file backup.'); },
+    restore(options = {}) { return apiJson('/api/recovery/restore-files', { method: 'POST', body: options }, 'Không thể khôi phục dữ liệu.'); },
+    deepScan(options = {}) { return apiJson('/api/recovery/deep-scan', { method: 'POST', body: options }, 'Không thể quét sâu toàn bộ ổ đĩa.'); },
+    verify(files = []) { return apiJson('/api/recovery/verify-files', { method: 'POST', body: { files } }, 'Không thể kiểm tra file backup.'); },
+    cancel() { return apiJson('/api/recovery/cancel', { method: 'POST' }, 'Không thể hủy khôi phục.'); },
+    status() { return apiJson('/api/recovery/status', {}, 'Không thể kiểm tra trạng thái khôi phục.'); },
+    foundFiles() { return apiJson('/api/recovery/found-files', {}, 'Không thể tìm file backup đã quét.'); },
+  },
 };
 
 export const dataGuardianApi = {
@@ -1478,3 +1487,5 @@ function normalizePendingOrder(order) {
     details,
   });
 }
+
+
