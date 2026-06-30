@@ -79,6 +79,7 @@ const databaseRoutes = require('./routes/database');
 const dataGuardianRoutes = require('./routes/dataGuardian');
 const historyRoutes = require('./routes/history');
 const recoveryRoutes = require('./routes/recovery');
+const restoreRoutes = require('./routes/restore');
 
 // ============================================================
 //  EXPRESS APP
@@ -281,6 +282,7 @@ app.use('/api/users',          usersRoutes);
 app.use('/api',                syncRoutes);
 app.use('/api/database',       databaseRoutes);
 app.use('/api/recovery',       recoveryRoutes);
+app.use('/api/restore',        restoreRoutes);
 app.use('/api/data-guardian',  dataGuardianRoutes);
 app.use('/api/store',          requireAuth, requireAnyPermission(['store.read', 'store.manage']), storeRoutes);
 app.use('/api/customers',      requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customersRoutes);
@@ -861,3 +863,4 @@ startServer().catch(error => {
   console.error('[KHA SERVER] Lỗi khởi động không mong muốn:', error);
   process.exit(1);
 });
+

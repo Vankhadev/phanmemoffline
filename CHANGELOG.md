@@ -1,4 +1,14 @@
-﻿## 2.4.1 - Sửa lỗi crash giao diện khôi phục
+﻿## 2.4.3 - Sửa nút Quét file backup trước đăng nhập
+
+### Sửa lỗi
+- Sửa lỗi nút **Quét file backup** không hoạt động ở màn hình đăng nhập/đăng ký khi setupStatus lỗi.
+- Tách chức năng quét backup khỏi setup/auth/login/register; không phụ thuộc `checkingSetup`, login loading, token hay trạng thái tài khoản.
+- Cho phép quét backup khi chưa đăng nhập để cứu dữ liệu.
+- Thêm log chẩn đoán khi bấm quét backup: click, electronAPI, scanBackupFiles, backend endpoint.
+- Lỗi setupStatus chỉ ghi cảnh báo, không khóa chức năng khôi phục dữ liệu.
+- Thêm public endpoint `GET /api/restore/scan` không yêu cầu token, không import dữ liệu ngay.
+- Danh sách backup rỗng hiển thị an toàn, không crash.
+## 2.4.1 - Sửa lỗi crash giao diện khôi phục
 
 ### Sửa lỗi
 - Sửa lỗi `ReferenceError: restoreFiles is not defined` làm React app crash khi mở phần mềm.
@@ -748,6 +758,7 @@ Nâng cấp ổn định toàn bộ dự án theo hướng production-stable: tr
 
 - Nâng version ứng dụng lên 2.3.7.
 - Đóng gói thay đổi RecoveryEngine, giao diện Khôi phục DL, API recovery và test khôi phục dữ liệu.
+
 
 
 

@@ -86,6 +86,10 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const safeRestoreFiles = Array.isArray(restoreFiles) ? restoreFiles : [];
 
   const handleRestoreScan = async () => {
+    console.log("[RESTORE] Scan backup button clicked");
+    console.log("[RESTORE] electronAPI available:", !!window.electronAPI);
+    console.log("[RESTORE] scanBackupFiles available:", !!window.electronAPI?.scanBackupFiles);
+    console.log("[RESTORE] calling /api/restore/scan");
     setRestoreLoading(true);
     setRestoreStats(null);
     setRestoreFiles([]);
@@ -728,7 +732,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 <button
                   type="button"
                   onClick={handleRestoreScan}
-                  disabled={restoreLoading || loading || checkingSetup}
+                  disabled={restoreLoading}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm"
                 >
                   {restoreLoading && !safeRestoreFiles.length ? (
@@ -740,7 +744,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 <button
                   type="button"
                   onClick={handleStartRestore}
-                  disabled={restoreLoading || !safeRestoreFiles.length || loading || checkingSetup}
+                  disabled={restoreLoading || !safeRestoreFiles.length}
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm"
                 >
                   {restoreLoading && safeRestoreFiles.length > 0 ? (
