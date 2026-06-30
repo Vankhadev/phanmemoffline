@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+﻿import { Component, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   authApi,
@@ -41,6 +41,31 @@ const normalizeEmail = (email) => email.trim().toLowerCase();
 const normalizePhone = (phone) => phone.replace(/\s/g, '');
 const getInitialServerUrl = () => getApiBase() || '';
 
+class RestoreModuleErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-700">
+          <div className="font-bold">Module kh?i ph?c d? li?u ?ang g?p l?i.</div>
+          <div className="mt-1">{this.state.error?.message || 'Kh?ng th? hi?n th? khu v?c kh?i ph?c.'}</div>
+          <button type="button" className="mt-2 rounded-lg border border-red-200 bg-white px-3 py-1 font-semibold text-red-700" onClick={() => this.setState({ error: null })}>Th? l?i</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+
 export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const navigate = useNavigate();
   const [form, setForm] = useState(() => ({ ...initialForm, serverUrl: getInitialServerUrl() }));
@@ -55,7 +80,10 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const [authModeTouched, setAuthModeTouched] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [restoreStats, setRestoreStats] = useState(null);
+  const [restoreFiles, setRestoreFiles] = useState([]);
   const [restoreError, setRestoreError] = useState('');
+
+  const safeRestoreFiles = Array.isArray(restoreFiles) ? restoreFiles : [];
 
   const handleRestoreScan = async () => {
     setRestoreLoading(true);
@@ -85,17 +113,17 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   };
 
   const handleStartRestore = async () => {
-    if (!restoreFiles.length) {
+    if (!safeRestoreFiles.length) {
       setRestoreError('Hãy bấm "Quét file backup" trước khi khôi phục.');
       return;
     }
-    if (!window.confirm(`Bắt đầu khôi phục ${restoreFiles.length} file backup? Dữ liệu hiện tại sẽ được snapshot trước, không replace database.`)) return;
+    if (!window.confirm(`Bắt đầu khôi phục ${safeRestoreFiles.length} file backup? Dữ liệu hiện tại sẽ được snapshot trước, không replace database.`)) return;
     setRestoreLoading(true);
     setRestoreStats(null);
     setRestoreError('');
     setSuccess('');
     try {
-      const data = await authApi.recoveryScan.restore({ files: restoreFiles });
+      const data = await authApi.recoveryScan.restore({ files: safeRestoreFiles });
       if (data && data.ok) {
         setRestoreStats(data.report || data);
         setSuccess(data.message || 'Đã khôi phục dữ liệu thành công.');
@@ -703,7 +731,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   disabled={restoreLoading || loading || checkingSetup}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm"
                 >
-                  {restoreLoading && !restoreFiles.length ? (
+                  {restoreLoading && !safeRestoreFiles.length ? (
                     <><RefreshCw size={16} className="animate-spin" /> Đang quét file...</>
                   ) : (
                     <>Quét file backup</>
@@ -712,19 +740,19 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 <button
                   type="button"
                   onClick={handleStartRestore}
-                  disabled={restoreLoading || !restoreFiles.length || loading || checkingSetup}
+                  disabled={restoreLoading || !safeRestoreFiles.length || loading || checkingSetup}
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-sm"
                 >
-                  {restoreLoading && restoreFiles.length > 0 ? (
+                  {restoreLoading && safeRestoreFiles.length > 0 ? (
                     <><RefreshCw size={16} className="animate-spin" /> Đang khôi phục...</>
                   ) : (
                     <>Bắt đầu khôi phục</>
                   )}
                 </button>
               </div>
-              {restoreFiles.length > 0 && !restoreLoading && (
+              {safeRestoreFiles.length > 0 && !restoreLoading && (
                 <div className="mt-2 text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
-                  <span className="font-semibold">{restoreFiles.length} file backup</span> đã quét được. Bấm "Bắt đầu khôi phục" để import.
+                  <span className="font-semibold">{safeRestoreFiles.length} file backup</span> đã quét được. Bấm "Bắt đầu khôi phục" để import.
                 </div>
               )}
               {restoreStats && (

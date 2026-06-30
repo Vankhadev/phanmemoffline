@@ -1,4 +1,12 @@
-﻿## 2.4.0 - Nâng version sau sửa lỗi build frontend
+﻿## 2.4.1 - Sửa lỗi crash giao diện khôi phục
+
+### Sửa lỗi
+- Sửa lỗi `ReferenceError: restoreFiles is not defined` làm React app crash khi mở phần mềm.
+- Khai báo đầy đủ state `restoreFiles` trong màn hình đăng nhập/khôi phục.
+- Thêm biến an toàn `safeRestoreFiles` để danh sách backup rỗng/không phải mảng không làm crash render.
+- Thêm `RestoreModuleErrorBoundary` bọc riêng khu vực khôi phục dữ liệu; nếu module restore lỗi chỉ hiện lỗi trong khu vực đó, không làm crash toàn app.
+- Không tự động chạy restore khi mở app; chỉ quét khi người dùng bấm "Quét file backup", chỉ restore khi bấm "Bắt đầu khôi phục".
+## 2.4.0 - Nâng version sau sửa lỗi build frontend
 
 ### Thay đổi
 - Nâng version từ 2.3.9 lên 2.4.0.
@@ -740,5 +748,6 @@ Nâng cấp ổn định toàn bộ dự án theo hướng production-stable: tr
 
 - Nâng version ứng dụng lên 2.3.7.
 - Đóng gói thay đổi RecoveryEngine, giao diện Khôi phục DL, API recovery và test khôi phục dữ liệu.
+
 
 
