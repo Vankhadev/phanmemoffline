@@ -1,4 +1,34 @@
 # Changelog
+## [2.3.8] - 2026-06-30
+
+### Sửa lỗi nghiêm trọng
+* Sửa lỗi bấm Khôi phục dữ liệu (Cài đặt → Khôi phục DL) bị treo/đứng giao diện ở v2.3.7.
+* Nguyên nhân: quét ổ, đọc file, giải nén, parse và merge toàn bộ chạy đồng bộ trên main thread, chặn event loop.
+
+### Khôi phục chạy nền an toàn
+* Toàn bộ quá trình khôi phục chạy nền, chia chunk xen kẽ trả quyền event loop → giao diện vẫn phản hồi, không treo.
+* Màn hình tiến trình chi tiết: ổ đang quét, số file tìm thấy, file đang xử lý, % tiến trình, checkpoint, số bản ghi khôi phục từng loại, số file lỗi.
+* Nút Hủy khôi phục an toàn (dừng sau batch hiện tại, không corrupt DB); không cho chạy 2 restore cùng lúc; nút disable khi đang chạy.
+
+### Chống treo & giới hạn an toàn
+* Mỗi file backup try/catch riêng + timeout 180s/file; file lỗi/rỗng/sai định dạng bị bỏ qua, không dừng toàn bộ.
+* Giới hạn file 256MB; file lớn đọc stream; không quét thư mục hệ thống (Windows, Program Files, AppData cache, Recycle Bin...).
+
+### Không bỏ sót backup & gộp an toàn
+* Quét C/D/E/F/USB, tìm .json/.db/.sqlite/.bak/.backup/.zip/.rar/.7z/.gz; ưu tiên thư mục backup/Documents/Desktop/Downloads.
+* Sắp xếp cũ → mới; gộp từng bảng, không ghi đè database; chống trùng bằng key ổn định; backfill trường trống; giữ giá lịch sử đơn/nhập cũ.
+* Orphan-safe: đơn thiếu product_id/dịch vụ khác vẫn hiển thị tên theo snapshot trong đơn; customer_id null vẫn hiện tên/SĐT.
+
+### Tương thích schema cũ
+* Normalize layer: orders→invoices, order_items→invoice_details, suppliers→partners, imports→import_logs; field customerName→customer_name, productName→product_name, totalAmount→total, createdAt/date→created_at, qty→quantity...
+
+### Snapshot & rollback & log
+* Tạo snapshot trước restore (zip, có JSON dự phòng nếu zip lỗi); rollback tự động nếu bảng bị giảm dữ liệu; không đụng backup gốc.
+* Import chia batch + checkpoint; log tiếng Việt ra restore-log-YYYYMMDD-HHmmss.txt; tổng kết + nút xem log lỗi.
+
+### Kiểm thử
+* scripts/test-recovery.js: 10 kịch bản (nhỏ/lớn/zip/lỗi/trùng/thiếu productId/dịch vụ/schema cũ/chạy lại không nhân đôi/hủy an toàn/không giảm đơn). PASS 26/26.
+
 
 ## [2.3.6] - 2026-06-28
 

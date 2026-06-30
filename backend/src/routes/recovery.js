@@ -1,7 +1,6 @@
 ﻿const express = require('express');
 const router = express.Router();
 const RecoveryEngine = require('../services/RecoveryEngine');
-const { createDbBackup } = require('../db/database');
 
 function ensureInit() {
   if (!RecoveryEngine.getStatus().initialized) {
@@ -9,15 +8,26 @@ function ensureInit() {
   }
 }
 
+// Bắt đầu quét + khôi phục toàn bộ backup (chạy nền).
 router.post('/scan-and-restore', (req, res) => {
   ensureInit();
-  if (RecoveryEngine.getStatus().running) {
-    return res.json({ ok: false, running: true, message: 'Recovery đang chạy nền. Vui lòng đợi.' });
+  const st = RecoveryEngine.getStatus();
+  if (st.running) {
+    return res.json({ ok: false, running: true, message: 'Đang có tiến trình khôi phục dữ liệu đang chạy. Vui lòng đợi hoàn tất.' });
   }
-  res.json({ ok: true, message: 'Bắt đầu quét và khôi phục toàn bộ backup...', started: true });
-  RecoveryEngine.startBackgroundRecovery({ delayMs: 500 });
+  const started = RecoveryEngine.startBackgroundRecovery({ delayMs: 300 });
+  if (!started.ok) return res.json({ ok: false, running: true, message: started.message });
+  res.json({ ok: true, message: 'Đã bắt đầu quét và khôi phục toàn bộ backup ở nền. Giao diện vẫn phản hồi bình thường.', started: true });
 });
 
+// Hủy khôi phục an toàn (dừng sau batch hiện tại).
+router.post('/cancel', (req, res) => {
+  ensureInit();
+  const result = RecoveryEngine.cancelRecovery();
+  res.json({ ok: result.ok, message: result.message });
+});
+
+// Trạng thái tiến trình chi tiết (UI poll).
 router.get('/status', (req, res) => {
   ensureInit();
   res.json({ ok: true, ...RecoveryEngine.getStatus() });
@@ -60,10 +70,10 @@ router.post('/rollback', (req, res) => {
   try {
     const safetyBackup = RecoveryEngine.getStatus().lastReport?.safetyBackup;
     if (backupPath === 'latest_safety' && safetyBackup) {
-      const result = RecoveryEngine.rollbackToPreRestore(safetyBackup.path);
+      RecoveryEngine.rollbackToPreRestore(safetyBackup.path);
       return res.json({ ok: true, message: 'Đã rollback về bản trước restore.' });
     }
-    const result = RecoveryEngine.rollbackToPreRestore(backupPath);
+    RecoveryEngine.rollbackToPreRestore(backupPath);
     res.json({ ok: true, message: 'Đã rollback thành công.' });
   } catch (e) {
     res.status(500).json({ ok: false, message: 'Rollback thất bại: ' + e.message });

@@ -2089,46 +2089,90 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
                 <h2 className="font-bold flex items-center gap-2"><RotateCcw size={18} /> Khôi phục dữ liệu</h2>
-                <p className="mt-1 text-sm text-gray-500">Quét toàn bộ ổ đĩa tìm backup cũ, giải nén file nén và merge vào database hiện tại, không ghi đè database.</p>
+                <p className="mt-1 text-sm text-gray-500">Quét toàn bộ ổ đĩa tìm backup cũ, giải nén file nén và gộp vào database hiện tại. Không ghi đè database, không mất đơn hàng. Chạy nền an toàn — giao diện vẫn phản hồi.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={async () => {
                   setRecoveryNotice(null);
                   try {
-                    await apiJson('/api/recovery/scan-and-restore', { method: 'POST' });
+                    const resp = await apiJson('/api/recovery/scan-and-restore', { method: 'POST' });
+                    if (resp.running) { setRecoveryRunning(true); setRecoveryNotice({ tone: 'error', message: resp.message || 'Đang có tiến trình khôi phục đang chạy.' }); return; }
                     setRecoveryRunning(true);
-                    setRecoveryNotice({ tone: 'success', message: 'Đang quét và khôi phục nền...' });
+                    setRecoveryNotice({ tone: 'success', message: 'Đã bắt đầu khôi phục ở nền. Vui lòng không tắt phần mềm.' });
                     const poll = async () => {
                       try {
                         const st = await apiJson('/api/recovery/status');
                         setRecoveryStatus(st);
-                        if (st.running) { setTimeout(poll, 2000); return; }
+                        if (st.running) { setTimeout(poll, 1500); return; }
                         setRecoveryRunning(false);
-                        if (st.lastReport) setRecoveryNotice({ tone: st.lastReport.errors?.length ? 'error' : 'success', message: st.lastReport.message || 'Hoàn tất khôi phục.' });
+                        const hasErr = st.lastReport?.errors?.length || st.lastReport?.failedFiles?.length;
+                        if (st.lastReport) setRecoveryNotice({ tone: hasErr ? 'error' : 'success', message: st.lastReport.message || (st.phase === 'cancelled' ? 'Đã hủy khôi phục.' : 'Hoàn tất khôi phục.') });
                         try { const f = await apiJson('/api/recovery/found-files'); setRecoveryFoundFiles(f.files || []); } catch (_) {}
                         try { const l = await apiJson('/api/recovery/logs?limit=10'); setRecoveryLogs(l.logs || []); } catch (_) {}
                       } catch (_) { setTimeout(poll, 3000); }
                     };
-                    setTimeout(poll, 2000);
-                  } catch (error) { setRecoveryNotice({ tone: 'error', message: error?.message || 'Khởi động recovery thất bại.' }); }
+                    setTimeout(poll, 1500);
+                  } catch (error) { setRecoveryRunning(false); setRecoveryNotice({ tone: 'error', message: error?.message || 'Khởi động khôi phục thất bại.' }); }
                 }} disabled={recoveryRunning} className="btn-success inline-flex min-h-10 items-center gap-2 disabled:opacity-60"><RotateCcw size={16} className={recoveryRunning ? 'animate-spin' : ''} /> Quét và khôi phục toàn bộ backup</button>
+                <button type="button" onClick={async () => {
+                  if (!window.confirm('Hủy khôi phục? Tiến trình sẽ dừng an toàn sau batch hiện tại, dữ liệu đã gộp vẫn được giữ.')) return;
+                  try { await apiJson('/api/recovery/cancel', { method: 'POST' }); setRecoveryNotice({ tone: 'success', message: 'Đã yêu cầu hủy. Đang dừng an toàn...' }); }
+                  catch (error) { setRecoveryNotice({ tone: 'error', message: error?.message || 'Hủy thất bại.' }); }
+                }} disabled={!recoveryRunning} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60">Hủy khôi phục</button>
                 <button type="button" onClick={async () => { try { const f = await apiJson('/api/recovery/found-files'); setRecoveryFoundFiles(f.files || []); } catch (_) {} }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Xem file backup đã tìm thấy</button>
                 <button type="button" onClick={async () => { try { const l = await apiJson('/api/recovery/logs?limit=10'); setRecoveryLogs(l.logs || []); } catch (_) {} }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Xem log khôi phục</button>
                 <button type="button" onClick={() => window.open('/api/recovery/export-report', '_blank')} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Xuất báo cáo restore</button>
-                <button type="button" onClick={async () => { if (!window.confirm('Rollback về bản trước restore?')) return; try { await apiJson('/api/recovery/rollback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ backupPath: 'latest_safety' }) }); setRecoveryNotice({ tone: 'success', message: 'Đã rollback về bản trước restore.' }); } catch (error) { setRecoveryNotice({ tone: 'error', message: error?.message || 'Rollback thất bại.' }); } }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100">Khôi phục lại bản trước restore</button>
+                <button type="button" onClick={async () => { if (!window.confirm('Khôi phục lại bản trước restore (rollback)?')) return; try { await apiJson('/api/recovery/rollback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ backupPath: 'latest_safety' }) }); setRecoveryNotice({ tone: 'success', message: 'Đã rollback về bản trước restore.' }); } catch (error) { setRecoveryNotice({ tone: 'error', message: error?.message || 'Rollback thất bại.' }); } }} disabled={recoveryRunning} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60">Khôi phục lại bản trước restore</button>
               </div>
             </div>
             <SectionNotice notice={recoveryNotice} />
-            {(recoveryRunning || recoveryStatus?.running) && <div className="rounded-xl border bg-blue-50 p-4 text-sm text-blue-800"><Loader2 size={16} className="mr-2 inline-block animate-spin" />{recoveryStatus?.progress || 'Đang chạy recovery...'}</div>}
+            {(recoveryRunning || recoveryStatus?.running) && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-blue-800">
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>{recoveryStatus?.progress || 'Đang chạy khôi phục...'}</span>
+                </div>
+                {(recoveryStatus?.details?.percent != null) && (
+                  <div className="w-full bg-blue-100 rounded-full h-2 overflow-hidden">
+                    <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${recoveryStatus.details.percent}%` }} />
+                  </div>
+                )}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-blue-900">
+                  <div><span className="opacity-70">Ổ đang quét: </span><span className="font-semibold">{recoveryStatus?.details?.scanningDrive || '—'}</span></div>
+                  <div><span className="opacity-70">File đang xử lý: </span><span className="font-semibold">{recoveryStatus?.details?.file ? recoveryStatus.details.file.split(/[\\/]/).pop() : '—'}</span></div>
+                  <div><span className="opacity-70">Đã xử lý: </span><span className="font-semibold">{recoveryStatus?.details?.processed || 0}/{recoveryStatus?.details?.total || 0}</span></div>
+                  <div><span className="opacity-70">Checkpoint: </span><span className="font-semibold">{recoveryStatus?.details?.checkpoint ? `${recoveryStatus.details.checkpoint.table} #${recoveryStatus.details.checkpoint.batch}` : '—'}</span></div>
+                </div>
+                <p className="text-xs text-blue-700">Đang khôi phục, vui lòng không tắt phần mềm. Giao diện vẫn phản hồi bình thường.</p>
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">File backup tìm thấy</div><div className="mt-1 font-bold text-gray-900">{recoveryFoundFiles.length || recoveryStatus?.foundFiles?.length || 0}</div></div>
               <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Trạng thái</div><div className="mt-1 font-bold text-gray-900">{recoveryRunning ? 'Đang chạy' : (recoveryStatus?.progress || 'Chưa chạy')}</div></div>
               <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Log gần nhất</div><div className="mt-1 font-bold text-gray-900">{recoveryStatus?.lastLogPath ? 'Có' : 'Chưa có'}</div></div>
             </div>
+            {recoveryStatus?.lastReport && (
+              <div className="rounded-xl border bg-emerald-50 p-4 space-y-2">
+                <h3 className="font-bold text-emerald-900">Tổng kết khôi phục</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-emerald-900">
+                  <div><span className="opacity-70">Đơn hàng khôi phục: </span><span className="font-semibold">{recoveryStatus.lastReport.restoredCounts?.invoices || 0}</span></div>
+                  <div><span className="opacity-70">Sản phẩm khôi phục: </span><span className="font-semibold">{recoveryStatus.lastReport.restoredCounts?.products || 0}</span></div>
+                  <div><span className="opacity-70">Khách hàng khôi phục: </span><span className="font-semibold">{recoveryStatus.lastReport.restoredCounts?.customers || 0}</span></div>
+                  <div><span className="opacity-70">Phiếu nhập khôi phục: </span><span className="font-semibold">{recoveryStatus.lastReport.restoredCounts?.import_logs || 0}</span></div>
+                  <div><span className="opacity-70">Bản ghi trùng (bỏ qua): </span><span className="font-semibold">{Object.values(recoveryStatus.lastReport.skippedDuplicates || {}).reduce((a, b) => a + b, 0)}</span></div>
+                  <div><span className="opacity-70">File lỗi/bỏ qua: </span><span className="font-semibold">{recoveryStatus.lastReport.failedFiles?.length || 0}</span></div>
+                  <div><span className="opacity-70">File đã xử lý: </span><span className="font-semibold">{recoveryStatus.lastReport.parsedFiles?.length || 0}</span></div>
+                  <div><span className="opacity-70">Rollback: </span><span className="font-semibold">{recoveryStatus.lastReport.rollbackStatus || '—'}</span></div>
+                </div>
+                {(recoveryStatus.lastReport.failedFiles?.length > 0) && (
+                  <button type="button" onClick={async () => { try { const l = await apiJson('/api/recovery/logs?limit=10'); setRecoveryLogs(l.logs || []); if (l.logs?.[0]) { const detail = await apiJson('/api/recovery/logs/' + l.logs[0].file); setRecoveryLogDetail(detail.log); } } catch (_) {} }} className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50">Xem log lỗi</button>
+                )}
+              </div>
+            )}
           </div>
           {recoveryFoundFiles.length > 0 && <div className="card space-y-4"><h3 className="font-bold">File backup đã tìm thấy ({recoveryFoundFiles.length})</h3><div className="overflow-auto rounded-xl border max-h-72"><table className="min-w-full text-sm"><thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Đường dẫn</th><th className="px-4 py-3">Kích thước</th></tr></thead><tbody>{recoveryFoundFiles.slice(0, 100).map((f, i) => <tr key={i} className="border-t"><td className="px-4 py-2 font-mono text-xs text-gray-800">{f.path}</td><td className="px-4 py-2 text-gray-600">{f.size ? formatBytes(f.size) : '-'}</td></tr>)}</tbody></table></div></div>}
           {recoveryLogs.length > 0 && <div className="card space-y-4"><h3 className="font-bold">Log khôi phục</h3><div className="space-y-2">{recoveryLogs.map((l, i) => <div key={i} className="rounded-lg border bg-gray-50 p-3 text-sm cursor-pointer hover:bg-gray-100" onClick={async () => { try { const detail = await apiJson('/api/recovery/logs/' + l.file); setRecoveryLogDetail(detail.log); } catch (_) {} }}><span className="font-mono text-xs">{l.file}</span></div>)}</div></div>}
-          {recoveryLogDetail && <div className="card space-y-4"><div className="flex items-center justify-between"><h3 className="font-bold">Chi tiết log</h3><button type="button" onClick={() => setRecoveryLogDetail(null)} className="text-gray-500 hover:text-gray-700 text-sm">Đóng</button></div><pre className="overflow-auto rounded-xl border bg-gray-900 p-4 text-xs text-green-200 max-h-96">{JSON.stringify(recoveryLogDetail, null, 2)}</pre></div>}
+          {recoveryLogDetail && <div className="card space-y-4"><div className="flex items-center justify-between"><h3 className="font-bold">Chi tiết log</h3><button type="button" onClick={() => setRecoveryLogDetail(null)} className="text-gray-500 hover:text-gray-700 text-sm">Đóng</button></div><pre className="overflow-auto rounded-xl border bg-gray-900 p-4 text-xs text-green-200 max-h-96">{recoveryLogDetail.type === 'text' ? recoveryLogDetail.content : JSON.stringify(recoveryLogDetail.content || recoveryLogDetail, null, 2)}</pre></div>}
         </div>
       )}
 
