@@ -145,18 +145,24 @@ async function waitForBackendHealth({ apiBase, expectedInstanceId, expectedPid, 
       lastError = err;
     }
 
-    await sleep(250);
+    await sleep(500);
   }
 
   throw new Error(`Backend did not become healthy at ${healthUrl}: ${lastError?.message || 'timeout'}`);
 }
 
+function getBackendDir() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'backend')
+    : path.join(__dirname, '..', 'backend');
+}
+
 function getBackendEntryPath() {
-  return path.join(__dirname, '..', 'backend', 'src', 'server.js');
+  return path.join(getBackendDir(), 'src', 'server.js');
 }
 
 function getBackendCwd() {
-  return app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
+  return app.isPackaged ? path.join(process.resourcesPath, 'backend') : path.join(__dirname, '..', 'backend');
 }
 
 function clearBackendWatchdog() {
@@ -325,15 +331,25 @@ async function startBackend(options = {}) {
     port = await findAvailablePort(preferredPort, BACKEND_HOST);
   }
   const apiBase = `http://${getBackendClientHost(BACKEND_HOST)}:${port}/api`;
+  const backendDir = getBackendDir();
   const backendEntry = getBackendEntryPath();
   const backendCwd = getBackendCwd();
+  const backendDirExists = fs.existsSync(backendDir);
+  const backendEntryExists = fs.existsSync(backendEntry);
 
-  // KHA FIX 2.3.3: kiểm tra file backend tồn tại + ghi log production đầy đủ.
+  // KHA FIX 2.4.5: log đầy đủ để chẩn đoán lỗi production không spawn được backend.
   openBackendFileLogStream();
-  const startLine = `[START] backendEntry=${backendEntry} | cwd=${backendCwd} | port=${port} | host=${BACKEND_HOST} | apiBase=${apiBase} | packaged=${app.isPackaged} | nodeExe=${process.execPath} | dbPath=${dbPath}`;
+  const startLine = `[START] appVersion=${app.getVersion()} | packaged=${app.isPackaged} | resourcesPath=${process.resourcesPath || ''} | backendDir=${backendDir} | backendDirExists=${backendDirExists} | backendEntry=${backendEntry} | backendEntryExists=${backendEntryExists} | cwd=${backendCwd} | port=${port} | host=${BACKEND_HOST} | apiBase=${apiBase} | nodeExe=${process.execPath} | dbPath=${dbPath} | userData=${userData}`;
   writeBackendLogLine(startLine);
+  writeBackendLogLine(`[SPAWN] command="${process.execPath}" "${backendEntry}" | cwd="${backendCwd}" | env.PORT=${port} | env.DATA_DIR=${userData}`);
   console.log(`[KHA Electron] ${startLine}`);
-  if (!fs.existsSync(backendEntry)) {
+  if (!backendDirExists) {
+    const msg = `Không tìm thấy thư mục backend nội bộ tại: ${backendDir}`;
+    writeBackendLogLine(`[ERROR] ${msg}`);
+    closeBackendFileLogStream();
+    throw new Error(msg);
+  }
+  if (!backendEntryExists) {
     const msg = `Không tìm thấy file backend nội bộ tại: ${backendEntry}`;
     writeBackendLogLine(`[ERROR] ${msg}`);
     closeBackendFileLogStream();

@@ -11,7 +11,7 @@ const cron    = require('node-cron');
 const path    = require('path');
 const fs       = require('fs');
 const { getAvailablePort } = require('./utils/portManager');
-const { version: APP_VERSION } = require('../../package.json');
+const APP_VERSION = (() => { try { return require('../../package.json').version; } catch (_) { try { return require('./package.json').version; } catch (__) { return require('../package.json').version; } } })();
 const { loadEnv, getLoadedEnvFiles } = require('./utils/loadEnv');
 
 loadEnv({ logErrors: true });
@@ -122,6 +122,8 @@ function buildHealthPayload() {
     settingsMySql: getSettingsMySqlStatus(),
     node: process.version,
     success: true,
+    status: 'ok',
+    time: new Date().toISOString(),
     message: 'Backend is running',
     baseUrl: `http://${HOST}:${PORT}/api`,
   };

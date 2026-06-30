@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-electron",
-  "version": "2.4.4",
+  "version": "2.4.5",
   "description": "Bán Hàng Pos - Phần mềm bán hàng offline",
   "repository": {
     "type": "git",
@@ -48,8 +48,6 @@
     },
     "files": [
       "src/**/*",
-      "backend/**/*",
-      "backend/migrations/**/*",
       "frontend/dist/**/*",
       "package.json",
       "!backend/data/**",
@@ -100,6 +98,31 @@
       {
         "from": "build/icons/app-icon.ico",
         "to": "icons/app-icon.ico"
+      },
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!data/**",
+          "!**/*.log",
+          "!**/*.lock",
+          "!**/*.db",
+          "!**/*.db.json",
+          "!**/*.sqlite",
+          "!**/*.sqlite-shm",
+          "!**/*.sqlite-wal",
+          "!**/*.sql",
+          "!**/*.jsonl",
+          "!**/*.bak",
+          "!**/*.backup",
+          "!**/*.backup.*",
+          "!**/*.zip",
+          "!**/*.tmp",
+          "!**/.kha-session-secret",
+          "!**/.kha-admin-recovery",
+          "!**/node_modules/.cache/**"
+        ]
       }
     ],
     "win": {

@@ -596,6 +596,8 @@ function forceUnlock() {
 }
 module.exports = {
   initialize,
+  startupCleanupLocks,
+  forceUnlock,
   scanBackupFiles,
   restoreBackups,
   verifyBackupFiles,

@@ -1,4 +1,12 @@
-﻿## 2.4.4 - Sửa restore lock kẹt + tiếng Việt trong khôi phục
+﻿## 2.4.5 - Sửa Electron production khởi động backend nội bộ
+
+### Sửa lỗi
+- Sửa lỗi Electron production không khởi động được backend nội bộ (ECONNREFUSED 127.0.0.1:7000).
+- Đóng gói backend đúng vào installer bằng extraResources thay vì để backend chạy từ app.asar.
+- Sửa đường dẫn backend khi chạy bản cài đặt sang resources/backend/src/server.js.
+- Bổ sung status/time cho endpoint /api/health.
+- Cải thiện log startup backend để dễ xác định đường dẫn, cwd, port, DATA_DIR và process runtime.
+## 2.4.4 - Sửa restore lock kẹt + tiếng Việt trong khôi phục
 
 ### Sửa lỗi restore lock
 - Restore lock giờ ghi metadata (pid/startedAt/updatedAt/appVersion/status).
@@ -774,6 +782,8 @@ Nâng cấp ổn định toàn bộ dự án theo hướng production-stable: tr
 
 - Nâng version ứng dụng lên 2.3.7.
 - Đóng gói thay đổi RecoveryEngine, giao diện Khôi phục DL, API recovery và test khôi phục dữ liệu.
+
+
 
 
 
