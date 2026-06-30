@@ -1,4 +1,11 @@
-﻿## 2.3.9 - Sửa triệt để lỗi treo hệ thống khi khôi phục dữ liệu
+﻿## 2.4.0 - Nâng version sau sửa lỗi build frontend
+
+### Thay đổi
+- Nâng version từ 2.3.9 lên 2.4.0.
+- Fix lỗi JSON parse (BOM) trong frontend/package.json.
+- Chuyển postcss.config.js sang postcss.config.cjs (CommonJS) để không xung đột ESM.
+- Build frontend thành công, test 15/15 PASS.
+## 2.3.9 - Sửa triệt để lỗi treo hệ thống khi khôi phục dữ liệu
 
 ### Sửa triệt để lỗi treo khi bấm Khôi phục dữ liệu
 * Viết lại toàn bộ flow khôi phục dữ liệu theo hướng chống treo: tách riêng **Quét file backup** và **Bắt đầu khôi phục**.
@@ -733,4 +740,5 @@ Nâng cấp ổn định toàn bộ dự án theo hướng production-stable: tr
 
 - Nâng version ứng dụng lên 2.3.7.
 - Đóng gói thay đổi RecoveryEngine, giao diện Khôi phục DL, API recovery và test khôi phục dữ liệu.
+
 
