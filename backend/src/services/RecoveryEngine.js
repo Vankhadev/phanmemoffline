@@ -24,7 +24,7 @@ const fsp = fs.promises;
 const path = require("path");
 const os = require("os");
 
-const VERSION = "2.3.9";
+const VERSION = "2.4.6";
 const WORKER_SCRIPT = path.resolve(__dirname, "..", "workers", "RecoveryWorker.js");
 
 let worker = null;
@@ -182,9 +182,10 @@ function isStaleLock(lockPath) {
   return false;
 }
 
-function acquireLock(label = "restore") {
+function acquireLock(label = "restore-import") {
   if (restoreLock) return false;
-  const lockPath = path.join(os.tmpdir(), "phanmienoffline", label === "scan" ? "restore-scan.lock" : "restore.lock");
+  const lockName = label === "scan" ? "restore-scan.lock" : "restore-import.lock";
+  const lockPath = path.join(os.tmpdir(), "phanmienoffline", lockName);
   try {
     ensureDir(path.dirname(lockPath));
     // Kiểm tra stale lock và tự dọn
@@ -225,12 +226,60 @@ function releaseLock() {
   }
 }
 
-function releaseLock() {
-  restoreLock = false;
-  if (lockFile) {
-    try { fs.unlinkSync(lockFile); } catch (_) {}
-    lockFile = null;
+
+function parseBackupTimestamp(filePath, mtimeMs) {
+  const s = path.basename(String(filePath || ''));
+  const m = s.match(/(20\d{2})[-_]?([01]\d)[-_]?([0-3]\d)[T _-]?([0-2]\d)?[-_]?([0-5]\d)?[-_]?([0-5]\d)?/);
+  if (m) {
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0));
+    if (Number.isFinite(d.getTime())) return d.getTime();
   }
+  return Number(mtimeMs) || 0;
+}
+
+function classifyBackupFile(file) {
+  const fp = String(file?.path || '');
+  const name = path.basename(fp).toLowerCase();
+  const full = fp.toLowerCase();
+  const isRecoveryPoint = /before-write-recovery-point|recovery-point|autosave|auto-save/.test(name) || full.includes('realtime-snapshots');
+  const type = isRecoveryPoint ? 'recovery_point' : 'main_backup';
+  const ts = parseBackupTimestamp(fp, file?.mtimeMs);
+  return { ...file, type, backupType: type, category: type, timestampMs: ts, timestamp: ts ? new Date(ts).toISOString() : null };
+}
+
+function summarizeBackups(files) {
+  const annotated = (Array.isArray(files) ? files : []).map(classifyBackupFile).sort((a, b) => (b.timestampMs || 0) - (a.timestampMs || 0));
+  const mainBackups = annotated.filter(f => f.type === 'main_backup');
+  const recoveryPoints = annotated.filter(f => f.type === 'recovery_point');
+  const latestByDayMap = new Map();
+  const latestByHourMap = new Map();
+  for (const f of annotated) {
+    const d = f.timestampMs ? new Date(f.timestampMs) : null;
+    if (!d) continue;
+    const day = d.toISOString().slice(0, 10);
+    const hour = d.toISOString().slice(0, 13);
+    if (!latestByDayMap.has(day)) latestByDayMap.set(day, f);
+    if (!latestByHourMap.has(hour)) latestByHourMap.set(hour, f);
+  }
+  const defaultSelection = (mainBackups.length ? mainBackups.slice(0, 1) : recoveryPoints.slice(0, 1)).map(f => f.path);
+  return {
+    files: annotated,
+    summary: {
+      total: annotated.length,
+      mainBackupCount: mainBackups.length,
+      recoveryPointCount: recoveryPoints.length,
+      latestByDayCount: latestByDayMap.size,
+      latestByHourCount: latestByHourMap.size,
+      defaultSelection,
+    },
+    filters: {
+      all: annotated.map(f => f.path),
+      main: mainBackups.map(f => f.path),
+      recoveryPoint: recoveryPoints.map(f => f.path),
+      latestByDay: Array.from(latestByDayMap.values()).map(f => f.path),
+      latestByHour: Array.from(latestByHourMap.values()).map(f => f.path),
+    },
+  };
 }
 
 // ========== INIT ==========
@@ -245,7 +294,7 @@ async function scanBackupFiles(options = {}) {
   if (!initialized) initialize();
   if (status.running) return { ok: false, message: "Đang có tiến trình đang chạy. Vui lòng đợi hoặc hủy." };
 
-  if (!acquireLock()) return { ok: false, message: "Không thể khóa tiến trình restore. Có thể đã có tiến trình khác. Thử nhấn Mở khóa restore." };
+  if (!acquireLock("scan")) return { ok: false, message: "Đang có tiến trình quét backup khác. Vui lòng đợi hoặc bấm Mở khóa restore." };
 
   status.running = true;
   status.phase = "scan";
@@ -277,17 +326,20 @@ async function scanBackupFiles(options = {}) {
 
     const result = await sendToWorker({ type: "scan-request", data: scanOptions });
 
-    status.foundFiles = result.files || [];
+    const backupInfo = summarizeBackups(result.files || []);
+    status.foundFiles = backupInfo.files;
     status.lastLogPath = logPath;
     status.phase = "scan_done";
-    status.progress = "Đã quét xong: tìm thấy " + (result.files?.length || 0) + " file backup.";
+    status.progress = "Đã quét xong: tìm thấy " + backupInfo.files.length + " file backup.";
 
     return {
       ok: true,
-      files: result.files || [],
-      total: (result.files || []).length,
+      files: backupInfo.files,
+      total: backupInfo.files.length,
+      summary: backupInfo.summary,
+      filters: backupInfo.filters,
       logPath,
-      message: "Đã quét xong: tìm thấy " + (result.files?.length || 0) + " file backup. Chon file de khoi phuc hoac bam 'Bat dau khoi phuc' de xu ly tat ca.",
+      message: "Đã quét xong: tìm thấy " + backupInfo.files.length + " file backup. Hãy chọn file cần khôi phục; mặc định không import toàn bộ recovery point.",
     };
   } catch (error) {
     status.phase = "error";
@@ -297,6 +349,7 @@ async function scanBackupFiles(options = {}) {
   } finally {
     status._startTime = null;
     status.running = false;
+    releaseLock();
   }
 }
 
@@ -305,7 +358,8 @@ async function restoreBackups(options = {}) {
   if (!initialized) initialize();
   if (status.running) return { ok: false, message: "Đang có tiến trình đang chạy. Vui lòng đợi hoặc hủy." };
 
-  if (!acquireLock()) return { ok: false, message: "Không thể khóa tiến trình restore. Thử nhấn Mở khóa restore." };
+  startupCleanupLocks();
+  if (!acquireLock("restore-import")) return { ok: false, message: "Không thể khóa tiến trình restore. Thử nhấn Mở khóa restore." };
 
   status.running = true;
   status.phase = "snapshot";
@@ -565,6 +619,7 @@ function startBackgroundRecovery(options = {}) {
 
 function startupCleanupLocks() {
   const lockPaths = [
+    path.join(os.tmpdir(), "phanmienoffline", "restore-import.lock"),
     path.join(os.tmpdir(), "phanmienoffline", "restore.lock"),
     path.join(os.tmpdir(), "phanmienoffline", "restore-scan.lock"),
   ];

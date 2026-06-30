@@ -1,4 +1,15 @@
-﻿## 2.4.5 - Sửa Electron production khởi động backend nội bộ
+﻿## [2.4.6] - 2026-06-30
+
+### Fixed
+- Sửa lỗi Quét file backup bị chặn bởi restore-import lock cũ/stale.
+- Tách lock quét backup (restore-scan.lock) và lock khôi phục (restore-import.lock) riêng biệt.
+- Thêm nút Mở khóa restore thủ công qua API /api/recovery/unlock-lock.
+- Tự cleanup stale lock (PID không còn sống, quá 10 phút) khi bắt đầu khôi phục.
+- Phân loại backup chính / recovery point; mặc định chỉ chọn backup mới nhất, không import toàn bộ recovery point.
+- Thêm checkbox chọn file backup cần khôi phục, bộ lọc theo loại.
+- Cảnh báo khi chọn hơn 100 file để tránh treo UI.
+- Sửa lỗi ký tự tiếng Việt trong màn hình Khôi phục DL (mojibake).
+## 2.4.5 - Sửa Electron production khởi động backend nội bộ
 
 ### Sửa lỗi
 - Sửa lỗi Electron production không khởi động được backend nội bộ (ECONNREFUSED 127.0.0.1:7000).
@@ -782,6 +793,7 @@ Nâng cấp ổn định toàn bộ dự án theo hướng production-stable: tr
 
 - Nâng version ứng dụng lên 2.3.7.
 - Đóng gói thay đổi RecoveryEngine, giao diện Khôi phục DL, API recovery và test khôi phục dữ liệu.
+
 
 
 

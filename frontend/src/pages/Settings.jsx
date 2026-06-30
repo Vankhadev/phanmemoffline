@@ -601,10 +601,26 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
   const [recoveryStatus, setRecoveryStatus] = useState(null);
   const [recoveryRunning, setRecoveryRunning] = useState(false);
+  const [isScanningBackup, setIsScanningBackup] = useState(false);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [isUnlockingRestore, setIsUnlockingRestore] = useState(false);
   const [recoveryFoundFiles, setRecoveryFoundFiles] = useState([]);
+  const [selectedRecoveryFilePaths, setSelectedRecoveryFilePaths] = useState([]);
+  const [recoveryFilter, setRecoveryFilter] = useState('main');
   const [recoveryLogs, setRecoveryLogs] = useState([]);
   const [recoveryNotice, setRecoveryNotice] = useState(null);
   const [recoveryLogDetail, setRecoveryLogDetail] = useState(null);
+
+  const recoveryFiles = Array.isArray(recoveryFoundFiles) ? recoveryFoundFiles : [];
+  const recoveryBusy = recoveryRunning || isScanningBackup || isRestoringBackup || isUnlockingRestore;
+  const visibleRecoveryFiles = recoveryFiles.filter(file => {
+    const kind = file?.type || file?.backupType || file?.category || 'main_backup';
+    if (recoveryFilter === 'all') return true;
+    if (recoveryFilter === 'main') return kind === 'main_backup';
+    if (recoveryFilter === 'recovery') return kind === 'recovery_point';
+    return true;
+  });
+  const selectedRecoveryFiles = selectedRecoveryFilePaths.map(filePath => recoveryFiles.find(file => file.path === filePath)).filter(Boolean);
 
   const getErrorMessage = useCallback(
     (error, fallback = 'Thao t?c th?t b?i.') => getApiErrorMessage(error?.data || error, error?.message || fallback),
@@ -2100,18 +2116,29 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                     setRecoveryRunning(false);
                     if (!resp.ok) { setRecoveryNotice({ tone: 'error', message: resp.message || 'Quét backup thất bại.' }); return; }
                     setRecoveryFoundFiles(resp.files || []);
-                    setRecoveryStatus(current => ({ ...(current || {}), foundFiles: resp.files || [], progress: resp.message || `?? t?m th?y ${(resp.files || []).length} file backup.` }));
-                    setRecoveryNotice({ tone: 'success', message: resp.message || `?? t?m th?y ${(resp.files || []).length} file backup. B?m "B?t ??u kh?i ph?c" ?? import.` });
+                    setSelectedRecoveryFilePaths(resp.summary?.defaultSelection || (resp.files || []).slice(0, 1).map(f => f.path));
+                    setRecoveryFilter((resp.summary?.mainBackupCount || 0) > 0 ? 'main' : 'recovery');
+                    setRecoveryStatus(current => ({ ...(current || {}), foundFiles: resp.files || [], progress: resp.message || `Đã tìm thấy ${(resp.files || []).length} file backup.` }));
+                    setRecoveryNotice({ tone: 'success', message: resp.message || `Đã tìm thấy ${(resp.files || []).length} file backup. Bấm "Bắt đầu khôi phục" để import.` });
                     try { const l = await apiJson('/api/recovery/logs?limit=10'); setRecoveryLogs(l.logs || []); } catch (_) {}
                   } catch (error) { setRecoveryRunning(false); setRecoveryNotice({ tone: 'error', message: error?.message || 'Quét backup thất bại.' }); }
-                }} disabled={recoveryRunning} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-60"><Loader2 size={16} className={recoveryRunning ? 'animate-spin' : ''} /> Qu?t file backup</button>
+                }} disabled={recoveryBusy} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-60"><Loader2 size={16} className={recoveryRunning ? 'animate-spin' : ''} /> Quét file backup</button>
                 <button type="button" onClick={async () => {
-                  if (!recoveryFoundFiles.length) { setRecoveryNotice({ tone: 'error', message: 'Hãy quét file backup trước khi khôi phục.' }); return; }
-                  if (!window.confirm(`B?t ??u kh?i ph?c ${recoveryFoundFiles.length} file backup? Database hi?n t?i s? ???c snapshot tr??c, kh?ng b? replace.`)) return;
+                  setIsUnlockingRestore(true);
+                  try {
+                    const resp = await apiJson('/api/recovery/unlock-lock', { method: 'POST' });
+                    setRecoveryNotice({ tone: resp.ok ? 'success' : 'error', message: resp.message || 'Đã kiểm tra khóa restore.' });
+                  } catch (error) { setRecoveryNotice({ tone: 'error', message: error?.message || 'Mở khóa restore thất bại.' }); }
+                  finally { setIsUnlockingRestore(false); }
+                }} disabled={recoveryBusy} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-60">{isUnlockingRestore ? <Loader2 size={16} className="animate-spin" /> : null} Mở khóa restore</button>
+                <button type="button" onClick={async () => {
+                  if (!selectedRecoveryFiles.length) { setRecoveryNotice({ tone: 'error', message: 'Hãy chọn ít nhất 1 file backup để khôi phục.' }); return; }
+                  if (selectedRecoveryFiles.length > 100 && !window.confirm(`Bạn đang chọn ${selectedRecoveryFiles.length} file backup. Việc khôi phục toàn bộ có thể rất lâu. Nên chọn backup mới nhất hoặc backup theo ngày. Bạn vẫn muốn tiếp tục?`)) return;
+                  if (!window.confirm(`Bắt đầu khôi phục ${selectedRecoveryFiles.length} file backup đã chọn? Database hiện tại sẽ được snapshot trước, không bị replace.`)) return;
                   setRecoveryNotice(null);
                   setRecoveryRunning(true);
                   try {
-                    const resp = await apiJson('/api/recovery/restore-files', { method: 'POST', body: { files: recoveryFoundFiles } });
+                    const resp = await apiJson('/api/recovery/restore-files', { method: 'POST', body: { files: selectedRecoveryFiles } });
                     setRecoveryRunning(false);
                     const st = await apiJson('/api/recovery/status');
                     setRecoveryStatus(st);
@@ -2119,7 +2146,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                     setRecoveryNotice({ tone: resp.ok && !hasErr ? 'success' : 'error', message: resp.message || (resp.ok ? 'Hoàn tất khôi phục.' : 'Khôi phục thất bại.') });
                     try { const l = await apiJson('/api/recovery/logs?limit=10'); setRecoveryLogs(l.logs || []); } catch (_) {}
                   } catch (error) { setRecoveryRunning(false); setRecoveryNotice({ tone: 'error', message: error?.message || 'Khôi phục thất bại.' }); }
-                }} disabled={recoveryRunning || !recoveryFoundFiles.length} className="btn-success inline-flex min-h-10 items-center gap-2 disabled:opacity-60"><RotateCcw size={16} className={recoveryRunning ? 'animate-spin' : ''} /> B?t ??u kh?i ph?c</button>
+                }} disabled={recoveryBusy || !selectedRecoveryFiles.length} className="btn-success inline-flex min-h-10 items-center gap-2 disabled:opacity-60"><RotateCcw size={16} className={recoveryRunning ? 'animate-spin' : ''} /> Bắt đầu khôi phục</button>
                 <button type="button" onClick={async () => {
                   if (!window.confirm('Quét sâu toàn bộ ổ đĩa có thể rất lâu. Tiếp tục?')) return;
                   setRecoveryNotice(null);
@@ -2129,9 +2156,11 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                     setRecoveryRunning(false);
                     if (!resp.ok) { setRecoveryNotice({ tone: 'error', message: resp.message || 'Quét sâu thất bại.' }); return; }
                     setRecoveryFoundFiles(resp.files || []);
-                    setRecoveryNotice({ tone: 'success', message: resp.message || `Qu?t s?u xong: ${(resp.files || []).length} file backup.` });
+                    setSelectedRecoveryFilePaths(resp.summary?.defaultSelection || (resp.files || []).slice(0, 1).map(f => f.path));
+                    setRecoveryFilter((resp.summary?.mainBackupCount || 0) > 0 ? 'main' : 'recovery');
+                    setRecoveryNotice({ tone: 'success', message: resp.message || `Quét sâu xong: ${(resp.files || []).length} file backup.` });
                   } catch (error) { setRecoveryRunning(false); setRecoveryNotice({ tone: 'error', message: error?.message || 'Quét sâu thất bại.' }); }
-                }} disabled={recoveryRunning} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60">Qu?t s?u to?n b? ? ??a</button>
+                }} disabled={recoveryBusy} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60">Quét sâu toàn bộ ổ đĩa</button>
                 <button type="button" onClick={async () => {
                   if (!window.confirm('Hủy khôi phục? Tiến trình sẽ dừng an toàn sau batch hiện tại, dữ liệu đã gộp vẫn được giữ.')) return;
                   try { await apiJson('/api/recovery/cancel', { method: 'POST' }); setRecoveryNotice({ tone: 'success', message: 'Đã yêu cầu hủy. Đang dừng an toàn...' }); }
@@ -2140,7 +2169,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 <button type="button" onClick={async () => { try { const f = await apiJson('/api/recovery/found-files'); setRecoveryFoundFiles(f.files || []); } catch (_) {} }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Xem file backup đã tìm thấy</button>
                 <button type="button" onClick={async () => { try { const l = await apiJson('/api/recovery/logs?limit=10'); setRecoveryLogs(l.logs || []); } catch (_) {} }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Xem log khôi phục</button>
                 <button type="button" onClick={() => window.open('/api/recovery/export-report', '_blank')} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Xuất báo cáo restore</button>
-                <button type="button" onClick={async () => { if (!window.confirm('Khôi phục lại bản trước restore (rollback)?')) return; try { await apiJson('/api/recovery/rollback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ backupPath: 'latest_safety' }) }); setRecoveryNotice({ tone: 'success', message: 'Đã rollback về bản trước restore.' }); } catch (error) { setRecoveryNotice({ tone: 'error', message: error?.message || 'Rollback thất bại.' }); } }} disabled={recoveryRunning} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60">Khôi phục lại bản trước restore</button>
+                <button type="button" onClick={async () => { if (!window.confirm('Khôi phục lại bản trước restore (rollback)?')) return; try { await apiJson('/api/recovery/rollback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ backupPath: 'latest_safety' }) }); setRecoveryNotice({ tone: 'success', message: 'Đã rollback về bản trước restore.' }); } catch (error) { setRecoveryNotice({ tone: 'error', message: error?.message || 'Rollback thất bại.' }); } }} disabled={recoveryBusy} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60">Khôi phục lại bản trước restore</button>
               </div>
             </div>
             <SectionNotice notice={recoveryNotice} />
@@ -2188,7 +2217,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               </div>
             )}
           </div>
-          {recoveryFoundFiles.length > 0 && <div className="card space-y-4"><h3 className="font-bold">File backup đã tìm thấy ({recoveryFoundFiles.length})</h3><div className="overflow-auto rounded-xl border max-h-72"><table className="min-w-full text-sm"><thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Đường dẫn</th><th className="px-4 py-3">Kích thước</th></tr></thead><tbody>{recoveryFoundFiles.slice(0, 100).map((f, i) => <tr key={i} className="border-t"><td className="px-4 py-2 font-mono text-xs text-gray-800">{f.path}</td><td className="px-4 py-2 text-gray-600">{f.size ? formatBytes(f.size) : '-'}</td></tr>)}</tbody></table></div></div>}
+          {recoveryFiles.length > 0 && <div className="card space-y-4"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h3 className="font-bold">File backup đã tìm thấy ({recoveryFiles.length})</h3><p className="text-xs text-gray-500">Đã chọn {selectedRecoveryFilePaths.length} file. Mặc định chọn backup mới nhất, không import toàn bộ recovery point.</p></div><div className="flex flex-wrap gap-2"><select value={recoveryFilter} onChange={e => setRecoveryFilter(e.target.value)} className="rounded-lg border px-3 py-2 text-sm"><option value="all">Tất cả backup</option><option value="main">Backup chính</option><option value="recovery">Recovery point</option></select><button type="button" onClick={() => setSelectedRecoveryFilePaths(visibleRecoveryFiles.map(f => f.path))} className="rounded-lg border px-3 py-2 text-sm">Chọn tất cả đang lọc</button><button type="button" onClick={() => setSelectedRecoveryFilePaths([])} className="rounded-lg border px-3 py-2 text-sm">Bỏ chọn tất cả</button><button type="button" onClick={() => setSelectedRecoveryFilePaths(recoveryFiles.slice(0, 1).map(f => f.path))} className="rounded-lg border px-3 py-2 text-sm">Chọn backup mới nhất</button></div></div><div className="overflow-auto rounded-xl border max-h-96"><table className="min-w-full text-sm"><thead className="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Chọn</th><th className="px-4 py-3">Loại</th><th className="px-4 py-3">Thời gian</th><th className="px-4 py-3">Đường dẫn</th><th className="px-4 py-3">Kích thước</th></tr></thead><tbody>{visibleRecoveryFiles.slice(0, 500).map((f, i) => <tr key={f.path || i} className="border-t"><td className="px-4 py-2"><input type="checkbox" checked={selectedRecoveryFilePaths.includes(f.path)} onChange={e => setSelectedRecoveryFilePaths(paths => e.target.checked ? Array.from(new Set([...paths, f.path])) : paths.filter(p => p !== f.path))} /></td><td className="px-4 py-2 text-xs">{(f.type || f.backupType) === 'recovery_point' ? 'Recovery point' : 'Backup chính'}</td><td className="px-4 py-2 text-xs text-gray-600">{f.timestamp ? formatDateTime(f.timestamp) : '-'}</td><td className="px-4 py-2 font-mono text-xs text-gray-800">{f.path}</td><td className="px-4 py-2 text-gray-600">{f.size ? formatBytes(f.size) : '-'}</td></tr>)}</tbody></table></div>{visibleRecoveryFiles.length > 500 && <p className="text-xs text-amber-700">Đang hiển thị 500 file đầu tiên. Hãy dùng bộ lọc hoặc chọn backup mới nhất để tránh treo.</p>}</div>}
           {recoveryLogs.length > 0 && <div className="card space-y-4"><h3 className="font-bold">Log khôi phục</h3><div className="space-y-2">{recoveryLogs.map((l, i) => <div key={i} className="rounded-lg border bg-gray-50 p-3 text-sm cursor-pointer hover:bg-gray-100" onClick={async () => { try { const detail = await apiJson('/api/recovery/logs/' + l.file); setRecoveryLogDetail(detail.log); } catch (_) {} }}><span className="font-mono text-xs">{l.file}</span></div>)}</div></div>}
           {recoveryLogDetail && <div className="card space-y-4"><div className="flex items-center justify-between"><h3 className="font-bold">Chi tiết log</h3><button type="button" onClick={() => setRecoveryLogDetail(null)} className="text-gray-500 hover:text-gray-700 text-sm">Đóng</button></div><pre className="overflow-auto rounded-xl border bg-gray-900 p-4 text-xs text-green-200 max-h-96">{recoveryLogDetail.type === 'text' ? recoveryLogDetail.content : JSON.stringify(recoveryLogDetail.content || recoveryLogDetail, null, 2)}</pre></div>}
         </div>
@@ -2641,3 +2670,5 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     </div>
   );
 }
+
+

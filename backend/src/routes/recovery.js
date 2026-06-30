@@ -20,7 +20,7 @@ router.post("/scan-files", async (req, res) => {
     const result = await RecoveryEngine.scanBackupFiles(options);
     res.json(result);
   } catch (error) {
-    res.json({ ok: false, message: "Loi quet backup: " + (error && error.message) });
+    res.json({ ok: false, message: "Lỗi quét backup: " + (error && error.message) });
   }
 });
 
@@ -30,12 +30,12 @@ router.post("/restore-files", async (req, res) => {
   try {
     const { files, batchSize, deepScan } = req.body || {};
     if (!files || !Array.isArray(files) || files.length === 0) {
-      return res.json({ ok: false, message: "Vui long chon it nhat 1 file backup de khoi phuc." });
+      return res.json({ ok: false, message: "Vui lòng chọn ít nhất 1 file backup để khôi phục." });
     }
     const result = await RecoveryEngine.restoreBackups({ files, batchSize, deepScan });
     res.json(result);
   } catch (error) {
-    res.json({ ok: false, message: "Loi khoi phuc: " + (error && error.message) });
+    res.json({ ok: false, message: "Lỗi khôi phục: " + (error && error.message) });
   }
 });
 
@@ -57,7 +57,7 @@ router.post("/deep-scan", async (req, res) => {
     const result = await RecoveryEngine.deepScanAllDrives(req.body || {});
     res.json(result);
   } catch (error) {
-    res.json({ ok: false, message: "Loi quet sau: " + (error && error.message) });
+    res.json({ ok: false, message: "Lỗi quét sâu: " + (error && error.message) });
   }
 });
 
@@ -69,7 +69,7 @@ router.post("/verify-files", async (req, res) => {
     const result = await RecoveryEngine.verifyBackupFiles(files || []);
     res.json(result);
   } catch (error) {
-    res.json({ ok: false, message: "Loi kiem tra: " + (error && error.message) });
+    res.json({ ok: false, message: "Lỗi kiểm tra: " + (error && error.message) });
   }
 });
 
@@ -105,7 +105,7 @@ router.get("/logs/:file", (req, res) => {
     const log = RecoveryEngine.readLog(req.params.file);
     res.json({ ok: true, log });
   } catch (e) {
-    res.status(404).json({ ok: false, message: "Khong tim thay log." });
+    res.status(404).json({ ok: false, message: "Không tìm thấy log." });
   }
 });
 
@@ -113,7 +113,7 @@ router.get("/logs/:file", (req, res) => {
 router.post("/export-report", (req, res) => {
   ensureInit();
   const report = RecoveryEngine.getStatus().lastReport;
-  if (!report) return res.json({ ok: false, message: "Chua co bao cao. Hay chay khoi phuc truoc." });
+  if (!report) return res.json({ ok: false, message: "Chưa có báo cáo. Hãy chạy khôi phục trước." });
   res.setHeader("Content-Disposition", "attachment; filename=\"recovery-report.json\"");
   res.setHeader("Content-Type", "application/json");
   res.send(JSON.stringify(report, null, 2));
@@ -123,26 +123,35 @@ router.post("/export-report", (req, res) => {
 router.post("/rollback", (req, res) => {
   ensureInit();
   const { backupPath } = req.body || {};
-  if (!backupPath) return res.status(400).json({ ok: false, message: "Thieu duong dan backup rollback." });
+  if (!backupPath) return res.status(400).json({ ok: false, message: "Thiếu đường dẫn backup rollback." });
   try {
     const safetyBackup = RecoveryEngine.getStatus().lastReport?.safetyBackup;
     if (backupPath === "latest_safety" && safetyBackup) {
       RecoveryEngine.rollbackToPreRestore(safetyBackup.path);
-      return res.json({ ok: true, message: "Da rollback ve ban truoc restore." });
+      return res.json({ ok: true, message: "Đã rollback về bản trước restore." });
     }
     RecoveryEngine.rollbackToPreRestore(backupPath);
-    res.json({ ok: true, message: "Da rollback thanh cong." });
+    res.json({ ok: true, message: "Đã rollback thành công." });
   } catch (e) {
-    res.status(500).json({ ok: false, message: "Rollback that bai: " + e.message });
+    res.status(500).json({ ok: false, message: "Rollback thất bại: " + e.message });
   }
 });
 
 
-// M? kh?a restore (d?n stale lock th? c?ng)
-router.post("/unlock", (req, res) => {
+// Mở khóa restore (dọn stale lock thủ công)
+function handleUnlockRestore(req, res) {
   ensureInit();
   const results = RecoveryEngine.forceUnlock();
-  res.json({ ok: true, results, message: "?? ki?m tra v? d?n kh?a restore." });
-});
+  const removed = results.filter(r => String(r.status || '').includes('removed')).length;
+  const active = results.filter(r => r.status === 'active').length;
+  const message = active > 0
+    ? 'Đang có tiến trình khôi phục thật sự đang chạy.'
+    : removed > 0
+      ? 'Đã mở khóa restore.'
+      : 'Không có tiến trình restore đang khóa.';
+  res.json({ ok: true, success: true, results, message });
+}
+router.post("/unlock", handleUnlockRestore);
+router.post("/unlock-lock", handleUnlockRestore);
 
 module.exports = router;
