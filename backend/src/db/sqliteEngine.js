@@ -48,6 +48,19 @@ function safeName(table) {
 }
 
 const _ensured = new Set();
+const _fieldIndexed = new Set();
+
+function ensureFieldIndex(table, field) {
+  if (!db) return;
+  const t = safeName(table);
+  if (!/^[A-Za-z0-9_]+$/.test(String(field))) throw new Error("Ten field khong hop le: " + field);
+  const key = t + "." + field;
+  if (_fieldIndexed.has(key)) return;
+  ensureCollection(t);
+  const idxName = "idx_coll_" + t + "_f_" + field;
+  db.exec('CREATE INDEX IF NOT EXISTS "' + idxName + '" ON "coll_' + t + '"(json_extract(data, \'$.' + field + '\'));');
+  _fieldIndexed.add(key);
+}
 function ensureCollection(table) {
   const t = safeName(table);
   if (_ensured.has(t)) return;
@@ -130,7 +143,7 @@ function checkpoint() { if (db) { try { db.exec("PRAGMA wal_checkpoint(TRUNCATE)
 
 module.exports = {
   isAvailable, isOpen, open, close, ensureCollection,
-  upsertRow, deleteRow, replaceCollection, replaceTable: replaceCollection,
+  upsertRow, deleteRow, replaceCollection, replaceTable: replaceCollection, ensureFieldIndex,
   setMeta, getMeta, listCollections, loadCollection, countCollection,
   begin, commit, rollback, checkpoint,
   get path() { return dbPath; },

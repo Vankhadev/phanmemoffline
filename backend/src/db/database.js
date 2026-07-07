@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const { spawnSync } = require('child_process');
+const crypto = require('crypto');
 const { AsyncLocalStorage } = require('async_hooks');
 const { encodeBackupData, readBackupData, isCompressedBackupPath } = require('../utils/backupCodec');
 
@@ -30,8 +31,36 @@ function engineReplace(table, rows) { if (engineEnsureOpen()) { try { sqliteEngi
 function engineBegin() { if (engineEnsureOpen()) { try { sqliteEngine.begin(); } catch (_) {} } }
 function engineCommit() { if (engineEnabled() && sqliteEngine.isOpen()) { try { sqliteEngine.commit(); } catch (_) {} } }
 function engineRollback() { if (engineEnabled() && sqliteEngine.isOpen()) { try { sqliteEngine.rollback(); } catch (_) {} } }
+const KHA_FIELD_INDEX_TARGETS = [
+  ['orders', 'order_code'], ['orders', 'created_at'], ['orders', 'customer_id'], ['orders', 'status'],
+  ['order_items', 'order_id'], ['order_items', 'product_id'],
+  ['imports', 'import_code'], ['imports', 'created_at'], ['imports', 'supplier_id'], ['imports', 'status'],
+  ['import_items', 'import_id'], ['import_items', 'product_id'],
+  ['inventory_batches', 'product_id'], ['inventory_batches', 'import_item_id'],
+  ['invoices', 'invoice_code'], ['invoices', 'created_at'], ['invoices', 'customer_id'], ['invoices', 'status'],
+  ['invoice_details', 'invoice_id'], ['invoice_details', 'product_id'],
+  ['products', 'sku'], ['products', 'internal_code'], ['products', 'barcode'], ['products', 'name'], ['products', 'category_id'], ['products', 'created_at'],
+  ['customers', 'phone'], ['customers', 'name'], ['customers', 'created_at'],
+  ['suppliers', 'phone'], ['suppliers', 'name'], ['suppliers', 'created_at'],
+  ['payments', 'order_id'], ['payments', 'paid_at'], ['payments', 'method'],
+  ['cash_ledger', 'reference_type'], ['cash_ledger', 'reference_id'], ['cash_ledger', 'order_id'], ['cash_ledger', 'import_id'], ['cash_ledger', 'created_at'],
+  ['audit_logs', 'created_at'], ['audit_logs', 'action'], ['audit_logs', 'entity_type'], ['audit_logs', 'entity_id'], ['audit_logs', 'user_id'],
+];
+let engineIndexesEnsured = false;
+function engineEnsureIndexes() {
+  if (engineIndexesEnsured) return;
+  if (!engineEnsureOpen()) return;
+  try {
+    for (const [table, field] of KHA_FIELD_INDEX_TARGETS) {
+      try { sqliteEngine.ensureFieldIndex(table, field); } catch (_) {}
+    }
+    engineIndexesEnsured = true;
+  } catch (e) { console.warn('[KHA SQLITE] ensure indexes failed:', e.message); }
+}
+
 function engineFullSync() {
   if (!engineEnsureOpen()) return;
+  engineEnsureIndexes();
   try {
     if (sqliteEngine.getMeta('full_synced') === true) return;
     const cur = getDb();
@@ -494,6 +523,24 @@ const SCHEMA = {
   marketplace_shops: [],
   marketplace_orders: [],
   update_releases: [],
+  // Additive relational compatibility tables. These mirror legacy JSON tables
+  // without deleting or renaming legacy data used by the current frontend.
+  categories: [],
+  suppliers: [],
+  product_variants: [],
+  inventory_batches: [],
+  imports: [],
+  import_items: [],
+  orders: [],
+  order_items: [],
+  payments: [],
+  cash_ledger: [],
+  app_settings: [],
+  invoice_templates: [],
+  backup_files: [],
+  restore_jobs: [],
+  schema_migrations: [],
+  migration_quarantine: [],
 };
 
 const INITIAL_NEXT_ID = Object.keys(SCHEMA).reduce((acc, table) => {
@@ -509,6 +556,9 @@ const ACCOUNT_SCOPED_TABLES = new Set([
   'einvoice_in', 'einvoice_out', 'tax_reports', 'revenue_reports', 'profit_reports', 'accounting_logs',
   'payrolls', 'excel_import_runs', 'excel_import_details',
   'print_templates', 'marketplace_shops', 'marketplace_orders', 'sync_metadata', 'audit_logs', 'system_settings',
+  'categories', 'suppliers', 'product_variants', 'inventory_batches', 'imports', 'import_items',
+  'orders', 'order_items', 'payments', 'cash_ledger', 'app_settings', 'invoice_templates',
+  'backup_files', 'restore_jobs', 'schema_migrations', 'migration_quarantine',
 ]);
 
 const DEFAULT_PERMISSIONS = [
@@ -616,6 +666,9 @@ const SYNC_TRACKED_TABLES = [
   'payrolls', 'excel_import_runs', 'excel_import_details', 'print_templates', 'marketplace_shops',
   'marketplace_orders', 'system_settings',
   'feature_catalog', 'update_releases',
+  'categories', 'suppliers', 'product_variants', 'inventory_batches', 'imports', 'import_items',
+  'orders', 'order_items', 'payments', 'cash_ledger', 'app_settings', 'invoice_templates',
+  'backup_files', 'restore_jobs', 'schema_migrations', 'migration_quarantine',
 ];
 
 const LEGACY_KEY_PREFIX = ['b', 'o', 't'].join('');
@@ -2287,6 +2340,346 @@ function importOldCustomerDatabase() {
   }
 }
 
+function sha256File(filePath) {
+  const hash = crypto.createHash('sha256');
+  hash.update(fs.readFileSync(filePath));
+  return hash.digest('hex');
+}
+
+function getBusinessRecordCounts(sourceDb = getDb()) {
+  const count = name => Array.isArray(sourceDb[name]) ? sourceDb[name].length : 0;
+  return {
+    products: count('products'),
+    customers: count('customers'),
+    orders: Math.max(count('orders'), count('invoices')),
+    invoices: count('invoices'),
+    imports: Math.max(count('imports'), count('import_logs')),
+    suppliers: count('suppliers') || count('partners'),
+    invoice_templates: count('invoice_templates') || count('print_templates'),
+    print_templates: count('print_templates'),
+  };
+}
+
+function safeCopyFileWithManifest(srcPath, destDir, manifestFiles, label) {
+  if (!srcPath || !fs.existsSync(srcPath)) return null;
+  const stat = fs.statSync(srcPath);
+  if (!stat.isFile()) return null;
+  fs.mkdirSync(destDir, { recursive: true });
+  const safeName = String(label || path.basename(srcPath)).replace(/[<>:"/\\|?*]+/g, '_');
+  const destPath = path.join(destDir, safeName);
+  fs.copyFileSync(srcPath, destPath);
+  const destStat = fs.statSync(destPath);
+  const entry = {
+    source: srcPath,
+    path: destPath,
+    name: path.basename(destPath),
+    size: destStat.size,
+    sha256: sha256File(destPath),
+  };
+  manifestFiles.push(entry);
+  return entry;
+}
+
+function createMandatoryPreMigrationBackup(reason = 'pre-migration') {
+  const timestamp = new Date().toISOString().replace(/T/, '_').replace(/\..+$/, '').replace(/:/g, '-');
+  const backupRoot = path.join(path.dirname(DB_PATH), DATA_PRESERVATION_BACKUP_FOLDER, 'pre_migration', timestamp);
+  const files = [];
+  fs.mkdirSync(backupRoot, { recursive: true });
+
+  const dbEntry = safeCopyFileWithManifest(DB_PATH, backupRoot, files, path.basename(DB_PATH));
+  if (!dbEntry) throw new Error('Mandatory pre-migration backup failed: database file was not copied.');
+
+  const candidateFiles = [
+    path.join(path.dirname(DB_PATH), 'config.json'),
+    path.resolve(__dirname, '..', '..', '.env'),
+    path.resolve(__dirname, '..', '..', '.env.example'),
+  ];
+  for (const candidate of candidateFiles) {
+    try { safeCopyFileWithManifest(candidate, backupRoot, files, path.basename(candidate)); } catch (_) {}
+  }
+
+  for (const logDir of [path.resolve(__dirname, '..', '..', 'data'), path.resolve(__dirname, '..', '..', '..', 'logs')]) {
+    try {
+      if (!fs.existsSync(logDir)) continue;
+      for (const item of fs.readdirSync(logDir).filter(name => /\.log$/i.test(name)).slice(0, 20)) {
+        safeCopyFileWithManifest(path.join(logDir, item), path.join(backupRoot, 'logs'), files, item);
+      }
+    } catch (_) {}
+  }
+
+  const schemaSnapshotPath = path.join(backupRoot, 'schema-current.json');
+  fs.writeFileSync(schemaSnapshotPath, JSON.stringify({ tables: Object.keys(SCHEMA), nextId: getDb().nextId || {}, counts: getBusinessRecordCounts() }, null, 2), 'utf8');
+  files.push({ source: 'generated', path: schemaSnapshotPath, name: path.basename(schemaSnapshotPath), size: fs.statSync(schemaSnapshotPath).size, sha256: sha256File(schemaSnapshotPath) });
+
+  const manifest = {
+    backup_time: new Date().toISOString(),
+    reason,
+    database_path: DB_PATH,
+    backup_path: backupRoot,
+    counts: getBusinessRecordCounts(),
+    files,
+  };
+  const manifestPath = path.join(backupRoot, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+  return { path: backupRoot, manifestPath, manifest };
+}
+
+function upsertMirrorRow(table, legacyId, row, options = {}) {
+  const rows = ensureTable(table);
+  const sourceTable = options.sourceTable || table;
+  const existing = rows.find(item => String(item.source_table || sourceTable) === String(sourceTable) && String(item.source_legacy_id) === String(legacyId));
+  if (existing) {
+    Object.assign(existing, { ...row, id: existing.id, source_table: sourceTable, source_legacy_id: legacyId, updated_at: now() });
+    return existing;
+  }
+  const id = getDb().nextId?.[table] || 1;
+  const normalized = normalizeInsertRow(table, { ...row, id, source_table: sourceTable, source_legacy_id: legacyId }, { skipAccountScope: true });
+  rows.push(normalized);
+  getDb().nextId[table] = Math.max(Number(getDb().nextId[table]) || 1, Number(id) + 1);
+  return normalized;
+}
+
+function recordMigrationQuarantine(entityType, entityId, reason, payload) {
+  upsertMirrorRow('migration_quarantine', `${entityType}:${entityId}:${reason}`, {
+    entity_type: entityType,
+    entity_id: entityId == null ? null : String(entityId),
+    reason,
+    payload_json: JSON.stringify(payload || null),
+    status: 'open',
+    created_at: now(),
+  }, { sourceTable: 'migration_quarantine' });
+}
+
+function findMigrationRow(migrationId) {
+  return ensureTable('schema_migrations').find(row => row.migration_id === migrationId || row.name === migrationId) || null;
+}
+
+function runRelationalCompatibilityMigration(options = {}) {
+  const migrationId = '20260707_relational_compatibility_v1';
+  const beforeCounts = getBusinessRecordCounts();
+  const existing = findMigrationRow(migrationId);
+  if (existing && options.force !== true) {
+    return { ok: true, skipped: true, migration_id: migrationId, before_counts: beforeCounts, after_counts: getBusinessRecordCounts(), backup: null };
+  }
+
+  const backup = options.skipBackup ? null : createMandatoryPreMigrationBackup('pre-migration');
+
+  return withAtomicDbWrite(() => {
+    const current = getDb();
+    for (const table of Object.keys(SCHEMA)) ensureTable(table);
+
+    const categoryByLegacyId = new Map();
+    for (const category of current.product_categories || []) {
+      const mirrored = upsertMirrorRow('categories', category.id, {
+        name: category.name || category.title || 'Chua phan loai',
+        description: category.description || '',
+        is_active: category.is_active !== false && category.active !== 0,
+        deleted_at: category.deleted_at || null,
+        account_id: category.account_id || null,
+      }, { sourceTable: 'product_categories' });
+      categoryByLegacyId.set(String(category.id), mirrored.id);
+    }
+
+    for (const partner of current.partners || []) {
+      upsertMirrorRow('suppliers', partner.id, {
+        name: partner.name || partner.supplier_name || 'Nha cung cap',
+        phone: partner.phone || '',
+        address: partner.address || '',
+        email: partner.email || '',
+        is_active: partner.is_active !== false && partner.active !== 0,
+        deleted_at: partner.deleted_at || null,
+        account_id: partner.account_id || null,
+      }, { sourceTable: 'partners' });
+    }
+
+    for (const product of current.products || []) {
+      if (product.deleted_at === undefined) product.deleted_at = null;
+      if (product.is_active === undefined) product.is_active = product.active !== 0;
+      if (product.version === undefined) product.version = 1;
+      if (product.internal_code === undefined) product.internal_code = `P-${product.id}`;
+      if (product.category_id != null && categoryByLegacyId.has(String(product.category_id))) {
+        product.rel_category_id = categoryByLegacyId.get(String(product.category_id));
+      }
+    }
+
+    const invoiceByLegacyId = new Map();
+    for (const invoice of current.invoices || []) {
+      const order = upsertMirrorRow('orders', invoice.id, {
+        order_code: invoice.invoice_code || `INV-${invoice.id}`,
+        customer_id: invoice.customer_id || null,
+        customer_name_snapshot: invoice.customer_name || invoice.receiver_name || '',
+        customer_phone_snapshot: invoice.customer_phone || '',
+        status: invoice.status || 'completed',
+        subtotal: normalizeNumber(invoice.subtotal, 0),
+        discount_total: normalizeNumber(invoice.discount_amount, 0),
+        tax_total: normalizeNumber(invoice.vat_amount, 0),
+        total_amount: normalizeNumber(invoice.total, 0),
+        paid_amount: normalizeNumber(invoice.paid_amount, 0),
+        debt_amount: normalizeNumber(invoice.remaining_amount, 0),
+        profit_amount: normalizeNumber(invoice.profit_amount, 0),
+        note: invoice.note || '',
+        deleted_at: invoice.deleted_at || null,
+        account_id: invoice.account_id || null,
+        created_at: invoice.created_at || now(),
+        updated_at: invoice.updated_at || invoice.created_at || now(),
+      }, { sourceTable: 'invoices' });
+      invoiceByLegacyId.set(String(invoice.id), order.id);
+      if (normalizeNumber(invoice.paid_amount, 0) > 0) {
+        upsertMirrorRow('payments', invoice.id, {
+          order_id: order.id,
+          amount: normalizeNumber(invoice.paid_amount, 0),
+          method: invoice.payment_method || 'cash',
+          paid_at: invoice.created_at || now(),
+          account_id: invoice.account_id || null,
+        }, { sourceTable: 'invoices' });
+      }
+    }
+
+    const productIds = new Set((current.products || []).map(product => String(product.id)));
+    for (const detail of current.invoice_details || []) {
+      const hasProduct = detail.product_id != null && productIds.has(String(detail.product_id));
+      if (!detail.product_name && !detail.name) recordMigrationQuarantine('invoice_detail', detail.id, 'missing_product_name_snapshot', detail);
+      if (detail.import_price == null) recordMigrationQuarantine('invoice_detail', detail.id, 'missing_import_price_snapshot', detail);
+      upsertMirrorRow('order_items', detail.id, {
+        order_id: invoiceByLegacyId.get(String(detail.invoice_id)) || null,
+        product_id: hasProduct ? detail.product_id : null,
+        line_type: hasProduct ? 'PRODUCT' : 'CUSTOM',
+        product_name_snapshot: detail.product_name || detail.name || detail.sku || 'Mat hang tuy chinh',
+        product_sku_snapshot: detail.product_sku || detail.sku || '',
+        unit_name_snapshot: detail.unit || detail.unit_name || '',
+        quantity: normalizeNumber(detail.quantity, 0),
+        import_price_snapshot: normalizeNumber(detail.import_price, 0),
+        sale_price_snapshot: normalizeNumber(detail.unit_price, 0),
+        discount_amount: normalizeNumber(detail.discount_amount, 0),
+        tax_rate: normalizeNumber(detail.tax_rate, 0),
+        tax_amount: normalizeNumber(detail.tax_amount, 0),
+        line_total: normalizeNumber(detail.line_total, 0),
+        profit_amount: normalizeNumber(detail.profit_amount, 0),
+        cost_source: detail.import_price == null ? 'missing_legacy_cost_default_0' : 'legacy_snapshot',
+        note: detail.note || '',
+        account_id: detail.account_id || null,
+      }, { sourceTable: 'invoice_details' });
+    }
+
+    const importByLegacyId = new Map();
+    for (const importLog of current.import_logs || []) {
+      const mirrored = upsertMirrorRow('imports', importLog.id, {
+        import_code: importLog.import_code || importLog.code || `IMP-${importLog.id}`,
+        supplier_id: importLog.partner_id || importLog.supplier_id || null,
+        status: importLog.status || 'completed',
+        total_amount: normalizeNumber(importLog.total || importLog.total_amount, 0),
+        note: importLog.note || '',
+        deleted_at: importLog.deleted_at || null,
+        account_id: importLog.account_id || null,
+        created_at: importLog.created_at || now(),
+        updated_at: importLog.updated_at || importLog.created_at || now(),
+      }, { sourceTable: 'import_logs' });
+      importByLegacyId.set(String(importLog.id), mirrored.id);
+    }
+
+    for (const detail of current.import_details || []) {
+      const importId = importByLegacyId.get(String(detail.import_id || detail.import_log_id)) || null;
+      const item = upsertMirrorRow('import_items', detail.id, {
+        import_id: importId,
+        product_id: detail.product_id || null,
+        quantity: normalizeNumber(detail.quantity, 0),
+        import_price: normalizeNumber(detail.import_price || detail.unit_price || detail.price, 0),
+        line_total: normalizeNumber(detail.line_total || detail.total, 0),
+        account_id: detail.account_id || null,
+      }, { sourceTable: 'import_details' });
+      upsertMirrorRow('inventory_batches', detail.id, {
+        product_id: detail.product_id || null,
+        import_item_id: item.id,
+        quantity_in: normalizeNumber(detail.quantity, 0),
+        quantity_remaining: normalizeNumber(detail.remaining_quantity, detail.quantity || 0),
+        import_price: normalizeNumber(detail.import_price || detail.unit_price || detail.price, 0),
+        imported_at: detail.created_at || now(),
+        account_id: detail.account_id || null,
+      }, { sourceTable: 'import_details' });
+    }
+
+    for (const entry of current.cash_book || []) {
+      upsertMirrorRow('cash_ledger', entry.id, {
+        reference_type: entry.reference_type || entry.type || null,
+        reference_id: entry.reference_id || entry.invoice_id || entry.import_id || null,
+        order_id: entry.invoice_id || null,
+        import_id: entry.import_id || null,
+        payment_id: entry.payment_id || null,
+        amount: normalizeNumber(entry.amount, 0),
+        direction: entry.direction || entry.transaction_type || '',
+        note: entry.note || entry.description || '',
+        account_id: entry.account_id || null,
+      }, { sourceTable: 'cash_book' });
+    }
+
+    for (const tpl of current.print_templates || []) {
+      upsertMirrorRow('invoice_templates', tpl.id, { ...tpl, is_active: tpl.is_active !== false && tpl.active !== 0 }, { sourceTable: 'print_templates' });
+    }
+    for (const setting of current.system_settings || []) {
+      upsertMirrorRow('app_settings', setting.id || setting.key, { ...setting }, { sourceTable: 'system_settings' });
+    }
+    if (!current.app_settings.some(item => item.key === 'allow_negative_stock')) {
+      upsertMirrorRow('app_settings', 'allow_negative_stock', { key: 'allow_negative_stock', value: false, value_type: 'boolean' }, { sourceTable: 'system_settings' });
+    }
+    for (const backup of current.system_backups || []) {
+      upsertMirrorRow('backup_files', backup.id, { ...backup }, { sourceTable: 'system_backups' });
+    }
+
+    const afterCounts = getBusinessRecordCounts();
+    if (afterCounts.products < beforeCounts.products || afterCounts.customers < beforeCounts.customers || afterCounts.invoices < beforeCounts.invoices) {
+      throw new Error('Compatibility migration aborted because post-migration business counts dropped below pre-migration counts.');
+    }
+
+    const migrationRow = existing || upsertMirrorRow('schema_migrations', migrationId, {
+      migration_id: migrationId,
+      name: migrationId,
+      status: 'success',
+      started_at: now(),
+      finished_at: now(),
+      before_counts: beforeCounts,
+      after_counts: afterCounts,
+      backup_path: backup?.path || null,
+    }, { sourceTable: 'schema_migrations' });
+    migrationRow.status = 'success';
+    migrationRow.finished_at = now();
+    migrationRow.before_counts = beforeCounts;
+    migrationRow.after_counts = afterCounts;
+    migrationRow.backup_path = backup?.path || migrationRow.backup_path || null;
+
+    auditLog('MIGRATE', { migration_id: migrationId, before_counts: beforeCounts, after_counts: afterCounts, backup_path: backup?.path || null }, { skipSave: true });
+    return { ok: true, skipped: false, migration_id: migrationId, before_counts: beforeCounts, after_counts: afterCounts, backup };
+  });
+}
+
+function buildMigrationReport() {
+  const current = getDb();
+  return {
+    ok: true,
+    database_path: DB_PATH,
+    backup_dir: DB_BACKUP_DIR,
+    counts: getBusinessRecordCounts(current),
+    compatibility_counts: {
+      categories: ensureTable('categories').length,
+      suppliers: ensureTable('suppliers').length,
+      orders: ensureTable('orders').length,
+      order_items: ensureTable('order_items').length,
+      imports: ensureTable('imports').length,
+      import_items: ensureTable('import_items').length,
+      inventory_batches: ensureTable('inventory_batches').length,
+      payments: ensureTable('payments').length,
+      cash_ledger: ensureTable('cash_ledger').length,
+      invoice_templates: ensureTable('invoice_templates').length,
+      app_settings: ensureTable('app_settings').length,
+      backup_files: ensureTable('backup_files').length,
+      restore_jobs: ensureTable('restore_jobs').length,
+      schema_migrations: ensureTable('schema_migrations').length,
+      migration_quarantine: ensureTable('migration_quarantine').length,
+    },
+    migrations: ensureTable('schema_migrations'),
+    quarantine: ensureTable('migration_quarantine'),
+  };
+}
+
 function migrateDB() {
   normalizeDBData();
   cleanupRemovedLegacyArtifacts();
@@ -2314,6 +2707,12 @@ function migrateDB() {
     importOldCustomerDatabase();
   } else if (process.env.KHA_SKIP_OLD_DB_MIGRATION !== '0') {
     console.log('[MIGRATION 1.6.8] Bỏ qua quét old customer database khi khởi động (chế độ Electron production).');
+  }
+  try {
+    runRelationalCompatibilityMigration({ skipBackup: true });
+  } catch (error) {
+    console.error('[KHA DB] Relational compatibility migration failed but startup continues:', error.message);
+    try { auditLog('MIGRATE_FAILED', { error: error.message }, { skipSave: true }); } catch (_) {}
   }
   recalculateNextIds();
 }
@@ -2622,12 +3021,17 @@ function deleteExpiredCancelledInvoices(options = {}) {
   const referenceTime = options.referenceTime || options.now || Date.now();
   const expiredInvoices = getExpiredCancelledInvoices(referenceTime, { skipAccountScope: true });
   if (expiredInvoices.length === 0) {
-    return { ok: true, deletedCount: 0, deletedDetailCount: 0, invoiceIds: [] };
+    return { ok: true, deletedCount: 0, deletedDetailCount: 0, invoiceIds: [], softDeleted: true };
   }
 
+  // Data safety hardening: never hard-delete business invoices or invoice details.
+  // Historical versions removed cancelled invoices after 24h; that can break audits
+  // and old order lookup. Keep the return shape for scheduler compatibility, but
+  // perform a soft delete marker only.
   return withAtomicDbWrite(() => {
     const invoiceIds = [];
-    let deletedDetailCount = 0;
+    let softDeletedDetailCount = 0;
+    const timestamp = now();
 
     for (const expiredInvoice of expiredInvoices) {
       const invoice = getOne('invoices', row => Number(row.id) === Number(expiredInvoice.id), { skipAccountScope: true });
@@ -2635,34 +3039,80 @@ function deleteExpiredCancelledInvoices(options = {}) {
 
       const details = getAll('invoice_details', detail => Number(detail.invoice_id) === Number(invoice.id), { skipAccountScope: true });
       for (const detail of details) {
-        if (remove('invoice_details', detail.id, {
+        const updatedDetail = update('invoice_details', detail.id, {
+          deleted_at: detail.deleted_at || timestamp,
+          is_active: false,
+          soft_delete_reason: detail.soft_delete_reason || 'expired_cancelled_invoice_retained',
+        }, {
           skipAccountScope: true,
           skipSave: true,
           accountId: detail.account_id || invoice.account_id || null,
-        })) {
-          deletedDetailCount += 1;
-        }
+        });
+        if (updatedDetail) softDeletedDetailCount += 1;
       }
 
-      const removedInvoice = remove('invoices', invoice.id, {
+      const updatedInvoice = update('invoices', invoice.id, {
+        deleted_at: invoice.deleted_at || timestamp,
+        is_active: false,
+        soft_delete_reason: invoice.soft_delete_reason || 'expired_cancelled_invoice_retained',
+      }, {
         skipAccountScope: true,
         skipSave: true,
         accountId: invoice.account_id || null,
       });
-      if (removedInvoice) invoiceIds.push(removedInvoice.id);
+      if (updatedInvoice) invoiceIds.push(updatedInvoice.id);
+    }
+
+    if (invoiceIds.length > 0) {
+      auditLog('DELETE_SOFT', {
+        entity_type: 'invoices',
+        entity_ids: invoiceIds,
+        reason: 'expired_cancelled_invoice_retained',
+        detail_count: softDeletedDetailCount,
+      }, { skipSave: true });
     }
 
     return {
       ok: true,
-      deletedCount: invoiceIds.length,
-      deletedDetailCount,
+      deletedCount: 0,
+      deletedDetailCount: 0,
+      softDeletedCount: invoiceIds.length,
+      softDeletedDetailCount,
       invoiceIds,
+      softDeleted: true,
     };
   });
 }
 
 function getOne(table, filter, options = {}) {
   return getAll(table, filter, options)[0] || null;
+}
+
+function getById(table, id, options = {}) {
+  const numericId = Number(id);
+  if (!Number.isFinite(numericId)) return null;
+  return getAll(table, row => Number(row?.id) === numericId, options)[0] || null;
+}
+
+function getByForeignKey(table, fkField, fkValue, options = {}) {
+  const value = Number(fkValue);
+  if (!Number.isFinite(value)) return [];
+  return getAll(table, row => Number(row?.[fkField]) === value, options);
+}
+
+function getPaginated(table, filter = null, options = {}) {
+  const { limit = 50, offset = 0, sortBy = 'created_at', sortDir = 'desc' } = options;
+  let rows = getAll(table, filter, options);
+  if (sortBy && rows.length > 0 && rows[0][sortBy] !== undefined) {
+    rows.sort((a, b) => {
+      let va = a[sortBy], vb = b[sortBy];
+      if (typeof va === 'string' && typeof vb === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      return sortDir === 'asc' ? va - vb : vb - va;
+    });
+  }
+  const total = rows.length;
+  const data = limit > 0 ? rows.slice(offset, offset + limit) : rows;
+  return { data, total, limit, offset, page: Math.floor(offset / limit) + 1 };
 }
 
 function getAccountById(accountId) {
@@ -2833,6 +3283,13 @@ const exportsObject = {
   listDbBackups,
   pruneDbBackups,
   runScheduledDbBackup,
+  createMandatoryPreMigrationBackup,
+  runRelationalCompatibilityMigration,
+  buildMigrationReport,
+  getById,
+  getByForeignKey,
+  getPaginated,
+  getBusinessRecordCounts,
   getDb,
   insert,
   update,

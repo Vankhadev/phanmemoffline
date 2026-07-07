@@ -78,6 +78,7 @@ const marketplacesRoutes = require('./routes/marketplaces');
 const databaseRoutes = require('./routes/database');
 const dataGuardianRoutes = require('./routes/dataGuardian');
 const historyRoutes = require('./routes/history');
+const expandedRoutes = require('./routes/expanded');
 const recoveryRoutes = require('./routes/recovery');
 const restoreRoutes = require('./routes/restore');
 
@@ -286,6 +287,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/users',          usersRoutes);
 app.use('/api',                syncRoutes);
 app.use('/api/database',       databaseRoutes);
+app.use('/api/db',             databaseRoutes);
 app.use('/api/recovery',       recoveryRoutes);
 app.use('/api/restore',        restoreRoutes);
 app.use('/api/data-guardian',  dataGuardianRoutes);
@@ -309,7 +311,9 @@ app.use('/api/accounting', requireAuth, requireAnyPermission(['accounting.read',
 app.use('/api/settings', requireAuth, requireAnyPermission(['settings.read', 'settings.manage']), settingsRoutes);
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);
 app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
+app.use('/api/invoice-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
 app.use('/api/marketplaces', requireAuth, requireAnyPermission(['settings.read', 'settings.manage', 'invoices.read', 'invoices.manage']), marketplacesRoutes);
+app.use('/api/expanded', requireAuth, requireAnyPermission(['invoices.read', 'partners.read', 'print_templates.read', 'activity_logs.read']), expandedRoutes);
 app.use('/api/history', historyRoutes);
 app.get('/api/realtime/sync', (req, res) => {
   realtimeSyncService.registerClient(req, res);
