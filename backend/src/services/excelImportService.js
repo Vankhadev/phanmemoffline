@@ -9,6 +9,7 @@ const {
   withAtomicDbWrite,
   generateNextDocumentCode,
 } = require('../db/database');
+const { findExistingProduct, isActiveProduct } = require('./productUpsertService');
 const { normalizeSearchText, parseKeywordList } = require('../utils/productSearch');
 const {
   getMinimumAllowedProductStock,
@@ -638,7 +639,7 @@ function commitProductRows(preview) {
   }
 
   for (const item of parentItems) {
-    const existing = getOne('products', p => !p.parent_id && normalizeSkuKey(p.sku) === normalizeSkuKey(item.sku));
+    const existing = findExistingProduct(getAll('products'), { ...item, parent_id: null }, { onlyActive: true }) || getOne('products', p => isActiveProduct(p) && !p.parent_id && normalizeSkuKey(p.sku) === normalizeSkuKey(item.sku));
     const payload = { ...productPayloadFromRow(item, existing || null), parent_id: null, updated_at: timestamp };
     if (existing) {
       payload.sku = existing.sku;
@@ -673,7 +674,7 @@ function commitProductRows(preview) {
       summary.errors += 1;
       continue;
     }
-    const existingBySku = getOne('products', p => p.parent_id && normalizeSkuKey(p.sku) === normalizeSkuKey(item.sku));
+    const existingBySku = getOne('products', p => isActiveProduct(p) && p.parent_id && normalizeSkuKey(p.sku) === normalizeSkuKey(item.sku));
     const existingByName = item.name
       ? getOne('products', p => Number(p.parent_id) === Number(parent.id) && normalizeSearchText(p.name) === normalizeSearchText(item.name))
       : null;

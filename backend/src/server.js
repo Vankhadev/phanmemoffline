@@ -515,6 +515,17 @@ function bootstrapDataGuardian() {
   // 10. Recovery Engine
   RecoveryEngine.initialize({ dbModule });
 
+  // KHA FIX: One-time duplicate product cleanup after version update. Chay mot lan duy nhat.
+  try {
+    const productUpsertService = require('./services/productUpsertService');
+    const cleanupResult = productUpsertService.cleanupDuplicateProductsOnce({ dbModule });
+    if (cleanupResult && !cleanupResult.skipped) {
+      console.log('[KHA PRODUCT CLEANUP] Ran once on startup after update.');
+    } else if (cleanupResult && cleanupResult.skipped) { /* already ran */ }
+  } catch (cleanupErr) {
+    console.warn('[KHA PRODUCT CLEANUP] Startup cleanup skipped/failed:', cleanupErr.message);
+  }
+
   // 11. Maintenance Service
   maintenanceService.initialize({
     dataDir,

@@ -2226,10 +2226,17 @@ function importOldCustomerDatabase() {
         const sku = String(p.sku || '').trim().toLowerCase();
         const name = String(p.name || '').trim().toLowerCase();
         if (!sku && !name) continue;
-        const exists = (current.products || []).some(currP => {
+                const exists = (current.products || []).some(currP => {
+          if (!currP || currP.active === 0 || currP.merged === true || currP.status === 'merged') return false;
           const currSku = String(currP.sku || '').trim().toLowerCase();
-          const currName = String(currP.name || '').trim().toLowerCase();
-          return (sku && currSku === sku) || (name && currName === name);
+          const currName = String(currP.name || '').trim().toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g,'d').replace(/Đ/g,'d');
+          const normName = String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g,'d').replace(/Đ/g,'d');
+          const currBarcode = String(currP.barcode || '').trim().toLowerCase();
+          const barcode = String(p.barcode || '').trim().toLowerCase();
+          return (sku && currSku === sku)
+            || (barcode && currBarcode && currBarcode === barcode)
+            || (name && currName && currName === normName);
         });
         if (!exists) {
           const newId = current.nextId.products || 1;
@@ -2713,6 +2720,16 @@ function migrateDB() {
   } catch (error) {
     console.error('[KHA DB] Relational compatibility migration failed but startup continues:', error.message);
     try { auditLog('MIGRATE_FAILED', { error: error.message }, { skipSave: true }); } catch (_) {}
+  }
+  // KHA FIX: cleanup san pham trung 1 lan sau update, khong seed lai san pham mau neu da co du lieu
+  try {
+    const productUpsertService = require('../services/productUpsertService');
+    const cleanupResult = productUpsertService.cleanupDuplicateProductsOnce({ dbModule: module.exports });
+    if (cleanupResult && !cleanupResult.skipped) {
+      console.log('[KHA DB] Duplicate products cleanup completed once after update.');
+    }
+  } catch (cleanupErr) {
+    console.error('[KHA DB] Duplicate products cleanup failed but startup continues:', cleanupErr.message);
   }
   recalculateNextIds();
 }

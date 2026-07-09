@@ -22,6 +22,28 @@ const vndFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currenc
 const PRODUCTS_PAGE_SIZE = 80;
 const EMPTY_ARRAY = Object.freeze([]);
 const toProductIdKey = (id) => String(id ?? '');
+const isRenderableProduct = (product) => {
+  if (!product || typeof product !== 'object') return false;
+  if (product.active === 0 || product.active === false) return false;
+  if (product.merged === true || product.status === 'merged' || product.status === 'deleted') return false;
+  if (product.deleted === true || product.deleted_at) return false;
+  return true;
+};
+const dedupeProductsById = (items = []) => {
+  const seen = new Set();
+  const out = [];
+  for (const product of Array.isArray(items) ? items : []) {
+    if (!isRenderableProduct(product)) continue;
+    const key = toProductIdKey(product.id);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const variants = Array.isArray(product.variants)
+      ? product.variants.filter(isRenderableProduct)
+      : product.variants;
+    out.push(variants === product.variants ? product : { ...product, variants, variant_count: Array.isArray(variants) ? variants.length : product.variant_count });
+  }
+  return out;
+};
 const getProductVariantCount = (product) => {
   if (Array.isArray(product?.variants)) return product.variants.length;
   const count = Number(product?.variant_count ?? product?.variants_count ?? product?.variantCount ?? 0);

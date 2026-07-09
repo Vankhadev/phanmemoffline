@@ -202,7 +202,44 @@ function normalizeRow(table, row) { if (!row || typeof row !== "object") return 
 function normalizeBackupData(data) { if (!data || typeof data !== "object") return null; const src = data.database ? data.database : data; const out = {}; for (const [k, t] of Object.entries(ALIAS_TABLES)) { if (Array.isArray(src[k])) { out[t] = out[t] || []; for (const r of src[k]) out[t].push(normalizeRow(t, r)); } } for (const t of Object.keys(DB_MODULE?.SCHEMA || {})) { if (Array.isArray(src[t])) { out[t] = out[t] || []; for (const r of src[t]) out[t].push(normalizeRow(t, r)); } } out.nextId = src.nextId || src.next_id || null; return Object.keys(out).some(k => Array.isArray(out[k]) && out[k].length) ? out : null; }
 
 function pk(prefix, values, fallback) { const v = values.find(hasValue); return v == null ? fallback : prefix + ":" + String(v); }
-function buildKey(table, row, index) { const r = row || {}; if (table === "invoices") return pk("order", [r.id, r.code], "orderhash:" + norm(r.created_at) + "|" + norm(r.customer_name) + "|" + norm(r.customer_phone) + "|" + money(r.total)); if (table === "invoice_details") return pk("item", [r.id], "itemhash:" + (r.invoice_id || "") + "|" + norm(r.product_name) + "|" + r.quantity + "|" + r.unit_price + "|" + r.total + "|" + index + "|" + hashObj(r)); if (table === "products") return pk("product", [r.id, r.sku, r.barcode, r.code], "producthash:" + norm(r.name) + "|" + norm(r.category)); if (table === "customers") return pk("customer", [r.id, r.phone, r.email], "customerhash:" + norm(r.name) + "|" + norm(r.address)); if (table === "partners") return pk("supplier", [r.id, r.phone, r.email, r.name], "supplierhash:" + hashObj(r)); if (table === "import_logs") return pk("import", [r.id, r.code], "importhash:" + (r.supplier_id || norm(r.supplier_name)) + "|" + norm(r.created_at) + "|" + money(r.total)); if (table === "import_details") return pk("importitem", [r.id], "importitemhash:" + (r.import_id || "") + "|" + norm(r.product_name) + "|" + r.quantity + "|" + r.unit_price + "|" + index + "|" + hashObj(r)); if (table === "print_templates") return pk("template", [r.id, r.key, r.name, r.code], "templatehash:" + hashObj(r)); return pk(table, [r.id, r.code, r.key, r.uuid], table + "hash:" + hashObj(r)); }
+function normalizeViKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\s+/g, '');
+}
+function productIdentityKey(row) {
+  const r = row || {};
+  if (hasValue(r.id)) return 'product:id:' + String(r.id);
+  if (hasValue(r.sku)) return 'product:sku:' + normalizeViKey(r.sku);
+  if (hasValue(r.barcode) && normalizeViKey(r.barcode) !== normalizeViKey(r.name)) return 'product:barcode:' + normalizeViKey(r.barcode);
+  if (hasValue(r.code) && normalizeViKey(r.code) !== normalizeViKey(r.name)) return 'product:code:' + normalizeViKey(r.code);
+  if (hasValue(r.productCode)) return 'product:product_code:' + normalizeViKey(r.productCode);
+  return 'product:name:' + normalizeViKey(r.category) + '|' + normalizeViKey(r.name);
+}
+function productMatchKeys(row) {
+  const r = row || {};
+  const keys = [];
+  if (hasValue(r.id)) keys.push('product:id:' + String(r.id));
+  if (hasValue(r.sku)) keys.push('product:sku:' + normalizeViKey(r.sku));
+  if (hasValue(r.barcode) && normalizeViKey(r.barcode) !== normalizeViKey(r.name)) keys.push('product:barcode:' + normalizeViKey(r.barcode));
+  if (hasValue(r.code) && normalizeViKey(r.code) !== normalizeViKey(r.name)) keys.push('product:code:' + normalizeViKey(r.code));
+  if (hasValue(r.productCode)) keys.push('product:product_code:' + normalizeViKey(r.productCode));
+  if (hasValue(r.name)) {
+    keys.push('product:name:' + normalizeViKey(r.category) + '|' + normalizeViKey(r.name));
+    // name-only only when no codes
+    if (!hasValue(r.sku) && !hasValue(r.barcode) && !hasValue(r.code) && !hasValue(r.productCode)) {
+      keys.push('product:name_only:' + normalizeViKey(r.name));
+    }
+  }
+  return keys;
+}
+function buildKey(table, row, index) { const r = row || {}; if (table === "invoices") return pk("order", [r.id, r.code], "orderhash:" + norm(r.created_at) + "|" + norm(r.customer_name) + "|" + norm(r.customer_phone) + "|" + money(r.total)); if (table === "invoice_details") return pk("item", [r.id], "itemhash:" + (r.invoice_id || "") + "|" + norm(r.product_name) + "|" + r.quantity + "|" + r.unit_price + "|" + r.total + "|" + index + "|" + hashObj(r)); if (table === "products") return productIdentityKey(r); if (table === "customers") return pk("customer", [r.id, r.phone, r.email], "customerhash:" + norm(r.name) + "|" + norm(r.address)); if (table === "partners") return pk("supplier", [r.id, r.phone, r.email, r.name], "supplierhash:" + hashObj(r)); if (table === "import_logs") return pk("import", [r.id, r.code], "importhash:" + (r.supplier_id || norm(r.supplier_name)) + "|" + norm(r.created_at) + "|" + money(r.total)); if (table === "import_details") return pk("importitem", [r.id], "importitemhash:" + (r.import_id || "") + "|" + norm(r.product_name) + "|" + r.quantity + "|" + r.unit_price + "|" + index + "|" + hashObj(r)); if (table === "print_templates") return pk("template", [r.id, r.key, r.name, r.code], "templatehash:" + hashObj(r)); return pk(table, [r.id, r.code, r.key, r.uuid], table + "hash:" + hashObj(r)); }
 
 function mergeFields(existing, incoming, table) {
   const historical = new Set(["invoices", "invoice_details", "import_logs", "import_details"]);
@@ -212,17 +249,51 @@ function mergeFields(existing, incoming, table) {
   return changed;
 }
 
+// KHA FIX product multi-key merge
 async function mergeDataset(current, incoming, report, logger, options) {
   const restored = report.restoredCounts; const skipped = report.skippedDuplicates;
   const bs = options.batchSize || TIMEOUT.BATCH_SIZE_JSON;
   for (const table of Object.keys(DB_MODULE?.SCHEMA || {})) {
     if (!Array.isArray(incoming[table])) continue; if (!Array.isArray(current[table])) current[table] = [];
-    const index = new Map(current[table].map((row, i) => [buildKey(table, row, i), { row, idx: i }]));
+    const index = new Map();
+    const registerRow = (row, idx) => {
+      if (table === 'products') {
+        for (const k of productMatchKeys(row)) index.set(k, { row, idx });
+      } else {
+        index.set(buildKey(table, row, idx), { row, idx });
+      }
+    };
+    current[table].forEach((row, i) => registerRow(row, i));
     const rows = incoming[table]; const totalBatches = Math.ceil(rows.length / bs);
     for (let bi = 0; bi < rows.length; bi += bs) {
       if (cancelRequested) { if (logger) await logger.add("Da huy o bang " + table + ", batch " + (Math.floor(bi / bs) + 1)); report.cancelled = true; return; }
       const batch = rows.slice(bi, bi + bs); const bn = Math.floor(bi / bs) + 1;
-      for (let j = 0; j < batch.length; j++) { const row = batch[j]; if (!row || typeof row !== "object") continue; const key = buildKey(table, row, bi + j); const ex = index.get(key); if (ex) { const ch = mergeFields(ex.row, row, table); if (ch) restored[table + "_merged"] = (restored[table + "_merged"] || 0) + 1; else skipped[table] = (skipped[table] || 0) + 1; } else { current[table].push(safeClone(row)); index.set(key, { row: current[table][current[table].length - 1], idx: current[table].length - 1 }); restored[table] = (restored[table] || 0) + 1; } }
+      for (let j = 0; j < batch.length; j++) {
+        const row = batch[j];
+        if (!row || typeof row !== "object") continue;
+        let ex = null;
+        if (table === 'products') {
+          const keys = productMatchKeys(row);
+          for (const k of keys) {
+            if (index.has(k)) { ex = index.get(k); break; }
+          }
+        } else {
+          const key = buildKey(table, row, bi + j);
+          ex = index.get(key);
+        }
+        if (ex) {
+          const ch = mergeFields(ex.row, row, table);
+          // products: do not sum stock on restore merge to avoid double counting historical snapshots
+          if (ch) restored[table + "_merged"] = (restored[table + "_merged"] || 0) + 1;
+          else skipped[table] = (skipped[table] || 0) + 1;
+          if (table === 'products') registerRow(ex.row, ex.idx);
+        } else {
+          current[table].push(safeClone(row));
+          const idx = current[table].length - 1;
+          registerRow(current[table][idx], idx);
+          restored[table] = (restored[table] || 0) + 1;
+        }
+      }
       await yieldLoop();
       postProgress({ phase: "merge", table, batch: bn, totalBatches, restored: { ...restored }, skipped: { ...skipped } });
       if (logger) await logger.add("  Merge " + table + ": batch " + bn + "/" + totalBatches + " | +" + (restored[table] || 0) + " moi, " + (skipped[table] || 0) + " trung");

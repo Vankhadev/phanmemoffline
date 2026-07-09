@@ -13,6 +13,8 @@ const {
   logNegativeStockLimitViolation,
   buildNegativeStockErrorResponse,
 } = require('../utils/negativeStock');
+const { isActiveProduct, findExistingProduct, upsertProduct } = require('../services/productUpsertService');
+const { normalizeVietnamese } = require('../utils/productKey');
 
 function getCategories() {
   return getAll('product_categories', c => c.active !== 0);
@@ -74,11 +76,11 @@ function hasParentId(value) {
 }
 
 function activeParents() {
-  return getAll('products', p => p.active !== 0 && !hasParentId(p.parent_id));
+  return getAll('products', p => isActiveProduct(p) && !hasParentId(p.parent_id));
 }
 
 function activeVariants(parentId) {
-  return getAll('products', v => v.active !== 0 && Number(v.parent_id) === Number(parentId));
+  return getAll('products', v => isActiveProduct(v) && Number(v.parent_id) === Number(parentId));
 }
 
 function getArrayField(product, field) {
@@ -111,7 +113,7 @@ function dedupeVariants(variants = []) {
 
 function buildProductsTree() {
   const categoriesById = getCategoriesById();
-  const all = getAll('products', p => p.active !== 0)
+  const all = getAll('products', p => isActiveProduct(p))
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
   const variantsByParentId = new Map();
   const parents = [];
@@ -270,7 +272,7 @@ function normalizeSkuKey(value) {
 function findActiveProductBySku(sku) {
   const normalizedSku = normalizeSku(sku);
   if (!normalizedSku) return null;
-  return getOne('products', p => p.active !== 0 && normalizeSkuKey(p.sku) === normalizeSkuKey(normalizedSku));
+  return getOne('products', p => isActiveProduct(p) && normalizeSkuKey(p.sku) === normalizeSkuKey(normalizedSku));
 }
 
 function normalizeImportKey(value) {
@@ -542,7 +544,7 @@ router.get('/', (req, res) => {
     const categoriesById = getCategoriesById();
 
     if (search) {
-      const rows = searchFlatProducts(getAll('products', p => p.active !== 0), search, categoriesById)
+      const rows = searchFlatProducts(getAll('products', p => isActiveProduct(p)), search, categoriesById)
         .slice(0, 100)
         .map(row => {
           const parent = row.parent ? enrichProduct(row.parent, null, categoriesById) : null;
@@ -577,7 +579,7 @@ router.get('/search', (req, res) => {
     const q = String(req.query.q || req.query.search || '').trim();
     const limit = Math.min(parseInt(req.query.limit) || 100, 300);
     const categoriesById = getCategoriesById();
-    const rows = searchFlatProducts(getAll('products', p => p.active !== 0), q, categoriesById)
+    const rows = searchFlatProducts(getAll('products', p => isActiveProduct(p)), q, categoriesById)
       .slice(0, limit)
       .map(row => {
         const parent = row.parent ? enrichProduct(row.parent, null, categoriesById) : null;
@@ -609,7 +611,7 @@ router.get('/all/with-variants', (req, res) => {
 // ─────────────────────────────────────────────
 router.get('/export', (req, res) => {
   try {
-    const products = getAll('products', p => p.active !== 0);
+    const products = getAll('products', p => isActiveProduct(p));
     const byId = new Map(products.map(product => [product.id, product]));
     const header = IMPORT_EXPECTED_COLUMNS;
     const orderedProducts = products.slice().sort((a, b) => {
@@ -915,11 +917,11 @@ router.post('/import-excel-rows', (req, res) => {
 router.get('/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const product = getOne('products', p => p.id === id && p.active !== 0);
+    const product = getOne('products', p => p.id === id && isActiveProduct(p));
     if (!product) return res.status(404).json({ error: 'Không tìm thấy sản phẩm' });
 
     const categoriesById = getCategoriesById();
-    const parent = product.parent_id ? getOne('products', p => p.id === product.parent_id && p.active !== 0) : null;
+    const parent = product.parent_id ? getOne('products', p => p.id === product.parent_id && isActiveProduct(p)) : null;
     const enrichedProduct = enrichProduct(product, parent, categoriesById);
 
     let variants = [];
@@ -939,6 +941,7 @@ router.get('/:id', (req, res) => {
 //  POST /api/products
 //  → Tạo sản phẩm cha mới; SKU trùng chỉ được báo ở danh mục sản phẩm
 // ─────────────────────────────────────────────
+// KHA FIX: upsert-safe create product
 router.post('/', (req, res) => {
   try {
     const { sku, name } = req.body;
@@ -946,16 +949,36 @@ router.post('/', (req, res) => {
 
     const result = withAtomicDbWrite(() => {
       const requestedSku = normalizeSku(sku);
-      const existing = requestedSku ? findActiveProductBySku(requestedSku) : null;
+      const candidate = {
+        ...req.body,
+        sku: requestedSku || '',
+        name: String(name).trim(),
+        barcode: req.body.barcode || '',
+        parent_id: null,
+      };
+      const existing = findExistingProduct(getAll('products'), candidate, { onlyActive: true });
       if (existing) {
-        const err = new Error(`SKU đã tồn tại trong danh mục sản phẩm: ${requestedSku}`);
-        err.status = 409;
-        err.statusCode = 409;
-        err.code = 'PRODUCT_SKU_DUPLICATE';
-        throw err;
+        // Neu trung SKU thi bao 409; neu trung ten/barcode thi upsert update
+        if (requestedSku && normalizeSkuKey(existing.sku) === normalizeSkuKey(requestedSku)) {
+          const err = new Error('SKU đã tồn tại trong danh mục sản phẩm: ' + requestedSku);
+          err.status = 409;
+          err.statusCode = 409;
+          err.code = 'PRODUCT_SKU_DUPLICATE';
+          throw err;
+        }
+        const nowTime = now();
+        const changes = {
+          ...productPayload(req.body, existing, null),
+          updated_at: nowTime,
+        };
+        // giu sku hien tai
+        changes.sku = normalizeSku(existing.sku);
+        const updated = update('products', existing.id, changes);
+        logProductStockChangeIfNegative(updated, existing.stock, 'products_api');
+        return { ok: true, id: updated.id, sku: updated.sku, message: 'Sản phẩm đã tồn tại, đã cập nhật thay vì tạo mới', action: 'updated' };
       }
-      const productSku = generateNextDocumentCode('product', { skipSave: true });
 
+      const productSku = generateNextDocumentCode('product', { skipSave: true });
       const nowTime = now();
       const finalData = {
         ...productPayload({ ...req.body, sku: productSku }, {}),
@@ -963,7 +986,6 @@ router.post('/', (req, res) => {
         active: 1,
         updated_at: nowTime,
       };
-
       finalData.created_at = nowTime;
       const id = insert('products', finalData);
       logProductStockChangeIfNegative({ id, ...finalData }, null, 'products_api');
@@ -985,18 +1007,18 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const product = getOne('products', p => p.id === id && p.active !== 0);
+    const product = getOne('products', p => p.id === id && isActiveProduct(p));
     if (!product) return res.status(404).json({ error: 'Không tìm thấy sản phẩm' });
 
     const isVariant = product.parent_id != null;
-    const parent = isVariant ? getOne('products', p => p.id === product.parent_id && p.active !== 0) : null;
+    const parent = isVariant ? getOne('products', p => p.id === product.parent_id && isActiveProduct(p)) : null;
     if (
       Object.prototype.hasOwnProperty.call(req.body, 'sku')
       && normalizeSku(req.body.sku)
       && normalizeSku(req.body.sku) !== normalizeSku(product.sku)
     ) {
       const requestedSku = normalizeSku(req.body.sku);
-      const duplicateSku = getOne('products', p => p.active !== 0 && p.id !== id && normalizeSkuKey(p.sku) === normalizeSkuKey(requestedSku));
+      const duplicateSku = getOne('products', p => isActiveProduct(p) && p.id !== id && normalizeSkuKey(p.sku) === normalizeSkuKey(requestedSku));
       if (duplicateSku) {
         return res.status(409).json({
           ok: false,
@@ -1036,16 +1058,16 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const product = getOne('products', p => p.id === id && p.active !== 0);
+    const product = getOne('products', p => p.id === id && isActiveProduct(p));
     if (!product) return res.status(404).json({ error: 'Không tìm thấy sản phẩm' });
 
     const result = withAtomicDbWrite(() => {
       if (!product.parent_id) {
         const variants = getAll('products', v => v.parent_id === id);
-        variants.forEach(v => update('products', v.id, { active: 0, updated_at: now() }));
+        variants.forEach(v => update('products', v.id, { active: 0, status: 'deleted', deleted: true, updated_at: now() }));
       }
 
-      update('products', id, { active: 0, updated_at: now() });
+      update('products', id, { active: 0, status: 'deleted', deleted: true, updated_at: now() });
       return { ok: true, message: product.parent_id ? 'Đã xóa biến thể' : 'Đã xóa sản phẩm và tất cả biến thể' };
     });
 
@@ -1062,7 +1084,7 @@ router.delete('/:id', (req, res) => {
 router.get('/:parentId/variants', (req, res) => {
   try {
     const parentId = parseInt(req.params.parentId);
-    const parent = getOne('products', p => p.id === parentId && p.active !== 0);
+    const parent = getOne('products', p => p.id === parentId && isActiveProduct(p));
     if (!parent) return res.status(404).json({ error: 'Sản phẩm cha không tồn tại' });
 
     const categoriesById = getCategoriesById();
@@ -1084,7 +1106,7 @@ router.get('/:parentId/variants', (req, res) => {
 router.post('/:parentId/variants', (req, res) => {
   try {
     const parentId = parseInt(req.params.parentId);
-    const parent = getOne('products', p => p.id === parentId && p.active !== 0);
+    const parent = getOne('products', p => p.id === parentId && isActiveProduct(p));
     if (!parent) return res.status(404).json({ error: 'Sản phẩm cha không tồn tại' });
 
     const { name } = req.body;
@@ -1120,10 +1142,10 @@ router.post('/:parentId/variants', (req, res) => {
 router.put('/variants/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const variant = getOne('products', v => v.id === id && v.active !== 0 && v.parent_id != null);
+    const variant = getOne('products', v => v.id === id && isActiveProduct(v) && v.parent_id != null);
     if (!variant) return res.status(404).json({ error: 'Không tìm thấy biến thể' });
 
-    const parent = getOne('products', p => p.id === variant.parent_id && p.active !== 0);
+    const parent = getOne('products', p => p.id === variant.parent_id && isActiveProduct(p));
     if (!parent) return res.status(400).json({ error: 'Không tìm thấy sản phẩm cha của biến thể' });
 
     const result = withAtomicDbWrite(() => {
@@ -1152,11 +1174,11 @@ router.put('/variants/:id', (req, res) => {
 router.delete('/variants/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const variant = getOne('products', v => v.id === id && v.active !== 0 && v.parent_id != null);
+    const variant = getOne('products', v => v.id === id && isActiveProduct(v) && v.parent_id != null);
     if (!variant) return res.status(404).json({ error: 'Không tìm thấy biến thể' });
 
     const result = withAtomicDbWrite(() => {
-      update('products', id, { active: 0, updated_at: now() });
+      update('products', id, { active: 0, status: 'deleted', deleted: true, updated_at: now() });
       return { ok: true, message: 'Đã xóa biến thể' };
     });
 
@@ -1217,26 +1239,25 @@ router.post('/import', (req, res) => {
         const sku = base.sku || '';
         if (!name) { results.skipped++; continue; }
 
-        const parent = base.parent_id ? getOne('products', p => p.id === parseInt(base.parent_id) && p.active !== 0) : null;
+        const parent = base.parent_id ? getOne('products', p => p.id === parseInt(base.parent_id) && isActiveProduct(p)) : null;
         const payload = productPayload(base, {}, parent);
         payload.parent_id = base.parent_id ? parseInt(base.parent_id) || null : null;
 
-        if (sku) {
-          const existing = getOne('products', p => normalizeSkuKey(p.sku) === normalizeSkuKey(sku) && p.active !== 0);
-          if (existing) {
-            const updated = update('products', existing.id, {
-              ...productPayload({ ...base, sku: existing.sku }, existing, parent),
-              updated_at: now(),
-            });
-            logProductStockChangeIfNegative(updated, existing.stock, 'products_import_csv');
-            results.updated++;
-          } else {
-            const generatedSku = generateNextDocumentCode('product', { skipSave: true });
-            const createdPayload = { ...payload, sku: generatedSku };
-            const id = insert('products', { ...createdPayload, active: 1, created_at: now(), updated_at: now() });
-            logProductStockChangeIfNegative({ id, ...createdPayload }, null, 'products_import_csv');
-            results.created++;
-          }
+        // KHA FIX: csv import multi-key upsert
+        const existing = findExistingProduct(getAll('products'), {
+          ...payload,
+          sku: sku || payload.sku || '',
+          name: name || payload.name || '',
+          barcode: base.barcode || payload.barcode || '',
+          parent_id: payload.parent_id || null,
+        }, { onlyActive: true });
+        if (existing) {
+          const updated = update('products', existing.id, {
+            ...productPayload({ ...base, sku: existing.sku }, existing, parent),
+            updated_at: now(),
+          });
+          logProductStockChangeIfNegative(updated, existing.stock, 'products_import_csv');
+          results.updated++;
         } else {
           const generatedSku = generateNextDocumentCode('product', { skipSave: true });
           const createdPayload = { ...payload, sku: generatedSku };

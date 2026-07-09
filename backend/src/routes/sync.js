@@ -9,6 +9,7 @@ const {
   logNegativeStockLimitViolation,
   buildNegativeStockErrorResponse,
 } = require('../utils/negativeStock');
+const { findExistingProduct, isActiveProduct } = require('../services/productUpsertService');
 
 const PULL_TABLES = [
   'store_info',
@@ -175,12 +176,22 @@ function findProductByNaturalKey(payload = {}) {
   const variantPayload = isProductVariantPayload(payload);
   if (payload.id !== undefined && payload.id !== null) {
     const byId = getOne('products', row => Number(row.id) === Number(payload.id));
-    if (byId && Boolean(byId.parent_id) === variantPayload) return byId;
+    if (byId && isActiveProduct(byId) && Boolean(byId.parent_id) === variantPayload) return byId;
   }
 
-  const sku = String(payload.sku || '').trim();
-  if (!sku) return null;
-  return getOne('products', row => row && row.active !== 0 && String(row.sku || '').trim() === sku && (variantPayload ? row.parent_id != null : !row.parent_id));
+  const products = getAll('products') || [];
+  const matched = findExistingProduct(products, {
+    ...payload,
+    parent_id: payload.parent_id != null ? payload.parent_id : (variantPayload ? payload.parent_id : null),
+  }, { onlyActive: true });
+  if (!matched) return null;
+  if (Boolean(matched.parent_id) !== variantPayload) {
+    // fallback sku only same type
+    const sku = String(payload.sku || '').trim();
+    if (!sku) return null;
+    return getOne('products', row => row && isActiveProduct(row) && String(row.sku || '').trim().toLowerCase() === sku.toLowerCase() && (variantPayload ? row.parent_id != null : !row.parent_id));
+  }
+  return matched;
 }
 
 function findByNaturalKey(table, payload = {}) {
