@@ -10,9 +10,16 @@ fs.mkdirSync(tmpDir, { recursive: true });
 
 const tmpDbPath = path.join(tmpDir, `repeat-sku-orders-${Date.now()}.db.json`);
 process.env.KHA_DB_PATH = tmpDbPath;
+process.env.KHA_DB_BACKUP_DIR = path.join(tmpDir, 'repeat-sku-backups');
+process.env.KHA_SQLITE = '0';
+process.env.KHA_SKIP_OLD_DB_MIGRATION = '1';
 
 const sourceDbPath = path.join(repoRoot, 'backend', 'data', 'phanmienoffline.db.json');
-const sourceDb = JSON.parse(fs.readFileSync(sourceDbPath, 'utf8'));
+// Repository sạch không bắt buộc chứa database runtime. Test phải tự dựng fixture
+// thay vì lỗi ENOENT trước khi backend kịp khởi tạo schema mặc định.
+const sourceDb = fs.existsSync(sourceDbPath)
+  ? JSON.parse(fs.readFileSync(sourceDbPath, 'utf8'))
+  : {};
 
 sourceDb.products = [];
 sourceDb.invoices = [];

@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-backend",
-  "version": "2.4.9",
+  "version": "2.4.10",
   "description": "Backend for Bán Hàng Pos",
   "main": "src/server.js",
   "scripts": {
@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.js",
     "reset-local-admin": "node scripts/reset-local-admin.js",
     "init-print-templates-mysql": "node scripts/init-print-templates-mysql.js",
-    "test:repeat-sku-orders": "node scripts/test-repeat-sku-orders.js"
+    "test:repeat-sku-orders": "node scripts/test-repeat-sku-orders.js",
+    "test:legacy-sku-invoice-edit": "node scripts/test-legacy-sku-invoice-edit.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

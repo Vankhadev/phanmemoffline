@@ -264,7 +264,7 @@ function runSyncTests() {
     // Test: Đồng bộ Nhập hàng (Import logs)
     const importPayload = {
       account_id: 1,
-      import_code: 'PN_TEST_TEMP',
+      import_code: 'NP_TEST_TEMP',
       total: 10000,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

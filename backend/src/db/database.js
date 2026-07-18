@@ -1005,14 +1005,16 @@ const DOCUMENT_CODE_CONFIG = Object.freeze({
   invoice: Object.freeze({
     table: 'invoices',
     field: 'invoice_code',
-    prefix: 'DH',
+    prefix: 'HD',
+    legacyPrefixes: Object.freeze(['DH']),
     counterName: 'invoice_seq',
     width: 6,
   }),
   import: Object.freeze({
     table: 'import_logs',
     field: 'import_code',
-    prefix: 'PN',
+    prefix: 'NP',
+    legacyPrefixes: Object.freeze(['PN']),
     counterName: 'import_seq',
     width: 5,
   }),
@@ -1030,7 +1032,7 @@ const DOCUMENT_CODE_CONFIG = Object.freeze({
 });
 
 function normalizeDocumentCodeText(value) {
-  return String(value || '').trim().replace(/\s+/g, ' ');
+  return String(value === undefined || value === null ? '' : value).trim().replace(/\s+/g, ' ');
 }
 
 function normalizeDocumentCodeLookup(value) {
@@ -1052,6 +1054,16 @@ function formatDocumentSequenceCode(prefix, seq, width = 5) {
   return `${String(prefix || '').toUpperCase()}${String(Math.max(1, Math.floor(Number(seq) || 1))).padStart(width, '0')}`;
 }
 
+function readConfiguredDocumentSequenceNumber(code, config = {}) {
+  const prefixes = [config.prefix, ...(Array.isArray(config.legacyPrefixes) ? config.legacyPrefixes : [])]
+    .map(prefix => String(prefix || '').trim())
+    .filter(Boolean);
+  return prefixes.reduce(
+    (max, prefix) => Math.max(max, readDocumentSequenceNumber(code, prefix)),
+    0,
+  );
+}
+
 function resolveDocumentCodeConfig(typeOrConfig) {
   if (typeof typeOrConfig === 'string') return DOCUMENT_CODE_CONFIG[typeOrConfig] || null;
   if (!typeOrConfig || typeof typeOrConfig !== 'object') return null;
@@ -1067,7 +1079,7 @@ function getMaxDocumentSequence(typeOrConfig) {
   if (!config) return 0;
   const rows = Array.isArray(getDb()[config.table]) ? getDb()[config.table] : [];
   return rows.reduce(
-    (max, row) => Math.max(max, readDocumentSequenceNumber(row?.[config.field], config.prefix)),
+    (max, row) => Math.max(max, readConfiguredDocumentSequenceNumber(row?.[config.field], config)),
     0,
   );
 }
@@ -1213,7 +1225,7 @@ function generateNextDocumentCode(typeOrConfig, options = {}) {
 function ensureDocumentSequenceForRow(table, row = {}) {
   const config = getDocumentCodeConfigForTable(table);
   if (!config) return false;
-  const seq = readDocumentSequenceNumber(row?.[config.field], config.prefix);
+  const seq = readConfiguredDocumentSequenceNumber(row?.[config.field], config);
   return seq > 0 ? ensureSequenceCounterAtLeast(config.counterName, seq) : false;
 }
 
@@ -1222,11 +1234,13 @@ function normalizeInvoiceCodeText(value) {
 }
 
 function normalizeInvoiceCodeLookup(value) {
-  return normalizeDocumentCodeLookup(value);
+  const compact = normalizeDocumentCodeLookup(value).replace(/[\s_-]+/g, '');
+  if (/^dh\d+$/i.test(compact)) return `hd${compact.slice(2)}`;
+  return compact;
 }
 
 function readInvoiceSequenceNumber(code) {
-  return readDocumentSequenceNumber(code, DOCUMENT_CODE_CONFIG.invoice.prefix);
+  return readConfiguredDocumentSequenceNumber(code, DOCUMENT_CODE_CONFIG.invoice);
 }
 
 function formatInvoiceSequenceCode(seq) {

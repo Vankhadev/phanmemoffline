@@ -1015,7 +1015,7 @@ router.put('/:id', (req, res) => {
     if (
       Object.prototype.hasOwnProperty.call(req.body, 'sku')
       && normalizeSku(req.body.sku)
-      && normalizeSku(req.body.sku) !== normalizeSku(product.sku)
+      && normalizeSkuKey(req.body.sku) !== normalizeSkuKey(product.sku)
     ) {
       const requestedSku = normalizeSku(req.body.sku);
       const duplicateSku = getOne('products', p => isActiveProduct(p) && p.id !== id && normalizeSkuKey(p.sku) === normalizeSkuKey(requestedSku));

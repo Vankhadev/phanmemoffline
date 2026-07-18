@@ -2697,7 +2697,7 @@ const Nhaphang = ({ store }) => {
                     value={importCodeInput}
                     onChange={e => setImportCodeInput(e.target.value)}
                     readOnly={isEditingOrder}
-                    placeholder="?? tr?ng t? sinh PN00001"
+                    placeholder="Để trống tự sinh NP00001"
                     maxLength={64}
                     disabled={saving}
                   />

@@ -726,7 +726,10 @@ router.put('/:id', async (req, res) => {
 
       if (details !== undefined) {
         const incomingDetails = Array.isArray(details) ? details : [];
-        const safeDetails = prepareInvoiceDetailsForPersistence(incomingDetails, { allowUnlinkedOnMissingProduct: true });
+        const safeDetails = prepareInvoiceDetailsForPersistence(incomingDetails, {
+          allowUnlinkedOnMissingProduct: true,
+          preserveRequestedSku: true,
+        });
         const oldDetails = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id));
         validateStockForInvoiceEditDetails(safeDetails, oldDetails);
 

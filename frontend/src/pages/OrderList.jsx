@@ -46,14 +46,14 @@ function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
 }
 
-// Chuy?n m? đơn hàng th?nh định dạngg "DH000001"
+// Chuyển mã đơn hàng thành định dạng "HD000001"; vẫn đọc được mã DH cũ.
 function displayOrderCode(code) {
   if (!code) return '—';
   const raw = String(code).trim();
-  if (/^DH\d{6,}$/i.test(raw)) return raw.toUpperCase();
+  if (/^HD\d{6,}$/i.test(raw)) return raw.toUpperCase();
   const numStr = raw.replace(/^(HD|DH|LOCAL_)/i, '').replace(/[^0-9]/g, '');
   const num = parseInt(numStr || '0', 10);
-  return `DH${String(num).padStart(6, '0')}`;
+  return `HD${String(num).padStart(6, '0')}`;
 }
 
 const customerTypeToPriceType = (ct) => {
@@ -2291,4 +2291,3 @@ export default function OrderList() {
     </div>
   );
 }
-

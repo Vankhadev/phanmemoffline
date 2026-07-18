@@ -103,20 +103,54 @@ function normalizeSkuKey(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function isActiveProduct(product) {
+  if (!product || product.active === 0 || product.deleted === true || product.merged === true) return false;
+  const status = String(product.status || '').trim().toLowerCase();
+  return status !== 'deleted' && status !== 'merged';
+}
+
 function getDetailSku(detail = {}) {
   return firstNonEmpty(detail.product_sku, detail.sku, detail.variant_sku, detail.productSku);
 }
 
-function getActiveProductById(productId) {
+function getProductById(productId) {
   const id = Number(productId);
   if (!Number.isFinite(id) || id <= 0) return null;
-  return getOne('products', product => Number(product.id) === id && product.active !== 0);
+  return getOne('products', product => Number(product.id) === id);
+}
+
+function resolveMergedProduct(product) {
+  let current = product || null;
+  const visited = new Set();
+
+  while (current && !isActiveProduct(current)) {
+    const currentId = Number(current.id);
+    if (Number.isFinite(currentId)) {
+      if (visited.has(currentId)) return null;
+      visited.add(currentId);
+    }
+    const mergedIntoId = Number(current.merged_into ?? current.merged_into_id ?? current.primary_product_id);
+    if (!Number.isFinite(mergedIntoId) || mergedIntoId <= 0) return null;
+    current = getProductById(mergedIntoId);
+  }
+
+  return isActiveProduct(current) ? current : null;
+}
+
+function getActiveProductById(productId) {
+  return resolveMergedProduct(getProductById(productId));
 }
 
 function getActiveProductBySku(sku) {
   const skuKey = normalizeSkuKey(sku);
   if (!skuKey) return null;
-  return getOne('products', product => product.active !== 0 && normalizeSkuKey(product.sku) === skuKey);
+  const directMatch = getOne('products', product => isActiveProduct(product) && normalizeSkuKey(product.sku) === skuKey);
+  if (directMatch) return directMatch;
+
+  // Dữ liệu cũ có thể vẫn giữ SKU nhập tay trên bản ghi đã merge. Theo liên kết
+  // merged_into để sửa hóa đơn cũ vẫn trỏ đúng sản phẩm đang hoạt động.
+  const legacyMatch = getOne('products', product => normalizeSkuKey(product.sku) === skuKey);
+  return resolveMergedProduct(legacyMatch);
 }
 
 function createProductNotFoundError(detail = {}, index = 0) {
@@ -177,6 +211,12 @@ function resolveInvoiceSaleDetailProduct(detail = {}, index = 0, options = {}) {
   const parent = product.parent_id ? getActiveProductById(product.parent_id) : null;
   const isVariant = Boolean(product.parent_id);
   const productName = firstNonEmpty(detail.product_name, detail.name, product.name, sku, 'Sản phẩm');
+  // Khi sửa hóa đơn cũ, giữ snapshot SKU nếu có vì đó có thể là mã số nhập tay
+  // trước khi sản phẩm được merge sang mã SP. Khi tạo đơn mới, luôn lấy SKU chuẩn
+  // từ sản phẩm để payload cũ của frontend không ghi một SKU sai vào đơn mới.
+  const persistedSku = options.preserveRequestedSku === true
+    ? firstNonEmpty(sku, product.sku)
+    : firstNonEmpty(product.sku, sku);
 
   return {
     ...(detail || {}),
@@ -187,8 +227,8 @@ function resolveInvoiceSaleDetailProduct(detail = {}, index = 0, options = {}) {
     variant_name: isVariant ? firstNonEmpty(detail.variant_name, product.name) : '',
     product_name: productName,
     name: firstNonEmpty(detail.name, productName),
-    product_sku: product.sku || sku,
-    sku: product.sku || sku,
+    product_sku: persistedSku,
+    sku: persistedSku,
   };
 }
 
@@ -676,4 +716,5 @@ module.exports = {
   prepareInvoiceDetailsForPersistence,
   normalizeClientOrderId,
   normalizePayloadHash,
+  resolveInvoiceSaleDetailProduct,
 };

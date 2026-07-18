@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-electron",
-  "version": "2.4.9",
+  "version": "2.4.10",
   "description": "Bán Hàng Pos - Phần mềm bán hàng offline",
   "repository": {
     "type": "git",
@@ -35,6 +35,7 @@
     "generate:latest-yml": "node scripts/generate-latest-yml.js",
     "generate:update-manifest": "node scripts/generate-update-manifest.js",
     "test:repeat-sku-orders": "npm --prefix backend run test:repeat-sku-orders",
+    "test:legacy-sku-invoice-edit": "npm --prefix backend run test:legacy-sku-invoice-edit",
     "healthcheck": "node scripts/healthcheck.js",
     "test:business": "node scripts/business-test.js",
     "backfill:orders:dry": "node scripts/backfill-order-items-snapshot-json.js --dry-run",
