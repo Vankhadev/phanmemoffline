@@ -101,8 +101,8 @@ function resolveInvoiceDetailDisplayFields(detail = {}, getProductById = () => n
   const productId = firstNonEmpty(detail.product_id, detail.productId);
   const variantId = firstNonEmpty(detail.variant_id, '');
   const lookupId = variantId || productId;
-  const product = lookupId ? getProductById(lookupId) : null;
-  const parent = product && product.parent_id ? getProductById(product.parent_id) : null;
+  const product = lookupId ? (getProductById(lookupId) || null) : null;
+  const parent = product && product.parent_id ? (getProductById(product.parent_id) || null) : null;
   const isVariant = Boolean(variantId || (product && product.parent_id) || detail.parent_id || detail.parent_name || detail.variant_name);
 
   const itemForName = {

@@ -43,6 +43,7 @@ const KHA_FIELD_INDEX_TARGETS = [
   ['customers', 'phone'], ['customers', 'name'], ['customers', 'created_at'],
   ['suppliers', 'phone'], ['suppliers', 'name'], ['suppliers', 'created_at'],
   ['payments', 'order_id'], ['payments', 'paid_at'], ['payments', 'method'],
+  ['inventory_transactions', 'product_id'], ['inventory_transactions', 'reference_type'], ['inventory_transactions', 'reference_id'], ['inventory_transactions', 'created_at'],
   ['cash_ledger', 'reference_type'], ['cash_ledger', 'reference_id'], ['cash_ledger', 'order_id'], ['cash_ledger', 'import_id'], ['cash_ledger', 'created_at'],
   ['audit_logs', 'created_at'], ['audit_logs', 'action'], ['audit_logs', 'entity_type'], ['audit_logs', 'entity_id'], ['audit_logs', 'user_id'],
 ];
@@ -395,7 +396,22 @@ function resolveDBPath() {
 
   // Ưu tiên: env KHA_DB_PATH (Electron production) > config.json > default project.
   // config.json CHỈ được dùng khi KHÔNG có envPath (chạy backend độc lập npm start).
-  const activePath = electronOwned ? defaultPath : (currentConfigPath || defaultPath);
+  // A backup is an immutable recovery artifact, never an application database.
+  // In particular, do not let a stale config.json make the backend run on it.
+  const isBackupPath = candidate => {
+    const normalized = path.resolve(String(candidate || '')).toLowerCase();
+    return normalized.includes(`${path.sep}${DATA_PRESERVATION_BACKUP_FOLDER.toLowerCase()}${path.sep}`)
+      || /\.(zip|gz)$/i.test(normalized)
+      || /(?:^|[\\/])backups?(?:[\\/]|$)/i.test(normalized);
+  };
+  if (electronOwned && isBackupPath(defaultPath)) {
+    throw new Error(`[KHA DB] Refusing to use backup file as DB_PATH: ${defaultPath}`);
+  }
+  const configuredPath = currentConfigPath && !isBackupPath(currentConfigPath) ? currentConfigPath : null;
+  if (currentConfigPath && !configuredPath) {
+    console.error(`[KHA DB] Ignoring unsafe backup path from config: ${currentConfigPath}`);
+  }
+  const activePath = electronOwned ? defaultPath : (configuredPath || defaultPath);
   const activeStats = getDbFileStats(activePath);
 
   // High-performance optimization: if current database already has data, skip startup scan
@@ -413,57 +429,20 @@ function resolveDBPath() {
     return activePath;
   }
 
-  // Perform the scan on startup ONLY if active database is empty (chỉ dev/standalone)
-  const statsList = performDeepScan();
-
-  if (statsList.length === 0) {
-    console.log('[INFO] Tìm thấy 0 Database');
-    console.log('[INFO] Chọn Database A làm Database chính');
-    return activePath;
-  }
-
-  const best = statsList[0];
-  let chosenPath = activePath;
-
-  if (best && !best.isEmpty) {
-    // If the currently resolved database is empty, OR the best database has MORE/BETTER data than the current database, we switch!
-    if (!activeStats || activeStats.isEmpty || compareDbStats(activeStats, best) > 0) {
-      chosenPath = best.path;
-      
-      // Auto restore: write configuration to config.json
-      if (chosenPath !== activePath) {
-        console.log(`[INFO] Tự động chọn Database tốt nhất: ${chosenPath}`);
-        writeDatabaseConfig(chosenPath);
-      }
-    }
-  }
-
-  console.log(`[INFO] Tìm thấy ${statsList.length} Database`);
-  statsList.forEach((item, index) => {
-    const label = String.fromCharCode(65 + index);
-    console.log(`[INFO] Database ${label}: ${getStatsDescription(item)}`);
-    console.log(`[INFO] Database ${label} path: ${item.path}`);
-  });
-
-  const chosenIndex = statsList.findIndex(item => item.path === chosenPath);
-  const chosenLabel = chosenIndex !== -1 ? String.fromCharCode(65 + chosenIndex) : 'A';
-  console.log(`[INFO] Chọn Database ${chosenLabel} làm Database chính`);
-
-  // Clean empty databases (except the chosen one)
-  statsList.forEach((item) => {
-    if (item.isEmpty && item.path !== chosenPath) {
-      try {
-        fs.unlinkSync(item.path);
-        console.log(`[INFO] Xóa Database rỗng: ${item.path}`);
-      } catch (_) {}
-    }
-  });
-
-  return chosenPath;
+  // Never auto-select, delete, or repoint to a scanned database. Recovery must
+  // be an explicit restore operation that copies a verified backup to DB_PATH.
+  console.warn(`[KHA DB] Active database is missing or empty; keeping configured DB_PATH for explicit recovery: ${activePath}`);
+  return activePath;
 }
 
 function setDBPath(newPath) {
-  DB_PATH = path.resolve(newPath);
+  const resolved = path.resolve(String(newPath || ''));
+  const normalized = resolved.toLowerCase();
+  if (!resolved || normalized.includes(`${path.sep}${DATA_PRESERVATION_BACKUP_FOLDER.toLowerCase()}${path.sep}`)
+    || /\.(zip|gz)$/i.test(normalized) || /(?:^|[\\/])backups?(?:[\\/]|$)/i.test(normalized)) {
+    throw new Error(`[KHA DB] Refusing to set DB_PATH to a backup artifact: ${newPath}`);
+  }
+  DB_PATH = resolved;
 }
 
 let DB_PATH = resolveDBPath();
@@ -529,6 +508,7 @@ const SCHEMA = {
   suppliers: [],
   product_variants: [],
   inventory_batches: [],
+  inventory_transactions: [],
   imports: [],
   import_items: [],
   orders: [],
@@ -556,7 +536,7 @@ const ACCOUNT_SCOPED_TABLES = new Set([
   'einvoice_in', 'einvoice_out', 'tax_reports', 'revenue_reports', 'profit_reports', 'accounting_logs',
   'payrolls', 'excel_import_runs', 'excel_import_details',
   'print_templates', 'marketplace_shops', 'marketplace_orders', 'sync_metadata', 'audit_logs', 'system_settings',
-  'categories', 'suppliers', 'product_variants', 'inventory_batches', 'imports', 'import_items',
+  'categories', 'suppliers', 'product_variants', 'inventory_batches', 'inventory_transactions', 'imports', 'import_items',
   'orders', 'order_items', 'payments', 'cash_ledger', 'app_settings', 'invoice_templates',
   'backup_files', 'restore_jobs', 'schema_migrations', 'migration_quarantine',
 ]);
@@ -666,7 +646,7 @@ const SYNC_TRACKED_TABLES = [
   'payrolls', 'excel_import_runs', 'excel_import_details', 'print_templates', 'marketplace_shops',
   'marketplace_orders', 'system_settings',
   'feature_catalog', 'update_releases',
-  'categories', 'suppliers', 'product_variants', 'inventory_batches', 'imports', 'import_items',
+  'categories', 'suppliers', 'product_variants', 'inventory_batches', 'inventory_transactions', 'imports', 'import_items',
   'orders', 'order_items', 'payments', 'cash_ledger', 'app_settings', 'invoice_templates',
   'backup_files', 'restore_jobs', 'schema_migrations', 'migration_quarantine',
 ];
@@ -1078,10 +1058,18 @@ function getMaxDocumentSequence(typeOrConfig) {
   const config = resolveDocumentCodeConfig(typeOrConfig);
   if (!config) return 0;
   const rows = Array.isArray(getDb()[config.table]) ? getDb()[config.table] : [];
-  return rows.reduce(
-    (max, row) => Math.max(max, readConfiguredDocumentSequenceNumber(row?.[config.field], config)),
+  let max = rows.reduce(
+    (max, row) => Math.max(max, readDocumentSequenceNumber(row?.[config.field], config.prefix)),
     0,
   );
+  // Continue numbering beyond legacy DH/PN documents after the HD/NP transition.
+  for (const legacyPrefix of (config.legacyPrefixes || [])) {
+    max = Math.max(max, rows.reduce(
+      (currentMax, row) => Math.max(currentMax, readDocumentSequenceNumber(row?.[config.field], legacyPrefix)),
+      0,
+    ));
+  }
+  return max;
 }
 
 function findDocumentByCode(typeOrConfig, code, ignoredId = null) {
@@ -1474,28 +1462,39 @@ function createDbBackup(reason = 'manual', options = {}) {
   const safeReason = sanitizeBackupReason(reason);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const backupData = getBackupDataset();
-  const fileName = `phanmienoffline-db-${stamp}-${safeReason}.zip`;
+  const validation = validateDatabaseData(backupData, { allowLegacyOrphans: true });
+  if (!validation.ok) {
+    console.error(`[KHA DB] Backup aborted by integrity check: ${validation.errors.join('; ')}`);
+    return null;
+  }
+  const fileName = `phanmienoffline-db-${stamp}-${safeReason}.json`;
   const backupPath = path.join(DB_BACKUP_DIR, fileName);
-  const tempDir = fs.mkdtempSync(path.join(path.dirname(DB_BACKUP_DIR), 'kha-backup-'));
-  const tempJson = path.join(tempDir, 'database.json');
-  const tempManifest = path.join(tempDir, 'manifest.json');
+  const tempPath = `${backupPath}.${process.pid}.${Date.now()}.tmp`;
   try {
-    fs.writeFileSync(tempJson, JSON.stringify(backupData, null, 2), 'utf8');
-    fs.writeFileSync(tempManifest, JSON.stringify({
-      backup_name: fileName,
-      backup_type: safeReason,
-      created_at: now(),
-      total_records: Object.keys(SCHEMA).reduce((sum, table) => sum + (Array.isArray(backupData[table]) ? backupData[table].length : 0), 0),
-    }, null, 2), 'utf8');
-
-    const zipCmd = `Compress-Archive -Path '${tempJson.replace(/'/g, "''")}', '${tempManifest.replace(/'/g, "''")}' -DestinationPath '${backupPath.replace(/'/g, "''")}' -CompressionLevel Optimal -Force`;
-    const zipResult = spawnSync('powershell', ['-NoProfile', '-Command', zipCmd], { encoding: 'utf8' });
-    if (zipResult.status !== 0 || !fs.existsSync(backupPath)) {
-      throw new Error(zipResult.stderr || zipResult.stdout || 'Compress-Archive failed');
-    }
+    // Serialize to a separate temporary file and validate it before publication.
+    fs.writeFileSync(tempPath, JSON.stringify(backupData, null, 2), 'utf8');
+    const staged = JSON.parse(fs.readFileSync(tempPath, 'utf8'));
+    const stagedValidation = validateDatabaseData(staged, { allowLegacyOrphans: true });
+    if (!stagedValidation.ok) throw new Error(`Temporary backup validation failed: ${stagedValidation.errors.join('; ')}`);
+    renameFileWithRetry(tempPath, backupPath);
 
     const stat = fs.statSync(backupPath);
     const totalRecords = Object.keys(SCHEMA).reduce((sum, table) => sum + (Array.isArray(backupData[table]) ? backupData[table].length : 0), 0);
+    const manifest = {
+      backup_name: fileName,
+      backup_type: safeReason,
+      created_at: now(),
+      application_version: process.env.npm_package_version || '2.4.9',
+      schema_version: getSchemaVersion(backupData),
+      size: stat.size,
+      sha256: sha256File(backupPath),
+      source_database: DB_PATH,
+      integrity_check: stagedValidation.integrity,
+      foreign_key_check: stagedValidation.foreign_key_errors,
+      total_records: totalRecords,
+      valid: true,
+    };
+    atomicWriteFile(getBackupManifestPath(backupPath), JSON.stringify(manifest, null, 2));
     const record = addBackupRecord({ backup_name: fileName, backup_type: safeReason, file_path: backupPath, file_size: stat.size, total_records: totalRecords, status: 'success', note: '' }, { skipSave: true });
     addBackupLog({ backup_file: fileName, file_size: stat.size, total_records: totalRecords, status: 'success', detail: `Backup ${safeReason} created`, backup_id: record?.id || null }, { skipSave: true });
 
@@ -1517,11 +1516,11 @@ function createDbBackup(reason = 'manual', options = {}) {
       total_records: totalRecords,
     };
   } catch (error) {
-    console.warn('[KHA DB] primary backup failed:', error.message);
+    console.error('[KHA DB] primary backup failed:', error.message);
     addBackupLog({ backup_file: fileName, file_size: 0, total_records: 0, status: 'failed', detail: error.message }, { skipSave: true });
     return null;
   } finally {
-    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
+    try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch (error) { console.error(`[KHA DB] Failed to clean backup temp file: ${error.message}`); }
   }
 }
 
@@ -1549,7 +1548,10 @@ function runScheduledDbBackup(reason = 'scheduled', options = {}) {
 }
 
 function recalculateNextIds() {
-  const current = getDb();
+  recalculateNextIdsFor(getDb());
+}
+
+function recalculateNextIdsFor(current) {
   const nextId = { ...INITIAL_NEXT_ID, ...(current.nextId || {}) };
   for (const table of Object.keys(SCHEMA)) {
     const rows = Array.isArray(current[table]) ? current[table] : [];
@@ -2367,6 +2369,124 @@ function sha256File(filePath) {
   return hash.digest('hex');
 }
 
+function getSchemaVersion(source = getDb()) {
+  const migration = (source.schema_migrations || [])
+    .filter(row => row && row.status === 'success')
+    .map(row => String(row.migration_id || row.name || ''))
+    .sort()
+    .pop();
+  return migration || 'json-schema-v1';
+}
+
+function validateDatabaseData(source, options = {}) {
+  const result = { ok: false, integrity: 'failed', foreign_key_errors: [], errors: [], counts: {} };
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    result.errors.push('Database payload must be an object.');
+    return result;
+  }
+  for (const table of Object.keys(SCHEMA)) {
+    if (source[table] != null && !Array.isArray(source[table])) result.errors.push(`${table} is not an array.`);
+    result.counts[table] = Array.isArray(source[table]) ? source[table].length : 0;
+  }
+  if (result.errors.length) return result;
+
+  const ids = table => new Set((source[table] || []).filter(Boolean).map(row => String(row.id)));
+  const check = (childTable, field, parentTable, nullable = false) => {
+    const parentIds = ids(parentTable);
+    for (const row of (source[childTable] || [])) {
+      if (!row || row[field] == null || row[field] === '') {
+        if (!nullable) result.foreign_key_errors.push(`${childTable}:${row?.id || '?'} missing ${field}`);
+      } else if (!parentIds.has(String(row[field]))) {
+        result.foreign_key_errors.push(`${childTable}:${row.id} ${field}=${row[field]} does not reference ${parentTable}`);
+      }
+    }
+  };
+  check('invoice_details', 'invoice_id', 'invoices');
+  check('invoice_details', 'product_id', 'products', true);
+  check('order_items', 'order_id', 'orders', true); // compatibility mirrors can be incomplete in old files
+  check('order_items', 'product_id', 'products', true);
+  check('import_details', 'import_id', 'import_logs');
+  check('import_details', 'product_id', 'products', true);
+  check('import_items', 'import_id', 'imports', true);
+  check('import_items', 'product_id', 'products', true);
+  check('payments', 'order_id', 'orders', true);
+  check('inventory_batches', 'product_id', 'products', true);
+
+  if (options.allowLegacyOrphans !== true && result.foreign_key_errors.length) {
+    result.errors.push(`foreign_key_check failed with ${result.foreign_key_errors.length} issue(s).`);
+    return result;
+  }
+  result.ok = true;
+  result.integrity = 'ok';
+  return result;
+}
+
+function atomicWriteFile(filePath, content) {
+  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmpPath, content, 'utf8');
+  renameFileWithRetry(tmpPath, filePath);
+}
+
+function getBackupManifestPath(backupPath) {
+  return `${backupPath}.manifest.json`;
+}
+
+function readVerifiedBackup(backupPath, options = {}) {
+  const resolved = path.resolve(String(backupPath || ''));
+  if (!resolved || !fs.existsSync(resolved)) throw new Error('Backup file does not exist.');
+  if (path.resolve(resolved) === path.resolve(DB_PATH)) throw new Error('Refusing to restore from the active database file.');
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile() || stat.size <= 0 || stat.size > DB_BACKUP_MAX_FILE_BYTES) throw new Error('Backup file size is invalid.');
+  const manifestPath = getBackupManifestPath(resolved);
+  let manifest = null;
+  if (fs.existsSync(manifestPath)) {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (manifest.size !== stat.size || manifest.sha256 !== sha256File(resolved)) throw new Error('Backup checksum verification failed.');
+    if (manifest.valid !== true) throw new Error('Backup manifest is not marked valid.');
+  } else if (options.requireManifest) {
+    throw new Error('Backup manifest is required for restore.');
+  }
+  const data = readBackupData(resolved);
+  const validation = validateDatabaseData(data, { allowLegacyOrphans: true });
+  if (!validation.ok) throw new Error(`Backup integrity check failed: ${validation.errors.join('; ')}`);
+  return { data, manifest, validation, path: resolved, size: stat.size };
+}
+
+function restoreDbBackup(backupPath, options = {}) {
+  const verified = readVerifiedBackup(backupPath, { requireManifest: options.allowLegacyBackup !== true });
+  const backup = createDbBackup('pre-restore', { skipRetention: true });
+  if (!backup) throw new Error('Unable to create verified rollback backup before restore.');
+  const restored = createEmptyDB();
+  for (const table of Object.keys(SCHEMA)) restored[table] = Array.isArray(verified.data[table]) ? verified.data[table] : [];
+  restored.nextId = { ...INITIAL_NEXT_ID, ...(verified.data.nextId || {}) };
+  recalculateNextIdsFor(restored);
+  const tempPath = `${DB_PATH}.${process.pid}.${Date.now()}.restore.tmp`;
+  try {
+    // Validate the exact staged file before replacing the active database.
+    fs.writeFileSync(tempPath, JSON.stringify(restored, null, 2), 'utf8');
+    const staged = JSON.parse(fs.readFileSync(tempPath, 'utf8'));
+    const stagedValidation = validateDatabaseData(staged, { allowLegacyOrphans: true });
+    if (!stagedValidation.ok) throw new Error(`Staged restore integrity failed: ${stagedValidation.errors.join('; ')}`);
+    renameFileWithRetry(tempPath, DB_PATH);
+    replaceDB(staged);
+    engineFullSync();
+    console.log(`[KHA DB] Restore completed from verified backup: ${path.basename(verified.path)}`);
+    return { ok: true, rollback_backup: backup, validation: stagedValidation, restored_tables: Object.keys(SCHEMA) };
+  } catch (error) {
+    try {
+      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      const rollback = readVerifiedBackup(backup.path, { requireManifest: true });
+      atomicWriteJSON(DB_PATH, rollback.data);
+      replaceDB(rollback.data);
+      console.error(`[KHA DB] Restore failed and rollback succeeded: ${error.message}`);
+    } catch (rollbackError) {
+      console.error(`[KHA DB] Restore rollback failed: ${rollbackError.message}`);
+      error.rollbackError = rollbackError;
+    }
+    throw error;
+  }
+}
+
 function getBusinessRecordCounts(sourceDb = getDb()) {
   const count = name => Array.isArray(sourceDb[name]) ? sourceDb[name].length : 0;
   return {
@@ -2758,10 +2878,10 @@ function loadDB(options = {}) {
   try {
     parsed = readBackupData(DB_PATH);
   } catch (error) {
-    console.warn(`[KHA DB] Failed to read DB file ${path.basename(DB_PATH)}: ${error.message}`);
-    backupDB('corrupt');
-    parsed = createEmptyDB();
-    shouldPersist = true;
+    console.error(`[KHA DB] Refusing to replace unreadable database ${path.basename(DB_PATH)}: ${error.message}`);
+    // Never create an empty database over an unreadable user database. The
+    // recovery UI can select a verified backup and restore it explicitly.
+    throw new Error(`Database cannot be read safely; recovery is required before startup: ${error.message}`);
   }
 
   const nextDB = createEmptyDB();
@@ -3311,6 +3431,10 @@ const exportsObject = {
   saveDB,
   backupDB,
   createDbBackup,
+  readVerifiedBackup,
+  restoreDbBackup,
+  validateDatabaseData,
+  getSchemaVersion,
   listDbBackups,
   pruneDbBackups,
   runScheduledDbBackup,

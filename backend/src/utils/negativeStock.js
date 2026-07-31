@@ -1,4 +1,4 @@
-const { getAll, getOne, update, auditLog, withAtomicDbWrite } = require('../db/database');
+const { getAll, getOne, insert, update, auditLog, withAtomicDbWrite } = require('../db/database');
 const { resolveInvoiceDetailDisplayFields } = require('./productDisplayName');
 const {
   NEGATIVE_STOCK_FEATURE_KEY,
@@ -373,6 +373,33 @@ function applyProductStockDeltaLocked({
       ...(changes || {}),
       stock: validation.projectedStock,
     }, { skipSave: options.skipSave === true });
+    // Append-only stock ledger: product.stock is the current balance, while this
+    // row preserves the business reference and before/after audit trail.
+    const referenceType = String(meta.reference_type || meta.referenceType || source || 'manual').trim();
+    const referenceId = meta.reference_id ?? meta.referenceId ?? null;
+    const revision = Number(meta.revision || 1) || 1;
+    const transactionType = delta < 0 ? 'sale_out' : 'stock_in';
+    const duplicate = referenceId == null ? null : getOne('inventory_transactions', row =>
+      Number(row.product_id) === Number(validation.productId)
+      && row.reference_type === referenceType
+      && String(row.reference_id) === String(referenceId)
+      && row.transaction_type === transactionType
+      && Number(row.revision || 1) === revision
+    );
+    if (!duplicate) {
+      insert('inventory_transactions', {
+        product_id: validation.productId,
+        transaction_type: transactionType,
+        reference_type: referenceType,
+        reference_id: referenceId,
+        revision,
+        quantity_change: validation.changeQuantity,
+        stock_before: validation.currentStock,
+        stock_after: validation.projectedStock,
+        note: operation,
+        created_at: new Date().toISOString(),
+      }, { skipSave: options.skipSave === true });
+    }
     logNegativeStockTransition({ ...validation, ...(meta || {}), source }, { skipSave: options.skipSave === true });
     return { updated, validation };
   }));

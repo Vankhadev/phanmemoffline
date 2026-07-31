@@ -5,7 +5,6 @@
 const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
-const { readBackupData } = require('../utils/backupCodec');
 
 const DATA_PRESERVATION_FOLDER = 'backup_du_lieu_phan_mem_no_del';
 const SCHEDULE_CRON = '0 */12 * * *';
@@ -76,7 +75,7 @@ function listAllBackups(limit = 50) {
   if (!baseBackupDir) return [];
   try {
     return fs.readdirSync(baseBackupDir)
-      .filter(file => file.startsWith('phanmienoffline-db-') && file.endsWith('.zip'))
+      .filter(file => file.startsWith('phanmienoffline-db-') && (file.endsWith('.json') || file.endsWith('.json.gz') || file.endsWith('.zip')))
       .map(file => {
         const fullPath = path.join(baseBackupDir, file);
         const stat = fs.statSync(fullPath);
@@ -95,16 +94,8 @@ function findBestBackup() {
 
 function restoreBackup(backupPath) {
   if (!backupPath || !fs.existsSync(backupPath)) throw new Error('Backup file không tồn tại');
-  const data = readBackupData(backupPath);
-  if (!data || typeof data !== 'object') throw new Error('Backup không hợp lệ');
-  if (!dbModule || typeof dbModule.getDb !== 'function') throw new Error('Database module không khả dụng');
-  const db = dbModule.getDb();
-  for (const key of Object.keys(data)) {
-    if (Array.isArray(data[key])) db[key] = data[key];
-  }
-  if (data.nextId) db.nextId = { ...(db.nextId || {}), ...data.nextId };
-  if (typeof dbModule.saveDB === 'function') dbModule.saveDB();
-  return { ok: true, restoredTables: Object.keys(data).filter(key => Array.isArray(data[key])) };
+  if (!dbModule || typeof dbModule.restoreDbBackup !== 'function') throw new Error('Safe database restore is unavailable');
+  return dbModule.restoreDbBackup(backupPath);
 }
 
 function getStatus() {

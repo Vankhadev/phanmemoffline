@@ -93,8 +93,13 @@ router.get('/download', (_req, res) => {
   try {
     const filePath = String(_req.query.path || '').trim();
     if (!filePath) return res.status(400).json({ ok: false, error: 'Thiếu path backup' });
-    if (!fs.existsSync(filePath)) return res.status(404).json({ ok: false, error: 'Backup file không tồn tại' });
-    return res.download(filePath, path.basename(filePath));
+    const backupDir = path.resolve(guardian?.dbModule?.DB_BACKUP_DIR || '');
+    const resolvedPath = path.resolve(filePath);
+    if (!backupDir || !resolvedPath.startsWith(`${backupDir}${path.sep}`)) {
+      return res.status(403).json({ ok: false, error: 'Chỉ được tải backup trong thư mục backup hợp lệ' });
+    }
+    if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) return res.status(404).json({ ok: false, error: 'Backup file không tồn tại' });
+    return res.download(resolvedPath, path.basename(resolvedPath));
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
@@ -194,22 +199,8 @@ router.post('/restore', (req, res) => {
       return res.status(404).json({ ok: false, error: 'Backup file không tồn tại' });
     }
 
-    if (guardian.backupScheduler) guardian.backupScheduler.backupEmergency();
-
-    let result = null;
-    if (guardian.backupScheduler?.restoreBackup) {
-      result = guardian.backupScheduler.restoreBackup(backupPath);
-    } else {
-      const { readBackupData } = require('../utils/backupCodec');
-      const data = readBackupData(backupPath);
-      const db = guardian.dbModule.getDb();
-      for (const key of Object.keys(data)) {
-        if (Array.isArray(data[key])) db[key] = data[key];
-      }
-      if (data.nextId) db.nextId = { ...(db.nextId || {}), ...data.nextId };
-      guardian.dbModule.saveDB();
-      result = { ok: true };
-    }
+    if (!guardian.backupScheduler?.restoreBackup) throw new Error('Safe restore service chưa khởi tạo');
+    const result = guardian.backupScheduler.restoreBackup(backupPath);
 
     res.json({ ok: true, message: `Đã khôi phục database từ: ${backupPath}`, path: backupPath, result });
   } catch (error) {

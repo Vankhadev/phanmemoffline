@@ -801,3 +801,16 @@ Nâng cấp ổn định toàn bộ dự án theo hướng production-stable: tr
 
 
 
+# [2.4.10] - 2026-07-31
+
+### Fixed
+- Bảo vệ database khỏi tự động chuyển sang file backup hoặc tự động thay thế database lỗi.
+- Backup và restore database dùng manifest, checksum SHA-256 và kiểm tra toàn vẹn trước khi thay thế.
+- Bổ sung ledger giao dịch tồn kho append-only và giữ snapshot SKU thủ công trên hóa đơn.
+- Chặn SKU trùng khi tạo/cập nhật sản phẩm, biến thể và import.
+- Bổ sung relational SQLite compatibility layer với composite foreign keys, transaction rollback và kiểm tra account isolation.
+- Sửa driver `sql.js` để duy trì `PRAGMA foreign_keys = ON` sau thao tác ghi và transaction.
+
+### Tests
+- Thêm regression tests cho data safety, Node/Electron SQLite driver và relational constraints.
+- Frontend production build và healthcheck đạt.

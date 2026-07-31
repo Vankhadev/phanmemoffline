@@ -125,7 +125,8 @@ function diagnose(integrityResult) {
 }
 
 /**
- * Attempt automatic recovery using the database module's built-in scanning.
+ * Diagnose only. Automatic path switching is prohibited: a backup must be
+ * explicitly selected and restored through the verified restore pipeline.
  * @param {object} dbModule - The database module
  * @param {object} diagnosis - Result from diagnose()
  * @returns {object} Recovery result
@@ -145,7 +146,7 @@ function attemptRecovery(dbModule, diagnosis) {
 
   console.log(`[KHA DB RECOVERY] Starting recovery. Issues: ${diagnosis.issues.map(i => i.type).join(', ')}`);
 
-  // Step 1: Deep scan for all database files
+  // Step 1: discover candidates for the UI, without changing DB_PATH or files.
   try {
     const scanResults = dbModule.performDeepScan();
     result.steps.push(`Deep scan found ${scanResults.length} database files`);
@@ -164,7 +165,7 @@ function attemptRecovery(dbModule, diagnosis) {
       return result;
     }
 
-    // Step 2: Find best database (most data)
+    // Step 2: report the best candidate. Do not run or copy it automatically.
     const bestDb = scanResults.find(s => !s.isEmpty);
     if (!bestDb) {
       result.steps.push('WARNING: Tất cả database tìm thấy đều rỗng');
@@ -180,20 +181,12 @@ function attemptRecovery(dbModule, diagnosis) {
       return result;
     }
 
-    // Step 3: Restore
     result.steps.push(`Best database: ${bestDb.path} (${bestDb.invoicesCount} đơn, ${bestDb.customersCount} KH, ${bestDb.productsCount} SP)`);
-
-    dbModule.setDBPath(bestDb.path);
-    dbModule.writeDatabaseConfig(bestDb.path);
-    result.steps.push(`Đã chuyển DB_PATH sang: ${bestDb.path}`);
-
-    dbModule.loadDB({ forceReload: true });
-    result.steps.push('Đã reload database vào memory');
-
-    result.ok = true;
-    result.recovered = true;
-    result.message = `Đã khôi phục database thành công từ: ${bestDb.path}`;
-    result.restoredFrom = {
+    result.ok = false;
+    result.recovered = false;
+    result.action = 'selection_required';
+    result.message = 'Database cần khôi phục. Chọn một backup đã xác thực để khôi phục an toàn; DB_PATH không bị thay đổi.';
+    result.candidate = {
       path: bestDb.path,
       invoices: bestDb.invoicesCount,
       customers: bestDb.customersCount,
@@ -202,15 +195,15 @@ function attemptRecovery(dbModule, diagnosis) {
 
     if (alertService) {
       alertService.sendCriticalAlert('db-recovery',
-        `Database đã được khôi phục tự động. Nguồn: ${bestDb.path}`,
+        `Database cần khôi phục thủ công từ backup đã xác thực. Ứng viên: ${bestDb.path}`,
         {
           actionsTaken: result.steps,
-          restoredFrom: result.restoredFrom,
+          candidate: result.candidate,
         }
       );
     }
 
-    console.log(`[KHA DB RECOVERY] Recovery successful: ${bestDb.path}`);
+    console.warn(`[KHA DB RECOVERY] Recovery selection required: ${bestDb.path}`);
   } catch (error) {
     result.steps.push(`Recovery error: ${error.message}`);
     result.ok = false;

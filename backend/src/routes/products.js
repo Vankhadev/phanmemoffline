@@ -269,6 +269,16 @@ function normalizeSkuKey(value) {
   return normalizeSku(value).toLowerCase();
 }
 
+function isDuplicateActiveSku(sku, ignoredId = null) {
+  const skuKey = normalizeSkuKey(sku);
+  if (!skuKey) return false;
+  return Boolean(getOne('products', product =>
+    isActiveProduct(product)
+    && Number(product.id) !== Number(ignoredId)
+    && normalizeSkuKey(product.sku) === skuKey
+  ));
+}
+
 function findActiveProductBySku(sku) {
   const normalizedSku = normalizeSku(sku);
   if (!normalizedSku) return null;
@@ -978,7 +988,7 @@ router.post('/', (req, res) => {
         return { ok: true, id: updated.id, sku: updated.sku, message: 'Sản phẩm đã tồn tại, đã cập nhật thay vì tạo mới', action: 'updated' };
       }
 
-      const productSku = generateNextDocumentCode('product', { skipSave: true });
+      const productSku = requestedSku || generateNextDocumentCode('product', { skipSave: true });
       const nowTime = now();
       const finalData = {
         ...productPayload({ ...req.body, sku: productSku }, {}),
@@ -1012,24 +1022,17 @@ router.put('/:id', (req, res) => {
 
     const isVariant = product.parent_id != null;
     const parent = isVariant ? getOne('products', p => p.id === product.parent_id && isActiveProduct(p)) : null;
-    if (
-      Object.prototype.hasOwnProperty.call(req.body, 'sku')
-      && normalizeSku(req.body.sku)
-      && normalizeSkuKey(req.body.sku) !== normalizeSkuKey(product.sku)
-    ) {
-      const requestedSku = normalizeSku(req.body.sku);
-      const duplicateSku = getOne('products', p => isActiveProduct(p) && p.id !== id && normalizeSkuKey(p.sku) === normalizeSkuKey(requestedSku));
-      if (duplicateSku) {
-        return res.status(409).json({
-          ok: false,
-          error: `SKU đã tồn tại trong danh mục sản phẩm: ${requestedSku}`,
-          message: `SKU đã tồn tại trong danh mục sản phẩm: ${requestedSku}`,
-          code: 'PRODUCT_SKU_DUPLICATE',
-        });
-      }
-      return res.status(400).json({ error: 'Mã sản phẩm đã cấp không được thay đổi' });
+    const requestedSku = normalizeSku(req.body.sku);
+    const productSku = requestedSku || normalizeSku(product.sku);
+    if (requestedSku && requestedSku !== normalizeSku(product.sku) && isDuplicateActiveSku(requestedSku, id)) {
+      return res.status(409).json({
+        ok: false,
+        error: `SKU đã tồn tại trong danh mục sản phẩm: ${requestedSku}`,
+        message: `SKU đã tồn tại trong danh mục sản phẩm: ${requestedSku}`,
+        code: 'PRODUCT_SKU_DUPLICATE',
+      });
     }
-    const requestBody = { ...req.body, sku: normalizeSku(product.sku) };
+    const requestBody = { ...req.body, sku: productSku };
 
     const result = withAtomicDbWrite(() => {
       const nowTime = now();
@@ -1113,8 +1116,16 @@ router.post('/:parentId/variants', (req, res) => {
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Tên biến thể không được để trống' });
 
     const result = withAtomicDbWrite(() => {
-      const generatedSku = generateNextDocumentCode('product', { skipSave: true });
-      const payload = productPayload({ ...req.body, sku: generatedSku }, {}, parent);
+      const requestedSku = normalizeSku(req.body.sku);
+      if (requestedSku && isDuplicateActiveSku(requestedSku)) {
+        const err = new Error(`SKU đã tồn tại trong danh mục sản phẩm: ${requestedSku}`);
+        err.status = 409;
+        err.statusCode = 409;
+        err.code = 'PRODUCT_SKU_DUPLICATE';
+        throw err;
+      }
+      const variantSku = requestedSku || generateNextDocumentCode('product', { skipSave: true });
+      const payload = productPayload({ ...req.body, sku: variantSku }, {}, parent);
       const nowTime = now();
       const id = insert('products', {
         ...payload,
@@ -1148,9 +1159,19 @@ router.put('/variants/:id', (req, res) => {
     const parent = getOne('products', p => p.id === variant.parent_id && isActiveProduct(p));
     if (!parent) return res.status(400).json({ error: 'Không tìm thấy sản phẩm cha của biến thể' });
 
+    const requestedSku = normalizeSku(req.body.sku);
+    if (requestedSku && requestedSku !== normalizeSku(variant.sku) && isDuplicateActiveSku(requestedSku, id)) {
+      return res.status(409).json({
+        ok: false,
+        error: `SKU đã tồn tại trong danh mục sản phẩm: ${requestedSku}`,
+        message: `SKU đã tồn tại trong danh mục sản phẩm: ${requestedSku}`,
+        code: 'PRODUCT_SKU_DUPLICATE',
+      });
+    }
+
     const result = withAtomicDbWrite(() => {
       const changes = {
-        ...productPayload({ ...req.body, sku: normalizeSku(variant.sku) }, variant, parent),
+        ...productPayload({ ...req.body, sku: requestedSku || normalizeSku(variant.sku) }, variant, parent),
         updated_at: now(),
       };
 
@@ -1259,8 +1280,14 @@ router.post('/import', (req, res) => {
           logProductStockChangeIfNegative(updated, existing.stock, 'products_import_csv');
           results.updated++;
         } else {
-          const generatedSku = generateNextDocumentCode('product', { skipSave: true });
-          const createdPayload = { ...payload, sku: generatedSku };
+          const requestedSku = normalizeSku(sku);
+          if (requestedSku && isDuplicateActiveSku(requestedSku)) {
+            const err = new Error(`SKU đã tồn tại trong danh mục sản phẩm: ${requestedSku}`);
+            err.status = 409;
+            throw err;
+          }
+          const productSku = requestedSku || generateNextDocumentCode('product', { skipSave: true });
+          const createdPayload = { ...payload, sku: productSku };
           const id = insert('products', { ...createdPayload, active: 1, created_at: now(), updated_at: now() });
           logProductStockChangeIfNegative({ id, ...createdPayload }, null, 'products_import_csv');
           results.created++;

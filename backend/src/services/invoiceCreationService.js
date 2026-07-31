@@ -247,7 +247,9 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
   const combo_id = comboLine ? (detail.combo_id || null) : null;
   const displayFields = resolveInvoiceDetailDisplayFields(detail, id => getOne('products', p => Number(p.id) === Number(id)));
   const product_name = displayFields.product_name;
-  const product_sku = displayFields.product_sku;
+  // Preserve the SKU snapshot supplied by the invoice editor. It can be a manual
+  // SKU and must not be replaced by a later product lookup while saving an invoice.
+  const product_sku = firstNonEmpty(detail.product_sku, detail.sku, displayFields.product_sku);
   const quantity = +detail.quantity || 1;
   // Ưu tiên unit_price (giá dòng đơn hiện tại người dùng đang thấy/sửa) hơn sale_price_at_sale
   // (snapshot cũ). Khi sửa đơn, frontend gửi unit_price mới; nếu ưu tiên sale_price_at_sale
@@ -289,7 +291,7 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
     product_name,
     product_sku,
     name: displayFields.name || product_name,
-    sku: displayFields.sku || product_sku,
+    sku: firstNonEmpty(detail.sku, detail.product_sku, displayFields.sku, product_sku),
     quantity,
     unit_price,
     sale_price: unit_price,
@@ -348,6 +350,7 @@ function deductStock(productOrVariantId, quantity, options = {}) {
       operation: 'xuất kho hóa đơn',
       options: writeOptions,
       source: options.source || 'invoice',
+      meta: { reference_type: 'invoice', reference_id: options.invoiceId || null, revision: options.revision || 1 },
     }).updated;
   }
 
@@ -361,6 +364,7 @@ function deductStock(productOrVariantId, quantity, options = {}) {
       operation: 'xuất kho hóa đơn',
       options: writeOptions,
       source: options.source || 'invoice',
+      meta: { reference_type: 'invoice', reference_id: options.invoiceId || null, revision: options.revision || 1 },
     }).updated;
   }
   return null;
@@ -381,6 +385,7 @@ function restoreStock(productOrVariantId, quantity, options = {}) {
       operation: 'hoan kho huy/sua hoa don',
       options: writeOptions,
       source: options.source || 'invoice_restore',
+      meta: { reference_type: 'invoice', reference_id: options.invoiceId || null, revision: options.revision || 1 },
     }).updated;
   }
 
@@ -394,6 +399,7 @@ function restoreStock(productOrVariantId, quantity, options = {}) {
       operation: 'hoan kho huy/sua hoa don',
       options: writeOptions,
       source: options.source || 'invoice_restore',
+      meta: { reference_type: 'invoice', reference_id: options.invoiceId || null, revision: options.revision || 1 },
     }).updated;
   }
   return null;
@@ -675,7 +681,7 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
       const detailRow = normalizeInvoiceDetail(detail, invoice_id);
       insert('invoice_details', detailRow, { skipSave: true, accountId });
       const productId = getDetailProductId(detailRow);
-      if (productId) deductStock(productId, +detailRow.quantity || 1, { skipSave: true, source: creatorMetadata.order_source || 'invoice' });
+      if (productId) deductStock(productId, +detailRow.quantity || 1, { skipSave: true, source: creatorMetadata.order_source || 'invoice', invoiceId: invoice_id });
     }
 
     const invoice = getOne('invoices', invoiceRow => Number(invoiceRow.id) === Number(invoice_id));

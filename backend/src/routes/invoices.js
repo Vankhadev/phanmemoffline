@@ -735,7 +735,7 @@ router.put('/:id', async (req, res) => {
 
         for (const d of oldDetails) {
           const stockProductId = getInvoiceDetailProductId(d);
-          if (stockProductId) restoreInvoiceStock(stockProductId, +d.quantity || 0, { skipSave: true });
+          if (stockProductId) restoreInvoiceStock(stockProductId, +d.quantity || 0, { skipSave: true, invoiceId: inv.id, revision: 1 });
         }
 
         const oldById = new Map(oldDetails.filter(d => d && d.id != null).map(d => [Number(d.id), d]));
@@ -764,7 +764,7 @@ router.put('/:id', async (req, res) => {
 
         for (const d of safeDetails) {
           const stockProductId = getInvoiceDetailProductId(d);
-          if (stockProductId) deductInvoiceStock(stockProductId, +d.quantity || 1, { skipSave: true });
+          if (stockProductId) deductInvoiceStock(stockProductId, +d.quantity || 1, { skipSave: true, invoiceId: inv.id, revision: 2 });
         }
       }
 
@@ -847,7 +847,7 @@ router.delete('/:id', async (req, res) => {
       const details = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id));
       for (const d of details) {
         const stockProductId = getInvoiceDetailProductId(d);
-        if (stockProductId) restoreInvoiceStock(stockProductId, +d.quantity || 0, { skipSave: true });
+        if (stockProductId) restoreInvoiceStock(stockProductId, +d.quantity || 0, { skipSave: true, invoiceId: inv.id, revision: 3 });
       }
 
       update('invoices', inv.id, { status: 'cancelled', cancelled_at: cancelledAt }, { skipSave: true });

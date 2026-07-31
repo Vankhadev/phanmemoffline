@@ -9,7 +9,13 @@
     "reset-local-admin": "node scripts/reset-local-admin.js",
     "init-print-templates-mysql": "node scripts/init-print-templates-mysql.js",
     "test:repeat-sku-orders": "node scripts/test-repeat-sku-orders.js",
-    "test:legacy-sku-invoice-edit": "node scripts/test-legacy-sku-invoice-edit.js"
+    "test:legacy-sku-invoice-edit": "node scripts/test-legacy-sku-invoice-edit.js",
+    "test:data-safety": "node scripts/test-data-safety.js",
+    "test:relational-sqlite": "node scripts/verify-relational-sqlite.js",
+    "test:sqlite-driver:node": "node scripts/test-sqlite-driver.js",
+    "test:sqlite-driver:electron": "node scripts/test-sqlite-driver-electron.js",
+    "test:db-relations": "node scripts/verify-relational-sqlite.js",
+    "test:db-transactions": "node scripts/verify-relational-sqlite.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -25,6 +31,7 @@
     "mysql2": "^3.22.4",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.10.1",
+    "sql.js": "^1.12.0",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
