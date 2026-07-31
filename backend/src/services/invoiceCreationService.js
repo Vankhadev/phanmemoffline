@@ -243,7 +243,10 @@ function buildDetailKey(detail = {}, index = 0) {
 
 function normalizeInvoiceDetail(detail = {}, invoice_id) {
   const comboLine = isComboDetail(detail);
-  const product_id = comboLine ? null : (detail.product_id ?? detail.variant_id ?? null);
+  const serviceLine = isServiceDetail(detail);
+  // Services are sales lines without inventory linkage, including services
+  // supplied manually from the order edit screen.
+  const product_id = comboLine || serviceLine ? null : (detail.product_id ?? detail.variant_id ?? null);
   const combo_id = comboLine ? (detail.combo_id || null) : null;
   const displayFields = resolveInvoiceDetailDisplayFields(detail, id => getOne('products', p => Number(p.id) === Number(id)));
   const product_name = displayFields.product_name;
@@ -284,10 +287,10 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
     item_type: itemType,
     combo_id,
     product_id,
-    variant_id: comboLine ? null : (displayFields.variant_id || detail.variant_id || null),
-    parent_id: comboLine ? null : (detail.parent_id || null),
-    parent_name: comboLine ? '' : (detail.parent_name || ''),
-    variant_name: comboLine ? '' : (detail.variant_name || ''),
+    variant_id: comboLine || serviceLine ? null : (displayFields.variant_id || detail.variant_id || null),
+    parent_id: comboLine || serviceLine ? null : (detail.parent_id || null),
+    parent_name: comboLine || serviceLine ? '' : (detail.parent_name || ''),
+    variant_name: comboLine || serviceLine ? '' : (detail.variant_name || ''),
     product_name,
     product_sku,
     name: displayFields.name || product_name,

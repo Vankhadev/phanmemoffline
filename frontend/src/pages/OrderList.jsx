@@ -904,6 +904,51 @@ export default function OrderList() {
     });
   };
 
+  // This line deliberately has no product_id, so it is never an inventory item.
+  const addCustomServiceDetail = () => {
+    const serviceDetail = {
+      id: `custom_service_${Date.now()}`,
+      type: 'custom_service',
+      item_type: 'custom_service',
+      is_service: true,
+      product_id: null,
+      variant_id: null,
+      product_name: 'Dịch vụ khác',
+      product_sku: '',
+      name: 'Dịch vụ khác',
+      sku: '',
+      quantity: 1,
+      unit_price: 0,
+      import_price: 0,
+      cost_price_at_sale: 0,
+      sale_price_at_sale: 0,
+      profit_at_sale: 0,
+      discount_percent: 0,
+      discount_amount: 0,
+      line_total: 0,
+      _new: true,
+    };
+    setEditDetails(prev => {
+      const updated = [...prev, serviceDetail];
+      const subtotal = updated.reduce((sum, detail) => sum + (Number(detail.line_total) || 0), 0);
+      const vat = subtotal * (Number(editForm.vat_percent) || 0) / 100;
+      const discount = Number(editForm.discount_percent)
+        ? subtotal * Number(editForm.discount_percent) / 100
+        : (Number(editForm.discount_amount) || 0);
+      const total = subtotal + vat - discount + (Number(editForm.delivery_fee) || 0);
+      const paid = Number(editForm.paid_amount) || 0;
+      setEditForm(form => ({
+        ...form,
+        subtotal,
+        vat_amount: vat,
+        total,
+        remaining_amount: Math.max(0, total - paid),
+        change_amount: Math.max(0, paid - total),
+      }));
+      return updated;
+    });
+  };
+
   // Thêm sản phẩm vào chi tiết sửa
   const addDetailFromPicker = (p) => {
     const isVariant = Boolean(p.is_variant || p.parent_id || p.parent_name || p.parent?.name);
@@ -984,6 +1029,9 @@ export default function OrderList() {
 
         const updatedCart = editDetails.map(c => ({
           id: c.id,
+          type: c.type || c.item_type || (c.is_service || c.isService ? 'service' : 'product'),
+          item_type: c.item_type || c.type || (c.is_service || c.isService ? 'service' : 'product'),
+          is_service: Boolean(c.is_service || c.isService),
           product_id: c.product_id,
           variant_id: c.variant_id || null,
           parent_id: c.parent_id || null,
@@ -1124,6 +1172,7 @@ export default function OrderList() {
         const finalQuantity = Number(quantity) || 1;
         const finalLineTotal = Math.max(0, Number(line_total) || (finalQuantity * finalUnitPrice - (Number(discount_amount) || 0)));
         const finalProfit = (finalUnitPrice - finalCostPrice) * finalQuantity;
+        const serviceLine = Boolean(is_service || isService || type === 'service' || type === 'custom_service' || item_type === 'service' || item_type === 'custom_service');
         return {
           type: type || item_type || (is_service || isService ? 'service' : undefined),
           item_type: item_type || type || (is_service || isService ? 'service' : undefined),
@@ -1131,8 +1180,8 @@ export default function OrderList() {
           combo_id: combo_id || null,
           id: rowId,
           order_item_id: rowId,
-          product_id,
-          variant_id,
+          product_id: serviceLine ? null : product_id,
+          variant_id: serviceLine ? null : variant_id,
           parent_id: parent_id || null,
           parent_name: parent_name || '',
           variant_name: variant_name || '',
@@ -1949,6 +1998,12 @@ export default function OrderList() {
                       className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium flex items-center gap-1">
                       <Plus size={13} /> Thêm sản phẩm
                     </button>
+                    <button
+                      type="button"
+                      onClick={addCustomServiceDetail}
+                      className="px-3 py-1 bg-violet-600 hover:bg-violet-700 text-white rounded text-xs font-medium flex items-center gap-1">
+                      <Plus size={13} /> Thêm dịch vụ khác
+                    </button>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -1973,8 +2028,21 @@ export default function OrderList() {
                         <tr key={`${d.id || d.product_id || d.product_sku || 'edit-detail'}-${idx}`} className={`border-b last:border-b-0 hover:bg-gray-50 text-xs ${rowStockInvalid ? 'bg-red-50 ring-1 ring-red-200' : rowNearLimit ? 'bg-orange-50' : ''}`}>
                           {editVisibleColumns.stt && <td className="py-2 px-3 text-center text-gray-400">{idx + 1}</td>}
 {editVisibleColumns.productName && <td className="py-2 px-3">
-  <div className="font-medium text-gray-800">{getProductDisplayName(d)}</div>
-  <div className="text-[10px] text-gray-400">{d.product_sku}</div>
+  {d.is_service || d.isService || d.type === 'service' || d.type === 'custom_service' || d.item_type === 'service' || d.item_type === 'custom_service' ? (
+    <>
+      <input
+        value={d.product_name || d.name || ''}
+        onChange={e => updateDetail(idx, 'product_name', e.target.value)}
+        placeholder="Tên dịch vụ"
+        className="w-full border rounded px-2 py-1 text-sm font-medium" />
+      <div className="text-[10px] text-violet-600 mt-1">Dịch vụ khác · không trừ tồn kho</div>
+    </>
+  ) : (
+    <>
+      <div className="font-medium text-gray-800">{getProductDisplayName(d)}</div>
+      <div className="text-[10px] text-gray-400">{d.product_sku}</div>
+    </>
+  )}
   {stockState && (
     <div className={`text-[10px] font-semibold mt-0.5 ${rowStockInvalid ? 'text-red-600' : rowNearLimit ? 'text-orange-700' : 'text-gray-500'}`}>
       Dự kiến {formatStockValue(stockState.projectedStock)}{rowStockInvalid ? ` · ${NEGATIVE_STOCK_LIMIT_MESSAGE}` : rowNearLimit ? ` · ${negativeStockNearLimitLabel || `gần ngưỡng ${negativeStockLimitLabel}`}` : ''}

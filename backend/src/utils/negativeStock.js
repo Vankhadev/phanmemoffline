@@ -95,8 +95,17 @@ function isComboDetail(detail = {}) {
   return detail.type === 'combo' || detail.item_type === 'combo' || !!detail.combo_id;
 }
 
+function isServiceDetail(detail = {}) {
+  return detail.type === 'service'
+    || detail.item_type === 'service'
+    || detail.type === 'custom_service'
+    || detail.item_type === 'custom_service'
+    || detail.is_service === true
+    || detail.isService === true;
+}
+
 function getInvoiceDetailProductId(detail = {}) {
-  if (isComboDetail(detail)) return null;
+  if (isComboDetail(detail) || isServiceDetail(detail)) return null;
   return detail.product_id || detail.variant_id || null;
 }
 

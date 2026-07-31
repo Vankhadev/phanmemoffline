@@ -814,3 +814,14 @@ Nâng cấp ổn định toàn bộ dự án theo hướng production-stable: tr
 ### Tests
 - Thêm regression tests cho data safety, Node/Electron SQLite driver và relational constraints.
 - Frontend production build và healthcheck đạt.
+# [2.4.11] - 2026-07-31
+
+### Added
+- Thêm nút **Thêm dịch vụ khác** trong màn hình sửa đơn hàng.
+- Cho phép nhập tên, số lượng, đơn giá và chiết khấu cho dịch vụ không có trong kho.
+- Lưu dịch vụ dưới dạng `custom_service` với snapshot tên/giá, không cần `product_id`.
+
+### Fixed
+- Dịch vụ khác không bị kiểm tra, trừ hoặc hoàn tồn kho khi lưu, sửa hoặc hủy đơn.
+- Tổng tiền, VAT, tiền còn thiếu và tiền thừa được cập nhật ngay sau khi thêm dịch vụ.
+- Giữ metadata dịch vụ khi cập nhật đơn offline và online.
