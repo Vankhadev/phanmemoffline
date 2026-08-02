@@ -7,6 +7,13 @@ const { getAll, today, normalizeDateKey, normalizeNumber, isCompletedInvoiceStat
 const { getNegativeStockPolicy } = require('../utils/negativeStock');
 const { calculateTaxReport } = require('../services/accountingService');
 
+// Statistics must reflect a payment immediately; browser/proxy caching can
+// otherwise keep the pre-payment report visible after the order is completed.
+router.use((req, res, next) => {
+  if (req.method === 'GET') res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  next();
+});
+
 function normalizeDailyStatsRow(row = {}) {
   return {
     ...row,

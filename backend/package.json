@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-backend",
-  "version": "2.4.12",
+  "version": "2.4.13",
   "description": "Backend for Bán Hàng Pos",
   "main": "src/server.js",
   "scripts": {
@@ -12,6 +12,7 @@
     "test:legacy-sku-invoice-edit": "node scripts/test-legacy-sku-invoice-edit.js",
     "test:data-safety": "node scripts/test-data-safety.js",
     "test:data-repair": "node scripts/test-data-repair.js",
+    "test:payment-stats": "node scripts/test-payment-stats.js",
     "test:relational-sqlite": "node scripts/verify-relational-sqlite.js",
     "test:sqlite-driver:node": "node scripts/test-sqlite-driver.js",
     "test:sqlite-driver:electron": "node scripts/test-sqlite-driver-electron.js",

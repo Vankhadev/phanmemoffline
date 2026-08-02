@@ -899,7 +899,16 @@ router.patch('/:id/confirm', async (req, res) => {
       }
 
       const previousCreatedAt = inv.created_at;
-      update('invoices', inv.id, { status: 'completed' }, { skipSave: true });
+      const total = Math.max(0, Number(inv.total) || 0);
+      const paidAmount = Math.max(0, Number(inv.paid_amount) || 0, total);
+      update('invoices', inv.id, {
+        status: 'completed',
+        paid_amount: paidAmount,
+        remaining_amount: Math.max(0, total - paidAmount),
+        change_amount: Math.max(0, paidAmount - total),
+        payment_status: 'paid',
+        paid_at: now(),
+      }, { skipSave: true });
       const completedInvoice = getOne('invoices', i => Number(i.id) === Number(inv.id));
       syncInvoiceAccounting(completedInvoice, { skipSave: true, previousCreatedAt, timestamp: now(), userId: req.user?.id || completedInvoice.user_id || null });
       logActivity(req, 'invoice.confirm', {
