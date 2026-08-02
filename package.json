@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-electron",
-  "version": "2.4.11",
+  "version": "2.4.12",
   "description": "Bán Hàng Pos - Phần mềm bán hàng offline",
   "repository": {
     "type": "git",
@@ -13,8 +13,8 @@
   "main": "src/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "set KHA_BACKEND_HOST=127.0.0.1&& npm --prefix backend start",
-    "dev:frontend": "set VITE_BACKEND_HOST=127.0.0.1&& set VITE_BACKEND_PORT=%KHA_BACKEND_PORT%&& npm --prefix frontend run dev -- --host 127.0.0.1 --port 5174 --strictPort",
+    "dev:backend": "set PORT=7000&& set KHA_BACKEND_PORT=7000&& set KHA_BACKEND_HOST=127.0.0.1&& set KHA_REQUIRE_PREFERRED_PORT=1&& npm --prefix backend start",
+    "dev:frontend": "set VITE_BACKEND_HOST=127.0.0.1&& set VITE_BACKEND_PORT=7000&& npm --prefix frontend run dev -- --host 127.0.0.1 --port 5174 --strictPort",
     "dev:electron": "set ELECTRON_DEV_URL=http://127.0.0.1:5174&& electron .",
     "reset-local-admin": "npm --prefix backend run reset-local-admin --",
     "icons:generate": "node scripts/generate-app-icons.js",

@@ -16,6 +16,18 @@ let lastPostedAt = 0;
 let sseConnection = null;
 let reconnectTimer = null;
 let reconnectDelay = 1000;
+const seenEventIds = new Map();
+
+function isDuplicateIncomingEvent(eventId) {
+  if (!eventId) return false;
+  const now = Date.now();
+  for (const [key, timestamp] of seenEventIds) {
+    if (now - timestamp > 60_000) seenEventIds.delete(key);
+  }
+  if (seenEventIds.has(eventId)) return true;
+  seenEventIds.set(eventId, now);
+  return false;
+}
 
 function isBrowserRuntime() {
   return typeof window !== 'undefined';
@@ -83,6 +95,7 @@ function postCrossTabPayload(detail = {}) {
 
   const payload = {
     type: 'sync-update',
+    eventId: `${TAB_ID}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     sourceTabId: TAB_ID,
     ts: Date.now(),
     detail: normalizedDetail,
@@ -91,19 +104,20 @@ function postCrossTabPayload(detail = {}) {
   const channel = ensureBroadcastChannel();
   if (channel) {
     channel.postMessage(payload);
-  }
-
-  try {
-    window.localStorage.setItem(CROSS_TAB_SYNC_STORAGE_KEY, JSON.stringify(payload));
-    window.localStorage.removeItem(CROSS_TAB_SYNC_STORAGE_KEY);
-  } catch (_) {
-    // Ignore storage failures in locked-down/private contexts.
+  } else {
+    try {
+      window.localStorage.setItem(CROSS_TAB_SYNC_STORAGE_KEY, JSON.stringify(payload));
+      window.localStorage.removeItem(CROSS_TAB_SYNC_STORAGE_KEY);
+    } catch (_) {
+      // Ignore storage failures in locked-down/private contexts.
+    }
   }
 }
 
 function handleIncomingPayload(payload) {
   if (!payload || payload.type !== 'sync-update') return;
   if (payload.sourceTabId === TAB_ID) return;
+  if (isDuplicateIncomingEvent(payload.eventId)) return;
 
   dispatchSyncUpdated({
     ...payload.detail,

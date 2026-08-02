@@ -113,7 +113,10 @@ function performRecovery(dbModule) {
       hasNextId: Boolean(db.nextId && typeof db.nextId === 'object'),
     };
 
-    const hasData = integrityCheck.invoices >= 0 && integrityCheck.customers >= 0 && integrityCheck.products >= 0;
+    const hasData = integrityCheck.invoices >= 0
+      && integrityCheck.customers >= 0
+      && integrityCheck.products >= 0
+      && integrityCheck.hasNextId;
     result.dataIntegrity = { ...integrityCheck, hasData };
     result.steps.push(`Integrity: ${hasData ? 'OK' : 'FAILED'} - ${integrityCheck.invoices} invoices, ${integrityCheck.customers} customers, ${integrityCheck.products} products`);
   } catch (error) {
@@ -121,7 +124,9 @@ function performRecovery(dbModule) {
   }
 
   // Step 3: If DB is empty/corrupt, try restoring from backup
-  if (result.dataIntegrity && !result.dataIntegrity.hasData) {
+  // An automatic restore can select a stale or unrelated database. It is only
+  // permitted for an explicitly controlled repair session.
+  if (process.env.KHA_ALLOW_AUTOMATIC_CRASH_RESTORE === '1' && result.dataIntegrity && !result.dataIntegrity.hasData) {
     try {
       result.steps.push('Database empty/corrupt - attempting backup restore...');
 

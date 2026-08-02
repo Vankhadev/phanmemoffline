@@ -2838,7 +2838,9 @@ function migrateDB() {
   normalizeInvoiceCancellationSchema();
   normalizeInvoiceCodeUniqueness();
   ensureAllDocumentSequenceCounters();
-  rebuildAllDailyStatsFromInvoices();
+  // Rebuilding every daily statistic from every invoice on each startup is
+  // expensive on stores with a long sales history. Invoice writes keep these
+  // stats current; full rebuild belongs to an explicit maintenance repair.
   // KHA FIX 2.3.3: bỏ qua migration "old customer database" (quét C:\D:\E:\F:\backup
   // parse từng file JSON để tìm dongphuongqc@gmail.com) khi chạy trong Electron
   // production (KHA_DB_PATH đã set). Quá trình này mất nhiều phút và là nguyên nhân
@@ -2855,16 +2857,10 @@ function migrateDB() {
     console.error('[KHA DB] Relational compatibility migration failed but startup continues:', error.message);
     try { auditLog('MIGRATE_FAILED', { error: error.message }, { skipSave: true }); } catch (_) {}
   }
-  // KHA FIX: cleanup san pham trung 1 lan sau update, khong seed lai san pham mau neu da co du lieu
-  try {
-    const productUpsertService = require('../services/productUpsertService');
-    const cleanupResult = productUpsertService.cleanupDuplicateProductsOnce({ dbModule: module.exports });
-    if (cleanupResult && !cleanupResult.skipped) {
-      console.log('[KHA DB] Duplicate products cleanup completed once after update.');
-    }
-  } catch (cleanupErr) {
-    console.error('[KHA DB] Duplicate products cleanup failed but startup continues:', cleanupErr.message);
-  }
+  // Never merge products automatically during startup. Product names and
+  // parent/variant relationships are not strong enough identities; a cleanup
+  // pass here can hide legitimate variants and make the loss irreversible.
+  console.log('[KHA DB] Automatic product merge is disabled; product repair is non-destructive and explicit-by-rule.');
   recalculateNextIds();
 }
 

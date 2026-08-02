@@ -27,7 +27,7 @@ const {
   deleteExpiredCancelledInvoices,
   runScheduledDbBackup,
 } = dbModule;
-const { requireAuth, requireAnyPermission, requirePermission } = require('./middleware/auth');
+const { requireAuth, requireAnyPermission, requirePermission, requireAdmin } = require('./middleware/auth');
 const { ensurePrintTemplatesSchema } = require('./db/printTemplatesSchema');
 const { testPrintTemplatesMySqlConnection, getPrintTemplatesMySqlStatus } = require('./db/printTemplatesMySql');
 const { ensureSettingsSchema, getSettingsMySqlStatus } = require('./db/settingsMySql');
@@ -288,9 +288,10 @@ app.use('/api/users',          usersRoutes);
 app.use('/api',                syncRoutes);
 app.use('/api/database',       databaseRoutes);
 app.use('/api/db',             databaseRoutes);
-app.use('/api/recovery',       recoveryRoutes);
-app.use('/api/restore',        restoreRoutes);
-app.use('/api/data-guardian',  dataGuardianRoutes);
+// These routes can restore or disclose the entire local database.
+app.use('/api/recovery',       requireAuth, requireAdmin, recoveryRoutes);
+app.use('/api/restore',        requireAuth, requireAdmin, restoreRoutes);
+app.use('/api/data-guardian',  requireAuth, requireAdmin, dataGuardianRoutes);
 app.use('/api/store',          requireAuth, requireAnyPermission(['store.read', 'store.manage']), storeRoutes);
 app.use('/api/customers',      requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customersRoutes);
 app.use('/api/products',       requireAuth, requireAnyPermission(['products.read', 'products.manage']), productsRoutes);
@@ -515,15 +516,17 @@ function bootstrapDataGuardian() {
   // 10. Recovery Engine
   RecoveryEngine.initialize({ dbModule });
 
-  // KHA FIX: One-time duplicate product cleanup after version update. Chay mot lan duy nhat.
+  // Do not run duplicate-product merges during startup. A product name is not
+  // a safe identity for parent/variant data and merging here previously hid
+  // legitimate products after an update.
+  console.log('[KHA PRODUCT CLEANUP] Automatic duplicate merge disabled.');
+
   try {
-    const productUpsertService = require('./services/productUpsertService');
-    const cleanupResult = productUpsertService.cleanupDuplicateProductsOnce({ dbModule });
-    if (cleanupResult && !cleanupResult.skipped) {
-      console.log('[KHA PRODUCT CLEANUP] Ran once on startup after update.');
-    } else if (cleanupResult && cleanupResult.skipped) { /* already ran */ }
-  } catch (cleanupErr) {
-    console.warn('[KHA PRODUCT CLEANUP] Startup cleanup skipped/failed:', cleanupErr.message);
+    const dataRepairService = require('./services/dataRepairService');
+    const repair = dataRepairService.repairOnStartup({ dbModule });
+    console.log('[KHA DATA REPAIR] restoredProducts=' + repair.restoredProducts + ' repairedCosts=' + repair.repairedCosts);
+  } catch (repairError) {
+    console.error('[KHA DATA REPAIR] Skipped to preserve data:', repairError.message);
   }
 
   // 11. Maintenance Service
@@ -813,11 +816,12 @@ async function startServer() {
   startGuardianServices();
 
   // KHA PORT AUTO-SELECT: tu tim port trong neu port uu tien (7000) dang bi chiem.
-  // Trang EADDRINUSE: khong crash, thu lan luot 7000 -> 7001 -> 7002 -> ... -> 7100.
+  // Khi chay npm run dev, giu dung PORT cau hinh de Vite proxy khong tro sang port cu.
+  const requirePreferredPort = String(process.env.KHA_REQUIRE_PREFERRED_PORT || '').trim() === '1';
   try {
     PORT = await getAvailablePort({
       preferredPort: PREFERRED_PORT,
-      fallbackPorts: [7000, 7001, 7002, 7003, 7004, 7005, 7010, 7100],
+      fallbackPorts: requirePreferredPort ? [PREFERRED_PORT] : [7000, 7001, 7002, 7003, 7004, 7005, 7010, 7100],
       host: HOST,
     });
   } catch (portErr) {
@@ -836,7 +840,9 @@ Started: ${SERVER_STARTED_AT}
 ----------------------------------------------
 `);
     writeRuntimePortFile(HOST, PORT);
-    if (process.env.KHA_RECOVERY_AUTO_ON_START !== '0') {
+    // Recovery must be an explicit, controlled operation. Scanning and merging
+    // backups during every ordinary startup can overwrite live business data.
+    if (process.env.KHA_RECOVERY_AUTO_ON_START === '1') {
       RecoveryEngine.startBackgroundRecovery({ delayMs: 5000 });
     }
   });

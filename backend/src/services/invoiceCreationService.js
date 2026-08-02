@@ -266,9 +266,9 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
     Number.NaN,
   );
   let import_price = Number.isFinite(explicitImportPrice) ? Math.max(0, explicitImportPrice) : 0;
-  if (!Number.isFinite(explicitImportPrice) && product_id) {
+  if ((!Number.isFinite(explicitImportPrice) || import_price === 0) && product_id) {
     const prod = getOne('products', p => p.id == product_id);
-    if (prod) import_price = Math.max(0, toNumber(prod.import_price, 0));
+    if (prod) import_price = Math.max(0, toNumber(prod.import_price ?? prod.cost_price ?? prod.purchase_price, 0));
   }
   const profit_at_sale = (unit_price - import_price) * quantity;
   const taxAmount = toNumber(detail.vat_amount ?? detail.tax_amount, 0);
@@ -639,7 +639,9 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
 
   const money = buildInvoiceMoneyFields(payload, safeDetails);
   const creatorMetadata = buildCreatorMetadata(payload, req, options);
-  const status = payload.status || options.defaultStatus || 'pending';
+  const status = payload.status
+    || options.defaultStatus
+    || (money.total > 0 && money.paid_amount >= money.total ? 'completed' : 'pending');
   const invoiceCreatedAt = payload.created_at || now();
 
   const runCreation = () => {

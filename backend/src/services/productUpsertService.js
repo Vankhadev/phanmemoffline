@@ -331,6 +331,42 @@ function cleanupDuplicateProductsOnce(options = {}) {
   });
 }
 
+/**
+ * Restore products that were hidden by the old automatic merge migration.
+ * This is deliberately one-way and non-destructive: it only clears the
+ * merge marker when the target still exists. It never rewires or deletes rows.
+ */
+function restoreProductsHiddenByAutomaticMerge(options = {}) {
+  const dbModule = options.dbModule || getDbModule();
+  const timestamp = nowIso();
+  return dbModule.withAtomicDbWrite(() => {
+    const db = dbModule.getDb();
+    const products = Array.isArray(db.products) ? db.products : [];
+    const candidates = products.filter(product => product
+      && product.merged === true
+      && product.status === 'merged'
+      && product.merged_into != null
+      && product._merge_note === 'Merged into product #' + product.merged_into + ' by productUpsertService');
+    const restored = [];
+    for (const product of candidates) {
+      const target = products.find(item => Number(item?.id) === Number(product.merged_into));
+      if (!target) continue;
+      const updated = dbModule.update('products', product.id, {
+        active: 1,
+        deleted: false,
+        deleted_at: null,
+        merged: false,
+        status: 'active',
+        restored_from_merge: true,
+        restored_at: timestamp,
+        updated_at: timestamp,
+      }, { skipSave: true });
+      if (updated) restored.push({ id: product.id, merged_into: target.id });
+    }
+    return { ok: true, restored, restoredCount: restored.length, checked: candidates.length };
+  });
+}
+
 function validateProductsIntegrity(db) {
   const products = Array.isArray(db.products) ? db.products : [];
   const active = products.filter(isActiveProduct);
@@ -389,6 +425,7 @@ module.exports = {
   upsertProduct,
   findExistingProduct,
   cleanupDuplicateProductsOnce,
+  restoreProductsHiddenByAutomaticMerge,
   hasCleanupAlreadyRun,
   validateProductsIntegrity,
   listActiveProductsOnly,

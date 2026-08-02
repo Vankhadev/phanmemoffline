@@ -44,6 +44,7 @@ if (typeof window !== 'undefined') {
         nextVersions[table] = (nextVersions[table] || 0) + 1;
       });
       setLocalSyncVersions(nextVersions);
+      invalidateApiCacheForTables(detail.changedTables);
     }
   });
 }
@@ -53,6 +54,15 @@ const apiCache = new Map();
 
 export function clearApiCache() {
   apiCache.clear();
+}
+
+function invalidateApiCacheForTables(changedTables = []) {
+  const changed = new Set(normalizeChangedTables(changedTables));
+  if (changed.size === 0) return;
+  for (const [cacheKey] of apiCache) {
+    const dependencies = getDependentTables(getUrlPathname(cacheKey));
+    if (dependencies.some(table => changed.has(table))) apiCache.delete(cacheKey);
+  }
 }
 
 function getUrlPathname(input) {
@@ -77,6 +87,10 @@ function getDependentTables(pathname) {
     tables.push('import_logs', 'import_details', 'products');
   } else if (pathname.startsWith('/partners')) {
     tables.push('partners');
+  } else if (pathname.startsWith('/customer-types')) {
+    tables.push('customer_types', 'customers');
+  } else if (pathname.startsWith('/combos')) {
+    tables.push('combos', 'products');
   } else if (pathname.startsWith('/cash-book') || pathname.startsWith('/cashbook')) {
     tables.push('cash_book');
   } else if (pathname.startsWith('/dashboard') || pathname.startsWith('/stats') || pathname.startsWith('/accounting')) {
@@ -85,6 +99,8 @@ function getDependentTables(pathname) {
     tables.push('settings');
   } else if (pathname.startsWith('/print-templates')) {
     tables.push('print_templates');
+  } else if (pathname.startsWith('/sync/')) {
+    return [];
   } else {
     tables.push('invoices', 'products', 'customers', 'cash_book');
   }
@@ -811,6 +827,12 @@ function buildLoopbackRetryUrls(url) {
   addPort(localOverride.port);
   addPort(configured.port);
   addPort(parsed.port);
+  // The normal development server has one fixed backend port. Do not fan one
+  // login request across fallback ports, especially after a backend restart.
+  if (String(readEnvValue('DEV', 'false')).trim().toLowerCase() === 'true') return retryPorts
+    .filter(port => port !== currentPort)
+    .map(port => `${parsed.protocol}//${retryHost}:${port}${parsed.pathname || ''}${parsed.search || ''}`);
+
   addPort('7000');
   addPort('7001');
   addPort('7002');
@@ -1002,7 +1024,7 @@ export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu AP
 
   if (method === 'GET') {
     const pathname = getUrlPathname(rawUrl);
-    const bypassCache = pathname.includes('/users/') || pathname.includes('/bootstrap-status');
+    const bypassCache = pathname.includes('/users/') || pathname.includes('/bootstrap-status') || pathname.startsWith('/sync/');
     if (!bypassCache) {
       const cacheKey = rawUrl;
       const cached = apiCache.get(cacheKey);
@@ -1051,7 +1073,7 @@ export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu AP
 
   if (method === 'GET') {
     const pathname = getUrlPathname(rawUrl);
-    const bypassCache = pathname.includes('/users/') || pathname.includes('/bootstrap-status');
+    const bypassCache = pathname.includes('/users/') || pathname.includes('/bootstrap-status') || pathname.startsWith('/sync/');
     if (!bypassCache) {
       const dependentTables = getDependentTables(pathname);
       const versions = {};
@@ -1062,6 +1084,7 @@ export async function apiJson(input, init = {}, fallbackMessage = 'Yêu cầu AP
         data,
         versions,
       });
+      if (apiCache.size > 250) apiCache.delete(apiCache.keys().next().value);
     }
   }
 

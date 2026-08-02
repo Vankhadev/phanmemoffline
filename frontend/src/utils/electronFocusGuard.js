@@ -131,21 +131,19 @@ export function installElectronInputFocusGuard() {
   if (!isBrowser() || installed || !window.khaDesktop?.isElectron) return () => {};
   installed = true;
 
-  const handlePointerDown = (event) => {
-    const control = getFocusableControl(event.target);
-    if (control) requestControlFocus(control, { reason: 'renderer:form-control-pointerdown' });
-  };
-
   const handleFocusIn = (event) => {
     const control = getFocusableControl(event.target);
-    if (control) requestControlFocus(control, { reason: 'renderer:form-control-focusin' });
+    // Native focus has already succeeded. Only recover the Electron window when
+    // the renderer is genuinely inactive; forcing focus per click breaks caret
+    // placement and queues needless IPC calls while typing.
+    if (control && document.activeElement === control && !document.hasFocus()) {
+      requestElectronInputFocus(control, 'renderer:recover-window-focus');
+    }
   };
 
-  document.addEventListener('pointerdown', handlePointerDown, true);
   document.addEventListener('focusin', handleFocusIn, true);
 
   return () => {
-    document.removeEventListener('pointerdown', handlePointerDown, true);
     document.removeEventListener('focusin', handleFocusIn, true);
     installed = false;
   };

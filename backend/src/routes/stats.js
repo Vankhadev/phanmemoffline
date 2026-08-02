@@ -258,8 +258,12 @@ function getDetailSku(detail = {}, productsById = new Map()) {
 // Query: from, to (YYYY-MM-DD), period=day|month|year|custom, status=completed mặc định
 // ─────────────────────────────────────────────
 function getDetailUnitCost(detail = {}) {
-  const snapshotCost = toNumber(detail.cost_price_at_sale ?? detail.import_price ?? detail.purchase_price, Number.NaN);
-  return Number.isFinite(snapshotCost) ? Math.max(0, snapshotCost) : 0;
+  return [
+    detail.cost_price_at_sale,
+    detail.import_price,
+    detail.purchase_price,
+    detail.cost_price,
+  ].map(value => toNumber(value, Number.NaN)).find(value => Number.isFinite(value) && value > 0) || 0;
 }
 
 router.get('/product-report', (req, res) => {

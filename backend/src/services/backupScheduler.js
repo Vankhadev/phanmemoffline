@@ -64,7 +64,12 @@ function runScheduledBackup(reason = 'scheduled') {
 }
 
 function backupNow(reason = 'manual') {
-  return runScheduledBackup(reason);
+  if (!initialized || !dbModule || typeof dbModule.createDbBackup !== 'function') {
+    return { ok: false, reason: 'not_initialized' };
+  }
+  const backup = dbModule.createDbBackup(reason, { retentionCount: 30 });
+  if (!backup) return { ok: false, error: 'backup_failed' };
+  return { ok: true, backup };
 }
 
 function backupBeforeMaintenance() { return runScheduledBackup('pre-maintenance'); }

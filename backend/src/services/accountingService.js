@@ -278,7 +278,15 @@ function upsertEinvoiceIn(importLog = {}, details = [], options = {}) {
 }
 
 function calculateInvoiceCost(details = []) {
-  return roundMoney((details || []).reduce((sum, detail) => sum + toMoney(detail.quantity) * toMoney(detail.cost_price_at_sale ?? detail.import_price), 0));
+  return roundMoney((details || []).reduce((sum, detail) => {
+    const cost = [
+      detail.cost_price_at_sale,
+      detail.import_price,
+      detail.cost_price,
+      detail.purchase_price,
+    ].map(value => toMoney(value, 0)).find(value => value > 0) || 0;
+    return sum + toMoney(detail.quantity) * cost;
+  }, 0));
 }
 
 function calculateInvoiceRevenue(invoice = {}) {
@@ -593,4 +601,3 @@ module.exports = {
   calculateInvoiceCost,
   roundMoney,
 };
-

@@ -1052,6 +1052,8 @@ function commitInvoiceRows(preview) {
       const discountPercent = Number(line.discount_percent) || 0;
       const calculatedLineTotal = Math.max(0, quantity * unitPrice - discountAmount - (quantity * unitPrice * discountPercent / 100));
       const lineTotal = Number.isFinite(Number(line.line_total)) ? Number(line.line_total) : calculatedLineTotal;
+      const product = getOne('products', product => Number(product.id) === Number(line.variant_id || line.product_id));
+      const importPrice = Math.max(0, Number(product?.import_price) || 0);
       insert('invoice_details', {
         invoice_id: invoiceId,
         type: 'product',
@@ -1065,10 +1067,11 @@ function commitInvoiceRows(preview) {
         sku: line.product_sku || '',
         quantity,
         unit_price: unitPrice,
-        import_price: 0,
-        cost_price_at_sale: 0,
+        import_price: importPrice,
+        cost_price: importPrice,
+        cost_price_at_sale: importPrice,
         sale_price_at_sale: unitPrice,
-        profit_at_sale: unitPrice * quantity,
+        profit_at_sale: (unitPrice - importPrice) * quantity,
         discount_amount: discountAmount,
         discount_percent: discountPercent,
         line_total: lineTotal,

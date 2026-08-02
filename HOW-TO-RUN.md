@@ -37,8 +37,8 @@ Script này chạy song song:
 Địa chỉ mặc định:
 
 - Frontend web: `http://127.0.0.1:5174`
-- Backend health: `http://127.0.0.1:3001/api/health`
-- Backend API base: `http://127.0.0.1:3001/api`
+- Backend health: `http://127.0.0.1:7000/api/health`
+- Backend API base: `http://127.0.0.1:7000/api`
 
 Nếu đang chạy backend test trên port khác, hãy export `KHA_BACKEND_PORT` trước khi chạy frontend hoặc [`npm run dev`](package.json:15). Ví dụ với backend local trên `3101`:
 
@@ -77,7 +77,7 @@ cd frontend
 npm run dev -- --host 127.0.0.1 --port 5174 --strictPort
 ```
 
-Frontend dev proxy các request `/api/*` về backend theo cấu hình trong [`frontend/vite.config.js`](frontend/vite.config.js). Port proxy ưu tiên `VITE_BACKEND_PORT`, sau đó `PHANMEM_PORT`, rồi `KHA_BACKEND_PORT`, và cuối cùng mới fallback `3001`.
+Frontend dev proxy các request `/api/*` về backend theo cấu hình trong [`frontend/vite.config.js`](frontend/vite.config.js). Khi chạy `npm run dev`, cả backend và proxy đều cố định tại port `7000` để tránh frontend trỏ tới port khác với backend.
 
 Ngoài proxy, frontend hiện ưu tiên xác định API base local theo thứ tự sau:
 
