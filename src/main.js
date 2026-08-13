@@ -365,6 +365,11 @@ async function startBackend(options = {}) {
     PHANMEM_PORT: String(port),
     KHA_DB_PATH: dbPath,
     ELECTRON_USER_DATA: userData,
+    KHA_RUNTIME_DIR: path.join(userData, 'runtime'),
+    // Desktop must make the local API available before nonessential maintenance.
+    KHA_LOCAL_LIGHTWEIGHT_MODE: '1',
+    KHA_DISABLE_AUTOMATIC_BACKUPS: '1',
+    KHA_SKIP_STARTUP_MIGRATION_BACKUP: '1',
     KHA_BACKEND_INSTANCE_ID: backendInstanceId,
     KHA_BACKEND_PARENT_PID: String(process.pid),
     ELECTRON_RUN_AS_NODE: '1',
@@ -995,4 +1000,3 @@ app.on('before-quit', () => {
   stopBackend();
   closeBackendFileLogStream();
 });
-

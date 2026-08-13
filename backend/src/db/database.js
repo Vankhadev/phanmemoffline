@@ -78,6 +78,7 @@ const DATA_PRESERVATION_BACKUP_ROOTS = (process.env.KHA_DATA_PRESERVATION_BACKUP
   .split(',')
   .map(root => root.trim())
   .filter(Boolean);
+const SKIP_STARTUP_MIGRATION_BACKUP = process.env.KHA_SKIP_STARTUP_MIGRATION_BACKUP === '1';
 
 function readDatabaseConfig() {
   const paths = [];
@@ -2892,7 +2893,7 @@ function loadDB(options = {}) {
     const hasRealData = Array.isArray(getDb().users) && getDb().users.length > 0
       || Array.isArray(getDb().products) && getDb().products.length > 0
       || Array.isArray(getDb().invoices) && getDb().invoices.length > 0;
-    if (hasRealData && !preMigrationBackupDone) {
+    if (hasRealData && !preMigrationBackupDone && !SKIP_STARTUP_MIGRATION_BACKUP) {
       try {
         const preMigBackup = createDbBackup('pre-migration', { skipRetention: false });
         if (!preMigBackup) throw new Error('Backup trước migrate thất bại - hủy migrate để bảo vệ dữ liệu');
@@ -2903,6 +2904,9 @@ function loadDB(options = {}) {
         console.error('[KHA DB] Backup trước migrate thất bại, hủy migrate:', backupErr.message);
         throw backupErr;
       }
+    }
+    if (hasRealData && SKIP_STARTUP_MIGRATION_BACKUP) {
+      console.log('[KHA DB] Skipping automatic pre-migration backup for this managed desktop startup.');
     }
     migrateDB();
     const afterMigrateSnapshot = JSON.stringify(getDb());

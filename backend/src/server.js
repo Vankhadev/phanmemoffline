@@ -798,7 +798,7 @@ function shutdownGuardian() {
 // KHA Runtime port file: frontend/Electron doc port backend dang chay.
 function writeRuntimePortFile(host, port) {
   try {
-    const runtimeDir = path.resolve(__dirname, '..', '..', 'runtime');
+    const runtimeDir = process.env.KHA_RUNTIME_DIR || path.resolve(__dirname, '..', '..', 'runtime');
     if (!fs.existsSync(runtimeDir)) fs.mkdirSync(runtimeDir, { recursive: true });
     const runtimeFile = path.join(runtimeDir, 'backend-port.json');
     const payload = {

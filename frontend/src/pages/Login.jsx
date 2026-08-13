@@ -312,16 +312,22 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
     if (!validateLogin()) return;
     if (!applyServerOverride()) return;
 
+    let authenticated = false;
     setLoading(true);
     try {
       const data = await loginWithCredentials(form.email, form.password);
+      authenticated = true;
       setSuccess(data.localOnly
         ? 'Đang nhập các bản trên điện thoại thành công.'
         : 'Đăng nhập thành công. Đang khôi phục phiên từ server...');
       await completeLogin(data);
     } catch (err) {
       const netData = err?.data;
-      if (netData && netData.isNetworkError) {
+      if (authenticated) {
+        // Credentials were accepted. Do not mislabel storage, sync, or routing
+        // failures as an incorrect password.
+        setError(err?.message || 'Đăng nhập thành công nhưng không thể hoàn tất phiên làm việc. Vui lòng thử lại.');
+      } else if (netData && netData.isNetworkError) {
         setError('Không kết nối được backend.');
       } else if (netData && netData.message) {
         // Lỗi từ backend rõ ràng (vd: sai tài khoản/mật khẩu)
