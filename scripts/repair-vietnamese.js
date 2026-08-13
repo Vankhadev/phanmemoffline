@@ -1,6 +1,38 @@
 ﻿const fs = require('fs');
 const path = require('path');
-const pairs = JSON.parse(fs.readFileSync(path.join(__dirname, 'vi-repairs.json'), 'utf8'));
+const pairs = [
+  ...JSON.parse(fs.readFileSync(path.join(__dirname, 'vi-repairs.json'), 'utf8')),
+  ...JSON.parse(fs.readFileSync(path.join(__dirname, 'vi-repairs-single.json'), 'utf8')),
+  // Common fragments missing from the historical repair dictionaries.
+  ...[
+    ['?m', 'âm'], ['?n', 'đơn'], ['?on', 'đơn'], ['?on', 'Đơn'], ['?i', 'đi'], ['?i?n', 'điện'], ['?i?u', 'điều'],
+    ['?a', 'đã'], ['?ang', 'đang'], ['?at', 'đặt'], ['?au', 'đầu'], ['?ay', 'đây'], ['?u', 'đủ'], ['?u?c', 'được'],
+    ['b?n', 'bản'], ['b?n', 'bạn'], ['b?i', 'bởi'], ['b?o', 'bảo'], ['b?ng', 'bằng'], ['b?m', 'bấm'], ['b?n', 'bán'],
+    ['c?n', 'cần'], ['c?ng', 'cộng'], ['c?u', 'cấu'], ['c?a', 'của'], ['c? th?', 'có thể'], ['c?ng', 'cũng'], ['c?i', 'cái'],
+    ['ch?a', 'chưa'], ['ch?c', 'chức'], ['ch?nh', 'chính'], ['ch?n', 'chọn'], ['ch?y', 'chạy'], ['ch?u', 'chịu'], ['ch?ng', 'chứng'],
+    ['d?c', 'đọc'], ['d?ng', 'dùng'], ['d?ng', 'đúng'], ['d?i', 'dài'], ['d?u', 'đầu'], ['d?y', 'đầy'], ['d?ng', 'dòng'],
+    ['g?n', 'gần'], ['g?i', 'gọi'], ['g?m', 'gồm'], ['g?i', 'gửi'], ['g?c', 'gốc'], ['g?i', 'gói'],
+    ['h?ng', 'hàng'], ['h?t', 'hết'], ['h?y', 'hủy'], ['h?n', 'hạn'], ['h?p', 'hợp'], ['h?i', 'hỏi'], ['h? tr?', 'hỗ trợ'], ['h?u', 'hầu'],
+    ['k?', 'kỳ'], ['k?o', 'kéo'], ['k?o', 'kiểu'], ['k?ch', 'kích'], ['k?t', 'kết'], ['k?m', 'kiểm'], ['k?o', 'kho'], ['k?c', 'khác'],
+    ['l?i', 'lỗi'], ['l?c', 'lọc'], ['l?u', 'lưu'], ['l?n', 'lớn'], ['l?m', 'làm'], ['l?y', 'lấy'], ['l?i', 'loại'], ['l?c', 'lúc'],
+    ['m?', 'mã'], ['m?u', 'mẫu'], ['m?c', 'mức'], ['m?i', 'mới'], ['m?ng', 'mạng'], ['m?o', 'mẹo'], ['m? r?ng', 'mở rộng'],
+    ['n?i', 'nội'], ['n?p', 'nộp'], ['n?u', 'nếu'], ['n?m', 'năm'], ['n?i', 'nơi'], ['n?o', 'nào'], ['n?ng', 'nặng'],
+    ['ng?y', 'ngày'], ['ng??i', 'người'], ['ngu?i', 'người'], ['ngu?n', 'nguồn'], ['ngu?ng', 'ngưỡng'], ['ng?n', 'ngân'],
+    ['nh?p', 'nhập'], ['nh?m', 'nhóm'], ['nh? cung cấp', 'nhà cung cấp'], ['nh?ng', 'những'], ['nh?n', 'nhân'], ['nh?ng', 'nhưng'], ['nh?i', 'nhiều'],
+    ['ph?i', 'phải'], ['ph?m', 'phạm'], ['ph?n', 'phần'], ['ph?i', 'phí'], ['ph?c', 'phục'], ['ph?ng', 'phòng'], ['ph?i', 'phối'], ['ph?n', 'phân'],
+    ['qu?n', 'quản'], ['qu?y', 'quỹ'], ['qu?n', 'quận'], ['qu?n', 'quyền'], ['qu? tr?nh', 'quá trình'], ['qu?ng', 'quảng'],
+    ['s?n', 'sản'], ['s?ng', 'sống'], ['s?p', 'sắp'], ['s? du', 'số dư'], ['s? l??ng', 'số lượng'], ['s? li?u', 'số liệu'], ['s?ng', 'sử dụng'],
+    ['t?n', 'tên'], ['t?n', 'tồn'], ['t?i', 'tải'], ['t?o', 'tạo'], ['t?y', 'tùy'], ['t?i', 'tối'], ['t?ng', 'tổng'], ['t?nh', 'tính'], ['t?m', 'tạm'],
+    ['th?i', 'thời'], ['th?ng', 'tháng'], ['th?c', 'thực'], ['th?nh', 'thành'], ['th?m', 'thêm'], ['th?u', 'thiếu'], ['th?ng', 'thông'], ['th?y', 'thấy'],
+    ['tr?ng', 'trống'], ['tr?ng', 'trạng'], ['tr?c', 'trước'], ['tr?n', 'trên'], ['tr? l?i', 'trở lại'], ['tr?c ti?p', 'trực tiếp'], ['tr?nh', 'trình'],
+    ['v?', 'về'], ['v?i', 'với'], ['v?n', 'vẫn'], ['v?ng', 'vùng'], ['v?n', 'vận'], ['v?c', 'vực'], ['v?i', 'vui'], ['v?n', 'vốn'],
+    ['x?y', 'xảy'], ['x?c', 'xác'], ['x?u', 'xuất'], ['x? lý', 'xử lý'], ['x?i', 'xóa'],
+    ['gi?', 'giá'], ['gi?y', 'giấy'], ['gi?i', 'giới'], ['gi?m', 'giảm'], ['gi? tr?', 'giá trị'], ['gi?i h?n', 'giới hạn'],
+    ['thu?', 'thuế'], ['ti?n', 'tiền'], ['ti?p', 'tiếp'], ['t? kh?a', 'từ khóa'], ['t? ng?y', 'từ ngày'], ['t?i đa', 'tối đa'],
+    ['H?A ?ON', 'HÓA ĐƠN'], ['B?N H?NG', 'BÁN HÀNG'], ['T?NG C?NG', 'TỔNG CỘNG'], ['L?I NHU?N', 'LỢI NHUẬN'],
+    ['�m', 'âm'], ['ph�p', 'phép'], ['\u0010ang', 'Đang'], ['\u0011?','đã'], ['\u0014', '—'],
+  ],
+];
 pairs.sort((a, b) => String(b[0]).length - String(a[0]).length);
 const ROOT = path.join(__dirname, '..', 'frontend', 'src');
 const exts = new Set(['.js', '.jsx', '.ts', '.tsx', '.html', '.css']);

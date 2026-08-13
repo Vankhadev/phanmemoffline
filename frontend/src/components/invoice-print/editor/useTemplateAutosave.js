@@ -208,7 +208,7 @@ export default function useTemplateAutosave({
 
   const markConflict = useCallback((nextConflict) => {
     setStatus('conflict');
-    setConflict(nextConflict || { message: 'Mẫu in đã được cập nhật ? phi?n kh?c.' });
+    setConflict(nextConflict || { message: 'Mẫu in đã được cập nhật ? phiđơn kh?c.' });
   }, []);
 
   const isDirty = Boolean(signature && signature !== lastSavedSignatureRef.current);

@@ -237,7 +237,7 @@ export const SAPO_TEMPLATE_VARIABLE_GROUPS = Object.freeze([
       { label: 'Tên cửa hàng', token: '{{store.name}}' },
       { label: 'Địa chỉ', token: '{{store.address}}' },
       { label: 'Số điện thoại', token: '{{store.phone}}' },
-      { label: 'M? s? thu?', token: '{{store.tax_code}}' },
+      { label: 'M? s? thuế', token: '{{store.tax_code}}' },
     ],
   },
   {

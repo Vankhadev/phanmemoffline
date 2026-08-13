@@ -243,7 +243,7 @@ export default function Stats() {
 
     let csv = '\uFEFF';
     csv += `${title}\n`;
-    csv += 'Ngày,S? don,Doanh thu,Gi? v?n u?c t?nh,Lỗi nhu?n u?c t?nh\n';
+    csv += 'Ngày,Số đơn,Doanh thu,Giá vốn ước tính,Lợi nhuận ước tính\n';
     rows.forEach(row => {
       csv += [
         formatDateLong(row.stat_date),

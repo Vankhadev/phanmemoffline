@@ -233,11 +233,13 @@ function resolveInvoiceSaleDetailProduct(detail = {}, index = 0, options = {}) {
 }
 
 function buildDetailKey(detail = {}, index = 0) {
-  const explicitId = detail.order_item_id || detail.id;
-  if (explicitId != null && String(explicitId).trim() !== '') {
+  const explicitId = Number(detail.order_item_id ?? detail.id);
+  if (Number.isInteger(explicitId) && explicitId > 0) {
     return `detail:${explicitId}`;
   }
   if (isComboDetail(detail)) return `combo:${detail.combo_id || detail.id || index}:${detail.unit_price || 0}`;
+  // A free service has no inventory identity; never merge two service rows.
+  if (isServiceDetail(detail)) return `service:${index}`;
   return `product:${detail.product_id || detail.variant_id || detail.id || index}:${detail.unit_price || 0}`;
 }
 
@@ -273,10 +275,9 @@ function normalizeInvoiceDetail(detail = {}, invoice_id) {
   const profit_at_sale = (unit_price - import_price) * quantity;
   const taxAmount = toNumber(detail.vat_amount ?? detail.tax_amount, 0);
   const taxPercent = toNumber(detail.vat_percent ?? detail.tax_percent ?? detail.tax_rate, 0);
-  const lineTotal = Number.isFinite(Number(detail.line_total))
-    ? Math.max(0, toNumber(detail.line_total, 0))
-    : Math.max(0, quantity * unit_price - discount_amount + taxAmount);
-  const rowId = detail.order_item_id ?? detail.id ?? null;
+  const lineTotal = Math.max(0, quantity * unit_price - discount_amount + taxAmount);
+  const requestedRowId = Number(detail.order_item_id ?? detail.id);
+  const rowId = Number.isInteger(requestedRowId) && requestedRowId > 0 ? requestedRowId : null;
   const itemType = comboLine ? 'combo' : (detail.item_type || detail.type || (detail.is_service || detail.isService ? 'service' : 'product'));
 
   return {

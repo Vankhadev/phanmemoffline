@@ -12,7 +12,7 @@ const IMPORT_FIELDS = {
     { key: 'sku', label: 'SKU / M? sản phẩm', required: true },
     { key: 'parent_sku', label: 'Parent SKU' },
     { key: 'name', label: 'Tên sản phẩm / biến thể', required: true },
-    { key: 'barcode', label: 'M? v?ch' },
+    { key: 'barcode', label: 'M? vềch' },
     { key: 'category', label: 'Danh mục text' },
     { key: 'default_category_id', label: 'Default category id' },
     { key: 'supplier_id', label: 'Supplier id' },
@@ -56,10 +56,10 @@ const IMPORT_FIELDS = {
 const IMPORT_ALIASES = {
   products: {
     row_type: ['loai dong', 'row_type', 'type', 'loại dòng', 'loại'],
-    sku: ['sku', 'ma sku', 'ma san pham', 'ma bien the', 'product code', 'variant code', 'm? sku', 'm? sản phẩm', 'm? biến thể'],
-    parent_sku: ['parent sku', 'parent_sku', 'sku cha', 'ma sku cha', 'ma cha', 'sku parent', 'm? sku cha', 'm? cha'],
+    sku: ['sku', 'ma sku', 'ma san pham', 'ma bien the', 'product code', 'variant code', 'mã sku', 'mã sản phẩm', 'mã biến thể'],
+    parent_sku: ['parent sku', 'parent_sku', 'sku cha', 'ma sku cha', 'ma cha', 'sku parent', 'mã sku cha', 'mã cha'],
     name: ['name', 'ten san pham', 'ten bien the', 'ten hang', 'product name', 'variant name', 'tên sản phẩm', 'tên biến thể', 'tên hàng'],
-    barcode: ['barcode', 'ma vach', 'm? v?ch'],
+    barcode: ['barcode', 'ma vach', 'mã vềch'],
     category: ['category', 'danh muc', 'danh muc text', 'nhom hang', 'danh mục', 'nhóm hàng'],
     default_category_id: ['default category id', 'default_category_id', 'id danh muc mac dinh', 'id danh mục mặc định'],
     supplier_id: ['supplier id', 'supplier_id', 'nha cung cap id', 'ncc id', 'nhà cung cấp id'],
@@ -77,13 +77,13 @@ const IMPORT_ALIASES = {
     active: ['active', 'hoat dong', 'trang thai', 'status', 'dang ban', 'hoạt động', 'trạng thái', 'đang bán'],
   },
   invoices: {
-    invoice_code: ['invoice_code', 'order_code', 'ma don hang', 'ma hoa don', 'code', 'order code', 'm? đơn hàng', 'm? hóa đơn'],
-    customer_code: ['customer_code', 'ma khach hang', 'ma kh', 'm? khách hàng', 'm? kh'],
+    invoice_code: ['invoice_code', 'order_code', 'ma don hang', 'ma hoa don', 'code', 'order code', 'mã đơn hàng', 'mã hóa đơn'],
+    customer_code: ['customer_code', 'ma khach hang', 'ma kh', 'mã khách hàng', 'mã kh'],
     customer_name: ['customer_name', 'ten khach hang', 'khach hang', 'customer', 'tên khách hàng', 'khách hàng'],
     customer_phone: ['customer_phone', 'sdt', 'so dien thoai', 'phone', 'sđt', 'số điện thoại'],
     customer_email: ['customer_email', 'email khach hang', 'email khách hàng', 'email'],
     customer_type: ['customer_type', 'loai khach', 'nhom khach', 'group', 'type', 'loại khách', 'nhóm khách'],
-    product_sku: ['product_sku', 'sku', 'ma san pham', 'ma hang', 'variant sku', 'm? sản phẩm', 'm? h?ng'],
+    product_sku: ['product_sku', 'sku', 'ma san pham', 'ma hang', 'variant sku', 'mã sản phẩm', 'mã h?ng'],
     product_name: ['product_name', 'ten san pham', 'san pham', 'item name', 'tên sản phẩm', 'sản phẩm'],
     quantity: ['quantity', 'qty', 'so luong', 'sl', 'số lượng'],
     unit_price: ['unit_price', 'don gia', 'gia ban', 'price', 'đơn giá', 'giá bán'],
@@ -107,7 +107,7 @@ const TEMPLATE_ROWS = {
       'SKU': 'SP00001',
       'Parent SKU': '',
       'Tên sản phẩm': 'Áo thun cotton',
-      'M? v?ch': '',
+      'M? vềch': '',
       'Danh mục text': 'Áo thun',
       'Default category id': '',
       'Supplier id': '',
@@ -129,7 +129,7 @@ const TEMPLATE_ROWS = {
       'SKU': 'SP00002',
       'Parent SKU': 'SP00001',
       'Tên sản phẩm': 'Màu đỏ / Size S',
-      'M? v?ch': '',
+      'M? vềch': '',
       'Danh mục text': 'Áo thun',
       'Default category id': '',
       'Supplier id': '',
@@ -168,7 +168,7 @@ const TEMPLATE_ROWS = {
       'Phương thức thanh toán': 'cash',
       'Trạng thái đơn': 'completed',
       'Thời gian tạo': '2026-05-10 09:00:00',
-      'Ghi ch?': 'Một don c? th? c? nhi?u d?ng c?ng m? đơn hàng',
+      'Ghi ch?': 'Một don có thể c? nhiđủ d?ng c?ng mã đơn hàng',
     },
     {
       'M? đơn hàng': 'HDIMPORT002',
@@ -190,7 +190,7 @@ const TEMPLATE_ROWS = {
       'Phương thức thanh toán': 'debt',
       'Trạng thái đơn': 'pending',
       'Thời gian tạo': '2026-05-10 10:00:00',
-      'Ghi ch?': 'M? khách ph?i t?n t?i v? kh?p nh?m khách',
+      'Ghi ch?': 'M? khách phđi tđơn tđi về kh?p nhâm khách',
     },
   ],
 };
@@ -200,8 +200,8 @@ function buildGuideRows(dataType, negativeStockLimitLabel = '0') {
     products: [
       ['Cột', 'Bắt buộc', 'Ghi chú'],
       ['Loại dòng', 'Khuyến nghị', 'PARENT cho sản phẩm cha, VARIANT cho biến thể; có Parent SKU thì backend suy luận là VARIANT.'],
-      ['SKU', 'C?', 'SKU/m? sản phẩm ho?c SKU biến thể, không được tr?ng sai loại.'],
-      ['Parent SKU', 'C? v?i VARIANT', 'Phải kh?p SKU sản phẩm cha trong file ho?c đã có trong hệ thống.'],
+      ['SKU', 'C?', 'SKU/mã sản phẩm ho?c SKU biến thể, không được tr?ng sai loại.'],
+      ['Parent SKU', 'C? vđi VARIANT', 'Phải kh?p SKU sản phẩm cha trong file ho?c đã có trong hệ thống.'],
       ['Tên sản phẩm', 'Có với bản ghi mới', 'Tên sản phẩm cha hoặc tên biến thể.'],
       ['Giá/Tồn kho', 'Không', `Giá nhập số không âm; tồn kho có thể âm đến ${negativeStockLimitLabel} (ví dụ -5, -20) và phải là số nguyên; thấp hơn ngưỡng sẽ bị backend chặn.`],
       ['Danh mục text / Default category id', 'Không', 'Khớp danh mục hiện có theo tên/từ khóa hoặc id.'],
@@ -209,8 +209,8 @@ function buildGuideRows(dataType, negativeStockLimitLabel = '0') {
     ],
     invoices: [
       ['Cột', 'Bắt buộc', 'Ghi chú'],
-      ['M? đơn hàng', 'C?', 'Các d?ng c?ng m? don sẽ được gom th?nh một don nhi?u sản phẩm.'],
-      ['M? khách hàng / Tồn / SDT / Email / Nh?m khách', 'N?n c? m? khách hàng', 'Khách ph?i t?n t?i; n?u c? nh?m khách th? ph?i kh?p loại khách d? tr?nh import nh?m khách l?/khách s?.'],
+      ['M? đơn hàng', 'C?', 'Các d?ng c?ng mã don sẽ được gom th?nh một don nhiđủ sản phẩm.'],
+      ['M? khách hàng / Tồn / SDT / Email / Nhâm khách', 'Nđơn c? mã khách hàng', 'Khách phđi tđơn tđi; nđủ c? nhâm khách th? phđi kh?p loại khách d? tr?nh import nhâm khách l?/khách s?.'],
       ['SKU hoặc Tên sản phẩm', 'Có', 'Sản phẩm/biến thể phải tồn tại trong hệ thống.'],
       ['Số lượng', 'Có', `Số lượng bán phải lớn hơn 0; có thể bán khi tồn hiện tại 0/âm nếu tồn dự kiến không nhỏ hơn ${negativeStockLimitLabel}. Backend sẽ chặn nếu vượt ngưỡng.`],
       ['Đơn giá / Giảm giá / Thành tiền', 'Không', 'Nếu tổng tiền file khác tổng chi tiết, hệ thống ưu tiên tính lại từ chi tiết.'],
@@ -569,7 +569,7 @@ export default function ExcelImportPanel({
     <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4 space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h3 className="font-bold flex items-center gap-2"><UploadCloud size={18} className="text-blue-600" /> {title || `Import ${dataType === 'invoices' ? 'h?a ?n/?n h?ng' : 'sản phẩm'} t? Excel/CSV`}</h3>
+          <h3 className="font-bold flex items-center gap-2"><UploadCloud size={18} className="text-blue-600" /> {title || `Import ${dataType === 'invoices' ? 'hđã đơn/đơn h?ng' : 'sản phẩm'} t? Excel/CSV`}</h3>
           <p className="text-xs text-gray-600 mt-1">{description || 'Frontend parse file bằng xlsx rồi gửi JSON rows cho backend preview/commit, không upload binary.'}</p>
           <p className="mt-1 text-[11px] font-medium text-orange-700">
             Nghiệp vụ âm kho: hệ thống cho phép tồn âm đến {negativeStockLimitLabel}; hóa đơn/import bị chặn nếu tồn dự kiến thấp hơn ngưỡng này.
@@ -679,7 +679,7 @@ export default function ExcelImportPanel({
       {excel.previewItems.length > 0 && (
         <div className="space-y-3">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-            <input className="input-field flex-1 text-sm bg-white" placeholder="Lực d?ng import, m?, SKU, khách hàng, lỗi..." value={filter.query} onChange={event => setFilter(prev => ({ ...prev, query: event.target.value }))} />
+            <input className="input-field flex-1 text-sm bg-white" placeholder="Lực d?ng import, mã, SKU, khách hàng, lỗi..." value={filter.query} onChange={event => setFilter(prev => ({ ...prev, query: event.target.value }))} />
             <select className="input-field text-sm bg-white lg:w-44" value={filter.action} onChange={event => setFilter(prev => ({ ...prev, action: event.target.value }))}>
               {['all', 'create', 'update', 'duplicate', 'error', 'skipped'].map(action => <option key={action} value={action}>{action === 'all' ? 'Tất cả status' : actionLabel(action)}</option>)}
             </select>

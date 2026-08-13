@@ -50,10 +50,14 @@ pnpm-debug.log*
 .npm-cache/
 .electron-cache/
 .electron-builder-cache/
+.tmp-npm-build/
+backend/.tmp-npm-build/
 tmp/
 temp/
 coverage/
 .nyc_output/
+__pycache__/
+*.py[cod]
 
 # Local environment and machine-specific config
 .env
@@ -107,6 +111,9 @@ vite_out*.log
 apiclient-head.js
 app-head.js
 tmp_*
+backend/.tmp-fk-debug.js
+backend/data/integrity-monitor-state.json
+backend/logs/integrity-monitor/
 broken-state.diff
 build.log
 release_notes.txt

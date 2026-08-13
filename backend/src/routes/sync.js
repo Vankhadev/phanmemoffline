@@ -111,7 +111,7 @@ function recentInvoices(limit = 200) {
 function buildBootstrapPayload(req) {
   const storeInfo = getAll('store_info')[0] || {};
   const syncVersions = getSyncVersions(req.accountId);
-  const defaultRoute = req.user?.role === 'admin' ? '/cai-dat' : '/';
+  const defaultRoute = '/';
   return {
     ok: true,
     user: publicUser(req.user),

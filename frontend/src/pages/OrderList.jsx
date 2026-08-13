@@ -46,6 +46,18 @@ function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
 }
 
+function getInvoicePaymentSummary(invoice = {}) {
+  const total = Math.max(0, Number(invoice.total) || 0);
+  const paid = Math.max(0, Number(invoice.paid_amount) || 0);
+  const remaining = Math.max(0, Number.isFinite(Number(invoice.remaining_amount))
+    ? Number(invoice.remaining_amount)
+    : total - paid);
+
+  if (paid >= total && total > 0) return { total, paid, remaining: 0, status: 'paid', label: 'Đã thanh toán' };
+  if (paid > 0) return { total, paid, remaining, status: 'partial', label: 'Thanh toán một phần' };
+  return { total, paid: 0, remaining, status: 'unpaid', label: 'Chưa thanh toán' };
+}
+
 // Chuyển mã đơn hàng thành định dạng "HD000001"; vẫn đọc được mã DH cũ.
 function displayOrderCode(code) {
   if (!code) return '—';
@@ -160,7 +172,11 @@ function getOrderSourceBadge(inv = {}) {
 function mergeDuplicateProducts(details = []) {
   const map = new Map();
   details.forEach((detail, index) => {
-    const key = `${detail.type || detail.item_type || 'product'}:${detail.combo_id || detail.product_id || detail.variant_id || detail.id || index}:${Number(detail.unit_price) || 0}`;
+    const isService = detail.is_service || detail.isService || detail.type === 'service' || detail.type === 'custom_service' || detail.item_type === 'service' || detail.item_type === 'custom_service';
+    // Free service lines have no product reference and must stay independent.
+    const key = isService
+      ? `service:${detail.id || detail.order_item_id || index}`
+      : `${detail.type || detail.item_type || 'product'}:${detail.combo_id || detail.product_id || detail.variant_id || detail.id || index}:${Number(detail.unit_price) || 0}`;
     const current = {
       ...detail,
       quantity: Number(detail.quantity) || 1,
@@ -867,6 +883,10 @@ export default function OrderList() {
           newItem.discount_percent = Math.min(100, Math.max(0, +val));
           newItem.discount_amount = newItem.quantity * newItem.unit_price * newItem.discount_percent / 100;
         }
+        if (field === 'product_name' && (newItem.is_service || newItem.isService || newItem.type === 'service' || newItem.type === 'custom_service' || newItem.item_type === 'service' || newItem.item_type === 'custom_service')) {
+          newItem.name = val;
+          newItem.service_name = val;
+        }
         newItem.line_total = newItem.quantity * newItem.unit_price - (newItem.discount_amount || 0);
         // Đồng bộ snapshot giá tại thời điểm bán theo giá dòng hiện tại.
         // sale_price_at_sale phải khớp unit_price để backend lưu đúng giá mới
@@ -907,7 +927,10 @@ export default function OrderList() {
   // This line deliberately has no product_id, so it is never an inventory item.
   const addCustomServiceDetail = () => {
     const serviceDetail = {
-      id: `custom_service_${Date.now()}`,
+      // The database assigns the persisted ID for an added service row.
+      id: null,
+      order_item_id: null,
+      client_line_id: `custom_service_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       type: 'custom_service',
       item_type: 'custom_service',
       is_service: true,
@@ -1162,7 +1185,8 @@ export default function OrderList() {
           line_total,
         } = detail;
         // Nếu sản phẩm không tồn tại trong danh mục hiện tại, bỏ product_id / variant_id để server không trả lỗi
-        const rowId = detail.id ?? detail.order_item_id ?? null;
+        const persistedRowId = Number(detail.order_item_id ?? detail.id);
+        const rowId = Number.isInteger(persistedRowId) && persistedRowId > 0 ? persistedRowId : null;
         // Quy chuẩn giá tại thời điểm bán: sale_price_at_sale phải khớp unit_price hiện tại
         // của dòng đơn hàng (giá user đang thấy/sửa). Đây là giá riêng của dòng đơn, không lấy
         // lại từ bảng products. Backend ưu tiên unit_price, nhưng giữ snapshot khớp để load lại
@@ -1197,7 +1221,7 @@ export default function OrderList() {
           profit_at_sale: finalProfit,
           discount_amount: Math.max(0, Number(discount_amount) || 0),
           discount_percent: Math.max(0, Number(discount_percent) || 0),
-          line_total: finalLineTotal,
+          line_total: Math.max(0, finalQuantity * finalUnitPrice - Math.max(0, Number(discount_amount) || 0)),
         };
       }),
       };
@@ -1533,7 +1557,7 @@ export default function OrderList() {
                   const [y, mo, day] = d.split('-');
                   return `${day}/${mo}/${y}`;
                 };
-                const isUnpaid = inv._isOffline || inv.status === 'pending';
+                const paymentSummary = getInvoicePaymentSummary(inv);
                 const orderKey = getOrderIdentityKey(inv);
                 const isSelected = selectedOrders.includes(orderKey);
                 const sourceBadge = getOrderSourceBadge(inv);
@@ -1566,7 +1590,7 @@ export default function OrderList() {
                               <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`}></span>
                               {st.text}
                             </span>
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">{isUnpaid ? 'Ch?a thanh toán' : formatPaymentMethod(inv.payment_method)}</span>
+                            <span className={`rounded-full px-2 py-0.5 font-medium ${paymentSummary.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : paymentSummary.status === 'partial' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>{paymentSummary.label}</span>
                           </div>
                           {isCancelled && cancelRemainingText && (
                             <div className="mt-1 inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">
@@ -1577,7 +1601,7 @@ export default function OrderList() {
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
-                        <div className="font-bold text-gray-900">{formatVND(inv.total)}</div>
+                        <div className="font-bold text-gray-900">{formatVND(paymentSummary.total)}</div>
                         <div className="mt-1 text-xs text-gray-400">{formatDate(inv.created_at)}</div>
                       </div>
                     </div>
@@ -1595,9 +1619,23 @@ export default function OrderList() {
                         <div className="text-gray-400">Người nhận</div>
                         <div className="truncate font-semibold text-gray-700">{inv.receiver_name || 'Chưa có'}</div>
                       </div>
-                      <div className="rounded-xl bg-white/70 p-2">
+                      <div className="rounded-xl p-2">
                         <div className="text-gray-400">Thanh toán</div>
                         <div className="font-semibold text-gray-700">{formatPaymentMethod(inv.payment_method)}</div>
+                      </div>
+                      <div className="col-span-2 grid grid-cols-3 gap-2 rounded-xl border border-slate-100 bg-slate-50 p-2">
+                        <div>
+                          <div className="text-gray-400">Tổng hóa đơn</div>
+                          <div className="mt-0.5 font-semibold text-gray-700">{formatVND(paymentSummary.total)}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-400">Đã thanh toán</div>
+                          <div className="mt-0.5 font-semibold text-emerald-700">{formatVND(paymentSummary.paid)}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-400">Còn nợ</div>
+                          <div className={`mt-0.5 font-semibold ${paymentSummary.remaining > 0 ? 'text-amber-700' : 'text-gray-500'}`}>{formatVND(paymentSummary.remaining)}</div>
+                        </div>
                       </div>
                       <div className="rounded-xl bg-white/70 p-2">
                         <div className="text-gray-400">Nguồn tạo</div>
@@ -1688,12 +1726,14 @@ export default function OrderList() {
                   const [y, mo, day] = d.split('-');
                   return `${day}/${mo}/${y}`;
                 };
-                const isUnpaid = inv._isOffline || inv.status === 'pending';
+                const paymentSummary = getInvoicePaymentSummary(inv);
                 const orderKey = getOrderIdentityKey(inv);
                 const isSelected = selectedOrders.includes(orderKey);
-                const paymentLabel = isUnpaid
-                  ? <span className="order-payment-badge bg-gray-100 text-gray-500">Chưa thanh toán</span>
-                  : <span className="order-payment-badge bg-emerald-50 text-emerald-700">{formatPaymentMethod(inv.payment_method)}</span>;
+                const paymentLabel = paymentSummary.status === 'paid'
+                  ? <span className="order-payment-badge bg-emerald-50 text-emerald-700">Đã thanh toán</span>
+                  : paymentSummary.status === 'partial'
+                    ? <span className="order-payment-badge bg-amber-50 text-amber-700">Thanh toán một phần</span>
+                    : <span className="order-payment-badge bg-gray-100 text-gray-500">Chưa thanh toán</span>;
                 const sourceBadge = getOrderSourceBadge(inv);
                 const creatorName = inv.user_name || inv.invoice_writer || inv.created_by_user_name || '';
                 const rowBg = isCancelled
@@ -1743,13 +1783,17 @@ export default function OrderList() {
                       <div className="mt-1 text-xs text-gray-400">{inv.receiver_name || 'Chưa có người nhận'}</div>
                     </td>
                     <td className="text-right">
-                      <div className="font-bold text-gray-900">{formatVND(inv.total)}</div>
+                      <div className="font-bold text-gray-900">{formatVND(paymentSummary.total)}</div>
                       <div className="mt-1 text-xs text-gray-400">Tạm tính: {formatVND(inv.subtotal)}</div>
                     </td>
                     <td>
                       <div className="space-y-1">
                         {paymentLabel}
                         <div className="text-xs text-gray-400">{formatPaymentMethod(inv.payment_method)}</div>
+                        <div className="text-xs leading-5">
+                          <div className="text-emerald-700">Đã thu: {formatVND(paymentSummary.paid)}</div>
+                          <div className={paymentSummary.remaining > 0 ? 'text-amber-700' : 'text-gray-400'}>Còn nợ: {formatVND(paymentSummary.remaining)}</div>
+                        </div>
                       </div>
                     </td>
                     <td>
@@ -1887,7 +1931,20 @@ export default function OrderList() {
               <div className="flex justify-between"><span>Tạm tính:</span><span>{formatVND(showView.subtotal)}</span></div>
               {showView.vat_percent > 0 && <div className="flex justify-between"><span>VAT ({showView.vat_percent}%):</span><span>{formatVND(showView.vat_amount)}</span></div>}
               {showView.discount_percent > 0 && <div className="flex justify-between text-red-500"><span>Chiết khấu ({showView.discount_percent}%):</span><span>-{formatVND(showView.discount_amount)}</span></div>}
-              <div className="flex justify-between font-bold text-base border-t pt-1"><span>Khách phải trả:</span><span className="text-blue-700">{formatVND(showView.total)}</span></div>
+              <div className="mt-3 grid grid-cols-1 gap-2 border-t pt-3 sm:grid-cols-3">
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="text-xs text-slate-500">Tổng hóa đơn</div>
+                  <div className="mt-1 font-bold text-slate-800">{formatVND(getInvoicePaymentSummary(showView).total)}</div>
+                </div>
+                <div className="rounded-lg bg-emerald-50 p-3">
+                  <div className="text-xs text-emerald-700">Đã thu</div>
+                  <div className="mt-1 font-bold text-emerald-800">{formatVND(getInvoicePaymentSummary(showView).paid)}</div>
+                </div>
+                <div className="rounded-lg bg-amber-50 p-3">
+                  <div className="text-xs text-amber-700">Còn nợ</div>
+                  <div className="mt-1 font-bold text-amber-800">{formatVND(getInvoicePaymentSummary(showView).remaining)}</div>
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-col gap-2 mt-4 sm:flex-row">
@@ -2092,7 +2149,7 @@ export default function OrderList() {
 
               {/* Tổng hợp tiền */}
               <div className="border rounded-lg p-4 bg-gray-50">
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4 text-sm">
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">VAT (%)</label>
                     <input type="number" min="0" max="100"
@@ -2132,6 +2189,18 @@ export default function OrderList() {
                     <label className="text-xs text-gray-500 block mb-1">Khách phải trả</label>
                     <div className="font-bold text-red-600 text-lg pt-1.5">
                       {formatVND(editForm.total)}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Đã thu</label>
+                    <div className="font-bold text-emerald-700 text-lg pt-1.5">
+                      {formatVND(editForm.paid_amount)}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Còn nợ</label>
+                    <div className={`font-bold text-lg pt-1.5 ${Number(editForm.remaining_amount) > 0 ? 'text-amber-700' : 'text-gray-500'}`}>
+                      {formatVND(editForm.remaining_amount)}
                     </div>
                   </div>
                 </div>

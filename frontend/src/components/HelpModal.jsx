@@ -21,7 +21,7 @@ export default function HelpModal({ show, onClose, title, content }) {
 
         <div className="flex gap-2 mt-6">
           <button onClick={onClose} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
-            D? hi?u
+            D? hiđủ
           </button>
         </div>
       </div>

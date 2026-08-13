@@ -195,7 +195,7 @@ function ElementContent({ element, template, payload }) {
       <div className="invoice-editor-preview-pairs" style={baseStyle}>
         {isStyleEnabled(style, 'showOrderCode') && <div><span>{style.orderCodeLabel || 'M? don'}:</span><b>{invoiceCode}</b></div>}
         {isStyleEnabled(style, 'showOrderDate') && <div><span>{style.orderDateLabel || 'Ngày'}:</span><b>{formatDate(invoice.created_at)} {formatTime(invoice.created_at)}</b></div>}
-        {isStyleEnabled(style, 'showSeller') && <div><span>{style.sellerLabelShort || 'NV'}:</span><b>{payload.metadata?.user_name || ''}</b></div>}
+        {isStyleEnabled(style, 'showSeller') && <div><span>{style.sellerLabelShort || 'NV'}:</span><b>{payload.metadata?.user_name || '—'}</b></div>}
         {isStyleEnabled(style, 'showOrderSource', false) && <div><span>{style.orderSourceLabel || 'Nguồn'}:</span><b>{invoice.source || '—'}</b></div>}
       </div>
     );

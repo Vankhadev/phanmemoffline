@@ -35,7 +35,7 @@ const ROLE_ACCOUNTANT = 'accountant';
 const ROLE_CASHIER = 'cashier';
 const ROLE_EMPLOYEE = 'employee';
 const ROLE_USER = 'user';
-const ADMIN_DEFAULT_ROUTE = '/cai-dat';
+const DEFAULT_ROUTE = '/';
 const AUTH_RATE_LIMIT_WINDOW_MS = Number(process.env.KHA_AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
 const AUTH_RATE_LIMIT_MAX = Number(process.env.KHA_AUTH_RATE_LIMIT_MAX || 60);
 const AUTH_SENSITIVE_RATE_LIMIT_MAX = Number(process.env.KHA_AUTH_SENSITIVE_RATE_LIMIT_MAX || 20);
@@ -85,7 +85,7 @@ function normalizePhone(phone) {
 }
 
 function getDefaultRouteForUser(user) {
-  return user?.role === ROLE_ADMIN ? ADMIN_DEFAULT_ROUTE : '/';
+  return DEFAULT_ROUTE;
 }
 
 function getBootstrapInfo() {

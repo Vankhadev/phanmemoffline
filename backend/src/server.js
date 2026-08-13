@@ -64,7 +64,6 @@ const combosRoutes   = require('./routes/combos');
 const returnsRoutes  = require('./routes/returns');
 const statsRoutes    = require('./routes/stats');
 const cashBookRoutes = require('./routes/cashbook');
-const payrollsRoutes = require('./routes/payrolls');
 const customerTypesRoutes = require('./routes/customerTypes');
 const productCategoriesRoutes = require('./routes/productCategories');
 const featuresRoutes = require('./routes/features');
@@ -96,6 +95,8 @@ const HOST = String(
 ).trim() || '127.0.0.1';
 const SERVER_STARTED_AT = new Date().toISOString();
 const BACKEND_INSTANCE_ID = String(process.env.KHA_BACKEND_INSTANCE_ID || '').slice(0, 100);
+const AUTOMATIC_BACKUPS_DISABLED = String(process.env.KHA_DISABLE_AUTOMATIC_BACKUPS || '').trim() === '1';
+const LOCAL_LIGHTWEIGHT_MODE = String(process.env.KHA_LOCAL_LIGHTWEIGHT_MODE || '').trim() === '1';
 
 function maskDbPath(filePath) {
   const normalized = String(filePath || '');
@@ -302,7 +303,6 @@ app.use('/api/combos',         requireAuth, requireAnyPermission(['combos.read',
 app.use('/api/returns',        requireAuth, requireAnyPermission(['returns.read', 'returns.manage']), returnsRoutes);
 app.use('/api/stats',          requireAuth, requirePermission('stats.read'), statsRoutes);
 app.use('/api/cash-book',      requireAuth, requireAnyPermission(['cashbook.read', 'cashbook.manage']), cashBookRoutes);
-app.use('/api/payrolls',       requireAuth, requireAnyPermission(['payrolls.read', 'payrolls.manage']), payrollsRoutes);
 app.use('/api/customer-types', requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customerTypesRoutes);
 app.use('/api/product-categories', requireAuth, requireAnyPermission(['products.read', 'products.manage']), productCategoriesRoutes);
 app.use('/api/features', featuresRoutes);
@@ -417,9 +417,11 @@ cron.schedule('*/30 * * * *', () => {
 // ============================================================
 //  CRON: kiểm tra backup định kỳ 72 giờ/lần
 // ============================================================
-cron.schedule('0 */12 * * *', () => {
-  runDbBackup('scheduler-72h');
-});
+if (!AUTOMATIC_BACKUPS_DISABLED) {
+  cron.schedule('0 */12 * * *', () => {
+    runDbBackup('scheduler-72h');
+  });
+}
 
 // ============================================================
 //  START SERVER
@@ -470,6 +472,12 @@ async function bootstrapSettingsSchema() {
 //  KHA DATA GUARDIAN - Bootstrap
 // ============================================================
 function bootstrapDataGuardian() {
+  if (LOCAL_LIGHTWEIGHT_MODE) {
+    console.log('[KHA LOCAL] Data Guardian background services are disabled for this local session.');
+    dataGuardianRoutes.setGuardianServices({ dbModule });
+    return;
+  }
+
   const dataDir = process.env.ELECTRON_USER_DATA || path.resolve(__dirname, '..', 'data');
 
   // 1. Admin Alert Service (must be first - other services depend on it)
@@ -498,20 +506,24 @@ function bootstrapDataGuardian() {
     backupScheduler,
   });
 
-  // 8. Realtime Backup
-  realtimeBackup.initialize({
-    dataDir,
-    dbModule,
-    alertService: adminAlertService,
-  });
+  if (!AUTOMATIC_BACKUPS_DISABLED) {
+    // 8. Realtime Backup
+    realtimeBackup.initialize({
+      dataDir,
+      dbModule,
+      alertService: adminAlertService,
+    });
 
-  // 9. Backup Scheduler
-  backupScheduler.initialize({
-    dataDir,
-    dbModule,
-    alertService: adminAlertService,
-    diskHealthMonitor,
-  });
+    // 9. Backup Scheduler
+    backupScheduler.initialize({
+      dataDir,
+      dbModule,
+      alertService: adminAlertService,
+      diskHealthMonitor,
+    });
+  } else {
+    console.log('[KHA BACKUP] Automatic backups are disabled for this local session.');
+  }
 
   // 10. Recovery Engine
   RecoveryEngine.initialize({ dbModule });
@@ -743,6 +755,8 @@ function hookGuardianIntoDatabase() {
 }
 
 function startGuardianServices() {
+  if (LOCAL_LIGHTWEIGHT_MODE) return;
+
   // Detect previous crash
   const crashInfo = powerLossRecovery.detectCrash();
   if (crashInfo.crashed) {
@@ -757,7 +771,7 @@ function startGuardianServices() {
   powerLossRecovery.createLock();
 
   // Start all scheduled services
-  backupScheduler.startSchedules();
+  if (!AUTOMATIC_BACKUPS_DISABLED) backupScheduler.startSchedules();
   diskHealthMonitor.startMonitoring();
   maintenanceService.startSchedule();
   selfHealing.startMonitoring();
@@ -809,7 +823,7 @@ async function startServer() {
   // Initialize Data Guardian
   bootstrapDataGuardian();
 
-  runDbBackup('startup');
+  if (!AUTOMATIC_BACKUPS_DISABLED) runDbBackup('startup');
   runExpiredCancelledInvoiceCleanup('startup');
 
   // Start Data Guardian services

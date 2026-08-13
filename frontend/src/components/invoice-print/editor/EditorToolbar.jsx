@@ -119,7 +119,7 @@ export default function EditorToolbar({
 
         {/* PHẦN 9: chỉ giữ Lưu + Publish, bỏ "Lưu draft"/"Bỏ draft" */}
         <button type="button" onClick={onSave} disabled={!canManage || busy === 'save'}>
-          {busy === 'save' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} L?u
+          {busy === 'save' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Lđủ
         </button>
         <button type="button" className="invoice-editor-toolbar-publish" onClick={onPublish} disabled={!canManage || !onPublish || busy === 'publish'}>
           {busy === 'publish' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} Publish

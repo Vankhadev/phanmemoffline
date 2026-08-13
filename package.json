@@ -42,6 +42,8 @@
     "test:db-transactions": "npm --prefix backend run test:db-transactions",
     "healthcheck": "node scripts/healthcheck.js",
     "test:business": "node scripts/business-test.js",
+    "monitor:data": "python scripts/toophanmem.py --once",
+    "monitor:data:watch": "python scripts/toophanmem.py --watch",
     "backfill:orders:dry": "node scripts/backfill-order-items-snapshot-json.js --dry-run",
     "backfill:orders:apply": "node scripts/backfill-order-items-snapshot-json.js --apply"
   },

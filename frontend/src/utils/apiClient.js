@@ -447,7 +447,7 @@ function logResolvedApiBase(details) {
 function shouldUseDevApiProxyPath(pathname) {
   if (!pathname || !pathname.startsWith('/')) return false;
   if (pathname === '/api' || pathname.startsWith('/api/')) return false;
-  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|inventory|accounting|excel-imports|store|settings|stats|cash-book|cashbook|payrolls|partners|combos|sync|features|updates|print-templates|dashboard)(\/|\?|$)/i.test(pathname);
+  return /^\/(users|products|product-categories|customers|customer-types|invoices|invoice-details|returns|imports|inventory|accounting|excel-imports|store|settings|stats|cash-book|cashbook|partners|combos|sync|features|updates|print-templates|dashboard)(\/|\?|$)/i.test(pathname);
 }
 
 function normalizeDevApiProxyPath(input) {

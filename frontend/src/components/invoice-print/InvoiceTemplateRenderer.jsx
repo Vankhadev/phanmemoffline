@@ -424,7 +424,7 @@ function V2Element({ element, data, template }) {
           <p>{style.buyerHint || '(Ký và ghi rõ họ tên)'}</p>
         </div>
         <div>
-          <h3>{style.sellerLabel || signatures.seller?.label || 'Ng??i b?n'}</h3>
+          <h3>{style.sellerLabel || signatures.seller?.label || 'Ng?đi bđơn'}</h3>
           <p>{style.sellerHint || '(Ký và ghi rõ họ tên)'}</p>
         </div>
       </div>
@@ -932,7 +932,7 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
                 <p>(Ký và ghi rõ họ tên)</p>
               </div>
               <div>
-                <h3>{signatures.seller?.label || 'Ng??i b?n'}</h3>
+                <h3>{signatures.seller?.label || 'Ng?đi bđơn'}</h3>
                 <p>(Ký và ghi rõ họ tên)</p>
               </div>
             </div>

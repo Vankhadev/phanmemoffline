@@ -33,7 +33,7 @@ function snapshotsMatch(left, right) {
 }
 
 export default function useTemplateEditorState(initialTemplate = {}) {
-  // Mặc định load b?n PUBLISHED (không ?u ti?n draft c?).
+  // Mặc định load bđơn PUBLISHED (không đủ tiđơn draft c?).
   const initial = useMemo(() => getActiveEditorDocument(initialTemplate, { preferDraft: false }), [initialTemplate]);
   const [template, setTemplate] = useState(initialTemplate);
   const [document, setDocument] = useState(initial.document);
@@ -56,7 +56,7 @@ export default function useTemplateEditorState(initialTemplate = {}) {
 
   const setTemplateFromServer = useCallback((nextTemplate, options = {}) => {
     if (!nextTemplate) return;
-    // Mặc định ?u ti?n b?n published tr? khi caller y?u c?u draft.
+    // Mặc định đủ tiđơn bđơn published tr? khi caller yđủ cđủ draft.
     const next = getActiveEditorDocument(nextTemplate, { preferDraft: options.preferDraft === true });
     setTemplate(nextTemplate);
     documentRef.current = next.document;

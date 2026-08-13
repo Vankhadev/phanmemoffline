@@ -27,7 +27,6 @@ const DEFAULT_MOBILE_PERMISSIONS = [
   'invoices.manage',
   'invoices.read',
   'partners.read',
-  'payrolls.read',
   'print_templates.manage',
   'print_templates.read',
   'products.read',

@@ -287,7 +287,7 @@ export function getStockDisplayMeta(value, settings = getRuntimeDefaultNegativeS
   if (isNearLimit) {
     return {
       stock,
-      label: '�m kho',
+      label: 'âm kho',
       extraLabel: nearLimitLabel,
       display: formatStockValue(stock),
       isNegative,
@@ -306,7 +306,7 @@ export function getStockDisplayMeta(value, settings = getRuntimeDefaultNegativeS
   if (isNegative) {
     return {
       stock,
-      label: '�m kho',
+      label: 'âm kho',
       display: formatStockValue(stock),
       isNegative,
       isNearLimit: false,

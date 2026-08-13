@@ -48,11 +48,11 @@ const INITIAL_EMP_FORM = Object.freeze({
 });
 
 const USER_ROLE_OPTIONS = Object.freeze([
-  { value: 'admin', label: 'Admin', description: 'Toán quy?n hệ thống v? kế toán.' },
-  { value: 'accountant', label: 'Kế toán', description: '??y d? module kế toán, thu?, tồn kho, công nợ v? nhật ký.' },
-  { value: 'cashier', label: 'Thu ng?n', description: 'Ch? xem doanh thu trong module kế toán.' },
-  { value: 'employee', label: 'Nhân viên', description: 'Không có quy?n module kế toán.' },
-  { value: 'user', label: 'User cu', description: 'Vai tr? legacy được gi? tuong th?ch.' },
+  { value: 'admin', label: 'Admin', description: 'Toán quyđơn hệ thống về kế toán.' },
+  { value: 'accountant', label: 'Kế toán', description: '??y d? module kế toán, thuế, tồn kho, công nợ về nhật ký.' },
+  { value: 'cashier', label: 'Thu ngđơn', description: 'Ch? xem doanh thu trong module kế toán.' },
+  { value: 'employee', label: 'Nhân viên', description: 'Không có quyđơn module kế toán.' },
+  { value: 'user', label: 'User cu', description: 'Vai tr? legacy được giá tuong th?ch.' },
 ]);
 
 const INITIAL_TYPE_FORM = Object.freeze({
@@ -87,8 +87,8 @@ const INITIAL_PRINT_TEMPLATE_FORM = Object.freeze({
   tableBorderWidthMm: DEFAULT_INVOICE_TEMPLATE_SETTINGS.tableBorderWidthMm,
 });
 
-const NEGATIVE_STOCK_FEATURE_NAME = 'Xuất ?m tồn kho';
-const NEGATIVE_STOCK_FEATURE_DESCRIPTION = 'Admin c? th? ch?nh số lượng t?n ?m t?i da tr?c ti?p t? giao di?n.';
+const NEGATIVE_STOCK_FEATURE_NAME = 'Xuất âm tồn kho';
+const NEGATIVE_STOCK_FEATURE_DESCRIPTION = 'Admin có thể ch?nh số lượng tđơn âm tđi da trực tiếp t? giao diđơn.';
 const RELEASE_VERSION = '1.3.8';
 const RELEASE_DOWNLOAD_BASE_URL = 'https://github.com/Vankhadev/phanmemoffline/releases/latest/download/';
 const WINDOWS_INSTALLERS = Object.freeze([
@@ -96,13 +96,13 @@ const WINDOWS_INSTALLERS = Object.freeze([
     arch: 'x64',
     label: 'Windows 64-bit (x64)',
     fileName: `banhangoffline-setup-v${RELEASE_VERSION}-x64.exe`,
-    recommendedFor: 'H?u h?t m?y t?nh Windows 10/11 hiện nay.',
+    recommendedFor: 'Hđủ h?t mãy t?nh Windows 10/11 hiện nay.',
   },
   {
     arch: 'ia32',
     label: 'Windows 32-bit (ia32)',
     fileName: `banhangoffline-setup-v${RELEASE_VERSION}-ia32.exe`,
-    recommendedFor: 'M?y Windows 32-bit ho?c m?y b?o không ch?y được b?n x64.',
+    recommendedFor: 'M?y Windows 32-bit ho?c mãy b?o không ch?y được bđơn x64.',
   },
 ]);
 
@@ -153,12 +153,12 @@ function getUpdateStatusLabel(status) {
   const labels = {
     idle: 'Sản s?ng',
     checking: 'đang kiểm tra...',
-    'no-update': 'Không có b?n mới',
-    'update-available': 'C? b?n cập nhật',
-    downloading: 'đang t?i cập nhật...',
-    downloaded: '?? t?i xong',
+    'no-update': 'Không có bđơn mới',
+    'update-available': 'C? bđơn cập nhật',
+    downloading: 'đang tđi cập nhật...',
+    downloaded: '?? tđi xong',
     installing: 'đang cập nhật...',
-    cancelled: '?? h?y t?i',
+    cancelled: '?? h?y tđi',
     error: 'C? lỗi',
   };
   return labels[status] || 'Chua kiểm tra';
@@ -170,41 +170,41 @@ function getUpdateErrorMessage(error) {
     MANIFEST_URL_MISSING: 'Chua x?c d?nh được URL cập nhật. Mặc định ứng dụng d?ng GitHub Releases latest.yml.',
     CONFIG_INVALID: 'File cấu hình cập nhật không hợp l?.',
     URL_INVALID: 'URL cập nhật ho?c installer không hợp l?.',
-    DEV_UPDATER_DISABLED: 'Auto-update b? tốt khi ch?y development/unpacked. Hủy test tr?n b?n d? cái bằng NSIS ho?c bắt KHA_ENABLE_ELECTRON_UPDATER=1 c? ch? d?ch.',
-    WINDOW_NOT_READY: 'Ch? kiểm tra cập nhật sau khi của s? ch?nh d? s?n s?ng.',
-    ELECTRON_UPDATER_ERROR: 'electron-updater b?o lỗi trong qu? tr?nh kiểm tra/t?i cập nhật.',
-    CHECK_FAILED: 'Kiểm tra cập nhật th?t b?i.',
-    UPDATE_GITHUB_ATOM_FEED_NOT_AVAILABLE: 'Endpoint GitHub releases.atom không phù hợp ho?c không kh? d?ng. Bản mới s? d?c tr?c ti?p latest.yml public thay v? ph? thu?c Atom feed.',
-    UPDATE_REPOSITORY_NOT_ACCESSIBLE: 'Không truy c?p được GitHub Releases/latest. Repo c? th? private, owner/repo sai, URL feed sai ho?c chưa c? release latest public.',
-    UPDATE_FEED_UNAUTHORIZED_OR_PRIVATE: 'GitHub Release/feed y?u c?u xác thực, token sai/thi?u quy?n ho?c repo dang private. Client Electron không được nh?ng token n?n không th? t? cập nhật t? asset private.',
-    UPDATE_FEED_METADATA_NOT_FOUND: 'Không t?m th?y latest.yml trong GitHub Release latest ho?c release latest không public.',
-    UPDATE_METADATA_INVALID: 'Metadata cập nhật tr?n GitHub Release không hợp l? ho?c r?ng.',
-    UPDATE_RUNTIME_ARCH_UNSUPPORTED: 'M?y Windows hiện tại chưa c? b? cái phù hợp. Hủy t?i d?ng b?n x64 ho?c ia32 t? GitHub Release.',
-    UPDATE_METADATA_MISSING_RUNTIME_INSTALLER: 'GitHub Release chưa c? installer ri?ng cho ki?n tr?c m?y n?y. C?n upload asset cấu hình t? -x64.exe ho?c -ia32.exe v? cập nhật latest.yml.',
-    UPDATE_METADATA_SELECTED_INSTALLER_MISMATCH: 'Metadata cập nhật dang chọn installer không kh?p ki?n tr?c m?y. Không t?i d? tr?nh lỗi Windows không ch?y được ứng dụng.',
-    UPDATE_ASSET_NOT_ACCESSIBLE_OR_PRIVATE: 'Không tải được installer/blockmap. Asset c? th? thi?u, t?n không kh?p latest.yml ho?c repo private tr? 404.',
-    UPDATE_RELEASE_NOT_PUBLISHED: 'Chua c? production release d? publish d? electron-updater chọn l?m latest.',
-    UPDATE_FEED_RATE_LIMITED: 'GitHub dang gi?i h?n truy c?p feed cập nhật, vui l?ng thử lại sau.',
-    UPDATE_NETWORK_ERROR: 'Không kết nối được t?i GitHub Releases. Vui lòng kiểm tra Internet, DNS, proxy/firewall.',
-    NETWORK_ERROR: 'Không th? kết nối t?i m?y ch? cập nhật. Vui lòng kiểm tra m?ng.',
-    NETWORK_TIMEOUT: 'K?t n?i t?i m?y ch? cập nhật qu? thời gian ch?.',
+    DEV_UPDATER_DISABLED: 'Auto-update b? tốt khi ch?y development/unpacked. Hủy test trđơn bđơn d? cái bằng NSIS ho?c bắt KHA_ENABLE_ELECTRON_UPDATER=1 c? ch? d?ch.',
+    WINDOW_NOT_READY: 'Ch? kiểm tra cập nhật sau khi của s? ch?nh d? sđơn s?ng.',
+    ELECTRON_UPDATER_ERROR: 'electron-updater b?o lỗi trong quá trình kiểm tra/tđi cập nhật.',
+    CHECK_FAILED: 'Kiểm tra cập nhật th?t bđi.',
+    UPDATE_GITHUB_ATOM_FEED_NOT_AVAILABLE: 'Endpoint GitHub releases.atom không phù hợp ho?c không kh? d?ng. Bản mới s? d?c trực tiếp latest.yml public thay về ph? thuếc Atom feed.',
+    UPDATE_REPOSITORY_NOT_ACCESSIBLE: 'Không truy c?p được GitHub Releases/latest. Repo có thể private, owner/repo sai, URL feed sai ho?c chưa c? release latest public.',
+    UPDATE_FEED_UNAUTHORIZED_OR_PRIVATE: 'GitHub Release/feed yđủ cđủ xác thực, token sai/thiđủ quyđơn ho?c repo dang private. Client Electron không được nh?ng token nđơn không th? t? cập nhật t? asset private.',
+    UPDATE_FEED_METADATA_NOT_FOUND: 'Không tâm th?y latest.yml trong GitHub Release latest ho?c release latest không public.',
+    UPDATE_METADATA_INVALID: 'Metadata cập nhật trđơn GitHub Release không hợp l? ho?c r?ng.',
+    UPDATE_RUNTIME_ARCH_UNSUPPORTED: 'M?y Windows hiện tại chưa c? b? cái phù hợp. Hủy tđi d?ng bđơn x64 ho?c ia32 t? GitHub Release.',
+    UPDATE_METADATA_MISSING_RUNTIME_INSTALLER: 'GitHub Release chưa c? installer ri?ng cho kiđơn tr?c mãy n?y. Cđơn upload asset cấu hình t? -x64.exe ho?c -ia32.exe về cập nhật latest.yml.',
+    UPDATE_METADATA_SELECTED_INSTALLER_MISMATCH: 'Metadata cập nhật dang chọn installer không kh?p kiđơn tr?c mãy. Không tđi d? tr?nh lỗi Windows không ch?y được ứng dụng.',
+    UPDATE_ASSET_NOT_ACCESSIBLE_OR_PRIVATE: 'Không tải được installer/blockmap. Asset có thể thiđủ, tđơn không kh?p latest.yml ho?c repo private tr? 404.',
+    UPDATE_RELEASE_NOT_PUBLISHED: 'Chua c? production release d? publish d? electron-updater chọn lâm latest.',
+    UPDATE_FEED_RATE_LIMITED: 'GitHub dang giới hạn truy c?p feed cập nhật, vui l?ng thử lại sau.',
+    UPDATE_NETWORK_ERROR: 'Không kết nối được tđi GitHub Releases. Vui lòng kiểm tra Internet, DNS, proxy/firewall.',
+    NETWORK_ERROR: 'Không th? kết nối tđi mãy ch? cập nhật. Vui lòng kiểm tra mãng.',
+    NETWORK_TIMEOUT: 'K?t nđi tđi mãy ch? cập nhật qu? thời gian ch?.',
     MANIFEST_HTTP_ERROR: 'M?y ch? không tr? metadata cập nhật hợp lệ.',
-    MANIFEST_INVALID_JSON: 'Metadata cập nhật không ph?i JSON/YAML hợp lệ.',
-    MANIFEST_INVALID: 'Metadata cập nhật thi?u ho?c sai c?u tr?c.',
-    MANIFEST_INVALID_VERSION: 'Metadata thi?u version SemVer hợp lệ.',
-    MANIFEST_INVALID_URL: 'Metadata thi?u URL g?i cập nhật hợp lệ.',
-    MANIFEST_INVALID_SHA256: 'Metadata thi?u checksum hợp lệ.',
-    MANIFEST_INVALID_RELEASE_DATE: 'Metadata thi?u releaseDate.',
-    UPDATE_NOT_AVAILABLE: 'Không có b?n cập nhật mới đã tải.',
-    DOWNLOAD_IN_PROGRESS: 'Một lu?t t?i cập nhật dang ch?y.',
-    DOWNLOAD_HTTP_ERROR: 'Không tải được g?i cập nhật t? m?y ch?.',
-    DOWNLOAD_FAILED: 'Tải g?i cập nhật th?t b?i.',
-    DOWNLOAD_CANCELLED: 'Ngu?i d?ng d? h?y t?i cập nhật.',
-    CHECKSUM_MISMATCH: 'Checksum không kh?p. Gửi cập nhật d? b? xóa v? s? không được ch?y.',
-    INSTALLER_NOT_DOWNLOADED: 'Chua t?i g?i cập nhật.',
-    UPDATE_NOT_DOWNLOADED: 'Chua c? b?n cập nhật đã tải xong d? cài đặt.',
-    INSTALLER_NOT_FOUND: 'Không t?m th?y installer đã tải. Vui lòng tải lại.',
-    INSTALL_IN_PROGRESS: 'ứng dụng dang chu?n b? cài đặt b?n cập nhật.',
+    MANIFEST_INVALID_JSON: 'Metadata cập nhật không phđi JSON/YAML hợp lệ.',
+    MANIFEST_INVALID: 'Metadata cập nhật thiđủ ho?c sai cđủ tr?c.',
+    MANIFEST_INVALID_VERSION: 'Metadata thiđủ version SemVer hợp lệ.',
+    MANIFEST_INVALID_URL: 'Metadata thiđủ URL gđi cập nhật hợp lệ.',
+    MANIFEST_INVALID_SHA256: 'Metadata thiđủ checksum hợp lệ.',
+    MANIFEST_INVALID_RELEASE_DATE: 'Metadata thiđủ releaseDate.',
+    UPDATE_NOT_AVAILABLE: 'Không có bđơn cập nhật mới đã tải.',
+    DOWNLOAD_IN_PROGRESS: 'Một lu?t tđi cập nhật dang ch?y.',
+    DOWNLOAD_HTTP_ERROR: 'Không tải được gđi cập nhật t? mãy ch?.',
+    DOWNLOAD_FAILED: 'Tải gđi cập nhật th?t bđi.',
+    DOWNLOAD_CANCELLED: 'Nguđi d?ng d? h?y tđi cập nhật.',
+    CHECKSUM_MISMATCH: 'Checksum không kh?p. Gửi cập nhật d? b? xóa về s? không được ch?y.',
+    INSTALLER_NOT_DOWNLOADED: 'Chua tđi gđi cập nhật.',
+    UPDATE_NOT_DOWNLOADED: 'Chua c? bđơn cập nhật đã tải xong d? cài đặt.',
+    INSTALLER_NOT_FOUND: 'Không tâm th?y installer đã tải. Vui lòng tải lại.',
+    INSTALL_IN_PROGRESS: 'ứng dụng dang chuđơn b? cài đặt bđơn cập nhật.',
     SPAWN_INSTALLER_FAILED: 'Không th? ch?y installer cập nhật.',
   };
   return messages[error.code] || error.message || '?? x?y ra lỗi cập nhật.';
@@ -215,15 +215,15 @@ function getManifestSourceLabel(updateState) {
   if (updateState.updateEngine === 'electron-updater') {
     if (updateState.feedProvider === 'generic') {
       return updateState.feedSource === 'package.build.publish.generic'
-        ? 'GitHub Release latest.yml tr?c ti?p (package.json build.publish generic)'
-        : 'GitHub Release latest.yml tr?c ti?p';
+        ? 'GitHub Release latest.yml trực tiếp (package.json build.publish generic)'
+        : 'GitHub Release latest.yml trực tiếp';
     }
     return updateState.feedSource === 'package.build.publish'
       ? 'GitHub Releases/electron-updater (package.json build.publish)'
       : 'GitHub Releases/electron-updater';
   }
   if (updateState.manifestUrlDefault) return 'GitHub Release mặc định';
-  if (updateState.manifestUrlConfigured) return `Override n?i b?: ${updateState.manifestSource || 'env/config file'}`;
+  if (updateState.manifestUrlConfigured) return `Override nđi b?: ${updateState.manifestSource || 'env/config file'}`;
   return updateState.manifestSource || 'GitHub Release mặc định';
 }
 
@@ -450,10 +450,10 @@ function normalizeNegativeStockLimitInput(value) {
 
 function getNegativeStockLimitInputError(value) {
   const text = String(value ?? '').trim();
-  if (!text) return 'Vui lượng nhập số lượng ?m t?i da cho phép.';
-  if (!/^\d+$/.test(text)) return 'Số lượng ?m t?i da ph?i l? s? nguy?n không ?m.';
+  if (!text) return 'Vui lượng nhập số lượng âm tđi da cho phép.';
+  if (!/^\d+$/.test(text)) return 'Số lượng âm tđi da phđi l? s? nguyđơn không âm.';
   const number = Number(text);
-  if (!Number.isInteger(number) || number < 0) return 'Số lượng ?m t?i da ph?i l? s? nguy?n không ?m.';
+  if (!Number.isInteger(number) || number < 0) return 'Số lượng âm tđi da phđi l? s? nguyđơn không âm.';
   return '';
 }
 
@@ -623,7 +623,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const selectedRecoveryFiles = selectedRecoveryFilePaths.map(filePath => recoveryFiles.find(file => file.path === filePath)).filter(Boolean);
 
   const getErrorMessage = useCallback(
-    (error, fallback = 'Thao t?c th?t b?i.') => getApiErrorMessage(error?.data || error, error?.message || fallback),
+    (error, fallback = 'Thao t?c th?t bđi.') => getApiErrorMessage(error?.data || error, error?.message || fallback),
     [],
   );
 
@@ -739,7 +739,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       }
       return items;
     } catch (error) {
-      const message = getErrorMessage(error, 'API mẫu in hóa đơn dang ? trạng thái an to?n; chưa tải được danh sách mẫu in t? /api/print-templates.');
+      const message = getErrorMessage(error, 'API mẫu in hóa đơn dang ? trạng thái an tođơn; chưa tải được danh sách mẫu in t? /api/print-templates.');
       if (mountedRef.current) {
         setPrintTemplates([]);
         setTimedNotice('print-templates', setPrintTemplatesNotice, { tone: 'info', message });
@@ -849,11 +849,11 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       setUpdateState(payload?.state || null);
       if (payload?.type === 'update-available') {
         const version = payload.updateInfo?.version || payload.state?.updateInfo?.version;
-        setUpdateNotice(version ? `C? b?n cập nhật ${version}.` : 'C? b?n cập nhật mới.');
+        setUpdateNotice(version ? `C? bđơn cập nhật ${version}.` : 'C? bđơn cập nhật mới.');
       }
-      if (payload?.type === 'downloaded') setUpdateNotice('?? t?i v? xác thực g?i cập nhật. Chọn Cập nhật ngay ho?c ?? sau.');
-      if (payload?.type === 'install-deferred') setUpdateNotice('?? chọn d? sau. ứng dụng tiếp tục ch?y b?nh thu?ng.');
-      if (payload?.type === 'cancelled') setUpdateNotice('?? h?y t?i cập nhật.');
+      if (payload?.type === 'downloaded') setUpdateNotice('?? tđi về xác thực gđi cập nhật. Chọn Cập nhật ngay ho?c ?? sau.');
+      if (payload?.type === 'install-deferred') setUpdateNotice('?? chọn d? sau. ứng dụng tiếp tục ch?y b?nh thuếng.');
+      if (payload?.type === 'cancelled') setUpdateNotice('?? h?y tđi cập nhật.');
       if (payload?.type === 'error') setUpdateNotice(getUpdateErrorMessage(payload.error || payload.state?.lastError));
     });
 
@@ -971,7 +971,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     const isCreating = !empEdit;
 
     if (!payload.name || !payload.email || !payload.phone) {
-      setEmpNotice({ tone: 'error', message: 'Vui lòng di?n đầy đủ h? t?n, email v? s? điện thoại.' });
+      setEmpNotice({ tone: 'error', message: 'Vui lòng diđơn đầy đủ h? tđơn, email về s? điện thoại.' });
       return;
     }
     if (!isValidEmail(payload.email)) {
@@ -983,7 +983,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       return;
     }
     if (payload.password && String(payload.password).length < 8) {
-      setEmpNotice({ tone: 'error', message: 'Mật khẩu ph?i c? ?t nh?t 8 k? t?.' });
+      setEmpNotice({ tone: 'error', message: 'Mật khẩu phđi c? ?t nh?t 8 kỳ t?.' });
       return;
     }
 
@@ -1036,7 +1036,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const handleSaveType = async () => {
     const payload = sanitizeTypePayload(typeForm);
     if (!payload.name) {
-      setTypeNotice({ tone: 'error', message: 'Vui lượng nhập t?n loại khách hàng.' });
+      setTypeNotice({ tone: 'error', message: 'Vui lượng nhập tđơn loại khách hàng.' });
       return;
     }
 
@@ -1096,7 +1096,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     try {
       const data = await printTemplatesApi.create({
         template_name: `Mẫu in hóa đơn ${printTemplates.length + 1}`,
-        description: 'Thi?t k? bằng editor mẫu in Canva-like.',
+        description: 'Thi?t kỳ bằng editor mẫu in Canva-like.',
         shop_name: storeForm.name,
         shop_address: storeForm.address,
         shop_phone: storeForm.phone,
@@ -1111,7 +1111,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       setShowPrintTemplateModal(true);
       setTimedNotice('print-templates', setPrintTemplatesNotice, {
         tone: 'success',
-        message: '?? tạo mẫu in mới. Editor đang m? ?? thi?t k?, b?m L?u ho?c Publish ?? l?u.'
+        message: '?? tạo mẫu in mới. Editor đang mã ?? thi?t kỳ, bâm Lđủ ho?c Publish ?? lđủ.'
       }, 3000);
     } catch (error) {
       setTimedNotice('print-templates', setPrintTemplatesNotice, {
@@ -1126,8 +1126,8 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const openDemoPrintTemplateEditor = () => {
     const demo = normalizePrintTemplate({
       id: null,
-      template_name: 'M?u thi?t k? th?',
-      description: 'Bản demo local d? thi?t k? k?o th? khi chưa c? MySQL mẫu in.',
+      template_name: 'Mđủ thi?t kỳ th?',
+      description: 'Bản demo local d? thi?t kỳ kỳo th? khi chưa c? MySQL mẫu in.',
       shop_name: storeForm.name,
       shop_address: storeForm.address,
       shop_phone: storeForm.phone,
@@ -1142,7 +1142,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     setShowPrintTemplateModal(true);
     setTimedNotice('print-templates', setPrintTemplatesNotice, {
       tone: 'info',
-      message: 'đang m? editor demo local. ?? luu/publish th?t, h?y cấu hình MySQL v? tạo mẫu in tr?n server.',
+      message: 'đang mã editor demo local. ?? luu/publish th?t, h?y cấu hình MySQL về tạo mẫu in trđơn server.',
     }, 5000);
   };
 
@@ -1175,7 +1175,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
   const handleRemovePrintTemplateLogo = async () => {
     if (printTemplateEdit?.id && !printTemplateLogoPreviewUrl && printTemplateForm.logo_url) {
-      if (!window.confirm('Xóa logo dang luu tr?n mẫu in n?y?')) return;
+      if (!window.confirm('Xóa logo dang luu trđơn mẫu in n?y?')) return;
       setPrintTemplateSaving(true);
       setPrintTemplateNotice(null);
       try {
@@ -1204,7 +1204,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const handleSavePrintTemplate = async () => {
     const payload = sanitizePrintTemplatePayload(printTemplateForm);
     if (!payload.template_name) {
-      setPrintTemplateNotice({ tone: 'error', message: 'Vui lượng nhập t?n mẫu in hóa đơn.' });
+      setPrintTemplateNotice({ tone: 'error', message: 'Vui lượng nhập tđơn mẫu in hóa đơn.' });
       return;
     }
 
@@ -1409,9 +1409,9 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       if (!result?.ok) {
         setUpdateNotice(getUpdateErrorMessage(result?.error));
       } else if (busyKey === 'checking') {
-        setUpdateNotice(result.updateAvailable ? `C? b?n cập nhật ${result.updateInfo?.version}.` : 'ứng dụng dang ? phi?n b?n mới nh?t.');
+        setUpdateNotice(result.updateAvailable ? `C? bđơn cập nhật ${result.updateInfo?.version}.` : 'ứng dụng dang ? phiđơn bđơn mới nh?t.');
       } else if (busyKey === 'downloading') {
-        setUpdateNotice('?? t?i v? xác thực g?i cập nhật. Chọn Cập nhật ngay ho?c ?? sau.');
+        setUpdateNotice('?? tđi về xác thực gđi cập nhật. Chọn Cập nhật ngay ho?c ?? sau.');
       } else if (busyKey === 'installing') {
         setUpdateNotice('đang cài đặt cập nhật. ứng dụng s? restart theo electron-updater.');
       }
@@ -1433,34 +1433,34 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
   const handleDownloadUpdate = () => runUpdateAction('downloading', updates => updates.download());
   const handleCancelUpdate = () => runUpdateAction('cancelling', updates => updates.cancel());
   const handleInstallUpdate = () => {
-    if (!window.confirm('ứng dụng s? tạo backup database r?i cài đặt v? khởi động lại. Tiếp tục?')) return null;
+    if (!window.confirm('ứng dụng s? tạo backup database rđi cài đặt về khởi động lại. Tiếp tục?')) return null;
     return runUpdateAction('installing', updates => updates.install());
   };
 
   const handleOpenInstallerDownload = async (installer) => {
     const url = buildReleaseDownloadUrl(installer.fileName);
-    setUpdateNotice(`đang kiểm tra link t?i ${installer.label} trước khi m? tr?nh duy?t...`);
+    setUpdateNotice(`đang kiểm tra link tđi ${installer.label} trước khi mã tr?nh duy?t...`);
 
     try {
       let verified = null;
       if (window.khaDesktop?.verifyDownloadUrl) {
         verified = await window.khaDesktop.verifyDownloadUrl(url);
-        if (!verified?.ok) throw new Error(verified?.error?.message || 'Link t?i không vu?t qua kiểm tra an to?n.');
+        if (!verified?.ok) throw new Error(verified?.error?.message || 'Link tđi không vu?t qua kiểm tra an tođơn.');
       }
 
       const detail = verified?.contentLength
         ? `HTTP ${verified.statusCode}, ${formatBytes(verified.contentLength)}, ${verified.contentType || 'Content-Type không r?'}`
-        : '?? kiểm tra định dạngg t?n file v? HTTP.';
-      setUpdateNotice(`Link t?i ${installer.label} hợp lệ (${detail}). đang m? tr?nh duy?t mặc định. Nếu SmartScreen/antivirus cảnh báo, ch? tiếp tục khi file d?ng t?n ${installer.fileName} v? URL thu?c github.com/Vankhadev/phanmemoffline.`);
+        : '?? kiểm tra định dạngg tđơn file về HTTP.';
+      setUpdateNotice(`Link tđi ${installer.label} hợp lệ (${detail}). đang mã tr?nh duy?t mặc định. Nếu SmartScreen/antivirus cảnh báo, ch? tiếp tục khi file d?ng tđơn ${installer.fileName} về URL thuếc github.com/Vankhadev/phanmemoffline.`);
 
       if (window.khaDesktop?.openExternal) {
         const opened = await window.khaDesktop.openExternal(url);
-        if (!opened?.ok) throw new Error(opened?.error?.message || 'Không m? được link t?i bằng tr?nh duy?t mặc định.');
+        if (!opened?.ok) throw new Error(opened?.error?.message || 'Không mã được link tđi bằng tr?nh duy?t mặc định.');
       } else {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      setUpdateNotice(`Không m? link t?i v? kiểm tra th?t b?i: ${error?.message || 'không r?'}. Hủy kiểm tra m?ng, GitHub Release public v? d?m b?o không t?i nh?m file r?ng/trang HTML. URL: ${url}`);
+      setUpdateNotice(`Không mã link tđi về kiểm tra th?t bđi: ${error?.message || 'không r?'}. Hủy kiểm tra mãng, GitHub Release public về dâm b?o không tđi nhâm file r?ng/trang HTML. URL: ${url}`);
     }
   };
 
@@ -1469,7 +1469,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     if (canViewStore) nextTabs.push({ key: 'store', label: 'Cửa hàng', icon: <Store size={16} /> });
     if (canViewEmployees) nextTabs.push({ key: 'employees', label: 'Nhân viên', icon: <Users size={16} /> });
     if (canViewCustomerTypes) nextTabs.push({ key: 'customer-types', label: 'Loại khách', icon: <Tag size={16} /> });
-    if (canViewNegativeStock) nextTabs.push({ key: 'negative-stock', label: 'Xuất ?m', icon: <Package size={16} /> });
+    if (canViewNegativeStock) nextTabs.push({ key: 'negative-stock', label: 'Xuất âm', icon: <Package size={16} /> });
     if (canViewPrintTemplates) nextTabs.push({ key: 'print-templates', label: 'Mẫu in hóa đơn', icon: <FileText size={16} /> });
     if (canAccessSection(['settings.read', 'settings.manage'])) nextTabs.push({ key: 'backup', label: 'Backup', icon: <Image size={16} /> });
     if (canAccessSection(['settings.read', 'settings.manage'])) nextTabs.push({ key: 'recovery', label: 'Khôi phục DL', icon: <RotateCcw size={16} /> });
@@ -1519,7 +1519,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           <div>
             <h1 className="text-xl font-bold">Cài đặt hệ thống</h1>
             <p className="text-sm text-gray-500">
-              Quản lý cửa hàng, nhân viên, loại khách hàng, xuất âm tồn kho v? cập nhật ứng dụng.
+              Quản lý cửa hàng, nhân viên, loại khách hàng, xuất âm tồn kho về cập nhật ứng dụng.
             </p>
           </div>
         </div>
@@ -1555,7 +1555,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
         <div className="card flex min-h-[260px] items-center justify-center">
           <div className="flex items-center gap-3 text-gray-600">
             <Loader2 size={20} className="animate-spin" />
-            <span>đang t?i dữ liệu cài đặt...</span>
+            <span>đang tđi dữ liệu cài đặt...</span>
           </div>
         </div>
       ) : null}
@@ -1575,7 +1575,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               label="Tồn cửa hàng"
               value={storeForm.name}
               onChange={event => updateStoreField('name', event.target.value)}
-              placeholder="V? d?: Cửa hàng V?n Kha"
+              placeholder="V? d?: Cửa hàng Vđơn Kha"
             />
             <InputField
               id="store-phone"
@@ -1594,7 +1594,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             />
             <InputField
               id="store-tax-code"
-              label="M? s? thu?"
+              label="M? s? thuế"
               value={storeForm.tax_code}
               onChange={event => updateStoreField('tax_code', event.target.value)}
             />
@@ -1611,7 +1611,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               {storeSaving ? 'đang luu...' : 'Luu thay đổi'}
             </button>
             <span className="text-xs text-gray-500">
-              Các thay đổi n?y ?nh hu?ng tr?c ti?p đến thông tin hiển thị tr?n hóa đơn v? các trang d?ng dữ liệu cửa hàng.
+              Các thay đổi n?y đơnh hu?ng trực tiếp đến thông tin hiển thị trđơn hóa đơn về các trang d?ng dữ liệu cửa hàng.
             </span>
           </div>
         </div>
@@ -1640,7 +1640,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
               <div className="inline-flex items-center gap-2">
                 <Loader2 size={16} className="animate-spin" />
-                đang t?i danh sách nhân viên...
+                đang tđi danh sách nhân viên...
               </div>
             </div>
           ) : employees.length === 0 ? (
@@ -1652,11 +1652,11 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600">
                   <tr>
-                    <th className="px-3 py-3 text-left">H? t?n</th>
+                    <th className="px-3 py-3 text-left">H? tđơn</th>
                     <th className="px-3 py-3 text-left">Email</th>
                     <th className="px-3 py-3 text-left">S?T</th>
                     <th className="px-3 py-3 text-left">Vai tr?</th>
-                    <th className="px-3 py-3 text-left">đang nh?p g?n nh?t</th>
+                    <th className="px-3 py-3 text-left">đang nh?p gđơn nh?t</th>
                     <th className="px-3 py-3 text-center">H?nh d?ng</th>
                   </tr>
                 </thead>
@@ -1731,7 +1731,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
               <div className="inline-flex items-center gap-2">
                 <Loader2 size={16} className="animate-spin" />
-                đang t?i loại khách hàng...
+                đang tđi loại khách hàng...
               </div>
             </div>
           ) : customerTypes.length === 0 ? (
@@ -1805,7 +1805,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <div className="space-y-2">
                 <div className="font-semibold text-gray-800 dark:text-slate-100">Cho ph?p xuất âm tồn kho sản phẩm</div>
                 <p className="text-sm text-gray-600 dark:text-slate-300">
-                  Khi bắt, hệ thống cho phép xu?t vu?t tồn kho hiện c? theo số lượng ?m t?i da admin nh?p. Khi tốt, hệ thống chọn mới tru?ng hợp lệm tồn kho nh? hon <strong>0</strong>.
+                  Khi bắt, hệ thống cho phép xu?t vu?t tồn kho hiện c? theo số lượng âm tđi da admin nh?p. Khi tốt, hệ thống chọn mới tru?ng hợp lệm tồn kho nh? hon <strong>0</strong>.
                 </p>
               </div>
 
@@ -1829,7 +1829,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                     </span>
                   </span>
                   <span className="mt-1 block text-xs font-medium opacity-80">
-                    {negativeStockSaving ? 'đang luu thay đổi...' : 'Ch?m d? bắt/tốt nhanh'}
+                    {negativeStockSaving ? 'đang luu thay đổi...' : 'Châm d? bắt/tốt nhanh'}
                   </span>
                 </span>
 
@@ -1845,7 +1845,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label htmlFor="negative-stock-limit" className="space-y-1">
-                  <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Số lượng ?m t?i da cho phép</span>
+                  <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Số lượng âm tđi da cho phép</span>
                   <input
                     id="negative-stock-limit"
                     type="number"
@@ -1864,13 +1864,13 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   {negativeStockLimitInputError ? (
                     <span className="block text-xs font-medium text-red-600">{negativeStockLimitInputError}</span>
                   ) : (
-                    <span className="block text-xs text-gray-500 dark:text-slate-400">Nhập 10 nghia l? t?n t?i thi?u -10. Gi? tr? hiện tại: {negativeStockAdminLimitLabel}; runtime d?ng t?n t?i thi?u {negativeStockRuntimeLimitLabel}.</span>
+                    <span className="block text-xs text-gray-500 dark:text-slate-400">Nhập 10 nghia l? tđơn tđi thiđủ -10. Gi? tr? hiện tại: {negativeStockAdminLimitLabel}; runtime d?ng tđơn tđi thiđủ {negativeStockRuntimeLimitLabel}.</span>
                   )}
                 </label>
 
                 <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
-                  <div className="text-xs font-semibold uppercase tracking-wide opacity-80">Gi?i h?n hiện tại</div>
-                  <div className="mt-1 text-lg font-bold">{negativeStockAdminLimitLabel} ? t?n t?i thi?u {negativeStockRuntimeLimitLabel}</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide opacity-80">Giđi hđơn hiện tại</div>
+                  <div className="mt-1 text-lg font-bold">{negativeStockAdminLimitLabel} ? tđơn tđi thiđủ {negativeStockRuntimeLimitLabel}</div>
                   <div className="mt-1 text-xs">{negativeStockRuntimeSummary}</div>
                 </div>
               </div>
@@ -1885,7 +1885,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   className="btn-success inline-flex min-h-10 items-center justify-center gap-2 disabled:opacity-60"
                 >
                   {negativeStockSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                  {negativeStockSaving ? 'đang luu...' : 'Luu gi?i h?n'}
+                  {negativeStockSaving ? 'đang luu...' : 'Luu giới hạn'}
                 </button>
                 <button
                   type="button"
@@ -1900,18 +1900,18 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           </div>
 
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
-            <div className="font-semibold">Nguy?n t?c ?p d?ng</div>
+            <div className="font-semibold">Nguyđơn t?c ?p d?ng</div>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>Khi tốt: backend không cho xu?t n?u t?n d? ki?n nh? hon 0.</li>
-              <li>Khi bắt: admin nh?p {negativeStockAdminLimitLabel}, backend cho phép t?n sau xu?t gi?m t?i da đến {negativeStockRuntimeLimitLabel}.</li>
-              <li>Nếu vu?t gi?i h?n, backend trở lại r? t?n sản phẩm, t?n hiện tại, số lượng xu?t v? gi?i h?n t?i thi?u.</li>
-              <li>Frontend d?c/ghi tr?c ti?p qua API /api/settings/negative-stock v? không cón d?ng gi?i h?n hard-code.</li>
+              <li>Khi tốt: backend không cho xu?t nđủ tđơn d? kiđơn nh? hon 0.</li>
+              <li>Khi bắt: admin nh?p {negativeStockAdminLimitLabel}, backend cho phép tđơn sau xu?t giám tđi da đến {negativeStockRuntimeLimitLabel}.</li>
+              <li>Nếu vu?t giới hạn, backend trở lại r? tđơn sản phẩm, tđơn hiện tại, số lượng xu?t về giới hạn tđi thiđủ.</li>
+              <li>Frontend d?c/ghi trực tiếp qua API /api/settings/negative-stock về không cón d?ng giới hạn hard-code.</li>
             </ul>
           </div>
 
           {!canManageNegativeStock && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              Tài khoản hiện tại ch? c? quy?n xem trạng thái xuất âm tồn kho v? không th? thay đổi cấu hình n?y.
+              Tài khoản hiện tại ch? c? quyđơn xem trạng thái xuất âm tồn kho về không th? thay đổi cấu hình n?y.
             </div>
           )}
         </div>
@@ -1925,7 +1925,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 <FileText size={18} /> Mẫu in hóa đơn ({printTemplates.length})
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Quản lý mẫu in d?ng cho hóa đơn th?t qua API /api/print-templates, editor Canva-like k?o th?, resize, publish sang layout in th?t.
+                Quản lý mẫu in d?ng cho hóa đơn th?t qua API /api/print-templates, editor Canva-like kỳo th?, resize, publish sang layout in th?t.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1950,7 +1950,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           {printTemplatesLoading ? (
             <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
               <div className="inline-flex items-center gap-2">
-                <Loader2 size={16} className="animate-spin" /> đang t?i danh sách mẫu in...
+                <Loader2 size={16} className="animate-spin" /> đang tđi danh sách mẫu in...
               </div>
             </div>
           ) : printTemplates.length === 0 ? (
@@ -1958,11 +1958,11 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               {canManagePrintTemplates && (
                 <div className="mb-4 flex flex-wrap justify-center gap-2">
                   <button type="button" onClick={openDemoPrintTemplateEditor} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">
-                    <Edit2 size={14} /> Thi?t k? th?
+                    <Edit2 size={14} /> Thi?t kỳ th?
                   </button>
                 </div>
               )}
-              Chua c? mẫu in hóa đơn. Nhân ?Thêm mẫu in? d? tạo m?u đầu ti?n.
+              Chua c? mẫu in hóa đơn. Nhân ?Thêm mẫu in? d? tạo mđủ đầu tiđơn.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -1975,7 +1975,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                         {template.is_default && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700"><Star size={12} /> Mặc định</span>}
                         <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{template.paper_size} ? {template.orientation === 'landscape' ? 'Ngang' : 'D?c'}</span>
                       </div>
-                      <p className="mt-1 text-sm text-gray-600">{template.description || template.shop_name || 'Không có m? t?.'}</p>
+                      <p className="mt-1 text-sm text-gray-600">{template.description || template.shop_name || 'Không có mã t?.'}</p>
                       <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
                         <span>Font {template.settings.fontSize}pt</span>
                         <span>Scale {Math.round(template.settings.scale * 100)}%</span>
@@ -2004,7 +2004,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                         </button>
                       </>
                     ) : (
-                      <span className="text-xs text-gray-400">Tài khoản ch? c? quy?n xem mẫu in.</span>
+                      <span className="text-xs text-gray-400">Tài khoản ch? c? quyđơn xem mẫu in.</span>
                     )}
                   </div>
                 </div>
@@ -2023,7 +2023,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   <Image size={18} /> Quản lý Backup
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Backup d?nh k? mới 72 gi?, gi? t?i da 30 b?n g?n nh?t, n?n ZIP v? luu lịch sử vào bằng system_backups / backup_logs.
+                  Backup d?nh kỳ mới 72 giá, giá tđi da 30 bđơn gđơn nh?t, nđơn ZIP về luu lịch sử vào bằng system_backups / backup_logs.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -2039,8 +2039,8 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <SectionNotice notice={backupNotice} />
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">L?n backup g?n nh?t</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.lastBackupAt || 'Chua c?'}</div></div>
-              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">L?n backup k? ti?p</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.nextBackupAt || 'Chua x?c d?nh'}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Lđơn backup gđơn nh?t</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.lastBackupAt || 'Chua c?'}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Lđơn backup kỳ ti?p</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.nextBackupAt || 'Chua x?c d?nh'}</div></div>
               <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Tổng s? file</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.totalBackups ?? backupItems.length}</div></div>
               <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Trạng thái</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.scheduleRunning ? 'đang ch?y' : 'đang d?ng'}</div></div>
             </div>
@@ -2054,7 +2054,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   <tr>
                     <th className="px-4 py-3">Tồn file</th>
                     <th className="px-4 py-3">Ngày tạo</th>
-                    <th className="px-4 py-3">K?ch thu?c</th>
+                    <th className="px-4 py-3">K?ch thuếc</th>
                     <th className="px-4 py-3">Loại</th>
                     <th className="px-4 py-3">Trạng thái</th>
                     <th className="px-4 py-3 text-right">Thao t?c</th>
@@ -2247,7 +2247,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   <Settings2 size={18} /> Cập nhật ứng dụng
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  ứng dụng Electron c? th? t? kiểm tra, t? t?i v? ch? cài đặt khi b?n xác nhận cập nhật.
+                  ứng dụng Electron có thể t? kiểm tra, t? tđi về ch? cài đặt khi bđơn xác nhận cập nhật.
                 </p>
               </div>
               <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${updateState?.status === 'error' ? 'bg-red-100 text-red-700' : hasUpdate ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -2257,16 +2257,16 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
             <div className="mt-4 grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
               <div className="rounded-xl border bg-gray-50 p-4">
-                <div className="text-gray-500">Phiên b?n hiện tại</div>
+                <div className="text-gray-500">Phiên bđơn hiện tại</div>
                 <div className="mt-1 text-2xl font-bold text-gray-800">{currentVersion}</div>
                 <div className="mt-2 text-xs text-gray-500">
-                  N?n tổng: {appInfo?.platform || window.khaDesktop?.platform || 'web'} ? Ki?n tr?c: {appInfo?.arch || 'unknown'}
+                  Nđơn tổng: {appInfo?.platform || window.khaDesktop?.platform || 'web'} ? Kiđơn tr?c: {appInfo?.arch || 'unknown'}
                 </div>
               </div>
               <div className="rounded-xl border bg-gray-50 p-4">
                 <div className="text-gray-500">Feed cập nhật</div>
                 <div className="mt-1 break-all font-medium text-gray-800">{manifestUrl || 'Chua n?p URL feed'}</div>
-                <div className="mt-2 text-xs text-gray-500">Ngu?n: {manifestSourceLabel}</div>
+                <div className="mt-2 text-xs text-gray-500">Nguđơn: {manifestSourceLabel}</div>
                 {updateState?.manifestUrlDefault && (
                   <div className="mt-2 inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
                     đang d?ng GitHub Release feed mặc định
@@ -2279,34 +2279,34 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
                 <div className="font-semibold text-gray-700">Log cập nhật</div>
                 <div className="mt-1 break-all">{updateLogPath}</div>
-                <div className="mt-1">Log n?y d?ng d? debug check/download/cài đặt v? không ch?a token hay mật khẩu.</div>
+                <div className="mt-1">Log n?y d?ng d? debug check/download/cài đặt về không chđã token hay mật khẩu.</div>
               </div>
             )}
 
             {runtimeDiagnostics && (
               <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
-                <div className="font-semibold text-gray-700">Chọn do?n runtime updater</div>
+                <div className="font-semibold text-gray-700">Chọn dođơn runtime updater</div>
                 <div className="mt-1 grid grid-cols-1 gap-x-4 gap-y-1 md:grid-cols-2">
-                  <div>?? d?ng g?i: {runtimeDiagnostics.isPackaged ? 'C?' : 'Không'}</div>
+                  <div>?? d?ng gđi: {runtimeDiagnostics.isPackaged ? 'C?' : 'Không'}</div>
                   <div>app-update.yml: {runtimeDiagnostics.appUpdateYmlExists ? 'C?' : 'Không th?y'}</div>
-                  <div>Ki?n tr?c runtime: {runtimeArch || 'unknown'}</div>
+                  <div>Kiđơn tr?c runtime: {runtimeArch || 'unknown'}</div>
                   <div>Tuong th?ch: {runtimeCompatibility?.supported === false ? 'Không' : 'C?'}</div>
-                  <div className="break-all md:col-span-2">?u?ng đến app-update.yml: {runtimeDiagnostics.appUpdateYmlPath || 'Không x?c d?nh'}</div>
+                  <div className="break-all md:col-span-2">đủ?ng đến app-update.yml: {runtimeDiagnostics.appUpdateYmlPath || 'Không x?c d?nh'}</div>
                 </div>
               </div>
             )}
 
             {runtimeCompatibility && (
               <div className={`mt-4 rounded-lg border px-4 py-3 text-sm ${runtimeCompatibility.supported === false ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
-                <div className="font-semibold">Tuong th?ch m?y Windows</div>
+                <div className="font-semibold">Tuong th?ch mãy Windows</div>
                 <div className="mt-1">{runtimeCompatibility.message}</div>
-                <div className="mt-1 text-xs">B? cái khuy?n ngh?: {recommendedInstaller?.label || 'Windows x64'}.</div>
+                <div className="mt-1 text-xs">B? cái khuyđơn ngh?: {recommendedInstaller?.label || 'Windows x64'}.</div>
               </div>
             )}
 
             {!desktopAvailable && (
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                T?nh nang cập nhật ch? ho?t d?ng trong ứng dụng Electron d? cái tr?n Windows. Khi ch?y frontend web d?c l?p, API cập nhật s? không kh? d?ng.
+                T?nh nang cập nhật ch? ho?t d?ng trong ứng dụng Electron d? cái trđơn Windows. Khi ch?y frontend web d?c l?p, API cập nhật s? không kh? d?ng.
               </div>
             )}
 
@@ -2318,7 +2318,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
             {updateError && (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                <div className="font-semibold">Không th? ho?n tốt thao t?c cập nhật</div>
+                <div className="font-semibold">Không th? hođơn tốt thao t?c cập nhật</div>
                 <div>{getUpdateErrorMessage(updateError)}</div>
                 {updateError.details && (
                   <pre className="mt-2 whitespace-pre-wrap rounded bg-white/70 p-2 text-xs">
@@ -2356,14 +2356,14 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
             {updateState?.status === 'no-update' && updateState?.lastCheckedAt && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                ứng dụng dang ? phi?n b?n mới nh?t. L?n kiểm tra: {formatDateTime(updateState.lastCheckedAt)}.
+                ứng dụng dang ? phiđơn bđơn mới nh?t. Lđơn kiểm tra: {formatDateTime(updateState.lastCheckedAt)}.
               </div>
             )}
 
             {updateState?.status === 'downloading' && (
               <div className="mt-4">
                 <div className="mb-1 flex items-center justify-between text-sm">
-                  <span>Tiền tr?nh t?i</span>
+                  <span>Tiền tr?nh tđi</span>
                   <span>{progressPercent}%</span>
                 </div>
                 <div className="h-3 overflow-hidden rounded-full bg-gray-100">
@@ -2377,7 +2377,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
             {downloaded && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                electron-updater đã tải v? xác thực g?i cập nhật thành công. Khi b?m Cập nhật ngay, ứng dụng s? sao luu database trước khi cài đặt v? khởi động lại.
+                electron-updater đã tải về xác thực gđi cập nhật thành công. Khi bâm Cập nhật ngay, ứng dụng s? sao luu database trước khi cài đặt về khởi động lại.
               </div>
             )}
 
@@ -2396,7 +2396,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 disabled={!desktopAvailable || !hasUpdate || downloaded || updateState?.status === 'downloading'}
                 className="btn-success disabled:opacity-60"
               >
-                {updateBusy === 'downloading' ? 'đang t?i...' : 'Tải b?n cập nhật'}
+                {updateBusy === 'downloading' ? 'đang tđi...' : 'Tải bđơn cập nhật'}
               </button>
               {updateState?.status === 'downloading' && (
                 <button
@@ -2405,7 +2405,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   disabled={updateBusy === 'cancelling'}
                   className="btn-danger disabled:opacity-60"
                 >
-                  {updateBusy === 'cancelling' ? 'đang h?y...' : 'Hủy t?i'}
+                  {updateBusy === 'cancelling' ? 'đang h?y...' : 'Hủy tđi'}
                 </button>
               )}
               <button
@@ -2420,9 +2420,9 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           </div>
 
           <div className="card border-emerald-100 bg-emerald-50 text-sm text-emerald-800">
-            <h3 className="mb-3 font-bold">Tải b? cái th? cứng dụng ki?n tr?c</h3>
+            <h3 className="mb-3 font-bold">Tải b? cái th? cứng dụng kiđơn tr?c</h3>
             <div className="mb-3 rounded-lg border border-emerald-200 bg-white/70 px-3 py-2 text-xs">
-              Lu?n t?i t? GitHub Release ch?nh th?c v? chọn d?ng file cấu hình t? ki?n tr?c. Nếu Windows b?o ?ứng dụng n?y không th? ch?y tr?n PC của b?n?, h?y th? b?n ia32 cho Windows 32-bit ho?c kiểm tra m?y c? h? tr? x64 không.
+              Luđơn tđi t? GitHub Release ch?nh th?c về chọn d?ng file cấu hình t? kiđơn tr?c. Nếu Windows b?o ?ứng dụng n?y không th? ch?y trđơn PC của bđơn?, h?y th? bđơn ia32 cho Windows 32-bit ho?c kiểm tra mãy c? hỗ trợ x64 không.
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               {WINDOWS_INSTALLERS.map(installer => {
@@ -2432,7 +2432,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   <div key={installer.arch} className="rounded-xl border border-emerald-200 bg-white p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="font-semibold text-gray-800">{installer.label}</div>
-                      {recommended && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Khuy?n ngh? cho m?y n?y</span>}
+                      {recommended && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Khuyđơn ngh? cho mãy n?y</span>}
                     </div>
                     <div className="mt-1 text-xs text-gray-500">{installer.recommendedFor}</div>
                     <div className="mt-2 break-all rounded bg-gray-50 p-2 text-xs text-gray-600">{installer.fileName}</div>
@@ -2453,11 +2453,11 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
           <div className="card border-blue-100 bg-blue-50 text-sm text-blue-800">
             <h3 className="mb-2 font-bold">Ghi ch? update feed</h3>
             <ul className="list-disc space-y-1 pl-5">
-              <li>Mặc định app d?ng provider generic d? d?c tr?c ti?p latest.yml t? GitHub Release latest.</li>
-              <li>Release production c?n c? installer x64 v? ia32, mới file .exe c? .exe.blockmap tuong ?ng v? t?n asset r? ki?n tr?c.</li>
-              <li>latest.yml v? update-manifest.json ph?i c?ng version, URL, sha256/sha512 v? size v?i asset d? upload.</li>
-              <li>Khi repo ho?c release asset dang private, client Electron không th? t? cập nhật n?u không có feed public phù hợp.</li>
-              <li>Trước khi cài đặt, ứng dụng s? sao luu file database trong thu m?c userData/backups.</li>
+              <li>Mặc định app d?ng provider generic d? d?c trực tiếp latest.yml t? GitHub Release latest.</li>
+              <li>Release production cđơn c? installer x64 về ia32, mới file .exe c? .exe.blockmap tuong đơng về tđơn asset r? kiđơn tr?c.</li>
+              <li>latest.yml về update-manifest.json phđi c?ng version, URL, sha256/sha512 về size vđi asset d? upload.</li>
+              <li>Khi repo ho?c release asset dang private, client Electron không th? t? cập nhật nđủ không có feed public phù hợp.</li>
+              <li>Trước khi cài đặt, ứng dụng s? sao luu file database trong thu mãc userData/backups.</li>
             </ul>
           </div>
         </div>
@@ -2481,7 +2481,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <div className="space-y-3">
                 <InputField
                   id="emp-name"
-                  label="H? t?n"
+                  label="H? tđơn"
                   value={empForm.name}
                   onChange={event => setEmpForm(current => ({ ...current, name: event.target.value }))}
                 />
@@ -2500,7 +2500,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 />
                 <InputField
                   id="emp-password"
-                  label={empEdit ? 'Mật khẩu mới (d? tr?ng n?u không dài)' : 'Mật khẩu'}
+                  label={empEdit ? 'Mật khẩu mới (d? tr?ng nđủ không dài)' : 'Mật khẩu'}
                   type="password"
                   autoComplete="new-password"
                   value={empForm.password}
@@ -2525,7 +2525,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               </div>
 
               <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                Vai tr? h? tr?: admin, kế toán, thu ng?n, nhân viên v? user cu. Khi tạo mới, backend v?n t? c?p role ban đầu theo co ch? cu; client s? cập nhật lỗi role đã chọn ngay sau khi tạo n?u c? quy?n quản lý ngu?i d?ng.
+                Vai tr? hỗ trợ: admin, kế toán, thu ngđơn, nhân viên về user cu. Khi tạo mới, backend vđơn t? c?p role ban đầu theo co ch? cu; client s? cập nhật lỗi role đã chọn ngay sau khi tạo nđủ c? quyđơn quản lý nguđi d?ng.
               </div>
             </div>
 
@@ -2570,7 +2570,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
               <div>
                 <label htmlFor="customer-type-color" className="text-sm font-medium text-gray-700">
-                  M?u s?c
+                  Mđủ s?c
                 </label>
                 <div className="mt-1 flex items-center gap-3">
                   <input
@@ -2621,15 +2621,15 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div>
               <h3 className="mb-2 font-bold text-gray-800">Tổng quan</h3>
               <p>
-                Trang Cài đặt cho phép cấu hình thông tin cửa hàng, quản lý nhân viên, loại khách hàng, bắt/tốt xuất âm tồn kho, mẫu in hóa đơn v? cập nhật ứng dụng Electron.
+                Trang Cài đặt cho phép cấu hình thông tin cửa hàng, quản lý nhân viên, loại khách hàng, bắt/tốt xuất âm tồn kho, mẫu in hóa đơn về cập nhật ứng dụng Electron.
               </p>
             </div>
 
             <div>
               <h3 className="mb-2 font-bold text-gray-800">Tab Cửa hàng</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Cập nhật t?n cửa hàng, địa chỉ, s? điện thoại, email, m? s? thu? v? thông tin ng?n h?ng.</li>
-                <li>Ph?n logo, ghi ch? v? slogan d?ng cho nhân di?n cửa hàng trong hệ thống.</li>
+                <li>Cập nhật tđơn cửa hàng, địa chỉ, s? điện thoại, email, mã s? thuế về thông tin ngđơn h?ng.</li>
+                <li>Phđơn logo, ghi ch? về slogan d?ng cho nhân diđơn cửa hàng trong hệ thống.</li>
                 <li>Sau khi chỉnh sửa, nhân <strong>Luu thay đổi</strong> d? ghi xu?ng backend.</li>
               </ul>
             </div>
@@ -2637,28 +2637,28 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <div>
               <h3 className="mb-2 font-bold text-gray-800">Tab Nhân viên</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Thêm, sửa ho?c v? hi?u tài khoản nhân viên.</li>
-                <li>C? th? chọn role Admin, Kế toán, Thu ng?n, Nhân viên ho?c User cu d? gi? tuong th?ch dữ liệu legacy.</li>
-                <li>Admin to?n quy?n; kế toán truy c?p module kế toán; thu ng?n ch? xem doanh thu; nhân viên/user cu không vào module kế toán.</li>
-                <li>Khi sửa nhân viên, c? th? d? tr?ng mật khẩu n?u không mu?n dài.</li>
+                <li>Thêm, sửa ho?c về hiđủ tài khoản nhân viên.</li>
+                <li>C? th? chọn role Admin, Kế toán, Thu ngđơn, Nhân viên ho?c User cu d? giá tuong th?ch dữ liệu legacy.</li>
+                <li>Admin tođơn quyđơn; kế toán truy c?p module kế toán; thu ngđơn ch? xem doanh thu; nhân viên/user cu không vào module kế toán.</li>
+                <li>Khi sửa nhân viên, có thể d? tr?ng mật khẩu nđủ không muđơn dài.</li>
               </ul>
             </div>
 
             <div>
               <h3 className="mb-2 font-bold text-gray-800">Tab Loại khách</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Tạo v? ch?nh m?u cho tổng nh?m khách hàng.</li>
-                <li>Xóa loại khách l? thao t?c soft-delete tr?n backend.</li>
+                <li>Tạo về ch?nh mđủ cho tổng nhâm khách hàng.</li>
+                <li>Xóa loại khách l? thao t?c soft-delete trđơn backend.</li>
               </ul>
             </div>
 
             <div>
-              <h3 className="mb-2 font-bold text-gray-800">Tab Xuất ?m</h3>
+              <h3 className="mb-2 font-bold text-gray-800">Tab Xuất âm</h3>
               <ul className="list-disc space-y-1 pl-5">
                 <li>Dùng d? bắt/tốt cho phép xuất âm tồn kho sản phẩm.</li>
-                <li>Khi bắt, admin nh?p số lượng ?m t?i da; v? đã nhập {negativeStockAdminLimitLabel} th? t?n t?i thi?u runtime l? {negativeStockRuntimeLimitLabel}.</li>
-                <li>Khi tốt, mới thao t?c l?m tồn kho nh? hon 0 s? b? backend t? ch?i.</li>
-                <li>? gi?i h?n luu qua API /api/settings/negative-stock v? được các m?n h?nh b?n h?ng/kho d?ng l?m runtime settings.</li>
+                <li>Khi bắt, admin nh?p số lượng âm tđi da; về đã nhập {negativeStockAdminLimitLabel} th? tđơn tđi thiđủ runtime l? {negativeStockRuntimeLimitLabel}.</li>
+                <li>Khi tốt, mới thao t?c lâm tồn kho nh? hon 0 s? b? backend t? chđi.</li>
+                <li>? giới hạn luu qua API /api/settings/negative-stock về được các mđơn h?nh bđơn h?ng/kho d?ng lâm runtime settings.</li>
               </ul>
             </div>
 
@@ -2666,17 +2666,17 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
               <h3 className="mb-2 font-bold text-gray-800">Tab Mẫu in hóa đơn</h3>
               <ul className="list-disc space-y-1 pl-5">
                 <li>Danh sách mẫu in l?y t? API th?t <strong>/api/print-templates</strong>, khứng dụng mock cho CRUD ho?c editor ch?nh th?c.</li>
-                <li>Editor Canva-like h? tr? k?o th?, resize, zoom, grid, snap, L?u v? Publish sang layout in th?t, preview bằng hóa đơn th?t.</li>
-                <li>Preview editor v? renderer in d?ng dữ liệu hóa đơn th?t t? API <strong>/api/invoices/:idOrCode/print</strong>; logo upload/xóa qua asset endpoint ri?ng.</li>
+                <li>Editor Canva-like hỗ trợ kỳo th?, resize, zoom, grid, snap, Lđủ về Publish sang layout in th?t, preview bằng hóa đơn th?t.</li>
+                <li>Preview editor về renderer in d?ng dữ liệu hóa đơn th?t t? API <strong>/api/invoices/:idOrCode/print</strong>; logo upload/xóa qua asset endpoint ri?ng.</li>
               </ul>
             </div>
 
             <div>
               <h3 className="mb-2 font-bold text-gray-800">Tab Cập nhật</h3>
               <ul className="list-disc space-y-1 pl-5">
-                <li>Ch? ho?t d?ng khi ch?y b?n Electron d? d?ng g?i.</li>
-                <li>App ch? cài đặt sau khi ngu?i d?ng xác nhận v? s? sao luu database trước khi cập nhật.</li>
-                <li>Khi c?n debug, c? th? xem du?ng đến file update.log được hiển thị trong trang.</li>
+                <li>Ch? ho?t d?ng khi ch?y bđơn Electron d? d?ng gđi.</li>
+                <li>App ch? cài đặt sau khi nguđi d?ng xác nhận về s? sao luu database trước khi cập nhật.</li>
+                <li>Khi cđơn debug, có thể xem du?ng đến file update.log được hiển thị trong trang.</li>
               </ul>
             </div>
           </div>

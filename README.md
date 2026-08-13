@@ -5,7 +5,7 @@
 Ứng dụng quản lý bán hàng offline gồm:
 
 - Backend Node.js/Express dùng JSON file database.
-- Frontend React/Vite cho nghiệp vụ bán hàng, kho, khách hàng, nhập hàng, báo cáo, sổ quỹ, bảng lương, mẫu in và thiết lập.
+- Frontend React/Vite cho nghiệp vụ bán hàng, kho, khách hàng, nhập hàng, báo cáo, sổ quỹ, mẫu in và thiết lập.
 - Desktop Electron đóng gói frontend và tự khởi động backend nội bộ khi chạy bản cài đặt.
 
 ## Nghiệp vụ chính

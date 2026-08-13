@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "mcp:readonly": "node mcp/readOnlyServer.js",
     "reset-local-admin": "node scripts/reset-local-admin.js",
     "init-print-templates-mysql": "node scripts/init-print-templates-mysql.js",
     "test:repeat-sku-orders": "node scripts/test-repeat-sku-orders.js",

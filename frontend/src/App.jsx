@@ -16,7 +16,6 @@ import Nhaphang from './pages/nhaphang';
 import CustomerOrderReport from './pages/CustomerOrderReport';
 import ProductReport from './pages/ProductReport';
 import CashBook from './pages/CashBook';
-import Payroll from './pages/Payroll';
 import InvoicePrint from './pages/InvoicePrint';
 import AccountingDashboard from './pages/AccountingDashboard';
 import TaxReport from './pages/TaxReport';
@@ -25,7 +24,6 @@ import AccountingLogs from './pages/AccountingLogs';
 import HelpModal from './components/HelpModal';
 import ErrorBoundary from './components/ErrorBoundary'; // page-level error guard
 import {
-  BadgeDollarSign,
   BarChart3,
   Box,
   Boxes,
@@ -150,7 +148,6 @@ const ROUTE_PERMISSIONS = {
   '/ke-toan/bao-cao-thue': ['tax_reports.read'],
   '/ke-toan/bao-cao-ton-kho': ['inventory_reports.read'],
   '/ke-toan/nhat-ky': ['activity_logs.read'],
-  '/bang-luong-nhan-vien': ['payrolls.read'],
   '/bao-cao-theo-don-hang': ['invoices.read'],
   '/bao-cao-theo-san-pham': ['stats.read'],
 
@@ -264,6 +261,16 @@ function FullScreenLoading({ message = 'Đang khởi tạo ứng dụng...' }) {
       </div>
     </div>
   );
+}
+
+function withStartupTimeout(promise, timeoutMs = 8000) {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error('Khởi động quá thời gian chờ.')), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) window.clearTimeout(timer);
+  });
 }
 
 
@@ -443,12 +450,6 @@ function buildScreenGuide(navGroups, currentPath) {
       'Nhập action hoặc từ khóa nếu muốn lọc sâu hơn.',
       'Bấm Xem ở từng dòng để mở dữ liệu trước và sau khi thay đổi.',
       'Dùng phân trang để xem các log cũ hơn mà không cần tải lại trang.',
-    ],
-    '/bang-luong-nhan-vien': [
-      'Chọn tháng cần xem bảng lương.',
-      'Kiểm tra doanh thu, hoa hồng, thưởng và trạng thái chi trả.',
-      'Cập nhật trạng thái đã thanh toán khi hoàn tất chi trả.',
-      'Xuất file nếu cần lưu hoặc gửi cho kế toán.',
     ],
     '/bao-cao-theo-don-hang': [
       'Chọn khách hàng và khoảng thời gian cần xem.',
@@ -720,7 +721,6 @@ function AppLayout({
           { to: '/so-quy', label: 'Sổ quỹ', icon: Wallet },
           { to: '/bao-cao-theo-don-hang', label: 'Báo cáo theo đơn hàng', icon: FileText },
           { to: '/bao-cao-theo-san-pham', label: 'Báo cáo sản phẩm', icon: Boxes },
-          { to: '/bang-luong-nhan-vien', label: 'Bảng lương nhân viên', icon: BadgeDollarSign },
           { to: '/cai-dat', label: 'Cài đặt', icon: SettingsIcon },
         ],
       },
@@ -866,7 +866,6 @@ function AppLayout({
             <Route path="/ke-toan/bao-cao-thue" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-thue"><ErrorBoundary><TaxReport /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/ke-toan/bao-cao-ton-kho" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-ton-kho"><ErrorBoundary><InventoryReport /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/ke-toan/nhat-ky" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/nhat-ky"><ErrorBoundary><AccountingLogs /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/bang-luong-nhan-vien" element={<ProtectedRoute user={user} permissions={permissions} path="/bang-luong-nhan-vien"><ErrorBoundary><Payroll /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><ErrorBoundary><CustomerOrderReport /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ErrorBoundary><ProductReport /></ErrorBoundary></ProtectedRoute>} />
 
@@ -960,7 +959,7 @@ function DesktopApp() {
 
   const loadBootstrapStatus = useCallback(async () => {
     try {
-      const status = await authApi.bootstrapStatus();
+      const status = await withStartupTimeout(authApi.bootstrapStatus());
       setBootstrapStatus(status);
       return status;
     } catch (err) {
@@ -1041,10 +1040,10 @@ function DesktopApp() {
       }
 
       try {
-        let payload = await authApi.profile();
+        let payload = await withStartupTimeout(authApi.profile());
 
         if (!mounted) return;
-        // Profile d? tr? v? đầy đủ user + permissions + syncVersions
+        // Profile d? tr? về đầy đủ user + permissions + syncVersions
         await applyServerPayload(payload, { persistMode: 'snapshot', redirect: true, sync: true });
         setBootstrapStatus(null);
       } catch (err) {
@@ -1226,7 +1225,7 @@ function DesktopApp() {
       try {
         await authApi.logout();
       } catch (_) {
-        // Nếu token d? hết hạn, apiClient d? cleanup v? ph?t s? ki?n 401.
+        // Nếu token d? hết hạn, apiClient d? cleanup về ph?t s? kiđơn 401.
       }
     }
     clearAuthSession({ clearVolatile: true, includePending: true });
@@ -1266,4 +1265,3 @@ function DesktopApp() {
 export default function App() {
   return <DesktopApp />;
 }
-

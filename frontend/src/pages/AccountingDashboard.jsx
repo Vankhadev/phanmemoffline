@@ -137,7 +137,7 @@ export default function AccountingDashboard({ user }) {
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide"><TrendingUp size={16} /> Tổng doanh thu</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatVND(summary?.total_revenue)}</div></div>
         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-700"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide"><ReceiptText size={16} /> S? hóa đơn</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatNumber(summary?.invoice_count)}</div></div>
         {!isCashier && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-700"><div className="text-xs font-bold uppercase tracking-wide">Tổng giá vốn</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatVND(summary?.total_cost)}</div></div>}
-        {!isCashier && <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-violet-700"><div className="text-xs font-bold uppercase tracking-wide">Lỗi nhu?n</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatVND(summary?.total_profit)}</div></div>}
+        {!isCashier && <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-violet-700"><div className="text-xs font-bold uppercase tracking-wide">Lợi nhuận</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatVND(summary?.total_profit)}</div></div>}
       </section>
 
       {showHelp && (

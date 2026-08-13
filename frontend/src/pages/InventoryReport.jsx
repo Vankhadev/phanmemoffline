@@ -20,17 +20,17 @@ const PAGE_SIZE = 20;
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'Tất cả trạng thái' },
-  { value: 'in_stock', label: 'C?n h?ng' },
+  { value: 'in_stock', label: 'Cđơn h?ng' },
   { value: 'low', label: 'S?p hết hạng' },
   { value: 'out', label: 'H?t h?ng' },
-  { value: 'negative', label: '?m kho' },
+  { value: 'negative', label: 'âm kho' },
 ];
 
 const STATUS_META = {
-  in_stock: { label: 'C?n h?ng', className: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: CircleCheck },
+  in_stock: { label: 'Cđơn h?ng', className: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: CircleCheck },
   low: { label: 'S?p hết hạng', className: 'border-amber-200 bg-amber-50 text-amber-700', icon: AlertTriangle },
   out: { label: 'H?t h?ng', className: 'border-red-200 bg-red-50 text-red-700', icon: PackageX },
-  negative: { label: '?m kho', className: 'border-rose-300 bg-rose-600 text-white', icon: AlertOctagon },
+  negative: { label: 'âm kho', className: 'border-rose-300 bg-rose-600 text-white', icon: AlertOctagon },
 };
 
 function formatVND(value) {
@@ -184,22 +184,22 @@ export default function InventoryReport() {
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-orange-50/80">Kho hàng ? Báo cáo</div>
               <h1 className="mt-1 text-2xl font-bold">Báo cáo tồn kho</h1>
-              <p className="mt-1 max-w-3xl text-sm text-white/85">Theo dài số lượng t?n, giá vốn, gi? tr? tồn kho v? các cảnh báo s?p h?t, hết hạng ho?c ?m kho.</p>
+              <p className="mt-1 max-w-3xl text-sm text-white/85">Theo dài số lượng tđơn, giá vốn, giá trị tồn kho về các cảnh báo s?p h?t, hết hạng ho?c âm kho.</p>
             </div>
           </div>
           <button type="button" onClick={() => loadReport()} disabled={loading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-white/15 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/25 disabled:opacity-60">
-            <RefreshCw size={17} className={loading ? 'animate-spin' : ''} /> L?m mới
+            <RefreshCw size={17} className={loading ? 'animate-spin' : ''} /> Lâm mới
           </button>
         </div>
       </section>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryCard icon={Boxes} label="Một h?ng" value={summary.total_items} tone="blue" />
-        <SummaryCard icon={CircleCheck} label="C?n h?ng" value={summary.in_stock_count} tone="emerald" />
+        <SummaryCard icon={CircleCheck} label="Cđơn h?ng" value={summary.in_stock_count} tone="emerald" />
         <SummaryCard icon={AlertTriangle} label="S?p h?t" value={summary.low_stock_count} tone="amber" />
         <SummaryCard icon={PackageX} label="H?t h?ng" value={summary.out_of_stock_count} tone="red" />
-        <SummaryCard icon={AlertOctagon} label="?m kho" value={summary.negative_stock_count} tone="rose" />
-        <SummaryCard icon={WalletCards} label="Gi? tr? t?n" value={summary.total_inventory_value} tone="violet" money />
+        <SummaryCard icon={AlertOctagon} label="âm kho" value={summary.negative_stock_count} tone="rose" />
+        <SummaryCard icon={WalletCards} label="Gi? tr? tđơn" value={summary.total_inventory_value} tone="violet" money />
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -208,7 +208,7 @@ export default function InventoryReport() {
             <label className="mb-1 block text-xs font-semibold text-gray-500">Tạm sản phẩm</label>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input className="input-field pl-9" value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="Tồn, m? sản phẩm ho?c SKU..." />
+              <input className="input-field pl-9" value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="Tồn, mã sản phẩm ho?c SKU..." />
             </div>
           </div>
           <div>
@@ -222,8 +222,8 @@ export default function InventoryReport() {
             <select className="input-field" value={sort} onChange={event => { setSort(event.target.value); setPage(1); }}>
               <option value="product_name">Tồn sản phẩm</option>
               <option value="stock">Tồn kho</option>
-              <option value="cost_price">Gi? v?n</option>
-              <option value="inventory_value">Gi? tr? t?n</option>
+              <option value="cost_price">Gi? vđơn</option>
+              <option value="inventory_value">Gi? tr? tđơn</option>
               <option value="status">Trạng thái</option>
             </select>
           </div>
@@ -231,7 +231,7 @@ export default function InventoryReport() {
             <label className="mb-1 block text-xs font-semibold text-gray-500">Th? t?</label>
             <select className="input-field" value={order} onChange={event => { setOrder(event.target.value); setPage(1); }}>
               <option value="asc">Tang đến</option>
-              <option value="desc">Gi?m đến</option>
+              <option value="desc">Giâm đến</option>
             </select>
           </div>
           <div>
@@ -244,9 +244,9 @@ export default function InventoryReport() {
           </div>
         </form>
         <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
-          <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">Tổng t?n: <strong>{formatNumber(summary.total_stock)}</strong></span>
+          <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700">Tổng tđơn: <strong>{formatNumber(summary.total_stock)}</strong></span>
           <span className="rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-amber-700">Ngu?ng cảnh báo: = <strong>{threshold}</strong></span>
-          {appliedSearch && <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">T? kh?a: ?{appliedSearch}?</span>}
+          {appliedSearch && <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1">T? khđã: ?{appliedSearch}?</span>}
           {data.generated_at && <span>Cập nhật: {new Date(data.generated_at).toLocaleString('vi-VN')}</span>}
         </div>
         {error && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
@@ -268,8 +268,8 @@ export default function InventoryReport() {
                 <th className="px-4 py-3 text-left">Tồn sản phẩm</th>
                 <th className="px-4 py-3 text-left">Kho / danh mục</th>
                 <th className="px-4 py-3 text-right">Tồn kho</th>
-                <th className="px-4 py-3 text-right">Gi? v?n</th>
-                <th className="px-4 py-3 text-right">Gi? tr? t?n</th>
+                <th className="px-4 py-3 text-right">Gi? vđơn</th>
+                <th className="px-4 py-3 text-right">Gi? tr? tđơn</th>
                 <th className="px-4 py-3 text-center">Cảnh báo</th>
               </tr>
             </thead>
@@ -286,7 +286,7 @@ export default function InventoryReport() {
                   </td>
                   <td className="px-4 py-3 text-gray-600">
                     <div>{row.warehouse_name || row.warehouse || 'Kho mặc định'}</div>
-                    <div className="mt-0.5 text-xs text-gray-400">{row.category_name || row.category || 'Chua ph?n loại'}</div>
+                    <div className="mt-0.5 text-xs text-gray-400">{row.category_name || row.category || 'Chua phđơn loại'}</div>
                   </td>
                   <td className={`px-4 py-3 text-right text-base font-extrabold ${Number(row.stock) < 0 ? 'text-rose-700' : Number(row.stock) === 0 ? 'text-red-600' : Number(row.stock) <= threshold ? 'text-amber-700' : 'text-emerald-700'}`}>{formatNumber(row.stock)}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{formatVND(row.cost_price ?? row.import_price)}</td>
@@ -299,12 +299,12 @@ export default function InventoryReport() {
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-2 border-t border-gray-100 py-14 text-gray-500"><Loader2 size={30} className="animate-spin text-orange-500" /><span className="font-semibold">đang t?i báo cáo tồn kho...</span></div>
+          <div className="flex flex-col items-center justify-center gap-2 border-t border-gray-100 py-14 text-gray-500"><Loader2 size={30} className="animate-spin text-orange-500" /><span className="font-semibold">đang tđi báo cáo tồn kho...</span></div>
         ) : rows.length === 0 ? (
           <div className="border-t border-gray-100 px-4 py-14 text-center text-gray-400">
             <div className="mb-2 text-4xl opacity-30">??</div>
             <div className="font-semibold text-gray-500">Không có sản phẩm phù hợp</div>
-            <div className="mt-1 text-sm">Hủy dài t? kh?a, trạng thái ho?c ngu?ng cảnh báo.</div>
+            <div className="mt-1 text-sm">Hủy dài từ khóa, trạng thái ho?c ngu?ng cảnh báo.</div>
           </div>
         ) : null}
 

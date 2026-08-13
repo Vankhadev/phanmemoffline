@@ -583,8 +583,6 @@ const DEFAULT_PERMISSIONS = [
   ['bank_accounts.read', 'Xem tài khoản ngân hàng', 'Xem danh mục tài khoản ngân hàng'],
   ['bank_accounts.manage', 'Quản lý tài khoản ngân hàng', 'Tạo, sửa, xóa tài khoản ngân hàng'],
   ['activity_logs.read', 'Xem nhật ký hoạt động', 'Xem nhật ký hoạt động nghiệp vụ'],
-  ['payrolls.read', 'Xem lương', 'Xem bảng lương'],
-  ['payrolls.manage', 'Quản lý lương', 'Tạo, sửa bảng lương'],
   ['sync.read', 'Xem đồng bộ', 'Xem trạng thái đồng bộ'],
   ['sync.manage', 'Quản lý đồng bộ', 'Đẩy/kéo dữ liệu đồng bộ'],
   ['settings.read', 'Xem thiết lập', 'Xem thiết lập hệ thống'],
@@ -596,7 +594,7 @@ const DEFAULT_PERMISSIONS = [
 const DEFAULT_USER_PERMISSION_KEYS = [
   'admin_panel.read', 'features.read', 'updates.read', 'users.read', 'store.read', 'products.read',
   'customers.read', 'partners.read', 'invoices.read', 'invoices.manage', 'imports.read', 'combos.read', 'returns.read',
-  'stats.read', 'cashbook.read', 'payrolls.read', 'sync.read', 'sync.manage',
+  'stats.read', 'cashbook.read', 'sync.read', 'sync.manage',
   'settings.read',
 ];
 
@@ -655,6 +653,8 @@ const LEGACY_KEY_PREFIX = ['b', 'o', 't'].join('');
 const REMOVED_LEGACY_PERMISSION_KEYS = new Set([
   `${LEGACY_KEY_PREFIX}.read`,
   `${LEGACY_KEY_PREFIX}.manage`,
+  'payrolls.read',
+  'payrolls.manage',
 ]);
 function isCurrentSchemaTable(tableName) {
   return Object.prototype.hasOwnProperty.call(SCHEMA, String(tableName || '').trim());
@@ -2841,15 +2841,12 @@ function migrateDB() {
   // Rebuilding every daily statistic from every invoice on each startup is
   // expensive on stores with a long sales history. Invoice writes keep these
   // stats current; full rebuild belongs to an explicit maintenance repair.
-  // KHA FIX 2.3.3: bỏ qua migration "old customer database" (quét C:\D:\E:\F:\backup
-  // parse từng file JSON để tìm dongphuongqc@gmail.com) khi chạy trong Electron
-  // production (KHA_DB_PATH đã set). Quá trình này mất nhiều phút và là nguyên nhân
-  // thứ hai gây treo startup backend production. Người dùng đã có dữ liệu trong DB
-  // hiện tại; việc khôi phục dữ liệu cũ nên làm thủ công qua nút "Khôi phục dữ liệu".
-  if (!process.env.KHA_DB_PATH && !process.env.DB_PATH && !process.env.DATABASE_PATH) {
+  // Importing an old database scans local drives and can delay HTTP startup for
+  // minutes. Recovery is explicit by default; opt in only for a one-time import.
+  if (process.env.KHA_IMPORT_OLD_DB_ON_STARTUP === '1') {
     importOldCustomerDatabase();
-  } else if (process.env.KHA_SKIP_OLD_DB_MIGRATION !== '0') {
-    console.log('[MIGRATION 1.6.8] Bỏ qua quét old customer database khi khởi động (chế độ Electron production).');
+  } else {
+    console.log('[MIGRATION 1.6.8] Bỏ qua import database cũ khi khởi động; dùng KHA_IMPORT_OLD_DB_ON_STARTUP=1 để chạy thủ công.');
   }
   try {
     runRelationalCompatibilityMigration({ skipBackup: true });

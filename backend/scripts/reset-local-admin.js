@@ -151,6 +151,7 @@ function resetLocalAdmin(options = {}) {
   const account = ensureDefaultAccount(db);
   const timestamp = now();
   const requestedEmail = normalizeEmail(options.email || 'admin.local@example.com');
+  const currentEmail = normalizeEmail(options.currentEmail);
   const requestedPassword = String(options.password || generatePassword()).trim();
   const requestedName = String(options.name || 'Local Admin').trim() || 'Local Admin';
   const requestedPhone = String(options.phone || '0900000000').trim() || '0900000000';
@@ -160,7 +161,8 @@ function resetLocalAdmin(options = {}) {
   }
 
   const adminCandidates = db.users.filter(user => user && normalizeRole(user.role) === 'admin');
-  let user = db.users.find(item => normalizeEmail(item && item.email) === requestedEmail)
+  let user = (currentEmail && db.users.find(item => normalizeEmail(item && item.email) === currentEmail))
+    || db.users.find(item => normalizeEmail(item && item.email) === requestedEmail)
     || adminCandidates.find(item => item && item.active !== 0)
     || adminCandidates[0]
     || null;
@@ -223,7 +225,7 @@ function resetLocalAdmin(options = {}) {
 }
 
 function printUsage() {
-  console.log('Usage: node backend/scripts/reset-local-admin.js --yes [--email admin@example.com] [--password Admin@123456] [--name "Local Admin"] [--phone 0900000000] [--db path-to-db.json]');
+  console.log('Usage: node backend/scripts/reset-local-admin.js --yes [--current-email old@example.com] [--email admin@example.com] [--password Admin@123456] [--name "Local Admin"] [--phone 0900000000] [--db path-to-db.json]');
 }
 
 function main() {
@@ -241,6 +243,7 @@ function main() {
 
   const result = resetLocalAdmin({
     args,
+    currentEmail: args['current-email'],
     email: args.email,
     password: args.password,
     name: args.name,

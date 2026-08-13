@@ -236,6 +236,7 @@ export default function CreateOrder({ user, store }) {
   const serviceNameInputRefs = useRef({});
   const comboLastFetchedAtRef = useRef(0);
   const comboFetchInFlightRef = useRef(null);
+  const productSearchRequestRef = useRef(0);
   const lastStockLimitToastRef = useRef('');
   const lastServiceLineAddedAtRef = useRef(0);
 
@@ -453,7 +454,6 @@ export default function CreateOrder({ user, store }) {
       }
     };
 
-    loadJson('products', resolveApiUrl('/products/all/with-variants'), setProducts);
     loadJson('customers', resolveApiUrl('/customers'), setCustomers);
     fetchCombos({ force: true });
 
@@ -466,6 +466,43 @@ export default function CreateOrder({ user, store }) {
       timeout(8000).catch(() => {})
     ]);
   }, []);
+
+  // The catalog contains thousands of products. Loading the full tree on every
+  // order screen visit blocks the browser, so fetch only matching rows on demand.
+  useEffect(() => {
+    const query = productSearch.trim();
+    if (query.length < 2 || productResultFilter === 'combo') {
+      setProducts([]);
+      setLoading(prev => ({ ...prev, products: false }));
+      setLoadError(prev => ({ ...prev, products: false }));
+      return undefined;
+    }
+
+    const requestId = productSearchRequestRef.current + 1;
+    productSearchRequestRef.current = requestId;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLoading(prev => ({ ...prev, products: true }));
+      try {
+        const data = await apiJsonChecked(`/products/search?q=${encodeURIComponent(query)}&limit=100`, { signal: controller.signal }, 'Không tải được sản phẩm.');
+        if (productSearchRequestRef.current === requestId) {
+          setProducts(Array.isArray(data) ? data : []);
+          setLoadError(prev => ({ ...prev, products: false }));
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError' && productSearchRequestRef.current === requestId) {
+          setProducts([]);
+          setLoadError(prev => ({ ...prev, products: true }));
+        }
+      } finally {
+        if (productSearchRequestRef.current === requestId) setLoading(prev => ({ ...prev, products: false }));
+      }
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [productSearch, productResultFilter]);
 
   useEffect(() => {
     const refreshCombos = () => fetchCombos({ force: true });
@@ -489,12 +526,7 @@ export default function CreateOrder({ user, store }) {
   }, []);
 
   useEffect(() => {
-    const refreshProducts = () => {
-      fetch(resolveApiUrl('/products/all/with-variants'))
-        .then(r => r.json())
-        .then(d => setProducts(Array.isArray(d) ? d : []))
-        .catch(() => { });
-    };
+    const refreshProducts = () => setProducts([]);
     const refreshCustomers = () => {
       fetch(resolveApiUrl('/customers'))
         .then(r => r.json())
@@ -555,7 +587,8 @@ export default function CreateOrder({ user, store }) {
     return (visibleFilteredProducts || []).flatMap(parent => {
       const variants = getProductVariants(parent);
       if (variants.length === 0) {
-        return [{ ...parent, is_variant: false, _isVariantOption: false, _rowKey: `product-${parent.id || parent.sku || parent.name}` }];
+        const isVariant = Boolean(parent.is_variant || parent._isVariantOption);
+        return [{ ...parent, is_variant: isVariant, _isVariantOption: isVariant, _rowKey: `${isVariant ? 'variant' : 'product'}-${parent.id || parent.sku || parent.name}` }];
       }
 
       const visibleVariants = !normalizedQuery || parent._matchesParentSearch
@@ -589,7 +622,9 @@ export default function CreateOrder({ user, store }) {
   const resultLoadError = isComboResultMode ? loadError.combos : loadError.products;
   const emptyProductResultMessage = resultLoadError
     ? (isComboResultMode ? 'Không tải được dữ liệu combo' : 'Không tải được dữ liệu sản phẩm')
-    : (isComboResultMode ? 'Không tìm thấy combo' : 'Không tìm thấy sản phẩm');
+    : (!isComboResultMode && productSearch.trim().length < 2
+      ? 'Nhập ít nhất 2 ký tự để tìm sản phẩm'
+      : (isComboResultMode ? 'Không tìm thấy combo' : 'Không tìm thấy sản phẩm'));
   const handleProductResultFilterChange = (filter) => {
     setProductResultFilter(filter);
     if (filter === 'combo') fetchCombos();
@@ -2456,88 +2491,77 @@ export default function CreateOrder({ user, store }) {
             )}
           </div>
 
-          {/* Tags + Ghi chú + Tổng tiền */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-            {/* Trái: Tags + Ghi chú */}
-            <div className="sapo-card p-4 space-y-3">
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Tags</label>
-                <input className="input-field w-full text-sm" placeholder="Nhập tag..."
-                  value={tag} onChange={e => setTag(e.target.value)} />
+          <div className="flex justify-end">
+            <div className="sapo-card sapo-order-summary order-payment-card w-full">
+              <div className="order-payment-header">
+                <div>
+                  <span>Thanh toán</span>
+                  <p>{cart.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0).toLocaleString('vi-VN')} sản phẩm trong đơn</p>
+                </div>
+                <ReceiptText size={19} aria-hidden="true" />
               </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Ghi chú đơn hàng</label>
-                <textarea className="input-field w-full text-sm resize-none" rows={4}
-                  placeholder="Ghi chú cho đơn hàng..."
-                  value={note} onChange={e => setNote(e.target.value)} />
-              </div>
-            </div>
 
-            {/* Phải: Tổng tiền */}
-            <div className="sapo-card sapo-order-summary p-4 space-y-2 text-sm">
-              <div className="flex justify-between items-center text-gray-600">
-                <span>Tổng tiền ({cart.reduce((s, i) => s + (Number(i.quantity) || 0), 0).toLocaleString('vi-VN')} số lượng)</span>
-                <span className="font-medium">{formatVND(subtotal)}</span>
-              </div>
-              <div className="flex justify-between items-center text-gray-600">
-                <span className="flex items-center gap-1">
-                  VAT
-                  <input type="number" min="0" max="100" value={vatPercent}
-                    onChange={e => setVatPercent(+e.target.value)}
-                    className="w-12 text-center border rounded px-1 py-0.5 text-xs ml-1" />%
-                </span>
-                <span>{formatVND(vatAmount)}</span>
-              </div>
-              <div className="flex justify-between items-center text-gray-600">
-                <span className="flex items-center gap-1">
-                  Chiết khấu
-                  <select value={deliveryFeeMode} onChange={e => setDeliveryFeeMode(e.target.value)}
-                    className="border rounded px-1 py-0.5 text-xs ml-1">
-                    <option value="absolute">VND</option>
-                    <option value="percent">%</option>
-                  </select>
-                </span>
-                <input type="number" min="0" value={discountAmount}
-                  onChange={e => setDiscountAmount(+e.target.value)}
-                  className="w-24 text-right border rounded px-2 py-0.5 text-xs" />
-              </div>
-              <div className="flex justify-between items-center text-gray-600">
-                <span>Phí giao hàng</span>
-                <input type="number" min="0" value={deliveryFee}
-                  onChange={e => setDeliveryFee(+e.target.value)}
-                  className="w-24 text-right border rounded px-2 py-0.5 text-xs" />
-              </div>
-              <div className="flex justify-between items-center text-gray-500 text-xs">
-                <span>M? gi?m gi?</span>
-                <input className="w-28 text-right border rounded px-2 py-0.5 text-xs" placeholder="Nhập m?..." disabled />
-              </div>
-              <div className="border-t pt-2 mt-1">
-                <div className="flex justify-between items-center font-bold text-base">
-                  <span>Khách phải trả</span>
-                  <span className="text-red-600 text-lg">{formatVND(grandTotal)}</span>
+              <div className="order-payment-body">
+                <div className="order-payment-line">
+                  <span>Giá tạm tính</span>
+                  <strong>{formatVND(subtotal)}</strong>
+                </div>
+
+                <div className="order-payment-adjustments">
+                  <label>
+                    <span>Thuế GTGT / VAT</span>
+                    <div className="order-payment-input">
+                      <input type="number" min="0" max="100" value={vatPercent} onChange={e => setVatPercent(+e.target.value)} />
+                      <span>%</span>
+                    </div>
+                    <small>Phí GTGT: {formatVND(vatAmount)}</small>
+                  </label>
+                  <label>
+                    <span>Chiết khấu</span>
+                    <div className="order-payment-input">
+                      <input type="number" min="0" value={discountAmount} onChange={e => setDiscountAmount(+e.target.value)} />
+                      <select value={deliveryFeeMode} onChange={e => setDeliveryFeeMode(e.target.value)} aria-label="Đơn vị chiết khấu">
+                        <option value="absolute">VND</option>
+                        <option value="percent">%</option>
+                      </select>
+                    </div>
+                    <small>-{formatVND(discountVal)}</small>
+                  </label>
+                  <label>
+                    <span>Phí giao hàng</span>
+                    <div className="order-payment-input">
+                      <input type="number" min="0" value={deliveryFee} onChange={e => setDeliveryFee(+e.target.value)} />
+                      <span>VND</span>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="order-payment-total">
+                  <span>Tổng tiền hóa đơn</span>
+                  <strong>{formatVND(grandTotal)}</strong>
+                  <small>Giá tạm tính + thuế GTGT - chiết khấu + phí giao hàng</small>
+                </div>
+
+                <div className="order-payment-received">
+                  <label>Khách phải trả</label>
+                  <strong>{formatVND(grandTotal)}</strong>
+                  <label htmlFor="order-paid-amount">Khách thanh toán</label>
+                  <input id="order-paid-amount" type="number" min="0" value={paidAmount} onChange={e => setPaidAmount(+e.target.value)} />
+                  <div>
+                    <span>{remainingAmount > 0 ? 'Còn phải trả' : 'Tiền thừa trả khách'}</span>
+                    <strong className={remainingAmount > 0 ? 'text-amber-700' : 'text-emerald-700'}>{formatVND(remainingAmount > 0 ? remainingAmount : changeAmount)}</strong>
+                  </div>
                 </div>
               </div>
-              <div className="flex justify-between items-center text-gray-600">
-                <span>Khách d? thanh toán</span>
-                <input type="number" min="0" value={paidAmount}
-                  onChange={e => setPaidAmount(+e.target.value)}
-                  className="w-28 text-right border rounded px-2 py-0.5 text-sm font-medium" />
-              </div>
-              <div className="flex justify-between items-center text-gray-600">
-                <span>Còn phải trả</span>
-                <span className={`font-semibold ${remainingAmount > 0 ? 'text-red-500' : 'text-green-600'}`}>
-                  {formatVND(Math.max(0, remainingAmount))}
-                </span>
-              </div>
               {hasCartStockError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                <div className="mx-4 mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
                   {cartStockValidation.summaryMessage || negativeStockLimitMessage}
                 </div>
               )}
               <button
                 onClick={editingInvoiceId ? handleSaveEdit : handleCreateOrder}
                 disabled={cart.length === 0 || creating || hasCartStockError}
-                className="sapo-btn sapo-btn-primary w-full mt-2">
+                className="sapo-btn sapo-btn-primary order-payment-submit">
                 {creating ? (editingInvoiceId ? ' Đang lưu...' : ' Đang tạo...') : (editingInvoiceId ? ' Lưu thay đổi' : 'Tạo đơn hàng')}
               </button>
             </div>

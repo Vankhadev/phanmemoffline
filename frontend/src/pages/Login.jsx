@@ -55,9 +55,9 @@ class RestoreModuleErrorBoundary extends Component {
     if (this.state.error) {
       return (
         <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-700">
-          <div className="font-bold">Module kh?i ph?c d? li?u ?ang g?p l?i.</div>
-          <div className="mt-1">{this.state.error?.message || 'Kh?ng th? hi?n th? khu v?c kh?i ph?c.'}</div>
-          <button type="button" className="mt-2 rounded-lg border border-red-200 bg-white px-3 py-1 font-semibold text-red-700" onClick={() => this.setState({ error: null })}>Th? l?i</button>
+          <div className="font-bold">Module khôi phục dữ liệu đang g?p lđi.</div>
+          <div className="mt-1">{this.state.error?.message || 'Kh?ng th? hiển thị khu vềc khôi phục.'}</div>
+          <button type="button" className="mt-2 rounded-lg border border-red-200 bg-white px-3 py-1 font-semibold text-red-700" onClick={() => this.setState({ error: null })}>Th? lđi</button>
         </div>
       );
     }
@@ -413,15 +413,35 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const isBootstrapDisabled = loading || checkingSetup || !showSetupForm;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg overflow-hidden bg-slate-50 border border-slate-100">
+    <div className="login-screen">
+      <div className="login-shell">
+        <aside className="login-showcase" aria-label="Giới thiệu Bán Hàng POS">
+          <div className="login-showcase-brand">
+            <div className="login-showcase-logo">
+              <img src="/icons/app-icon-192.png" alt="" />
+            </div>
+            <span>Bán Hàng POS</span>
+          </div>
+          <div className="login-showcase-copy">
+            <p className="login-showcase-eyebrow">QUẢN LÝ BÁN HÀNG TẠI QUẦY</p>
+            <h1>Vận hành cửa hàng gọn gàng, nhanh chóng.</h1>
+            <p>Theo dõi đơn hàng, tồn kho và doanh thu từ một không gian làm việc duy nhất.</p>
+          </div>
+          <div className="login-showcase-points">
+            <div><ShieldCheck size={18} /><span>Dữ liệu được lưu an toàn trên máy của bạn</span></div>
+            <div><Store size={18} /><span>Sẵn sàng cho bán hàng ngay cả khi mất mạng</span></div>
+          </div>
+          <div className="login-showcase-footer">Phiên bản quản lý cửa hàng</div>
+        </aside>
+        <main className="login-card">
+        <div className="login-heading">
+          <div className="login-mobile-logo">
             <img src="/icons/app-icon-192.png" alt="POS Logo" className="w-full h-full object-cover" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">Bán Hàng POS</h1>
-          <p className="text-blue-600 font-semibold mt-1">
-            {checkingSetup ? 'Đang kiểm tra hệ thống...' : showSetupForm ? 'Thiết lập lần đầu' : 'Đăng nhập hệ thống'}
+          <p className="login-kicker">CHÀO MỪNG TRỞ LẠI</p>
+          <h2>{checkingSetup ? 'Đang kiểm tra hệ thống' : showSetupForm ? 'Thiết lập lần đầu' : 'Đăng nhập vào cửa hàng'}</h2>
+          <p className="login-subtitle">
+            {showSetupForm ? 'Tạo quản trị viên đầu tiên để bắt đầu sử dụng.' : 'Nhập thông tin tài khoản để tiếp tục làm việc.'}
           </p>
           {isNativeAppRuntime() && (
             <div className="mt-2 text-xs font-bold text-emerald-700">{MOBILE_APP_DISPLAY_NAME} {MOBILE_APP_VERSION}</div>
@@ -458,13 +478,13 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
 
             {/* Toggle between Đăng ký, Đăng nhập, và Thiết lập (nếu cần) */}
-            <div className="mb-4 grid grid-cols-3 gap-2 rounded-xl bg-amber-50 p-1">
+            <div className="login-mode-tabs">
               {/* Đăng ký - luôn hiển thị nếu không ở chế độ setup */}
               {!showSetupForm && (
                 <button
                   type="button"
                   onClick={() => switchAuthMode('register')}
-                  className="rounded-lg px-3 py-2 text-sm font-bold text-green-800 hover:bg-green-100"
+                  className={`login-mode-tab ${authMode === 'register' ? 'login-mode-tab-active' : ''}`}
                 >
                   Đăng ký
                 </button>
@@ -473,7 +493,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
               <button
                 type="button"
                 onClick={() => switchAuthMode('login')}
-                className={`rounded-lg px-3 py-2 text-sm font-bold transition ${authMode === 'login' ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-700 hover:bg-blue-50'}`}
+                className={`login-mode-tab ${authMode === 'login' ? 'login-mode-tab-active' : ''}`}
               >
                 Đăng nhập tài khoản đã có
               </button>
@@ -482,7 +502,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 <button
                   type="button"
                   onClick={() => switchAuthMode('setup')}
-                  className={`rounded-lg px-3 py-2 text-sm font-bold transition ${authMode === 'setup' ? 'bg-amber-600 text-white shadow-sm' : 'text-amber-800 hover:bg-amber-100'}`}
+                  className={`login-mode-tab ${authMode === 'setup' ? 'login-mode-tab-active' : ''}`}
                 >
                   Thiết lập máy này
                 </button>
@@ -711,7 +731,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 <button
                   type="submit"
                   disabled={isLoginDisabled}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2"
+                  className="login-submit"
                 >
                   {loading ? (
                     <><RefreshCw size={20} className="animate-spin" /> đang đăng nhập...</>
@@ -720,14 +740,14 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   )}
                 </button>
 
-                <Link to="/dang-ky" className="w-full border border-blue-200 text-blue-700 hover:bg-blue-50 py-2.5 rounded-xl font-semibold transition flex items-center justify-center gap-2 text-sm">
+                <Link to="/dang-ky" className="login-register-link">
                   <UserPlus size={16} /> Đăng ký tài khoản mới
                 </Link>
               </form>
             )}
 
             {/* Khôi phục dữ liệu section */}
-            <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="login-recovery">
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -789,7 +809,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
               )}
             </div>
 
-            <div className="mt-6 bg-blue-50 rounded-xl p-4 text-xs text-blue-700">
+            <div className="login-status-note">
               {showSetupForm ? (
                 <div>Lần đầu sử dụng: tài khoản đầu tiên sẽ được server tự động cấp quyền ADMIN.</div>
               ) : needsSetup ? (
@@ -799,6 +819,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
               )}
             </div>
           </>
+        </main>
       </div>
     </div>
   );

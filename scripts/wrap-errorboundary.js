@@ -1,7 +1,7 @@
 const fs = require('fs');
 const p = 'G:/phanmienoffline/frontend/src/App.jsx';
 let cv = fs.readFileSync(p, 'utf8');
-const pages = ['CreateOrder','OrderList','InvoicePrint','KhoHang','NhaCungCap','Nhaphang','Products','Customers','Stats','CashBook','AccountingDashboard','TaxReport','InventoryReport','AccountingLogs','Payroll','CustomerOrderReport','ProductReport','Settings'];
+const pages = ['CreateOrder','OrderList','InvoicePrint','KhoHang','NhaCungCap','Nhaphang','Products','Customers','Stats','CashBook','AccountingDashboard','TaxReport','InventoryReport','AccountingLogs','CustomerOrderReport','ProductReport','Settings'];
 let count = 0;
 for (const pg of pages) {
   // match <Page ... /> self-closing tag (not already wrapped)
