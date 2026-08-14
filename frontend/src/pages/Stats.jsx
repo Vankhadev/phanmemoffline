@@ -15,7 +15,7 @@ function getLocalDateKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-function getPeriodRange(period) {
+function getPeriodRange(period, selectedMonth = '') {
   const now = new Date();
   const today = getLocalDateKey(now);
   if (period === 'day') return { from: today, to: today };
@@ -25,7 +25,11 @@ function getPeriodRange(period) {
     return { from: getLocalDateKey(fromDate), to: today };
   }
   if (period === 'month') {
-    return { from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, to: today };
+    const month = /^\d{4}-\d{2}$/.test(selectedMonth) ? selectedMonth : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const [year, monthNumber] = month.split('-').map(Number);
+    const lastDay = new Date(year, monthNumber, 0).getDate();
+    const currentMonth = today.slice(0, 7);
+    return { from: `${month}-01`, to: month === currentMonth ? today : `${month}-${String(lastDay).padStart(2, '0')}` };
   }
   return { from: `${now.getFullYear()}-01-01`, to: today };
 }
@@ -116,9 +120,13 @@ export default function Stats() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [reportMonth, setReportMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [showHelp, setShowHelp] = useState(false);
 
-  const periodRange = useMemo(() => getPeriodRange(period), [period]);
+  const periodRange = useMemo(() => getPeriodRange(period, reportMonth), [period, reportMonth]);
 
   const profitGroups = useMemo(() => buildProfitGroups(profitReport || {}), [profitReport]);
 
@@ -307,6 +315,15 @@ export default function Stats() {
               </button>
             ))}
           </div>
+          {period === 'month' && (
+            <input
+              type="month"
+              className="input-field h-9 text-sm"
+              value={reportMonth}
+              onChange={event => setReportMonth(event.target.value)}
+              aria-label="Chọn tháng xem thống kê"
+            />
+          )}
         </div>
       </div>
 

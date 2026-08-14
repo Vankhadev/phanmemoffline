@@ -604,6 +604,49 @@ router.get('/search', (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+// GET /api/products/sale-candidates?q=...
+// Returns only rows that can be sold: a parent without variants, or each
+// variant of a parent that has variants. Parent rows with variants are never
+// returned as sale candidates, avoiding duplicate choices in order entry.
+// ─────────────────────────────────────────────
+router.get('/sale-candidates', (req, res) => {
+  try {
+    const query = String(req.query.q || req.query.search || '').trim();
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 300);
+    const categoriesById = getCategoriesById();
+    const rows = [];
+
+    for (const parent of activeParents()) {
+      const variants = activeVariants(parent.id);
+      if (variants.length === 0) {
+        rows.push(enrichProduct(parent, null, categoriesById));
+        continue;
+      }
+      const enrichedParent = enrichProduct(parent, null, categoriesById);
+      variants.forEach(variant => rows.push({
+        ...enrichProduct(variant, enrichedParent, categoriesById),
+        parent_id: variant.parent_id || parent.id,
+        parent_name: variant.parent_name || parent.name,
+        parent_sku: variant.parent_sku || parent.sku,
+        is_variant: true,
+      }));
+    }
+
+    const normalizedQuery = normalizeSearchText(query);
+    const matches = normalizedQuery
+      ? rows.filter(row => normalizeSearchText([
+        row.name, row.sku, row.barcode, row.parent_name, row.parent_sku,
+      ].filter(Boolean).join(' ')).includes(normalizedQuery))
+      : rows;
+    res.json(matches
+      .sort((left, right) => String(left.name || '').localeCompare(String(right.name || ''), 'vi'))
+      .slice(0, limit));
+  } catch (err) {
+    res.status(500).json({ error: 'Lỗi khi lấy danh sách sản phẩm bán hàng', detail: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
 //  GET /api/products/all/with-variants
 //  → Tất cả sản phẩm dạng tree, cha + biến thể con
 // ─────────────────────────────────────────────

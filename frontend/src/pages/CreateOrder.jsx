@@ -467,11 +467,12 @@ export default function CreateOrder({ user, store }) {
     ]);
   }, []);
 
-  // The catalog contains thousands of products. Loading the full tree on every
-  // order screen visit blocks the browser, so fetch only matching rows on demand.
+  // The sale-candidate API returns variants for configurable products and the
+  // parent only when it has no variants. This keeps the original suggestion UX
+  // without loading/rendering the entire catalog.
   useEffect(() => {
     const query = productSearch.trim();
-    if (query.length < 2 || productResultFilter === 'combo') {
+    if (productResultFilter === 'combo') {
       setProducts([]);
       setLoading(prev => ({ ...prev, products: false }));
       setLoadError(prev => ({ ...prev, products: false }));
@@ -484,7 +485,7 @@ export default function CreateOrder({ user, store }) {
     const timer = setTimeout(async () => {
       setLoading(prev => ({ ...prev, products: true }));
       try {
-        const data = await apiJsonChecked(`/products/search?q=${encodeURIComponent(query)}&limit=100`, { signal: controller.signal }, 'Không tải được sản phẩm.');
+        const data = await apiJsonChecked(`/products/sale-candidates?q=${encodeURIComponent(query)}&limit=100`, { signal: controller.signal }, 'Không tải được sản phẩm.');
         if (productSearchRequestRef.current === requestId) {
           setProducts(Array.isArray(data) ? data : []);
           setLoadError(prev => ({ ...prev, products: false }));
@@ -622,9 +623,7 @@ export default function CreateOrder({ user, store }) {
   const resultLoadError = isComboResultMode ? loadError.combos : loadError.products;
   const emptyProductResultMessage = resultLoadError
     ? (isComboResultMode ? 'Không tải được dữ liệu combo' : 'Không tải được dữ liệu sản phẩm')
-    : (!isComboResultMode && productSearch.trim().length < 2
-      ? 'Nhập ít nhất 2 ký tự để tìm sản phẩm'
-      : (isComboResultMode ? 'Không tìm thấy combo' : 'Không tìm thấy sản phẩm'));
+    : (isComboResultMode ? 'Không tìm thấy combo' : 'Không tìm thấy sản phẩm');
   const handleProductResultFilterChange = (filter) => {
     setProductResultFilter(filter);
     if (filter === 'combo') fetchCombos();
