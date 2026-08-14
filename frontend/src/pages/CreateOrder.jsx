@@ -467,9 +467,8 @@ export default function CreateOrder({ user, store }) {
     ]);
   }, []);
 
-  // The sale-candidate API returns variants for configurable products and the
-  // parent only when it has no variants. This keeps the original suggestion UX
-  // without loading/rendering the entire catalog.
+  // Quick add needs the full sellable catalog. A configurable parent is
+  // represented by its variants only; a parent without variants stays sellable.
   useEffect(() => {
     const query = productSearch.trim();
     if (productResultFilter === 'combo') {
@@ -479,13 +478,22 @@ export default function CreateOrder({ user, store }) {
       return undefined;
     }
 
+    if (!showProductPanel && query.length < 2) {
+      setProducts([]);
+      setLoading(prev => ({ ...prev, products: false }));
+      return undefined;
+    }
+
     const requestId = productSearchRequestRef.current + 1;
     productSearchRequestRef.current = requestId;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(prev => ({ ...prev, products: true }));
       try {
-        const data = await apiJsonChecked(`/products/sale-candidates?q=${encodeURIComponent(query)}&limit=100`, { signal: controller.signal }, 'Không tải được sản phẩm.');
+        const endpoint = query
+          ? `/products/search?q=${encodeURIComponent(query)}&limit=100`
+          : '/products/sale-candidates?limit=50000';
+        const data = await apiJsonChecked(endpoint, { signal: controller.signal }, 'Không tải được sản phẩm.');
         if (productSearchRequestRef.current === requestId) {
           setProducts(Array.isArray(data) ? data : []);
           setLoadError(prev => ({ ...prev, products: false }));
@@ -503,7 +511,7 @@ export default function CreateOrder({ user, store }) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [productSearch, productResultFilter]);
+  }, [productSearch, productResultFilter, showProductPanel]);
 
   useEffect(() => {
     const refreshCombos = () => fetchCombos({ force: true });
@@ -1016,6 +1024,7 @@ export default function CreateOrder({ user, store }) {
   };
 
   const openOrderProductPicker = () => {
+    setProductSearch('');
     setShowProductPanel(true);
     if (productResultFilter === 'combo') fetchCombos();
   };

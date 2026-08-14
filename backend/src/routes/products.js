@@ -612,7 +612,7 @@ router.get('/search', (req, res) => {
 router.get('/sale-candidates', (req, res) => {
   try {
     const query = String(req.query.q || req.query.search || '').trim();
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 300);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 50000);
     const categoriesById = getCategoriesById();
     const rows = [];
 
