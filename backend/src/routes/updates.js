@@ -11,6 +11,7 @@ const {
 const { requireAuth, requirePermission, requireAnyPermission } = require('../middleware/auth');
 
 const router = express.Router();
+const { verifyReleaseReadiness } = require('../utils/systemVerification');
 
 const TABLE = 'update_releases';
 
@@ -228,14 +229,12 @@ router.post('/', canManageUpdates, (req, res) => {
 
   const publishFlag = parsed.value.published === undefined ? 1 : parsed.value.published;
   if (publishFlag === 1) {
-    const { verifyWholeSystem, rollbackDatabase } = require('../utils/systemVerification');
-    const testResult = verifyWholeSystem();
+    const testResult = verifyReleaseReadiness();
     if (!testResult.ok) {
       const adminAlertService = require('../services/adminAlertService');
       adminAlertService.sendEmergencyAlert('updates', 'PHÁT HÀNH THẤT BẠI: Lỗi kiểm tra tự động trước khi tạo bản cập nhật mới.', {
         errorDetail: testResult.errors.join('\n')
       });
-      rollbackDatabase();
       return res.status(400).json({ ok: false, error: 'Không thể tạo bản phát hành: Lỗi hệ thống tự động kiểm tra trước khi publish.', details: testResult.errors });
     }
   }
@@ -291,14 +290,12 @@ router.patch('/:id', canManageUpdates, (req, res) => {
   if (parsed.error) return res.status(400).json({ ok: false, error: parsed.error });
 
   if (parsed.value.published === 1 || parsed.value.active === 1) {
-    const { verifyWholeSystem, rollbackDatabase } = require('../utils/systemVerification');
-    const testResult = verifyWholeSystem();
+    const testResult = verifyReleaseReadiness();
     if (!testResult.ok) {
       const adminAlertService = require('../services/adminAlertService');
       adminAlertService.sendEmergencyAlert('updates', 'PHÁT HÀNH THẤT BẠI: Lỗi kiểm tra tự động trước khi cập nhật bản cập nhật.', {
         errorDetail: testResult.errors.join('\n')
       });
-      rollbackDatabase();
       return res.status(400).json({ ok: false, error: 'Không thể cập nhật bản phát hành: Lỗi hệ thống tự động kiểm tra trước khi publish.', details: testResult.errors });
     }
   }
@@ -324,14 +321,12 @@ router.patch('/:id/publish', canManageUpdates, (req, res) => {
   const row = id ? getOne(TABLE, item => Number(item.id) === id && !item.deleted_at, { skipAccountScope: true }) : null;
   if (!row) return res.status(404).json({ ok: false, error: 'Không tìm thấy bản cập nhật.' });
 
-  const { verifyWholeSystem, rollbackDatabase } = require('../utils/systemVerification');
-  const testResult = verifyWholeSystem();
+  const testResult = verifyReleaseReadiness();
   if (!testResult.ok) {
     const adminAlertService = require('../services/adminAlertService');
     adminAlertService.sendEmergencyAlert('updates', 'PHÁT HÀNH THẤT BẠI: Lỗi kiểm tra tự động trước khi xuất bản cập nhật.', {
       errorDetail: testResult.errors.join('\n')
     });
-    rollbackDatabase();
     return res.status(400).json({ ok: false, error: 'Không thể xuất bản: Lỗi hệ thống tự động kiểm tra trước khi publish.', details: testResult.errors });
   }
 

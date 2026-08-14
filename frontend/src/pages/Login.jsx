@@ -86,10 +86,6 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const safeRestoreFiles = Array.isArray(restoreFiles) ? restoreFiles : [];
 
   const handleRestoreScan = async () => {
-    console.log("[RESTORE] Scan backup button clicked");
-    console.log("[RESTORE] electronAPI available:", !!window.electronAPI);
-    console.log("[RESTORE] scanBackupFiles available:", !!window.electronAPI?.scanBackupFiles);
-    console.log("[RESTORE] calling /api/restore/scan");
     setRestoreLoading(true);
     setRestoreStats(null);
     setRestoreFiles([]);

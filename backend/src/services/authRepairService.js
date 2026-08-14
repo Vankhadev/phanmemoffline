@@ -121,8 +121,13 @@ function repairUserAuthSystem() {
       modified = true;
     }
     if (user.password === undefined || user.password === null) {
-      user.password = hashPassword('12345678'); // Mật khẩu mặc định an toàn tối thiểu 8 ký tự
+      // Never assign a predictable password to a repaired account. Disable it
+      // until an administrator performs an explicit reset or local recovery.
+      user.password = hashPassword(crypto.randomBytes(24).toString('hex'));
+      user.active = 0;
+      user.approved = 0;
       modified = true;
+      console.warn('[AUTH REPAIR] Disabled an account with missing credentials pending an explicit reset.');
     }
     if (!user.created_at) {
       user.created_at = dbModule.now();
@@ -135,7 +140,7 @@ function repairUserAuthSystem() {
         user.active = 1;
         user.approved = 1;
         modified = true;
-        console.log(`[AUTH REPAIR] Restored active/approved state for main Admin: ${user.email}`);
+        console.warn('[AUTH REPAIR] Restored active/approved state for designated administrator.');
       }
     } else {
       if (user.active === undefined || user.active === null) {
@@ -159,43 +164,17 @@ function repairUserAuthSystem() {
       const plainPassword = user.password;
       user.password = hashPassword(plainPassword);
       modified = true;
-      console.log(`[AUTH REPAIR] Hashed raw plain-text password for user ID ${user.id} (${user.email})`);
+      console.warn('[AUTH REPAIR] Rehashed a legacy plaintext password during repair.');
     }
   }
 
-  // Đảm bảo có ít nhất một tài khoản Admin đang hoạt động
+  // Never promote an arbitrary user or create a predictable administrator when
+  // auth data is damaged. The local recovery account is generated separately
+  // with a random credential and explicit local-only recovery flow.
   const activeAdmins = current.users.filter(u => u && u.role === 'admin' && u.active === 1 && u.approved === 1);
   if (activeAdmins.length === 0) {
-    const firstActive = current.users.find(u => u && u.active === 1 && u.approved === 1);
-    if (firstActive) {
-      firstActive.role = 'admin';
-      modified = true;
-      console.log(`[AUTH REPAIR] No active Admin found. Auto-promoted oldest user: ${firstActive.email}`);
-      adminAlertService.sendWarningAlert('auth-repair', `Hệ thống không tìm thấy Admin hoạt động nào. Đã tự động thăng cấp người dùng: ${firstActive.email} làm ADMIN.`);
-    } else {
-      // Tạo lại Admin mặc định nếu DB hoàn toàn không có user nào hoạt động
-      const defaultAccount = current.accounts && current.accounts[0] ? current.accounts[0] : { id: 1 };
-      const newId = current.nextId.users || 1;
-      current.nextId.users = newId + 1;
-      current.users.push({
-        id: newId,
-        account_id: defaultAccount.id,
-        name: 'Đông Phương QC',
-        fullname: 'Đông Phương QC',
-        email: 'dongphuongqc@gmail.com',
-        phone: '0904045075',
-        password: hashPassword('khongnoiduoc'),
-        role: 'admin',
-        approved: 1,
-        active: 1,
-        created_at: dbModule.now(),
-        updated_at: dbModule.now(),
-        session_token: null,
-      });
-      modified = true;
-      console.log(`[AUTH REPAIR] No active users in database. Seeded default Admin dongphuongqc@gmail.com`);
-      adminAlertService.sendWarningAlert('auth-repair', 'Phát hiện cơ sở dữ liệu trống người dùng. Đã khởi tạo lại Admin mặc định dongphuongqc@gmail.com.');
-    }
+    console.warn('[AUTH REPAIR] No active administrator found. Local recovery credentials are required.');
+    adminAlertService.sendWarningAlert('auth-repair', 'Không tìm thấy Admin hoạt động. Hệ thống không tự thăng quyền; dùng tài khoản Admin Recovery cục bộ để khôi phục quyền quản trị.');
   }
 
   if (modified) {
@@ -252,8 +231,8 @@ function initializeEmergencyAdmin() {
   }
 
   dbModule.saveDB();
-  console.log(`[AUTH REPAIR] Emergency Admin generated. Credentials written to ${recoveryFile}`);
-  adminAlertService.sendInfoAlert('auth-repair', `Khởi tạo tài khoản Admin Recovery thành công. File mật khẩu: ${recoveryFile}`);
+  console.warn('[AUTH REPAIR] Local-only emergency administrator credentials were regenerated.');
+  adminAlertService.sendInfoAlert('auth-repair', 'Khởi tạo tài khoản Admin Recovery thành công. Kiểm tra tệp recovery cục bộ.');
 }
 
 module.exports = {

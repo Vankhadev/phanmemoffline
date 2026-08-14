@@ -448,17 +448,6 @@ function updateNegativeStockSettings(input = {}, context = {}) {
     invalidateNegativeStockSettingsCache(accountId);
     const after = getNegativeStockSettings({ accountId, skipSave: true, skipCache: true });
     writeNegativeStockSettingsCache(accountId, after);
-    if (changes.negative_stock_limit) {
-      console.info('[KHA SETTINGS] negative_stock_limit updated', {
-        account_id: accountId,
-        user_id: context.userId || context.user_id || null,
-        old_value: changes.negative_stock_limit.before,
-        new_value: changes.negative_stock_limit.after,
-        old_minimum_allowed_stock: before.minimum_allowed_stock,
-        new_minimum_allowed_stock: after.minimum_allowed_stock,
-        source: context.source || 'settings_api',
-      });
-    }
     if (Object.keys(changes).length > 0) {
       auditLog('settings.negative_stock_updated', {
         account_id: accountId,

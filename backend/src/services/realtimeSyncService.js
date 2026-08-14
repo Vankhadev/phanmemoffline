@@ -6,7 +6,9 @@
  */
 const { getAll } = require('../db/database');
 
-const clients = new Set();
+const clients = new Map();
+const MAX_CATCH_UP_AGE_MS = 24 * 60 * 60 * 1000;
+const MAX_CATCH_UP_ROWS = 1000;
 let pingInterval = null;
 
 function initialize() {
@@ -14,7 +16,7 @@ function initialize() {
   if (!pingInterval) {
     pingInterval = setInterval(() => {
       const message = `data: ${JSON.stringify({ type: 'ping', ts: Date.now() })}\n\n`;
-      for (const client of clients) {
+      for (const client of clients.keys()) {
         try {
           client.write(message);
         } catch (_) {
@@ -35,17 +37,17 @@ function registerClient(req, res) {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': '*',
   });
 
   // Gửi gói tin kết nối thành công ban đầu
   res.write(`data: ${JSON.stringify({ type: 'connected', ts: Date.now() })}\n\n`);
-  clients.add(res);
+  const accountId = Number(req.accountId || req.account?.id || req.user?.account_id);
+  clients.set(res, Number.isFinite(accountId) && accountId > 0 ? accountId : null);
 
   // Xử lý catch-up nếu có lastSyncTime gửi kèm
   const lastSyncTime = req.query.lastSyncTime;
   if (lastSyncTime) {
-    handleCatchUp(res, lastSyncTime);
+    handleCatchUp(res, lastSyncTime, clients.get(res));
   }
 
   req.on('close', () => {
@@ -53,13 +55,24 @@ function registerClient(req, res) {
   });
 }
 
-function handleCatchUp(res, lastSyncTime) {
+function handleCatchUp(res, lastSyncTime, accountId) {
   const lastSyncMs = Number(lastSyncTime);
   if (Number.isNaN(lastSyncMs) || lastSyncMs <= 0) return;
+  if (Date.now() - lastSyncMs > MAX_CATCH_UP_AGE_MS) {
+    res.write(`data: ${JSON.stringify({ type: 'full-refresh-required', reason: 'catchup-window-expired', ts: Date.now() })}\n\n`);
+    return;
+  }
 
   try {
     // Lấy lịch sử thay đổi để quét các bảng đã được sửa sau thời điểm mất kết nối
-    const history = getAll('edit_history', h => (h.timestamp || 0) > lastSyncMs, { skipAccountScope: true });
+    const history = getAll('edit_history', h => (
+      (h.timestamp || 0) > lastSyncMs
+      && (accountId == null || Number(h.account_id) === accountId)
+    ), { skipAccountScope: true }).slice(0, MAX_CATCH_UP_ROWS + 1);
+    if (history.length > MAX_CATCH_UP_ROWS) {
+      res.write(`data: ${JSON.stringify({ type: 'full-refresh-required', reason: 'catchup-limit-exceeded', ts: Date.now() })}\n\n`);
+      return;
+    }
     if (history.length > 0) {
       const changedTables = Array.from(new Set(history.map(h => h.table).filter(Boolean)));
       if (changedTables.length > 0) {
@@ -70,7 +83,6 @@ function handleCatchUp(res, lastSyncTime) {
           ts: Date.now(),
           source: 'server-catch-up'
         })}\n\n`);
-        console.log(`[KHA REALTIME] Sent catch-up sync for tables: ${changedTables.join(', ')}`);
       }
     }
   } catch (err) {
@@ -94,7 +106,8 @@ function broadcastChangeEvent(changedTables, detail = {}) {
   const message = `data: ${JSON.stringify(payload)}\n\n`;
   let sentCount = 0;
 
-  for (const client of clients) {
+  for (const [client, accountId] of clients) {
+    if (detail.accountId != null && Number(detail.accountId) !== Number(accountId)) continue;
     try {
       client.write(message);
       sentCount++;
@@ -103,9 +116,6 @@ function broadcastChangeEvent(changedTables, detail = {}) {
     }
   }
 
-  if (sentCount > 0) {
-    console.log(`[KHA REALTIME] Broadcast changes on [${changedTables.join(', ')}] to ${sentCount} client(s)`);
-  }
 }
 
 function shutdown() {
@@ -113,7 +123,7 @@ function shutdown() {
     clearInterval(pingInterval);
     pingInterval = null;
   }
-  for (const client of clients) {
+  for (const client of clients.keys()) {
     try {
       client.end();
     } catch (_) {}

@@ -37,8 +37,9 @@ function format(level, msg, meta) {
 function write(level, msg, meta) {
   if (!initialized) { ensureDir(); initialized = true; }
   const line = format(level, msg, meta);
-  // In ra console luôn
+  // Keep the console severity aligned with the persisted log level.
   if (level === 'error') console.error(line);
+  else if (level === 'warn') console.warn(line);
   else console.log(line);
   try {
     rotateIfNeeded();

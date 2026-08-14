@@ -532,15 +532,17 @@ export function buildSaleStockValidation(lines = [], options = {}) {
   const errors = [];
 
   productIds.forEach(productId => {
-    const currentStock = roundStock(stockByProductId.has(productId) ? stockByProductId.get(productId) : 0);
+    const stockKnown = stockByProductId.has(productId);
+    const currentStock = stockKnown ? roundStock(stockByProductId.get(productId)) : null;
     const requestedQuantity = roundStock(requestedByProductId.get(productId) || 0);
     const baselineQuantity = roundStock(baselineByProductId.get(productId) || 0);
-    const projectedStock = roundStock(currentStock + baselineQuantity - requestedQuantity);
-    const invalid = projectedStock < minimumAllowedStock;
-    const nearLimit = Boolean(settings.enabled && settings.limit > 0 && projectedStock <= warningThreshold && projectedStock >= minimumAllowedStock);
+    const projectedStock = stockKnown ? roundStock(currentStock + baselineQuantity - requestedQuantity) : null;
+    const invalid = stockKnown && projectedStock < minimumAllowedStock;
+    const nearLimit = Boolean(stockKnown && settings.enabled && settings.limit > 0 && projectedStock <= warningThreshold && projectedStock >= minimumAllowedStock);
     const state = {
       productId,
       currentStock,
+      stockKnown,
       requestedQuantity,
       baselineQuantity,
       projectedStock,

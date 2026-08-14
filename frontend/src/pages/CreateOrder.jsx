@@ -746,7 +746,9 @@ export default function CreateOrder({ user, store }) {
     const product = getProductById(productId);
     if (product && Number.isFinite(Number(product.stock))) return Number(product.stock);
     const fallback = Number(line?.current_stock ?? line?.currentStock ?? line?.max_stock ?? line?.stock);
-    return Number.isFinite(fallback) ? fallback : 0;
+    // Stock missing from an invalidated catalogue is unknown, not zero. The
+    // backend remains the authoritative validator when the order is saved.
+    return Number.isFinite(fallback) ? fallback : undefined;
   };
 
   const cartStockValidation = useMemo(() => buildSaleStockValidation(cart, {

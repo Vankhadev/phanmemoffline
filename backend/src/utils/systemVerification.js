@@ -10,6 +10,23 @@ const path = require('path');
 const dbModule = require('../db/database');
 const { hashPassword, verifyPassword } = require('./password');
 
+// Release publishing must never mutate the live business database. Destructive
+// integration tests remain available for isolated test environments only.
+function verifyReleaseReadiness() {
+  const errors = [];
+  try {
+    const current = dbModule.getDb();
+    const validation = dbModule.validateDatabaseData(current, { allowLegacyOrphans: true });
+    if (!validation?.ok) errors.push(...(validation.errors || ['Dữ liệu database không hợp lệ']));
+    for (const table of ['users', 'products', 'customers', 'invoices', 'invoice_details']) {
+      if (!Array.isArray(current[table])) errors.push(`Thiếu bảng dữ liệu: ${table}`);
+    }
+  } catch (error) {
+    errors.push(`Không thể kiểm tra trạng thái phát hành: ${error.message}`);
+  }
+  return { ok: errors.length === 0, errors };
+}
+
 /**
  * Run all authentication flow tests
  */
@@ -390,6 +407,7 @@ function rollbackDatabase() {
 }
 
 module.exports = {
+  verifyReleaseReadiness,
   runAuthTests,
   runSyncTests,
   verifyWholeSystem,

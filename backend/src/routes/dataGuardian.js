@@ -16,6 +16,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const admission = require('../services/dataSafetyAdmissionService');
 const router = express.Router();
 
 let guardian = null;
@@ -176,33 +177,61 @@ router.post('/backup-now', (_req, res) => {
   }
 });
 
+function actorFromRequest(req) {
+  return { userId: req.user?.id || null, accountId: req.accountId || null };
+}
+
+// Step 1: inspect a verified, app-managed backup. Low-scoring artifacts are
+// quarantined as metadata only and never overwrite or delete source files.
+router.post('/admissions', (req, res) => {
+  try {
+    const result = admission.inspectBackup(guardian?.dbModule, req.body?.backupPath, actorFromRequest(req));
+    res.status(result.approved ? 200 : 422).json({
+      ok: result.approved,
+      admissionId: result.id,
+      decision: result.approved ? 'approved' : 'quarantined',
+      safetyScore: result.safetyScore,
+      threshold: result.threshold,
+      reasons: result.reasons,
+      quarantineId: result.quarantineId || null,
+      expiresAt: new Date(result.expiresAt).toISOString(),
+    });
+  } catch (error) { res.status(error.statusCode || 500).json({ ok: false, error: error.message }); }
+});
+
+// Step 2: local, single-use approval challenge for a previously approved backup.
+router.post('/admissions/:id/challenge', (req, res) => {
+  try {
+    const result = admission.createChallenge(guardian?.dbModule, req.params.id, req, actorFromRequest(req));
+    res.json({ ok: true, challengeId: result.id, expiresAt: new Date(result.expiresAt).toISOString(), attemptsRemaining: 3 });
+  } catch (error) { res.status(error.statusCode || 500).json({ ok: false, error: error.message }); }
+});
+
+router.post('/admissions/:id/confirm', (req, res) => {
+  try {
+    const result = admission.confirmChallenge(guardian?.dbModule, req.body?.challengeId, req.body?.localCode, req, actorFromRequest(req));
+    res.json({ ok: true, grantId: result.id, expiresAt: new Date(result.expiresAt).toISOString(), singleUse: true });
+  } catch (error) { res.status(error.statusCode || 500).json({ ok: false, error: error.message }); }
+});
+
 // POST /api/data-guardian/restore
 router.post('/restore', (req, res) => {
   try {
-    const { path: backupPath, tier } = req.body || {};
+    const { admissionId, grantId } = req.body || {};
 
     // If no specific path, use auto recovery
-    if (!backupPath) {
-      if (guardian?.databaseAutoRecovery && guardian?.dbModule) {
-        const result = guardian.databaseAutoRecovery.runStartupCheck(guardian.dbModule);
-        return res.json(result);
-      }
-      return res.status(400).json({ ok: false, error: 'Thiếu path backup hoặc database module' });
-    }
-
     if (!guardian?.dbModule) {
       return res.status(500).json({ ok: false, error: 'Database module không khả dụng' });
     }
-
-    const fs = require('fs');
-    if (!fs.existsSync(backupPath)) {
-      return res.status(404).json({ ok: false, error: 'Backup file không tồn tại' });
-    }
+    if (!admissionId || !grantId) return res.status(403).json({ ok: false, error: 'Khôi phục yêu cầu kiểm duyệt an toàn và mã xác thực cục bộ.' });
+    const approved = admission.consumeGrant(guardian.dbModule, admissionId, grantId, actorFromRequest(req));
 
     if (!guardian.backupScheduler?.restoreBackup) throw new Error('Safe restore service chưa khởi tạo');
-    const result = guardian.backupScheduler.restoreBackup(backupPath);
+    const protectionPoint = guardian.dbModule.createVerifiedDataProtectionPoint('pre-guardian-restore', { skipRetention: true });
+    if (!protectionPoint) throw new Error('Không tạo được lớp backup bảo vệ trước khôi phục.');
+    const result = guardian.backupScheduler.restoreBackup(approved.backupPath);
 
-    res.json({ ok: true, message: `Đã khôi phục database từ: ${backupPath}`, path: backupPath, result });
+    res.json({ ok: true, message: 'Đã khôi phục database từ backup đã kiểm duyệt.', result, protectionPoint });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }

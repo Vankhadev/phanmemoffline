@@ -104,6 +104,9 @@ function performRecovery(dbModule) {
   // Step 2: Verify database integrity
   try {
     const db = dbModule.getDb();
+    const validation = typeof dbModule.validateDatabaseData === 'function'
+      ? dbModule.validateDatabaseData(db, { allowLegacyOrphans: false })
+      : { ok: false, errors: ['Không có database validator'] };
     const integrityCheck = {
       invoices: Array.isArray(db.invoices) ? db.invoices.length : -1,
       customers: Array.isArray(db.customers) ? db.customers.length : -1,
@@ -113,11 +116,12 @@ function performRecovery(dbModule) {
       hasNextId: Boolean(db.nextId && typeof db.nextId === 'object'),
     };
 
-    const hasData = integrityCheck.invoices >= 0
+    const hasData = validation.ok
+      && integrityCheck.invoices >= 0
       && integrityCheck.customers >= 0
       && integrityCheck.products >= 0
       && integrityCheck.hasNextId;
-    result.dataIntegrity = { ...integrityCheck, hasData };
+    result.dataIntegrity = { ...integrityCheck, hasData, errors: validation.errors || [], foreign_key_errors: validation.foreign_key_errors || [] };
     result.steps.push(`Integrity: ${hasData ? 'OK' : 'FAILED'} - ${integrityCheck.invoices} invoices, ${integrityCheck.customers} customers, ${integrityCheck.products} products`);
   } catch (error) {
     result.steps.push(`Integrity check error: ${error.message}`);

@@ -366,10 +366,11 @@ async function startBackend(options = {}) {
     KHA_DB_PATH: dbPath,
     ELECTRON_USER_DATA: userData,
     KHA_RUNTIME_DIR: path.join(userData, 'runtime'),
-    // Desktop must make the local API available before nonessential maintenance.
-    KHA_LOCAL_LIGHTWEIGHT_MODE: '1',
-    KHA_DISABLE_AUTOMATIC_BACKUPS: '1',
-    KHA_SKIP_STARTUP_MIGRATION_BACKUP: '1',
+    // Financial data takes precedence over a slightly faster startup. Guardian
+    // services create verified recovery points and migrations get a rollback copy.
+    KHA_LOCAL_LIGHTWEIGHT_MODE: '0',
+    KHA_DISABLE_AUTOMATIC_BACKUPS: '0',
+    KHA_SKIP_STARTUP_MIGRATION_BACKUP: '0',
     KHA_BACKEND_INSTANCE_ID: backendInstanceId,
     KHA_BACKEND_PARENT_PID: String(process.pid),
     ELECTRON_RUN_AS_NODE: '1',

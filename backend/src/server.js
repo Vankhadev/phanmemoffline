@@ -287,8 +287,8 @@ app.get('/api/health', (_req, res) => {
   // Public auth/setup endpoints remain inside usersRoutes and syncRoutes; business routes require a valid server session.
 app.use('/api/users',          usersRoutes);
 app.use('/api',                syncRoutes);
-app.use('/api/database',       databaseRoutes);
-app.use('/api/db',             databaseRoutes);
+app.use('/api/database',       requireAuth, requireAdmin, databaseRoutes);
+app.use('/api/db',             requireAuth, requireAdmin, databaseRoutes);
 // These routes can restore or disclose the entire local database.
 app.use('/api/recovery',       requireAuth, requireAdmin, recoveryRoutes);
 app.use('/api/restore',        requireAuth, requireAdmin, restoreRoutes);
@@ -316,7 +316,7 @@ app.use('/api/invoice-templates', requireAuth, requireAnyPermission(['print_temp
 app.use('/api/marketplaces', requireAuth, requireAnyPermission(['settings.read', 'settings.manage', 'invoices.read', 'invoices.manage']), marketplacesRoutes);
 app.use('/api/expanded', requireAuth, requireAnyPermission(['invoices.read', 'partners.read', 'print_templates.read', 'activity_logs.read']), expandedRoutes);
 app.use('/api/history', historyRoutes);
-app.get('/api/realtime/sync', (req, res) => {
+app.get('/api/realtime/sync', requireAuth, requirePermission('sync.read'), (req, res) => {
   realtimeSyncService.registerClient(req, res);
 });
 
@@ -375,7 +375,6 @@ app.get('/api/dashboard', requireAuth, requirePermission('stats.read'), (_req, r
 //  CRON: mỗi 5 phút - kiểm tra & đồng bộ daily_stats
 // ============================================================
 cron.schedule('*/5 * * * *', () => {
-  console.log('[VANKHA CRON]', new Date().toISOString());
   const t = today();
   upsertDailyStats(t, 0, { keepEmpty: true });
 });
@@ -587,6 +586,13 @@ function bootstrapDataGuardian() {
 
   // Hook transaction journal into database module
   hookGuardianIntoDatabase();
+  if (typeof dbModule.onDurableChanges === 'function') {
+    dbModule.onDurableChanges(changes => {
+      for (const change of changes) {
+        realtimeBackup.onDataChange(change.table, change.operation, change.rowId);
+      }
+    });
+  }
 
   console.log('[KHA DATA GUARDIAN] All 11 modules initialized');
 }
@@ -629,15 +635,23 @@ function hookGuardianIntoDatabase() {
         const result = originalWithAtomicDbWrite.call(this, callback);
         transactionDepth--;
         if (transactionDepth === 0) {
-          const uniqueTables = Array.from(new Set(pendingBroadcasts.flatMap(b => b.tables)));
           const broadcastsToProcess = [...pendingBroadcasts];
           pendingBroadcasts = [];
-          if (uniqueTables.length > 0) {
+          const eventsByAccountId = new Map();
+          for (const broadcast of broadcastsToProcess) {
+            const accountId = broadcast.detail?.accountId ?? null;
+            if (!eventsByAccountId.has(accountId)) eventsByAccountId.set(accountId, []);
+            eventsByAccountId.get(accountId).push(broadcast);
+          }
+          for (const [accountId, events] of eventsByAccountId) {
+            const uniqueTables = Array.from(new Set(events.flatMap(event => event.tables)));
+            if (uniqueTables.length === 0) continue;
             const ctx = getRequestContext();
             realtimeSyncService.broadcastChangeEvent(uniqueTables, {
               sourceTabId: ctx?.sourceTabId,
               reason: 'transaction-committed',
-              broadcasts: broadcastsToProcess,
+              broadcasts: events,
+              accountId,
             });
           }
         }
@@ -665,6 +679,7 @@ function hookGuardianIntoDatabase() {
       sourceTabId: ctx.sourceTabId,
       op: 'insert',
       id: result?.id || row?.id,
+      accountId: row?.account_id || options.accountId || dbModule.getActiveAccountId(),
     });
 
     return result;
@@ -684,6 +699,7 @@ function hookGuardianIntoDatabase() {
       sourceTabId: ctx.sourceTabId,
       op: 'update',
       id: id,
+      accountId: result?.account_id || before?.account_id || options.accountId || dbModule.getActiveAccountId(),
     });
 
     return result;
@@ -714,6 +730,7 @@ function hookGuardianIntoDatabase() {
         sourceTabId: ctx.sourceTabId,
         op: 'delete',
         id: id,
+        accountId: result?.account_id || existingRow?.account_id || options.accountId || dbModule.getActiveAccountId(),
       });
       return result;
     }
@@ -730,6 +747,7 @@ function hookGuardianIntoDatabase() {
       sourceTabId: ctx.sourceTabId,
       op: 'delete',
       id: id,
+      accountId: result?.account_id || existingRow?.account_id || options.accountId || dbModule.getActiveAccountId(),
     });
 
     return result;

@@ -1,26 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate, } from 'react-router-dom';
-import Home from './pages/Home';
-import CreateOrder from './pages/CreateOrder';
-import NhaCungCap from './pages/nhacungcap';
-import Products from './pages/Products';
-import Customers from './pages/Customers';
-import Stats from './pages/Stats';
-import Settings from './pages/Settings';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import OrderList from './pages/OrderList';
 import LiveSyncBadge from './components/LiveSyncBadge';
-import KhoHang from './pages/KhoHang';
-import Nhaphang from './pages/nhaphang';
-import CustomerOrderReport from './pages/CustomerOrderReport';
-import ProductReport from './pages/ProductReport';
-import CashBook from './pages/CashBook';
-import InvoicePrint from './pages/InvoicePrint';
-import AccountingDashboard from './pages/AccountingDashboard';
-import TaxReport from './pages/TaxReport';
-import InventoryReport from './pages/InventoryReport';
-import AccountingLogs from './pages/AccountingLogs';
 import HelpModal from './components/HelpModal';
 import ErrorBoundary from './components/ErrorBoundary'; // page-level error guard
 import {
@@ -69,6 +49,29 @@ import {
   getMobileOfflineSessionPayload,
   isLocalMobileAuthToken,
 } from './utils/mobileOfflineAuth';
+
+// Load feature pages only after a user navigates to them. This keeps Excel,
+// PDF, chart and inventory code out of the initial POS startup bundle.
+const Home = lazy(() => import('./pages/Home'));
+const CreateOrder = lazy(() => import('./pages/CreateOrder'));
+const NhaCungCap = lazy(() => import('./pages/nhacungcap'));
+const Products = lazy(() => import('./pages/Products'));
+const Customers = lazy(() => import('./pages/Customers'));
+const Stats = lazy(() => import('./pages/Stats'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const OrderList = lazy(() => import('./pages/OrderList'));
+const KhoHang = lazy(() => import('./pages/KhoHang'));
+const Nhaphang = lazy(() => import('./pages/nhaphang'));
+const CustomerOrderReport = lazy(() => import('./pages/CustomerOrderReport'));
+const ProductReport = lazy(() => import('./pages/ProductReport'));
+const CashBook = lazy(() => import('./pages/CashBook'));
+const InvoicePrint = lazy(() => import('./pages/InvoicePrint'));
+const AccountingDashboard = lazy(() => import('./pages/AccountingDashboard'));
+const TaxReport = lazy(() => import('./pages/TaxReport'));
+const InventoryReport = lazy(() => import('./pages/InventoryReport'));
+const AccountingLogs = lazy(() => import('./pages/AccountingLogs'));
 
 
 const ROUTE_ALIASES = {
@@ -261,6 +264,10 @@ function FullScreenLoading({ message = 'Đang khởi tạo ứng dụng...' }) {
       </div>
     </div>
   );
+}
+
+function RouteLoading() {
+  return <FullScreenLoading message="Đang tải màn hình..." />;
 }
 
 function withStartupTimeout(promise, timeoutMs = 8000) {
@@ -850,7 +857,8 @@ function AppLayout({
               <HelpCircle size={16} /> Hướng dẫn
             </button>
           </div>
-          <Routes>
+          <Suspense fallback={<RouteLoading />}>
+            <Routes>
             <Route path={HOME_ROUTE} element={<ErrorBoundary><Home user={user} store={store} /></ErrorBoundary>} />
             <Route path="/tao-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/tao-don-hang"><ErrorBoundary><CreateOrder user={user} store={store} /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/danh-sach-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/danh-sach-don-hang"><ErrorBoundary><OrderList store={store} /></ErrorBoundary></ProtectedRoute>} />
@@ -875,7 +883,8 @@ function AppLayout({
               <Route key={from} path={from} element={<Navigate to={canAccess(to) ? to : firstAccessibleRoute(user, permissions)} replace />} />
             ))}
             <Route path="*" element={<Navigate to={canAccessAny(Object.keys(ROUTE_PERMISSIONS)) ? firstAccessibleRoute(user, permissions) : HOME_ROUTE} replace />} />
-          </Routes>
+            </Routes>
+          </Suspense>
         </div>
       </div>
       <MobileActionSheet
@@ -1241,10 +1250,12 @@ function DesktopApp() {
     <>
       <HashRouter>
         {!authState.user ? (
-          <Routes>
-            <Route path={LOGIN_REGISTER_ROUTE} element={<Register onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} />} />
-            <Route path="*" element={<Login onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} onBootstrapStatus={setBootstrapStatus} />} />
-          </Routes>
+          <Suspense fallback={<RouteLoading />}>
+            <Routes>
+              <Route path={LOGIN_REGISTER_ROUTE} element={<Register onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} />} />
+              <Route path="*" element={<Login onLogin={handleAuthenticated} bootstrapStatus={bootstrapStatus} onBootstrapStatus={setBootstrapStatus} />} />
+            </Routes>
+          </Suspense>
         ) : (
           <AppLayout
             authState={authState}

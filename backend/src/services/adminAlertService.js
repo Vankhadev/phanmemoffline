@@ -148,6 +148,12 @@ function notifyElectron(alert) {
 function sendAlert(severity, module, message, details = {}) {
   const alert = buildAlertPayload(severity, module, message, details);
 
+  // Throttle before console/file output so recurring background faults do not
+  // flood the event loop or logs. Emergency alerts are never throttled.
+  if (severity !== ALERT_SEVERITY.EMERGENCY && shouldThrottle(module, severity)) {
+    return alert;
+  }
+
   // Console log
   const logPrefix = `[KHA GUARDIAN ALERT ${severity.toUpperCase()}]`;
   if (severity === ALERT_SEVERITY.EMERGENCY || severity === ALERT_SEVERITY.CRITICAL) {
@@ -156,11 +162,6 @@ function sendAlert(severity, module, message, details = {}) {
     console.warn(`${logPrefix} [${module}] ${message}`);
   } else {
     console.log(`${logPrefix} [${module}] ${message}`);
-  }
-
-  // Throttle check (don't throttle emergency)
-  if (severity !== ALERT_SEVERITY.EMERGENCY && shouldThrottle(module, severity)) {
-    return alert;
   }
 
   // Write to log file

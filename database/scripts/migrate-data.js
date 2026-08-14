@@ -1,6 +1,6 @@
 ﻿/**
  * migrate-data.js — Migrate dữ liệu từ JSON store -> SQLite Enterprise
- * Usage: node migrate-data.js
+ * Usage: node migrate-data.js --source <json> --db <sqlite>
  * Đảm bảo: KHÔNG mất bất kỳ dòng nào. Mọi lỗi đều được ghi vào report.warnings.
  */
 "use strict";
@@ -8,9 +8,23 @@ const { DatabaseSync } = require("node:sqlite");
 const fs   = require("fs");
 const path = require("path");
 
-const ROOT     = path.resolve("g:/phanmienoffline");
-const SRC_JSON = path.join(ROOT, "phanmienoffline.db.json");
-const DB_PATH  = path.join(ROOT, "data", "phanmienoffline_enterprise.db");
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const root = path.resolve(process.cwd());
+  let source = path.join(root, 'backend', 'data', 'phanmienoffline.db.json');
+  let dbPath = path.join(root, 'data', 'phanmienoffline_enterprise.db');
+  let allowExisting = false;
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '--source' && args[i + 1]) source = path.resolve(args[++i]);
+    if (args[i] === '--db' && args[i + 1]) dbPath = path.resolve(args[++i]);
+    if (args[i] === '--allow-existing') allowExisting = true;
+  }
+  return { source, dbPath, allowExisting };
+}
+
+const { source: SRC_JSON, dbPath: DB_PATH, allowExisting } = parseArgs();
+if (!fs.existsSync(SRC_JSON)) throw new Error(`Không tìm thấy JSON nguồn: ${SRC_JSON}`);
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 function num(v, d=0)  { const n=Number(v); return Number.isFinite(n)?n:d; }
 function str(v)       { return (v===undefined||v===null)?null:String(v); }
@@ -22,6 +36,17 @@ const get = (k) => Array.isArray(raw[k])?raw[k]:[];
 
 const db = new DatabaseSync(DB_PATH);
 db.exec("PRAGMA foreign_keys=ON;");
+if (Number(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys) !== 1) {
+  throw new Error('SQLite không thể bật foreign key enforcement');
+}
+const existingBusinessTables = ['accounts', 'users', 'customers', 'products', 'orders', 'order_items'];
+const existingRecords = existingBusinessTables.reduce((total, table) => {
+  try { return total + Number(db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count || 0); } catch (_) { return total; }
+}, 0);
+if (existingRecords > 0 && !allowExisting) {
+  db.close();
+  throw new Error('Database đích đã có dữ liệu. Dùng --allow-existing chỉ khi đã tạo backup và chủ động merge dữ liệu.');
+}
 
 const report = {
   accounts:0, users:0, customer_ranks:0, customers:0,
@@ -148,6 +173,11 @@ try {
     if(tryRun(aStmt,[num(al.id),num(al.account_id,1),uid,str(al.action)||"OTHER","legacy",meta,str(al.ip),str(al.user_agent),ts(al.created_at)||new Date().toISOString()],"audit id="+al.id)) report.audit++;
   }
 
+  const fkBeforeCommit = db.prepare("PRAGMA foreign_key_check").all();
+  const integrityBeforeCommit = db.prepare("PRAGMA integrity_check").all();
+  if (fkBeforeCommit.length > 0 || integrityBeforeCommit.length !== 1 || integrityBeforeCommit[0].integrity_check !== 'ok') {
+    throw new Error(`Integrity check thất bại trước commit: ${fkBeforeCommit.length} lỗi foreign key`);
+  }
   db.exec("COMMIT");
 } catch(e) {
   db.exec("ROLLBACK");
@@ -164,4 +194,5 @@ console.log(JSON.stringify(report, null, 2));
 console.log("\nintegrity_check:", ic[0].integrity_check);
 console.log("FK violations:", fk.length);
 if(fk.length>0) console.log(JSON.stringify(fk));
+if (fk.length > 0 || ic.length !== 1 || ic[0].integrity_check !== 'ok') process.exitCode = 1;
 db.close();

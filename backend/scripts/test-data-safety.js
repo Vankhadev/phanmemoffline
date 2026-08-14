@@ -41,6 +41,9 @@ function test() {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   assert.strictEqual(manifest.valid, true, 'backup must be valid only after verification');
   assert.strictEqual(manifest.integrity_check, 'ok', 'backup integrity check must pass');
+  const protectionPoint = db.createVerifiedDataProtectionPoint('test-protection', { skipRetention: true });
+  assert(protectionPoint?.sha256, 'verified protection point must include a checksum');
+  assert.strictEqual(protectionPoint.validation.ok, true, 'verified protection point must pass integrity validation');
   assert.deepStrictEqual(JSON.parse(fs.readFileSync(dbPath, 'utf8')), original, 'backup must not modify source DB');
 
   db.withAtomicDbWrite(() => db.update('products', 1, { stock: 1 }, { skipSave: true }));

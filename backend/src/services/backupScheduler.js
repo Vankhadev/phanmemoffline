@@ -72,9 +72,20 @@ function backupNow(reason = 'manual') {
   return { ok: true, backup };
 }
 
-function backupBeforeMaintenance() { return runScheduledBackup('pre-maintenance'); }
-function backupBeforeUpdate() { return runScheduledBackup('pre-update'); }
-function backupEmergency() { return runScheduledBackup('emergency'); }
+function createRequiredProtectionPoint(reason) {
+  if (!initialized || !dbModule) return { ok: false, reason: 'not_initialized' };
+  const create = dbModule.createVerifiedDataProtectionPoint || dbModule.createDbBackup;
+  const backup = create.call(dbModule, reason, { retentionCount: 30 });
+  if (!backup) {
+    if (alertService) alertService.sendCriticalAlert('backup-scheduler', `Không tạo được backup bắt buộc trước ${reason}.`);
+    return { ok: false, error: 'backup_failed' };
+  }
+  return { ok: true, backup, forced: true };
+}
+
+function backupBeforeMaintenance() { return createRequiredProtectionPoint('pre-maintenance'); }
+function backupBeforeUpdate() { return createRequiredProtectionPoint('pre-update'); }
+function backupEmergency() { return createRequiredProtectionPoint('emergency'); }
 
 function listAllBackups(limit = 50) {
   if (!baseBackupDir) return [];

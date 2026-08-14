@@ -288,12 +288,20 @@ export default function OrderList() {
   };
   // UI state for a price suggestion toast
   const [priceSuggestion, setPriceSuggestion] = useState(null); // { lineIndex, productId, price, customerId, oldPrice }
+  const priceSuggestionTimerRef = useRef(null);
+  useEffect(() => () => {
+    if (priceSuggestionTimerRef.current) clearTimeout(priceSuggestionTimerRef.current);
+  }, []);
   // Show suggestion when a stored price differs from the current price of a line
   const maybeShowPriceSuggestion = (lineIndex, productId, price, customerId) => {
     const stored = getStoredPrice(customerId, productId);
     if (stored != null && stored !== price) {
       setPriceSuggestion({ lineIndex, productId, price, customerId, oldPrice: stored });
-      setTimeout(() => setPriceSuggestion(null), 10000);
+      if (priceSuggestionTimerRef.current) clearTimeout(priceSuggestionTimerRef.current);
+      priceSuggestionTimerRef.current = setTimeout(() => {
+        setPriceSuggestion(null);
+        priceSuggestionTimerRef.current = null;
+      }, 10000);
     }
   };
   // Apply the suggested price to the specific line and update memory
@@ -1225,8 +1233,6 @@ export default function OrderList() {
         };
       }),
       };
-      // Log payload để kiểm tra giá gửi lên (yêu cầu debug nghiệp vụ sửa đơn).
-      try { console.log('UPDATE_ORDER_PAYLOAD', payload); } catch {}
       await apiJsonChecked(`/invoices/${showEdit.id}`, { method: 'PUT', body: payload }, 'Không thể lưu đơn hàng.');
       // Verify dữ liệu vừa lưu: gọi GET order detail để chắc chắn database đã cập nhật thật.
       try {

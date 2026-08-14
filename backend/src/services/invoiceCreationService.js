@@ -16,6 +16,7 @@ const {
 const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
 const {
   getInvoiceDetailProductId,
+  getStockTargetsForInvoiceDetail,
   validateNegativeStockForDetails,
   applyProductStockDeltaLocked,
   logNegativeStockLimitViolation,
@@ -409,6 +410,26 @@ function restoreStock(productOrVariantId, quantity, options = {}) {
   return null;
 }
 
+// A combo affects the stock of its component products, not its display row.
+// Aggregate first so one invoice produces one ledger entry per affected product.
+function applyInvoiceDetailsStock(details = [], direction = 'deduct', options = {}) {
+  const quantitiesByProductId = new Map();
+  for (const detail of details || []) {
+    for (const target of getStockTargetsForInvoiceDetail(detail)) {
+      const productId = Number(target.productId);
+      const quantity = Math.max(0, Number(target.quantity) || 0);
+      if (!Number.isFinite(productId) || productId <= 0 || quantity <= 0) continue;
+      quantitiesByProductId.set(productId, (quantitiesByProductId.get(productId) || 0) + quantity);
+    }
+  }
+
+  for (const [productId, quantity] of quantitiesByProductId) {
+    const stockOptions = { ...options };
+    if (direction === 'restore') restoreStock(productId, quantity, stockOptions);
+    else deductStock(productId, quantity, stockOptions);
+  }
+}
+
 function findExistingInvoiceByClientOrderId(clientOrderId, accountId = getActiveAccountId()) {
   if (!clientOrderId) return null;
   return getOne('invoices', invoice =>
@@ -686,9 +707,12 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
     for (const detail of safeDetails) {
       const detailRow = normalizeInvoiceDetail(detail, invoice_id);
       insert('invoice_details', detailRow, { skipSave: true, accountId });
-      const productId = getDetailProductId(detailRow);
-      if (productId) deductStock(productId, +detailRow.quantity || 1, { skipSave: true, source: creatorMetadata.order_source || 'invoice', invoiceId: invoice_id });
     }
+    applyInvoiceDetailsStock(safeDetails, 'deduct', {
+      skipSave: true,
+      source: creatorMetadata.order_source || 'invoice',
+      invoiceId: invoice_id,
+    });
 
     const invoice = getOne('invoices', invoiceRow => Number(invoiceRow.id) === Number(invoice_id));
     syncInvoiceAccounting(invoice, { skipSave: true, timestamp: invoiceCreatedAt, userId: req?.user?.id || invoice?.user_id || null });
@@ -721,6 +745,7 @@ module.exports = {
   createInvoiceFromPayload,
   deductStock,
   restoreStock,
+  applyInvoiceDetailsStock,
   isComboDetail,
   isServiceDetail,
   normalizeInvoiceDetail,

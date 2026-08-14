@@ -23,7 +23,7 @@ if %errorlevel% equ 0 (
     echo Backend health check OK at %BACKEND_HEALTH_URL%
 ) else (
     echo Starting backend server...
-    start "Backend Server" cmd /k "cd /d %ROOT_DIR%\backend && set KHA_BACKEND_HOST=%BACKEND_HOST%&& set KHA_BACKEND_PORT=%BACKEND_PORT%&& set KHA_DISABLE_AUTOMATIC_BACKUPS=1&& set KHA_LOCAL_LIGHTWEIGHT_MODE=1&& set PORT=%BACKEND_PORT%&& set KHA_DB_PATH=%DB_PATH%&& npm start"
+    start "Backend Server" cmd /k "cd /d %ROOT_DIR%\backend && set KHA_BACKEND_HOST=%BACKEND_HOST%&& set KHA_BACKEND_PORT=%BACKEND_PORT%&& set KHA_DISABLE_AUTOMATIC_BACKUPS=0&& set KHA_LOCAL_LIGHTWEIGHT_MODE=0&& set KHA_SKIP_STARTUP_MIGRATION_BACKUP=0&& set PORT=%BACKEND_PORT%&& set KHA_DB_PATH=%DB_PATH%&& npm start"
     call :wait_for_backend_health 30
     if errorlevel 1 (
         echo Backend did not become healthy at %BACKEND_HEALTH_URL%

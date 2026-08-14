@@ -17,7 +17,6 @@ class EventEmitter {
   }
 
   emit(event, data) {
-    console.log(`[SYNC] Emit ${event}`);
     if (!this.listeners[event]) return;
     this.listeners[event].forEach(callback => {
       try {

@@ -697,6 +697,28 @@ const DB_WRITE_RETRY_MAX_DELAY_MS = Math.max(DB_WRITE_RETRY_BASE_DELAY_MS, Numbe
 let hasLoadedDb = false;
 let preMigrationBackupDone = false; // KHA hardening (PHẦN 1.3): tránh backup lại trong cùng session
 let atomicWriteDepth = 0;
+const durableChangeListeners = new Set();
+const pendingDurableChanges = new Map();
+
+function recordDurableChange(table, operation, rowId) {
+  if (!table) return;
+  pendingDurableChanges.set(`${table}:${operation}:${rowId ?? ''}`, { table, operation, rowId: rowId ?? null });
+}
+
+function flushDurableChanges() {
+  if (pendingDurableChanges.size === 0) return;
+  const changes = Array.from(pendingDurableChanges.values());
+  pendingDurableChanges.clear();
+  for (const listener of durableChangeListeners) {
+    try { listener(changes); } catch (error) { console.error(`[KHA DB] Durable change listener failed: ${error.message}`); }
+  }
+}
+
+function onDurableChanges(listener) {
+  if (typeof listener !== 'function') return () => {};
+  durableChangeListeners.add(listener);
+  return () => durableChangeListeners.delete(listener);
+}
 
 function sleepSync(ms) {
   const delayMs = Math.max(0, Number(ms) || 0);
@@ -870,6 +892,11 @@ function atomicWriteJSON(filePath, data) {
   let renamed = false;
   try {
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+    const fd = fs.openSync(tmp, 'r+');
+    try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    const staged = JSON.parse(fs.readFileSync(tmp, 'utf8'));
+    const validation = validateDatabaseData(staged, { allowLegacyOrphans: true });
+    if (!validation.ok) throw new Error(`Staged database integrity failed: ${validation.errors.join('; ')}`);
     renameFileWithRetry(tmp, filePath);
     renamed = true;
   } finally {
@@ -957,7 +984,9 @@ function isExpiredCancelledInvoice(invoice, referenceTime = Date.now()) {
 }
 
 function isInvoiceVisibleInActiveList(invoice, referenceTime = Date.now()) {
-  return !isExpiredCancelledInvoice(invoice, referenceTime);
+  // A cancelled invoice is an accounting record. It must remain retrievable for
+  // audit, printing and recovery regardless of when it was cancelled.
+  return Boolean(invoice);
 }
 
 function normalizeInvoiceCancellationSchema() {
@@ -1528,6 +1557,20 @@ function createDbBackup(reason = 'manual', options = {}) {
 function backupDB(reason = 'migration') {
   const backup = createDbBackup(reason, { skipRetention: false });
   return backup ? backup.path : null;
+}
+
+function createVerifiedDataProtectionPoint(reason = 'data-protection', options = {}) {
+  const backup = createDbBackup(reason, {
+    skipRetention: options.skipRetention === true,
+    retentionCount: options.retentionCount,
+  });
+  if (!backup) return null;
+  const verified = readVerifiedBackup(backup.path, { requireManifest: true });
+  return {
+    ...backup,
+    sha256: verified.manifest?.sha256 || sha256File(backup.path),
+    validation: verified.validation,
+  };
 }
 
 function runScheduledDbBackup(reason = 'scheduled', options = {}) {
@@ -2214,7 +2257,7 @@ function importOldCustomerDatabase() {
   }
   
   if (oldDbFile && oldDbData) {
-    console.log(`[MIGRATION 1.6.8] Found old database containing ${targetEmail} at: ${oldDbFile}`);
+    console.log(`[MIGRATION 1.6.8] Found eligible legacy database: ${path.basename(oldDbFile)}`);
     let importedAny = false;
     
     // Import users
@@ -2339,29 +2382,8 @@ function importOldCustomerDatabase() {
     }
   }
   
-  const finalHasUser = (current.users || []).some(u => String(u.email || '').trim().toLowerCase() === 'dongphuongqc@gmail.com');
-  if (!finalHasUser) {
-    const newId = current.nextId.users || 1;
-    current.nextId.users = newId + 1;
-    
-    const { hashPassword } = require('../utils/password');
-    const defaultAccount = ensureDefaultAccount();
-    current.users.push({
-      id: newId,
-      account_id: defaultAccount.id,
-      name: 'Đông Phương QC',
-      email: 'dongphuongqc@gmail.com',
-      phone: '0904045075',
-      password: hashPassword('khongnoiduoc'),
-      role: 'admin',
-      approved: 1,
-      active: 1,
-      created_at: now(),
-      updated_at: now(),
-      session_token: null,
-    });
-    console.log(`[MIGRATION 1.6.8] Seeded default user: dongphuongqc@gmail.com`);
-  }
+  // Do not create a predictable administrator when legacy data lacks one.
+  // Admin Recovery or the normal registration flow handles this explicitly.
 }
 
 function sha256File(filePath) {
@@ -2926,6 +2948,7 @@ function loadDB(options = {}) {
 
 function saveDB() {
   atomicWriteJSON(DB_PATH, getDb());
+  flushDurableChanges();
 }
 
 function cloneDbState() {
@@ -2948,7 +2971,11 @@ function withAtomicDbWrite(callback) {
     return result;
   } catch (error) {
     atomicWriteDepth = Math.max(0, atomicWriteDepth - 1);
-    if (isOuterAtomicWrite) { engineRollback(); if (snapshot) replaceDB(snapshot); }
+    if (isOuterAtomicWrite) {
+      engineRollback();
+      if (snapshot) replaceDB(snapshot);
+      pendingDurableChanges.clear();
+    }
     throw error;
   }
 }
@@ -3089,6 +3116,7 @@ function replaceTable(table, rows, options = {}) {
   engineReplace(table, current[table]);
   recalculateNextIds();
   if (!options.skipTouch) touchSyncMetadata(table, options.accountId || getActiveAccountId());
+  recordDurableChange(table, 'replace', null);
   if (shouldSaveImmediately(options)) saveDB();
   return current[table];
 }
@@ -3111,6 +3139,7 @@ function insert(table, row, options = {}) {
   current.nextId[table] = Math.max(Number(current.nextId[table]) || 1, id + 1);
   ensureDocumentSequenceForRow(table, normalized);
   if (!options.skipTouch) touchSyncMetadata(table, normalized.account_id || options.accountId || getActiveAccountId());
+  recordDurableChange(table, 'insert', id);
   if (shouldSaveImmediately(options)) saveDB();
   return id;
 }
@@ -3134,6 +3163,7 @@ function update(table, id, changes, options = {}) {
   engineUpsert(table, updated);
   ensureDocumentSequenceForRow(table, updated);
   if (!options.skipTouch) touchSyncMetadata(table, updated.account_id || options.accountId || getActiveAccountId());
+  recordDurableChange(table, 'update', numericId);
   if (shouldSaveImmediately(options)) saveDB();
   return updated;
 }
@@ -3146,6 +3176,7 @@ function remove(table, id, options = {}) {
   const [removed] = rows.splice(index, 1);
   engineDelete(table, removed && removed.id);
   if (!options.skipTouch) touchSyncMetadata(table, removed?.account_id || options.accountId || getActiveAccountId());
+  recordDurableChange(table, 'delete', numericId);
   if (shouldSaveImmediately(options)) saveDB();
   return removed;
 }
@@ -3166,70 +3197,9 @@ function getExpiredCancelledInvoices(referenceTime = Date.now(), options = {}) {
 }
 
 function deleteExpiredCancelledInvoices(options = {}) {
-  const referenceTime = options.referenceTime || options.now || Date.now();
-  const expiredInvoices = getExpiredCancelledInvoices(referenceTime, { skipAccountScope: true });
-  if (expiredInvoices.length === 0) {
-    return { ok: true, deletedCount: 0, deletedDetailCount: 0, invoiceIds: [], softDeleted: true };
-  }
-
-  // Data safety hardening: never hard-delete business invoices or invoice details.
-  // Historical versions removed cancelled invoices after 24h; that can break audits
-  // and old order lookup. Keep the return shape for scheduler compatibility, but
-  // perform a soft delete marker only.
-  return withAtomicDbWrite(() => {
-    const invoiceIds = [];
-    let softDeletedDetailCount = 0;
-    const timestamp = now();
-
-    for (const expiredInvoice of expiredInvoices) {
-      const invoice = getOne('invoices', row => Number(row.id) === Number(expiredInvoice.id), { skipAccountScope: true });
-      if (!isExpiredCancelledInvoice(invoice, referenceTime)) continue;
-
-      const details = getAll('invoice_details', detail => Number(detail.invoice_id) === Number(invoice.id), { skipAccountScope: true });
-      for (const detail of details) {
-        const updatedDetail = update('invoice_details', detail.id, {
-          deleted_at: detail.deleted_at || timestamp,
-          is_active: false,
-          soft_delete_reason: detail.soft_delete_reason || 'expired_cancelled_invoice_retained',
-        }, {
-          skipAccountScope: true,
-          skipSave: true,
-          accountId: detail.account_id || invoice.account_id || null,
-        });
-        if (updatedDetail) softDeletedDetailCount += 1;
-      }
-
-      const updatedInvoice = update('invoices', invoice.id, {
-        deleted_at: invoice.deleted_at || timestamp,
-        is_active: false,
-        soft_delete_reason: invoice.soft_delete_reason || 'expired_cancelled_invoice_retained',
-      }, {
-        skipAccountScope: true,
-        skipSave: true,
-        accountId: invoice.account_id || null,
-      });
-      if (updatedInvoice) invoiceIds.push(updatedInvoice.id);
-    }
-
-    if (invoiceIds.length > 0) {
-      auditLog('DELETE_SOFT', {
-        entity_type: 'invoices',
-        entity_ids: invoiceIds,
-        reason: 'expired_cancelled_invoice_retained',
-        detail_count: softDeletedDetailCount,
-      }, { skipSave: true });
-    }
-
-    return {
-      ok: true,
-      deletedCount: 0,
-      deletedDetailCount: 0,
-      softDeletedCount: invoiceIds.length,
-      softDeletedDetailCount,
-      invoiceIds,
-      softDeleted: true,
-    };
-  });
+  // Retained as a compatibility no-op for old scheduler callers. Business
+  // documents must never be hidden or modified solely because of age.
+  return { ok: true, deletedCount: 0, deletedDetailCount: 0, invoiceIds: [], retained: true };
 }
 
 function getOne(table, filter, options = {}) {
@@ -3428,6 +3398,7 @@ const exportsObject = {
   saveDB,
   backupDB,
   createDbBackup,
+  createVerifiedDataProtectionPoint,
   readVerifiedBackup,
   restoreDbBackup,
   validateDatabaseData,
@@ -3491,6 +3462,7 @@ const exportsObject = {
   INVOICE_STATUS_CANCELLED_AT_INDEX_FIELDS,
   cleanupDatabaseTempFiles,
   withAtomicDbWrite,
+  onDurableChanges,
   setDBPath,
   performDeepScan,
   readDatabaseConfig,

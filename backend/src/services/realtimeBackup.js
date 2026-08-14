@@ -11,16 +11,17 @@
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const DEBOUNCE_MS = 10 * 1000; // 10 seconds
 const MAX_SNAPSHOTS = 50;
 const SNAPSHOT_DIR_NAME = 'realtime-snapshots';
 const CRITICAL_TABLES = new Set([
-  'invoices', 'invoice_details',
-  'customers',
-  'products',
-  'partners',
-  'import_logs', 'import_details',
+  'invoices', 'invoice_details', 'orders', 'order_items', 'payments',
+  'customers', 'products', 'partners', 'suppliers',
+  'import_logs', 'import_details', 'imports', 'import_items',
+  'inventory_transactions', 'inventory_batches', 'cash_book', 'cash_fund',
+  'debts', 'debt_payments', 'return_logs', 'return_details', 'audit_logs',
 ]);
 
 let snapshotDir = null;
@@ -50,7 +51,7 @@ function initialize(options = {}) {
  * Called by database hooks when a critical table changes.
  */
 function onDataChange(table, operation, rowId) {
-  if (!initialized || !CRITICAL_TABLES.has(table)) return;
+  if (!initialized || (table !== 'manual' && !CRITICAL_TABLES.has(table))) return;
 
   pendingChanges.push({
     table,
@@ -71,25 +72,27 @@ function createSnapshot() {
   const changes = pendingChanges.splice(0);
   if (changes.length === 0) return null;
 
+  let tempPath = null;
   try {
     const db = dbModule.getDb();
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const tablesChanged = [...new Set(changes.map(c => c.table))].join('+');
+    const tablesChanged = [...new Set(changes.map(c => c.table))].join('+') || 'full';
     const fileName = `snapshot-${stamp}-${tablesChanged}.json`;
     const snapshotPath = path.join(snapshotDir, fileName);
-
-    // Write snapshot
+    tempPath = `${snapshotPath}.${process.pid}.${Date.now()}.tmp`;
     const snapshotData = {
       _meta: {
         created_at: new Date().toISOString(),
         changes: changes.length,
         tables: tablesChanged,
         trigger: changes[0]?.operation || 'unknown',
+        snapshot_type: 'full_database_recovery_point',
       },
     };
 
-    // Only include critical tables in snapshot (not full DB)
-    for (const table of CRITICAL_TABLES) {
+    // This is a complete recovery point. Partial table snapshots can restore a
+    // sale without its cash, debt or stock entries and therefore are unsafe.
+    for (const table of Object.keys(dbModule.SCHEMA || {})) {
       if (Array.isArray(db[table])) {
         snapshotData[table] = db[table];
       }
@@ -98,7 +101,23 @@ function createSnapshot() {
     // Also include nextId for recovery
     snapshotData.nextId = db.nextId || {};
 
-    fs.writeFileSync(snapshotPath, JSON.stringify(snapshotData, null, 0), 'utf8');
+    fs.writeFileSync(tempPath, JSON.stringify(snapshotData), 'utf8');
+    const fd = fs.openSync(tempPath, 'r+');
+    try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    const staged = JSON.parse(fs.readFileSync(tempPath, 'utf8'));
+    const validation = dbModule.validateDatabaseData(staged, { allowLegacyOrphans: true });
+    if (!validation.ok) throw new Error(`Snapshot integrity failed: ${validation.errors.join('; ')}`);
+    fs.renameSync(tempPath, snapshotPath);
+    const hash = crypto.createHash('sha256').update(fs.readFileSync(snapshotPath)).digest('hex');
+    fs.writeFileSync(`${snapshotPath}.manifest.json`, JSON.stringify({
+      file: fileName,
+      sha256: hash,
+      size: fs.statSync(snapshotPath).size,
+      created_at: snapshotData._meta.created_at,
+      schema_version: typeof dbModule.getSchemaVersion === 'function' ? dbModule.getSchemaVersion(db) : 'json-schema-v1',
+      valid: true,
+      counts: validation.counts,
+    }), 'utf8');
     lastSnapshotTime = Date.now();
     snapshotCount++;
 
@@ -107,8 +126,9 @@ function createSnapshot() {
     // Prune old snapshots
     pruneSnapshots();
 
-    return { path: snapshotPath, file: fileName, changes: changes.length };
+    return { path: snapshotPath, file: fileName, changes: changes.length, sha256: hash };
   } catch (error) {
+    try { if (tempPath && fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch (_) {}
     console.error(`[KHA REALTIME BACKUP] Snapshot error: ${error.message}`);
     if (alertService) {
       alertService.sendWarningAlert('realtime-backup', `Lỗi tạo snapshot realtime: ${error.message}`);
@@ -174,29 +194,22 @@ function listSnapshots(limit = 20) {
 function restoreFromSnapshot(snapshotPath, targetDbModule) {
   const mod = targetDbModule || dbModule;
   if (!mod) throw new Error('Database module not available');
-  if (!fs.existsSync(snapshotPath)) throw new Error(`Snapshot not found: ${snapshotPath}`);
-
-  const content = fs.readFileSync(snapshotPath, 'utf8');
-  const snapshot = JSON.parse(content);
-  const db = mod.getDb();
-  const restored = [];
-
-  for (const table of CRITICAL_TABLES) {
-    if (Array.isArray(snapshot[table]) && snapshot[table].length > 0) {
-      db[table] = snapshot[table];
-      restored.push(table);
-    }
+  const resolved = path.resolve(String(snapshotPath || ''));
+  const allowedRoot = path.resolve(snapshotDir || '.');
+  if (!resolved.startsWith(`${allowedRoot}${path.sep}`)) throw new Error('Snapshot path is outside the protected snapshot directory');
+  if (!fs.existsSync(resolved)) throw new Error(`Snapshot not found: ${resolved}`);
+  if (typeof mod.restoreDbBackup !== 'function') throw new Error('Verified full snapshot restore is unavailable');
+  const manifestPath = `${resolved}.manifest.json`;
+  if (!fs.existsSync(manifestPath)) throw new Error('Snapshot manifest is required for restore');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const stat = fs.statSync(resolved);
+  const checksum = crypto.createHash('sha256').update(fs.readFileSync(resolved)).digest('hex');
+  if (manifest.valid !== true || manifest.size !== stat.size || manifest.sha256 !== checksum) {
+    throw new Error('Snapshot checksum verification failed');
   }
-
-  if (snapshot.nextId) {
-    db.nextId = { ...(db.nextId || {}), ...snapshot.nextId };
-  }
-
-  return {
-    ok: true,
-    restored,
-    snapshotMeta: snapshot._meta || {},
-  };
+  const snapshot = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+  const result = mod.restoreDbBackup(resolved, { allowLegacyBackup: true });
+  return { ...result, snapshotMeta: snapshot._meta || {} };
 }
 
 function getStatus() {

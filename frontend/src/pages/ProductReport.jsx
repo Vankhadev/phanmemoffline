@@ -718,6 +718,9 @@ export default function ProductReport() {
   const [createError, setCreateError] = useState('');
   const [createdNotice, setCreatedNotice] = useState('');
   const [showHelp, setShowHelp] = useState(false);
+  const reportRequestRef = useRef({ id: 0, controller: null });
+
+  useEffect(() => () => reportRequestRef.current.controller?.abort(), []);
 
   const selectedRange = useMemo(() => getPeriodRange({
     period,
@@ -742,28 +745,30 @@ export default function ProductReport() {
       return false;
     }
 
+    reportRequestRef.current.controller?.abort();
+    const controller = new AbortController();
+    const requestId = reportRequestRef.current.id + 1;
+    reportRequestRef.current = { id: requestId, controller };
     setLoading(true);
     setError('');
     setCreatedNotice('');
     try {
       const endpoint = `${API}/stats/product-report?${request.params.toString()}`;
-      console.info('[ProductReport] fetchReport -> requesting', {
-        endpoint,
-        filters,
-        range: request.range,
-      });
-      const res = await fetch(endpoint);
+      const res = await fetch(endpoint, { signal: controller.signal });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Không l?p được báo cáo sản phẩm');
+      if (reportRequestRef.current.id !== requestId) return false;
       setReport(data);
       setLastFetchedAt(new Date());
       return true;
     } catch (err) {
+      if (err.name === 'AbortError') return false;
+      if (reportRequestRef.current.id !== requestId) return false;
       setReport(null);
       setError(err.message || 'Không l?p được báo cáo sản phẩm');
       return false;
     } finally {
-      setLoading(false);
+      if (reportRequestRef.current.id === requestId) setLoading(false);
     }
   }, [period, selectedDate, selectedMonth, selectedYear, from, to, status]);
 
@@ -774,7 +779,6 @@ export default function ProductReport() {
   useEffect(() => {
     const handleSyncRefresh = () => {
       fetchReport();
-      console.log('[SYNC] ProductReport refreshed');
     };
 
     const unsubProductUpdated = globalSyncEmitter.on('PRODUCT_UPDATED', handleSyncRefresh);
@@ -861,11 +865,6 @@ export default function ProductReport() {
     setCreateError('');
     try {
       const endpoint = `${API}/stats/product-report?${request.params.toString()}`;
-      console.info('[ProductReport] createReport -> requesting', {
-        endpoint,
-        draft: reportDraft,
-        range: request.range,
-      });
       const res = await fetch(endpoint);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Không tạo được báo cáo sản phẩm');

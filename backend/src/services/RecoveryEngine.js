@@ -71,27 +71,46 @@ function spawnWorker() {
   }
   workerReady = false;
   worker = new Worker(WORKER_SCRIPT);
-  worker.on("message", (msg) => {
-    if (msg.type === "ready") { workerReady = true; }
-  });
-  worker.on("error", (err) => {
-    console.error("[RecoveryEngine] Worker error:", err.message);
-    workerReady = false;
-  });
-  worker.on("exit", (code) => {
-    if (code !== 0 && status.running) {
-      console.error("[RecoveryEngine] Worker exit with code:", code);
-      status.running = false;
-      status.phase = "error";
-      status.progress = "Worker crash, vui lòng thử lại.";
-      restoreLock = false;
-    }
-    worker = null;
-    workerReady = false;
-  });
-  return new Promise((resolve) => {
-    const check = () => { if (workerReady) resolve(true); else setTimeout(check, 50); };
-    check();
+  return new Promise((resolve, reject) => {
+    const activeWorker = worker;
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (error) reject(error);
+      else resolve(true);
+    };
+    const timeout = setTimeout(() => {
+      if (worker === activeWorker) {
+        try { activeWorker.terminate(); } catch (_) {}
+      }
+      finish(new Error('Worker khôi phục không sẵn sàng trong thời gian cho phép'));
+    }, 30000);
+
+    activeWorker.on("message", (msg) => {
+      if (msg.type === "ready") {
+        workerReady = true;
+        finish();
+      }
+    });
+    activeWorker.on("error", (err) => {
+      console.error("[RecoveryEngine] Worker error:", err.message);
+      workerReady = false;
+      finish(new Error(`Worker khôi phục lỗi: ${err.message}`));
+    });
+    activeWorker.on("exit", (code) => {
+      if (!settled) finish(new Error(`Worker khôi phục dừng trước khi sẵn sàng (mã ${code})`));
+      if (code !== 0 && status.running) {
+        console.error("[RecoveryEngine] Worker exit with code:", code);
+        status.running = false;
+        status.phase = "error";
+        status.progress = "Worker crash, vui lòng thử lại.";
+        restoreLock = false;
+      }
+      if (worker === activeWorker) worker = null;
+      workerReady = false;
+    });
   });
 }
 
@@ -198,15 +217,16 @@ function acquireLock(label = "restore-import") {
         return false;
       }
     }
-    restoreLock = true;
-    fs.writeFileSync(lockPath, JSON.stringify({
+    const lockData = JSON.stringify({
       pid: process.pid,
       type: label,
       startedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       appVersion: VERSION,
       status: "running",
-    }, null, 2), "utf8");
+    }, null, 2);
+    fs.writeFileSync(lockPath, lockData, { encoding: 'utf8', flag: 'wx' });
+    restoreLock = true;
     lockFile = lockPath;
     console.log("[RESTORE_LOCK] Lock acquired:", lockPath);
     return true;
@@ -370,6 +390,7 @@ async function restoreBackups(options = {}) {
   status.elapsedMs = 0;
 
   const logPath = path.join(getLogDir(), "restore-log-" + stamp() + ".txt");
+  let safetyBackup = null;
 
   try {
     // Tao snapshot pre-restore
@@ -377,7 +398,6 @@ async function restoreBackups(options = {}) {
     const beforeCounts = countTables(snapshot);
 
     // Tao backup truoc khi restore
-    let safetyBackup = null;
     try {
       safetyBackup = dbModule.createDbBackup("recovery_pre_restore_" + stamp(), { skipRetention: true });
       if (!safetyBackup) {
@@ -410,7 +430,22 @@ async function restoreBackups(options = {}) {
 
     const result = await sendToWorker({ type: "restore-request", data: restoreOptions });
 
-    // Merge result back to DB
+    // A cancelled or failed worker result is never persisted. This preserves the
+    // exact pre-restore database even when cancellation occurs mid-scan.
+    if (!result.ok || result.report?.cancelled) {
+      const report = result.report || {};
+      report.beforeCounts = beforeCounts;
+      report.afterCounts = beforeCounts;
+      report.safetyBackup = safetyBackup;
+      report.rollbackStatus = 'not_needed';
+      status.lastReport = report;
+      status.lastLogPath = logPath;
+      status.phase = 'cancelled';
+      status.progress = result.message || 'Đã hủy khôi phục; dữ liệu hiện tại không thay đổi.';
+      return { ok: false, message: status.progress, report, logPath, files: options.files || [] };
+    }
+
+    // Merge a completed worker result back to DB.
     if (result.current) {
       const db = dbModule.getDb();
       for (const table of Object.keys(dbModule.SCHEMA || {})) {
@@ -633,6 +668,7 @@ function startupCleanupLocks() {
 
 function forceUnlock() {
   const lockPaths = [
+    path.join(os.tmpdir(), "phanmienoffline", "restore-import.lock"),
     path.join(os.tmpdir(), "phanmienoffline", "restore.lock"),
     path.join(os.tmpdir(), "phanmienoffline", "restore-scan.lock"),
   ];

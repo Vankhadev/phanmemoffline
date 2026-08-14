@@ -18,6 +18,7 @@ const {
   normalizeRoleValue,
 } = require('../db/database');
 const { hashPassword, verifyPassword, isPasswordHash } = require('../utils/password');
+const fileLogger = require('../utils/fileLogger');
 const {
   createSession,
   publicSession,
@@ -42,8 +43,13 @@ const AUTH_SENSITIVE_RATE_LIMIT_MAX = Number(process.env.KHA_AUTH_SENSITIVE_RATE
 const AUTH_DEBUG_ENABLED = String(process.env.KHA_DEBUG_AUTH || process.env.DEBUG_AUTH || '').trim().toLowerCase() === 'true';
 
 function debugAuthLog(event, payload = {}) {
-  if (!AUTH_DEBUG_ENABLED || typeof console === 'undefined' || typeof console.info !== 'function') return;
-  console.info(`[KHA AUTH] ${event}`, payload);
+  if (!AUTH_DEBUG_ENABLED) return;
+  const safePayload = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (/input|email|phone|password|token|session|ip/i.test(key)) continue;
+    safePayload[key] = value;
+  }
+  fileLogger.debug(`auth.${event}`, safePayload);
 }
 
 const authPublicLimiter = rateLimit({
@@ -391,20 +397,18 @@ router.post('/login', authSensitiveLimiter, (req, res) => {
   const user = matchingUsers.find(u => verifyPassword(password, u.password));
 
   debugAuthLog('login-attempt', {
-    input: normalizedInput,
+    identifier_type: normalizedInput.includes('@') ? 'email' : 'username_or_phone',
     matchingCount: matchingUsers.length,
     hasUser: Boolean(user),
     userId: user?.id || null,
     accountId: user?.account_id || null,
     hasPasswordHash: Boolean(user?.password && isPasswordHash(user.password)),
-    ip: req.ip,
   });
 
   if (!user) {
     debugAuthLog('login-failed', {
-      input: normalizedInput,
+      identifier_type: normalizedInput.includes('@') ? 'email' : 'username_or_phone',
       reason: matchingUsers.length > 0 ? 'password_mismatch_all_matches' : 'user_not_found_or_inactive',
-      ip: req.ip,
     });
     return res.status(401).json({ ok: false, message: 'Email/Số điện thoại hoặc mật khẩu không đúng' });
   }
@@ -416,12 +420,9 @@ router.post('/login', authSensitiveLimiter, (req, res) => {
   update('users', user.id, { ...passwordChanges, session_token: null, last_login: lastLogin });
   logAuthEvent('auth.login', req, { user_id: user.id, account_id: account.id, session_id: session.id });
   debugAuthLog('login-succeeded', {
-    input: normalizedInput,
     userId: user.id,
     accountId: account.id,
-    sessionId: session.id,
     migratedLegacyPassword: Boolean(passwordChanges.password),
-    ip: req.ip,
   });
 
   res.json(buildAuthPayload({ token, user: { ...user, account_id: account.id, last_login: lastLogin }, account, session }));

@@ -39,7 +39,8 @@ function getAppliedVersions(db) {
 
 function applyMigration(db, file, dryRun) {
   const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), "utf8");
-  // Lọc bỏ PRAGMA (không nằm trong transaction), chạy riêng
+  // PRAGMA configuration must be applied before the transaction. A failure to
+  // enable foreign keys is unsafe and must stop the migration.
   const pragmaLines  = sql.split("\n").filter(l => l.trim().toUpperCase().startsWith("PRAGMA"));
   const nonPragma    = sql.split("\n").filter(l => !l.trim().toUpperCase().startsWith("PRAGMA")).join("\n");
 
@@ -51,7 +52,12 @@ function applyMigration(db, file, dryRun) {
   // Áp dụng PRAGMA ngoài transaction
   for (const pLine of pragmaLines) {
     const stmt = pLine.replace(/;.*$/, "").trim();
-    if (stmt) { try { db.exec(stmt + ";"); } catch (_) {} }
+    if (!stmt) continue;
+    db.exec(stmt + ";");
+    if (/^PRAGMA\s+foreign_keys\s*=\s*ON$/i.test(stmt)) {
+      const enabled = db.prepare('PRAGMA foreign_keys').get()?.foreign_keys;
+      if (Number(enabled) !== 1) throw new Error('Không thể bật PRAGMA foreign_keys');
+    }
   }
 
   // Áp dụng phần còn lại trong transaction
@@ -79,38 +85,43 @@ function main() {
 
   const db = new DatabaseSync(dbPath);
 
-  // Bootstrap schema_migrations nếu chưa tồn tại
-  db.exec(`
+  try {
+    // Bootstrap schema_migrations nếu chưa tồn tại
+    db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version     TEXT PRIMARY KEY,
       applied_at  TEXT NOT NULL DEFAULT (datetime('now')),
       description TEXT
     );
-  `);
-
-  const files   = getMigrationFiles();
-  const applied = getAppliedVersions(db);
-
-  let count = 0;
-  for (const file of files) {
-    // Lấy version từ prefix số (001, 002, ...)
-    const version = file.split("_")[0];
-    if (applied.has(version)) {
-      console.log(`  - Skip : ${file} (already applied)`);
-      continue;
+    `);
+    db.exec('PRAGMA foreign_keys = ON;');
+    if (Number(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys) !== 1) {
+      throw new Error('SQLite không thể bật foreign key enforcement');
     }
-    applyMigration(db, file, dryRun);
-    count++;
-  }
 
-  if (count === 0) {
+    const files   = getMigrationFiles();
+    const applied = getAppliedVersions(db);
+
+    let count = 0;
+    for (const file of files) {
+    // Lấy version từ prefix số (001, 002, ...)
+      const version = file.split("_")[0];
+      if (applied.has(version)) {
+        console.log(`  - Skip : ${file} (already applied)`);
+        continue;
+      }
+      applyMigration(db, file, dryRun);
+      count++;
+    }
+
+    if (count === 0) {
     console.log("  Nothing to migrate — database is up to date.\n");
-  } else {
+    } else {
     console.log(`\n  Done: ${count} migration(s) applied.\n`);
-  }
+    }
 
-  // Verify
-  if (!dryRun) {
+    // Verify
+    if (!dryRun) {
     console.log("  Running integrity checks...");
     const ic = db.prepare("PRAGMA integrity_check").all();
     const ok = ic.length === 1 && ic[0].integrity_check === "ok";
@@ -118,13 +129,20 @@ function main() {
 
     db.exec("PRAGMA foreign_keys = ON;");
     const fk = db.prepare("PRAGMA foreign_key_check").all();
-    console.log(`  foreign_key_check: ${fk.length === 0 ? "OK (0 violations)" : JSON.stringify(fk)}`);
+      console.log(`  foreign_key_check: ${fk.length === 0 ? "OK (0 violations)" : JSON.stringify(fk)}`);
+      if (!ok || fk.length > 0) throw new Error('Integrity hoặc foreign key check thất bại sau migration');
 
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
     console.log(`  Tables created   : ${tables.map(r=>r.name).join(", ")}\n`);
+    }
+  } finally {
+    db.close();
   }
-
-  db.close();
 }
 
-main();
+try {
+  main();
+} catch (error) {
+  console.error(`Migration failed: ${error.message}`);
+  process.exitCode = 1;
+}

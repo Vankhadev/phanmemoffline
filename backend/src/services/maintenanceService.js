@@ -104,10 +104,13 @@ async function runMaintenance() {
     if (backupScheduler) {
       try {
         const backup = backupScheduler.backupBeforeMaintenance();
-        result.tasks.push({ name: 'Pre-maintenance backup', ok: true, detail: backup?.file || 'done' });
+        if (!backup?.ok) throw new Error(backup?.error || 'Không tạo được backup bảo vệ trước bảo trì');
+        result.tasks.push({ name: 'Pre-maintenance backup', ok: true, detail: backup.backup?.file || 'done' });
       } catch (err) {
         result.tasks.push({ name: 'Pre-maintenance backup', ok: false, error: err.message });
         result.errors.push(err.message);
+        result.ok = false;
+        return result;
       }
     }
     await yieldToEventLoop();

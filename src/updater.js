@@ -684,8 +684,28 @@ async function backupDatabase(app, targetVersion) {
     `${DB_FILE_NAME}.backup.${formatTimestampForFile()}.pre-update-${sanitizeFileName(targetVersion)}.json`,
   );
 
+  let manifestPath = null;
+  let dbHash = null;
   if (await pathExists(dbPath)) {
-    await fsp.copyFile(dbPath, backupPath);
+    const tempPath = `${backupPath}.${process.pid}.${Date.now()}.tmp`;
+    await fsp.copyFile(dbPath, tempPath);
+    const raw = await fsp.readFile(tempPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw createPublicError('BACKUP_INVALID', 'Backup trước cập nhật không có định dạng dữ liệu hợp lệ.');
+    }
+    dbHash = await sha256File(tempPath);
+    await fsp.rename(tempPath, backupPath);
+    manifestPath = `${backupPath}.manifest.json`;
+    await fsp.writeFile(manifestPath, JSON.stringify({
+      type: 'pre-update',
+      version: targetVersion,
+      created_at: new Date().toISOString(),
+      source_file: DB_FILE_NAME,
+      size: (await fsp.stat(backupPath)).size,
+      sha256: dbHash,
+      valid: true,
+    }, null, 2), 'utf8');
   }
 
   // Create comprehensive pre-upgrade backups in requested folders:
@@ -742,7 +762,7 @@ async function backupDatabase(app, targetVersion) {
     }
   }
 
-  return { dbPath, backupPath, skipped: !(await pathExists(dbPath)) };
+  return { dbPath, backupPath, manifestPath, sha256: dbHash, skipped: !(await pathExists(dbPath)) };
 }
 
 function isCancellationError(err) {
@@ -1716,4 +1736,3 @@ module.exports = {
   parseSemVer,
   sha256File,
 };
-

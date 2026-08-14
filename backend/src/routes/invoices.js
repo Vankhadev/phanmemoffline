@@ -23,13 +23,12 @@ const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayNa
 const {
   createInvoiceFromPayload,
   syncInvoiceAccounting,
-  deductStock: deductInvoiceStock,
-  restoreStock: restoreInvoiceStock,
+  applyInvoiceDetailsStock,
   normalizeInvoiceDetail: normalizeInvoiceDetailService,
   prepareInvoiceDetailsForPersistence,
 } = require('../services/invoiceCreationService');
 const {
-  getInvoiceDetailProductId,
+  collectRequestedProductQuantities,
   validateNegativeStockForDetails,
   logNegativeStockLimitViolation,
   buildNegativeStockErrorResponse,
@@ -46,15 +45,7 @@ function isComboDetail(detail = {}) {
 }
 
 function collectProductQuantities(details = []) {
-  const map = new Map();
-  for (const detail of details || []) {
-    const productId = Number(getInvoiceDetailProductId(detail));
-    if (!Number.isFinite(productId) || productId <= 0) continue;
-    const quantity = Math.max(0, Number(detail.quantity) || 0);
-    if (quantity <= 0) continue;
-    map.set(productId, (map.get(productId) || 0) + quantity);
-  }
-  return map;
+  return collectRequestedProductQuantities(details);
 }
 
 function validateStockForInvoiceEditDetails(newDetails = [], oldDetails = []) {
@@ -237,8 +228,10 @@ function buildPaymentPrintInfo(invoice = {}, store = {}) {
   };
 }
 
-function buildPrintItem(detail = {}, index = 0, productsById = new Map()) {
-  const displayFields = resolveInvoiceDetailDisplayFields(detail, id => productsById.get(Number(id)) || null);
+function buildPrintItem(detail = {}, index = 0) {
+  // Historical invoice snapshots must win. Resolving from a product currently in
+  // the catalogue can otherwise print a renamed or merged product on an old bill.
+  const displayFields = resolveInvoiceDetailDisplayFields(detail, () => null);
   const quantity = toMoney(detail.quantity) || 0;
   const unitPrice = toMoney(detail.unit_price);
   const discountAmount = toMoney(detail.discount_amount);
@@ -254,7 +247,7 @@ function buildPrintItem(detail = {}, index = 0, productsById = new Map()) {
     variant_id: detail.variant_id || null,
     combo_id: detail.combo_id || null,
     sku: firstNonEmpty(detail.product_sku, detail.sku, displayFields.product_sku),
-    name: firstNonEmpty(displayFields.product_name, detail.product_name, detail.name, detail.combo_name, detail.sku, detail.product_sku, 'Sản phẩm'),
+    name: firstNonEmpty(detail.product_name, detail.name, detail.combo_name, displayFields.product_name, detail.sku, detail.product_sku, 'Sản phẩm'),
     unit: firstNonEmpty(detail.unit, detail.product_unit, detail.unit_name),
     quantity,
     unit_price: unitPrice,
@@ -344,9 +337,8 @@ function buildInvoicePrintPayload(idOrCode) {
   const invoice = findInvoiceForPrint(idOrCode);
   if (!invoice) return null;
 
-  const productsById = new Map(getAll('products').map(product => [Number(product.id), product]));
   const details = getAll('invoice_details', detail => Number(detail.invoice_id) === Number(invoice.id))
-    .map((detail, index) => buildPrintItem(detail, index, productsById));
+    .map((detail, index) => buildPrintItem(detail, index));
   const customer = getOne('customers', c => Number(c.id) === Number(invoice.customer_id));
   const user = getOne('users', u => Number(u.id) === Number(invoice.user_id));
   const currentStore = getAll('store_info')[0] || {};
@@ -733,10 +725,7 @@ router.put('/:id', async (req, res) => {
         const oldDetails = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id));
         validateStockForInvoiceEditDetails(safeDetails, oldDetails);
 
-        for (const d of oldDetails) {
-          const stockProductId = getInvoiceDetailProductId(d);
-          if (stockProductId) restoreInvoiceStock(stockProductId, +d.quantity || 0, { skipSave: true, invoiceId: inv.id, revision: 1 });
-        }
+        applyInvoiceDetailsStock(oldDetails, 'restore', { skipSave: true, invoiceId: inv.id, revision: 1 });
 
         const oldById = new Map(oldDetails.filter(d => d && d.id != null).map(d => [Number(d.id), d]));
         const matchedOldIds = new Set();
@@ -762,10 +751,7 @@ router.put('/:id', async (req, res) => {
           }
         }
 
-        for (const d of safeDetails) {
-          const stockProductId = getInvoiceDetailProductId(d);
-          if (stockProductId) deductInvoiceStock(stockProductId, +d.quantity || 1, { skipSave: true, invoiceId: inv.id, revision: 2 });
-        }
+        applyInvoiceDetailsStock(safeDetails, 'deduct', { skipSave: true, invoiceId: inv.id, revision: 2 });
       }
 
       const updatedInvoice = getOne('invoices', i => Number(i.id) === Number(inv.id));
@@ -845,10 +831,7 @@ router.delete('/:id', async (req, res) => {
       }
 
       const details = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id));
-      for (const d of details) {
-        const stockProductId = getInvoiceDetailProductId(d);
-        if (stockProductId) restoreInvoiceStock(stockProductId, +d.quantity || 0, { skipSave: true, invoiceId: inv.id, revision: 3 });
-      }
+      applyInvoiceDetailsStock(details, 'restore', { skipSave: true, invoiceId: inv.id, revision: 3 });
 
       update('invoices', inv.id, { status: 'cancelled', cancelled_at: cancelledAt }, { skipSave: true });
       const cancelledInvoice = getOne('invoices', i => Number(i.id) === Number(inv.id));
