@@ -713,17 +713,6 @@ export default function CreateOrder({ user, store }) {
     return getProductById(item.variant_id || item.product_id);
   };
 
-  const findMissingOrderProductLine = (lines = cart) => (
-    (Array.isArray(lines) ? lines : []).find(line => {
-      if (isComboOrderItem(line) || isServiceOrderItem(line)) return false;
-      // Treat any line without a product/variant/combo reference as a free service line,
-      // so legacy invoices that lost the explicit 'service' flag can still be edited.
-      const hasReference = line?.product_id || line?.variant_id || line?.combo_id;
-      if (!hasReference) return false;
-      return !resolveOrderProductRecord(line);
-    })
-  );
-
   const repriceCartLineForType = (item, nextPriceType = 'retail') => {
     if (isServiceOrderItem(item)) return item;
     if (isComboOrderItem(item)) {
@@ -1636,11 +1625,6 @@ export default function CreateOrder({ user, store }) {
   const handleCreateOrder = async () => {
     if (cart.length === 0) { alert('Chưa có sản phẩm hoặc dịch vụ nào!'); return; }
     if (!guardServiceLinesBeforeSubmit()) return;
-    const missingProductLine = findMissingOrderProductLine();
-    if (missingProductLine) {
-      alert(`Sản phẩm "${missingProductLine.product_name || missingProductLine.name || 'đã chọn'}" không t?n t?i trong hệ thống. Vui lòng chọn lỗi sản phẩm t? danh sách.`);
-      return;
-    }
     if (!guardCartStockBeforeSubmit()) return;
     setCreating(true);
     const clientOrderId = generateClientOrderId();
@@ -1776,11 +1760,6 @@ export default function CreateOrder({ user, store }) {
     if (!editingInvoiceId) { alert('Không tìm thấy đơn hàng để cập nhật!'); return; }
     if (cart.length === 0) { alert('Chưa có sản phẩm hoặc dịch vụ nào!'); return; }
     if (!guardServiceLinesBeforeSubmit()) return;
-    const missingProductLine = findMissingOrderProductLine();
-    if (missingProductLine) {
-      alert(`Sản phẩm "${missingProductLine.product_name || missingProductLine.name || 'đã chọn'}" không t?n t?i trong hệ thống. Vui lòng chọn lỗi sản phẩm t? danh sách.`);
-      return;
-    }
     if (!guardCartStockBeforeSubmit()) return;
     setCreating(true);
     const payload = {
