@@ -385,8 +385,8 @@ export default function CashBook() {
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? Thu nh?p tự động t? đơn hàng</h3>
-                <p className="text-blue-600">Khi bđơn xác nhận đơn hàng (trạng thái "?? thanh toán"), hệ thống s? tự động tạo giao dịch thu vào s? qu? vđi:</p>
+                <h3 className="font-bold text-gray-800 mb-2">Thu nhập tự động từ đơn hàng</h3>
+                <p className="text-blue-600">Khi bạn xác nhận đơn hàng (trạng thái "Đã thanh toán"), hệ thống sẽ tự động tạo giao dịch thu vào sổ quỹ với:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>Danh mục: "Doanh thu t? đơn hàng"</li>
                   <li>S? tiđơn: Tổng giá trị hóa đơn</li>

@@ -404,7 +404,7 @@ function V2Element({ element, data, template }) {
         {showDiscount && <MoneyLine label="Chiết khấu" value={totals.discount_amount} negative hiddenWhenZero />}
         <MoneyLine label="Phí giao hàng" value={totals.delivery_fee} hiddenWhenZero />
         {showGrandTotal && <MoneyLine label="Tổng tiền" value={totals.total ?? totals.grand_total} highlight />}
-        <MoneyLine label="D? thanh toán" value={paidAmount} hiddenWhenZero />
+        <MoneyLine label="Đã thanh toán" value={paidAmount} hiddenWhenZero />
         {showDebt && <MoneyLine label="Công nợ" value={remainingAmount} hiddenWhenZero />}
         <MoneyLine label="Tiền thừa" value={totals.change_amount} hiddenWhenZero />
       </div>

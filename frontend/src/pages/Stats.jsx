@@ -162,7 +162,7 @@ export default function Stats() {
   const fetchSummary = useCallback(async () => {
     const response = await fetch(`${API}/stats/summary`);
     const data = await response.json();
-    if (!response.ok) throw new Error(data?.error || 'Không thử lại tháng k? tổng quan.');
+    if (!response.ok) throw new Error(data?.error || 'Không thử lại tháng kỳ tổng quan.');
     setSummary(data);
   }, []);
 
@@ -286,25 +286,25 @@ export default function Stats() {
       const [rowYear, rowMonth] = String(row.stat_date || '').split('-');
       return rowYear === year && rowMonth === month;
     });
-    exportRows(rows, `BaoCaoDoanhThu_LoiNhuan_${month}_${year}.csv`, `B?O C?O DOANH THU L?I NHU?N TH?NG ${month}/${year}`);
+    exportRows(rows, `BaoCaoDoanhThu_LoiNhuan_${month}_${year}.csv`, `B?O C?O DOANH THU LỢI NHUẬN TH?NG ${month}/${year}`);
   };
 
   const exportCurrentRangeReport = () => {
-    exportRows(dailyRows, `BaoCaoDoanhThu_LoiNhuan_${periodRange.from}_${periodRange.to}.csv`, `B?O C?O DOANH THU L?I NHU?N ${periodRange.from} - ${periodRange.to}`);
+    exportRows(dailyRows, `BaoCaoDoanhThu_LoiNhuan_${periodRange.from}_${periodRange.to}.csv`, `B?O C?O DOANH THU LỢI NHUẬN ${periodRange.from} - ${periodRange.to}`);
   };
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-xl font-bold">
-          <TrendingUp className="text-green-600" size={24} /> Tháng k? Doanh thu
+          <TrendingUp className="text-green-600" size={24} /> Tháng kỳ Doanh thu
         </h1>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => setShowHelp(true)} className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100">
             <HelpCircle size={16} /> Hướng dẫn
           </button>
           <div className="flex gap-2">
-            {[['day', 'H?m nay'], ['week', 'Tu?n'], ['month', 'Tháng'], ['year', 'Nam']].map(([key, label]) => (
+            {[['day', 'Hâm nay'], ['week', 'Tuđơn'], ['month', 'Tháng'], ['year', 'Nam']].map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -351,7 +351,7 @@ export default function Stats() {
         </div>
         <div className="card border-t-4 border-emerald-500 text-center">
           <div className="mb-1 flex items-center justify-center gap-2 text-xs text-gray-500">
-            <DollarSign size={14} /> L?I NHU?N U?C T?NH
+            <DollarSign size={14} /> LỢI NHUẬN U?C T?NH
           </div>
           <div className="text-2xl font-bold text-emerald-600">{formatVND(periodTotals.profit)}</div>
           <div className="mt-1 text-xs text-gray-400">{periodRange.from} - {periodRange.to}</div>
@@ -380,22 +380,22 @@ export default function Stats() {
         <HelpModal
           show={showHelp}
           onClose={() => setShowHelp(false)}
-          title="Hướng dẫn tháng k? doanh thu"
+          title="Hướng dẫn tháng kỳ doanh thu"
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">C?ch d?c m?n h?nh</h3>
+                <h3 className="font-bold text-gray-800 mb-2">C?ch d?c mđơn h?nh</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Chọn m?c thời gian theo ngày, tu?n, tháng ho?c nam.</li>
-                  <li>Xem các th? tổng quan d? kiểm tra doanh thu v? lợi nhuận.</li>
+                  <li>Chọn mãc thời gian theo ngày, tuđơn, tháng ho?c nam.</li>
+                  <li>Xem các th? tổng quan d? kiểm tra doanh thu về lợi nhuận.</li>
                   <li>Dùng n?t xu?t Excel đã tải báo cáo chi tiết.</li>
                 </ul>
               </div>
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Báo cáo t? l?m mới khi dữ liệu đơn hàng thay đổi.</li>
-                  <li>C? th? m? r?ng tổng ngày d? xem chi tiết đơn hàng.</li>
+                  <li>Báo cáo t? lâm mới khi dữ liệu đơn hàng thay đổi.</li>
+                  <li>C? th? mở rộng tổng ngày d? xem chi tiết đơn hàng.</li>
                 </ul>
               </div>
             </div>
@@ -406,7 +406,7 @@ export default function Stats() {
       {chartData.length > 0 && (
         <div className="card mb-4">
           <h3 className="mb-4 flex items-center gap-2 font-bold">
-            <TrendingUp className="text-blue-600" size={18} /> Bi?u d? doanh thu
+            <TrendingUp className="text-blue-600" size={18} /> Biđủ d? doanh thu
           </h3>
           <div className="flex h-48 items-end gap-1">
             {chartData.map((day, index) => (
@@ -429,7 +429,7 @@ export default function Stats() {
         </h3>
         {error && <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
         {loading ? (
-          <div className="py-8 text-center text-gray-400">đang t?i...</div>
+          <div className="py-8 text-center text-gray-400">đang tđi...</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -438,8 +438,8 @@ export default function Stats() {
                   <th className="p-2 text-left">Ngày</th>
                   <th className="p-2 text-right">S? don</th>
                   <th className="p-2 text-right">Doanh thu</th>
-                  <th className="p-2 text-right">Gi? v?n u?c t?nh</th>
-                  <th className="p-2 text-right">Lỗi nhu?n u?c t?nh</th>
+                  <th className="p-2 text-right">Gi? vđơn u?c t?nh</th>
+                  <th className="p-2 text-right">Lỗi nhuđơn u?c t?nh</th>
                 </tr>
               </thead>
               <tbody>
@@ -503,8 +503,8 @@ function FragmentRow({ row, expanded, onToggle }) {
                       <tr className="bg-slate-100 text-gray-500">
                         <th className="px-3 py-2 text-left">M? don</th>
                         <th className="px-3 py-2 text-right">Doanh thu</th>
-                        <th className="px-3 py-2 text-right">Gi? v?n</th>
-                        <th className="px-3 py-2 text-right">Lỗi nhu?n</th>
+                        <th className="px-3 py-2 text-right">Gi? vđơn</th>
+                        <th className="px-3 py-2 text-right">Lỗi nhuđơn</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -521,7 +521,7 @@ function FragmentRow({ row, expanded, onToggle }) {
                 </div>
                 <div className="flex flex-wrap justify-end gap-4 border-t border-slate-200 pt-2 text-sm font-bold text-emerald-700">
                   <span>Tổng {formatNumber(row.orders.length)} don</span>
-                  <span>Lỗi nhu?n ngày: {formatVND(row.estimatedProfit)}</span>
+                  <span>Lỗi nhuđơn ngày: {formatVND(row.estimatedProfit)}</span>
                 </div>
               </div>
             )}

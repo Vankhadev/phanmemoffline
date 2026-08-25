@@ -25,8 +25,8 @@ import {
 const STATUS_LABELS = {
   pending: 'Ch? xác nhận',
   processing: 'đang xử lý',
-  completed: 'Hođơn th?nh',
-  cancelled: '?? h?y',
+  completed: 'Hoàn thành',
+  cancelled: 'Đã hủy',
 };
 
 function pad2(value) {

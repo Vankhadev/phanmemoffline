@@ -210,7 +210,7 @@ export default function Home({ user, store = {} }) {
     {
       title: 'đơn h?ng hâm nay',
       value: stats.todayOrders.toLocaleString('vi-VN'),
-      sub: `${stats.paidOrders.toLocaleString('vi-VN')} d? thanh toán`,
+      sub: `${stats.paidOrders.toLocaleString('vi-VN')} đã thanh toán`,
       icon: ShoppingCart,
       textColor: 'text-green-600',
       bgColor: 'bg-green-50',
@@ -474,8 +474,8 @@ export default function Home({ user, store = {} }) {
                 <h3 className="mb-2 font-bold text-gray-800">?? Tháng kỳ nhanh</h3>
                 <p>4 thệ thống kỳ hiện thệ thống tin quan tr?ng nh?t:</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li><strong>Doanh thu hâm nay:</strong> Tổng tiđơn t? các đơn hàng d? thanh toán trong ngày</li>
-                  <li><strong>đơn h?ng hâm nay:</strong> Số lượng don tạo trong ngày về s? d? thanh toán</li>
+                  <li><strong>Doanh thu hôm nay:</strong> Tổng tiền từ các đơn hàng đã thanh toán trong ngày</li>
+                  <li><strong>Đơn hàng hôm nay:</strong> Số lượng đơn tạo trong ngày và số đã thanh toán</li>
                   <li><strong>Tổng sản phẩm:</strong> Tổng s? sản phẩm trong kho, c? sản phẩm cha về biến thể</li>
                   <li><strong>Cảnh báo tồn kho:</strong> Số lượng sản phẩm tđơn 0, s?p h?t ho?c dang âm kho</li>
                   <li><strong>âm kho:</strong> Sản phẩm c? tđơn âm, cảnh báo gđơn ngu?ng {negativeStockLimitLabel}</li>

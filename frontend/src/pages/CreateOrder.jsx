@@ -426,7 +426,7 @@ export default function CreateOrder({ user, store }) {
       setCustomerSearch('');
       setShowCustomerForm(false);
       setNewCustomer({ name: '', phone: '', email: '', tax_code: '', customer_type: 'Khách lẻ' });
-      alert(`?? Server offline - Khách hàng đã được luu các b?.\nT?n: ${newCustomer.name}\nM? t?m: ${offlineId}\n\nSử dụng b? khi server trở lại.`);
+      alert(`?? Server offline - Khách hàng đã được luu các b?.\nTđơn: ${newCustomer.name}\nM? tâm: ${offlineId}\n\nSử dụng b? khi server trở lại.`);
     }
   };
 
@@ -670,7 +670,7 @@ export default function CreateOrder({ user, store }) {
 
   const subtotal = cart.reduce((s, i) => s + (Number(i.line_total) || 0), 0);
 
-  // L?y gi? d?ng theo loại khách hàng đã chọn
+  // L?y giá d?ng theo loại khách hàng đã chọn
   const getPrice = (product) => {
     const activePriceType = selectedCustomer
       ? customerTypeToPriceType(selectedCustomer.customer_type)
@@ -1947,7 +1947,7 @@ export default function CreateOrder({ user, store }) {
                 <div className="relative flex-1">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input className="input-field pl-9 w-full text-sm"
-                    placeholder="Tạm theo tồn, SDT, m? khách hàng ... (F4)"
+                    placeholder="Tạm theo tồn, SDT, mã khách hàng ... (F4)"
                     value={customerSearch}
                     onFocus={() => setShowCustomerDropdown(true)}
                     onChange={e => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }} />
@@ -2159,7 +2159,7 @@ export default function CreateOrder({ user, store }) {
                           </div>
                           <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                             <div className={`text-[10px] ${stockMeta.textClass}`}>{stockMeta.display}</div>
-                            {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>�m kho</div>}
+                            {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>âm kho</div>}
                             {stockMeta.isNearLimit && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.extraBadgeClass || 'bg-orange-100 text-orange-800 border border-orange-200'}`}>{stockMeta.extraLabel || negativeStockNearLimitLabel}</div>}
                             <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(item))}</div>
                           </div>
@@ -2261,7 +2261,7 @@ export default function CreateOrder({ user, store }) {
                                 <span className="pos-product-name-wrap">{getProductDisplayName(item)}</span>
                               )}
                             </div>
-                            <div className="text-[10px] text-gray-400">{isService ? 'Dịch vụ kh?c' : 'Sản phẩm ? chọn'}</div>
+                            <div className="text-[10px] text-gray-400">{isService ? 'Dịch vụ kh?c' : 'Sản phẩm đã chọn'}</div>
                             {isCombo && (
                               <div className="text-[10px] text-purple-500 mt-0.5 truncate max-w-xs">{getComboItemSummary(item)}</div>
                             )}
@@ -2458,7 +2458,7 @@ export default function CreateOrder({ user, store }) {
                           </div>
                           <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                             <div className={`text-[10px] ${stockMeta.textClass}`}>{stockMeta.display}</div>
-                            {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>�m kho</div>}
+                            {stockMeta.isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.badgeClass}`}>âm kho</div>}
                             {stockMeta.isNearLimit && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${stockMeta.extraBadgeClass || 'bg-orange-100 text-orange-800 border border-orange-200'}`}>{stockMeta.extraLabel || negativeStockNearLimitLabel}</div>}
                             <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getPrice(item))}</div>
                           </div>
@@ -2606,7 +2606,7 @@ export default function CreateOrder({ user, store }) {
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Trạng thái đơn</label>
                 <div className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
-                  <span className="text-xs font-medium text-orange-700">{editingInvoiceId ? 'ang chỉnh sửa' : 'Ch? xác nhận'}</span>
+                  <span className="text-xs font-medium text-orange-700">{editingInvoiceId ? 'Đang chỉnh sửa' : 'Ch? xác nhận'}</span>
                   <span className="text-[10px] font-bold text-orange-600">{editingInvoiceId ? 'EDITING' : 'PENDING'}</span>
                 </div>
               </div>

@@ -16,7 +16,7 @@ const toPaymentNumber = (value, fallback = 0) => {
 
 const normalizePaymentStatus = (status) => {
   const value = String(status || '').trim().toLowerCase();
-  if (['paid', 'da_thanh_toan', 'd? thanh toán', 'da thanh toan'].includes(value)) return 'paid';
+  if (['paid', 'da_thanh_toan', 'đã thanh toán', 'da thanh toan'].includes(value)) return 'paid';
   if (['unpaid', 'chưa_thanh_toan', 'chưa thanh toán', 'chưa thanh toan'].includes(value)) return 'unpaid';
   return '';
 };
@@ -425,7 +425,7 @@ export default function NhaCungCap() {
 
   const getSupplierPaymentLabel = (summary) => {
     if (summary.label) return summary.label;
-    return summary.payment_status === 'paid' ? '?? thanh toán' : 'Chua thanh toán';
+    return summary.payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán';
   };
 
   const getSupplierPaymentBadgeClass = (status) => {

@@ -579,7 +579,7 @@ export default function OrderList() {
 
   const handleBulkDelete = async () => {
     if (selectedOrders.length === 0) return;
-    if (!confirm(`Hủy ${selectedOrders.length} đơn hàng đã chọn?\n\nH?ng sẽ được ho?n v? kho.`)) return;
+    if (!confirm(`Hủy ${selectedOrders.length} đơn hàng đã chọn?\n\nH?ng sẽ được hođơn về kho.`)) return;
 
     setIsBulkDeleting(true);
     try {
@@ -744,7 +744,7 @@ export default function OrderList() {
     });
   }, [customers, repriceEditDetailsForCustomer]);
 
-  const editProductsStateLabel = { loading: 'đang t?i dữ liệu sản phẩm...', loaded: '', empty: 'Không có dữ liệu sản phẩm d? kiểm tra tồn kho.', error: 'Không tải được dữ liệu sản phẩm, v?n cho phép luu.' }[editProductsState] || '';
+  const editProductsStateLabel = { loading: 'đang tđi dữ liệu sản phẩm...', loaded: '', empty: 'Không có dữ liệu sản phẩm d? kiểm tra tồn kho.', error: 'Không tải được dữ liệu sản phẩm, vđơn cho phép luu.' }[editProductsState] || '';
 
   const filteredEditCustomers = useMemo(() => {
     const query = String(editCustomerSearch || '').trim().toLowerCase();
@@ -1446,7 +1446,7 @@ export default function OrderList() {
         <ExcelImportPanel
           dataType="invoices"
           title="Import hóa đơn/đơn hàng từ Excel/CSV"
-          description={`Preview/validate đơn hàng v? chi tiết sản phẩm trước khi commit; cho phép b?n khi t?n 0/?m n?u t?n d? ki?n không th?p hon ${negativeStockLimitLabel}, một don nhi?u d?ng được gom theo m? don.`}
+          description={`Preview/validate đơn hàng về chi tiết sản phẩm trước khi commit; cho phép bđơn khi tđơn 0/âm nđủ tđơn d? kiđơn không th?p hon ${negativeStockLimitLabel}, một don nhiđủ d?ng được gom theo mã don.`}
           negativeStockSettings={negativeStockSettings}
           onCommitted={async () => {
             setLoading(true);
@@ -1519,7 +1519,7 @@ export default function OrderList() {
               )}
             </div>
             <div className="text-xs text-gray-400">
-              Uu ti?n dữ liệu server khi tr?ng m? don, v?n gi? don local d? thao t?c ti?p.
+              Uu tiđơn dữ liệu server khi tr?ng mã don, vđơn giá don local d? thao t?c ti?p.
             </div>
           </div>
         </div>
@@ -2248,7 +2248,7 @@ export default function OrderList() {
               </button>
               {showEdit && !editProductsReady && (
                 <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                  {editProductsStateLabel || 'đang t?i dữ liệu sản phẩm...'}
+                  {editProductsStateLabel || 'đang tđi dữ liệu sản phẩm...'}
                 </div>
               )}
               <button onClick={handleSaveEdit}
@@ -2273,7 +2273,7 @@ export default function OrderList() {
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input className="input-field pl-9 w-full text-sm"
-                  placeholder="Tạm theo tồn, m? SKU..."
+                  placeholder="Tạm theo tồn, mã SKU..."
                   value={editProductSearch}
                   onChange={e => setEditProductSearch(e.target.value)} autoFocus />
               </div>
@@ -2319,7 +2319,7 @@ export default function OrderList() {
                             <div className="flex items-center gap-3 shrink-0">
                               <div className="text-[10px] text-gray-400">{parent.sku || '—'}</div>
                               <div className={`text-[10px] ${getStockDisplayMeta(parent.stock, negativeStockSettings).textClass}`}>{getStockDisplayMeta(parent.stock, negativeStockSettings).display}</div>
-                              {getStockDisplayMeta(parent.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(parent.stock, negativeStockSettings).badgeClass}`}>�m kho</div>}
+                              {getStockDisplayMeta(parent.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(parent.stock, negativeStockSettings).badgeClass}`}>âm kho</div>}
                               {getStockDisplayMeta(parent.stock, negativeStockSettings).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">{getStockDisplayMeta(parent.stock, negativeStockSettings).extraLabel || negativeStockNearLimitLabel || `Gần ${negativeStockLimitLabel}`}</div>}
                               <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getDisplayPrice(parent))}</div>
                             </div>
@@ -2346,7 +2346,7 @@ export default function OrderList() {
                                   <div className="flex items-center gap-3 shrink-0">
                                     <div className="text-[10px] text-gray-400">{variant.sku || '—'}</div>
                                     <div className={`text-[10px] ${getStockDisplayMeta(variant.stock, negativeStockSettings).textClass}`}>{getStockDisplayMeta(variant.stock, negativeStockSettings).display}</div>
-                                    {getStockDisplayMeta(variant.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(variant.stock, negativeStockSettings).badgeClass}`}>�m kho</div>}
+                                    {getStockDisplayMeta(variant.stock, negativeStockSettings).isNegative && <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStockDisplayMeta(variant.stock, negativeStockSettings).badgeClass}`}>âm kho</div>}
                                     {getStockDisplayMeta(variant.stock, negativeStockSettings).isNearLimit && <div className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-800 border border-orange-200">{getStockDisplayMeta(variant.stock, negativeStockSettings).extraLabel || negativeStockNearLimitLabel || `Gần ${negativeStockLimitLabel}`}</div>}
                                     <div className="text-xs font-bold text-blue-600 whitespace-nowrap">{formatVND(getDisplayPrice(variant))}</div>
                                   </div>
@@ -2396,8 +2396,8 @@ export default function OrderList() {
                 <ul className="list-disc pl-5 space-y-1">
                   <li><span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">⏳ Chờ xác nhận</span> - Đơn mới tạo, chờ duyệt</li>
                   <li><span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">🔄 Đang xử lý</span> - Đang chuẩn bị hàng</li>
-                  <li><span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">? Ho?n th?nh</span> - D? thanh toán v? giao h?ng</li>
-                  <li><span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">? D? h?y</span> - Don b? h?y</li>
+                  <li><span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">✅ Hoàn thành</span> - Đã thanh toán và giao hàng</li>
+                  <li><span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">❌ Đã hủy</span> - Đơn bị hủy</li>
                   <li><span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">📡 Offline</span> - Đơn tạo khi server offline</li>
                 </ul>
               </div>
@@ -2405,7 +2405,7 @@ export default function OrderList() {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">🔍 Lọc & Tìm kiếm</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Tìm kiếm theo m? don (DH XXXXX) ho?c t?n khách hàng</li>
+                  <li>Tìm kiếm theo mã don (DH XXXXX) ho?c tđơn khách hàng</li>
                   <li>Lọc theo trạng thái từ dropdown</li>
                   <li>Kết hợp cả hai để tìm nhanh</li>
                 </ul>
@@ -2424,7 +2424,7 @@ export default function OrderList() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">✅ Xác nhận thanh toán</h3>
-                <p>Nhân icon <CheckSquare size={14} className="inline" /> d? d?nh đầu don d? thanh toán. Trạng thái s? chuy?n sang "Ho?n th?nh" v? hiển thị phuong th?c thanh toán.</p>
+                <p>Nhấn icon <CheckSquare size={14} className="inline" /> để đánh dấu đơn đã thanh toán. Trạng thái sẽ chuyển sang "Hoàn thành" và hiển thị phương thức thanh toán.</p>
               </div>
 
               <div>
@@ -2448,7 +2448,7 @@ export default function OrderList() {
 
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowHelp(false)} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
-                D? hi?u
+                D? hiđủ
               </button>
             </div>
           </div>

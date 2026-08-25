@@ -610,7 +610,7 @@ const mapProductForImport = (searchProduct = {}, fullProduct = {}, productTree =
 
 const normalizePaymentStatusValue = (status) => {
   const value = String(status || '').trim().toLowerCase();
-  return ['paid', 'da_thanh_toan', 'd? thanh toán', 'da thanh toan'].includes(value) ? 'paid' : 'unpaid';
+  return ['paid', 'da_thanh_toan', 'đã thanh toán', 'da thanh toan'].includes(value) ? 'paid' : 'unpaid';
 };
 
 const toNonNegativeMoney = (value, fallback = 0) => {
@@ -1573,7 +1573,7 @@ const Nhaphang = ({ store }) => {
         <div className="flex max-h-[92dvh] w-full max-w-[750px] flex-col overflow-hidden rounded bg-white text-slate-800 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="import-product-picker-title">
           <div className="flex items-center justify-between px-6 pb-3 pt-5">
             <h2 id="import-product-picker-title" className="text-xl font-semibold tracking-normal text-slate-900">
-              Chọn sản phẩm d? nhập hàng
+              Chọn sản phẩm để nhập hàng
             </h2>
             <button
               type="button"
@@ -1919,7 +1919,7 @@ const Nhaphang = ({ store }) => {
   const historySelectionKeys = useMemo(() => orderHistory.map(order => String(order.maDonHang || order.id)), [orderHistory]);
   const isAllHistorySelected = orderHistory.length > 0 && selectedHistoryIds.length === historySelectionKeys.length;
 
-  const getPaymentLabel = (status) => normalizePaymentStatusValue(status) === 'paid' ? '?? thanh toán' : 'Chua thanh toán';
+  const getPaymentLabel = (status) => normalizePaymentStatusValue(status) === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán';
 
   const getPaymentBadgeClass = (status) => normalizePaymentStatusValue(status) === 'paid'
     ? 'bg-green-100 text-green-700 border-green-200'
@@ -2418,7 +2418,7 @@ const Nhaphang = ({ store }) => {
 
     const confirmPay = window.confirm(
       `Thanh toán phiếu nhập ${currentOrder?.maDonHang || editingImportKey}?\n\n` +
-      'Thao t?c n?y ch? cập nhật phiếu hiện tại sang d? thanh toán về ghi nhân s? qu?/công nợ liđơn quan, không tạo phiếu mới về không thay đổi tồn kho.'
+      'Thao tác này chỉ cập nhật phiếu hiện tại sang đã thanh toán và ghi nhận sổ quỹ/công nợ liên quan, không tạo phiếu mới và không thay đổi tồn kho.'
     );
     if (!confirmPay) return;
 
@@ -3168,7 +3168,7 @@ const Nhaphang = ({ store }) => {
                     className="flex w-full items-center justify-center gap-2 rounded-sm bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
                   >
                     <CreditCard className="h-4 w-4" />
-                    {paymentSummary.payment_status === 'paid' ? '?? thanh toán' : 'Thanh toán'}
+                    {paymentSummary.payment_status === 'paid' ? 'Đã thanh toán' : 'Thanh toán'}
                   </button>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded-sm bg-gray-50 p-2">
@@ -3747,7 +3747,7 @@ const Nhaphang = ({ store }) => {
                     className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white font-medium py-2.5 px-4 rounded-md flex items-center justify-center gap-2 text-sm shadow-sm"
                   >
                     <CreditCard className="w-4 h-4" />
-                    {paymentSummary.payment_status === 'paid' ? '?? thanh toán' : 'Thanh toán'}
+                    {paymentSummary.payment_status === 'paid' ? 'Đã thanh toán' : 'Thanh toán'}
                   </button>
                   <p className={`mt-2 text-xs ${hasUnsavedPaymentAffectingChanges ? 'text-orange-600' : 'text-gray-500'}`}>
                     {hasUnsavedPaymentAffectingChanges

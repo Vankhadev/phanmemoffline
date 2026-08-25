@@ -20,7 +20,7 @@ export const mockInvoicePayload = Object.freeze({
     invoice_code: 'HD00001',
     created_at: now,
     delivery_date: '01/06/2026',
-    status: 'D? thanh toán',
+    status: 'Đã thanh toán',
     payment_method: 'Tiền mặt',
     note: 'Hàng giao trong giờ hành chính. Vui lòng kiểm tra hàng trước khi nhận.',
   },

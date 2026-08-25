@@ -2291,7 +2291,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   <div>app-update.yml: {runtimeDiagnostics.appUpdateYmlExists ? 'C?' : 'Không th?y'}</div>
                   <div>Kiđơn tr?c runtime: {runtimeArch || 'unknown'}</div>
                   <div>Tuong th?ch: {runtimeCompatibility?.supported === false ? 'Không' : 'C?'}</div>
-                  <div className="break-all md:col-span-2">đủ?ng đến app-update.yml: {runtimeDiagnostics.appUpdateYmlPath || 'Không x?c d?nh'}</div>
+                  <div className="break-all md:col-span-2">đủđơng đến app-update.yml: {runtimeDiagnostics.appUpdateYmlPath || 'Không x?c d?nh'}</div>
                 </div>
               </div>
             )}

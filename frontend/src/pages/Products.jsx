@@ -1454,7 +1454,7 @@ export default function Products({ store }) {
 
       const importRows = normalizeExcelImportRows(rows);
       if (importRows.length === 0) {
-        alert(`?? Sheet "${sheetName}" c? tiđủ d? nhung không có d?ng dữ liệu.\nC?t nhân được: ${formatColumnList(displayColumns)}`);
+        alert(`Sheet "${sheetName}" có tiêu đề nhưng không có dòng dữ liệu.\nCột nhận được: ${formatColumnList(displayColumns)}`);
         return;
       }
 
