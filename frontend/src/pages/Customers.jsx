@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resolveApiUrl } from '../utils/apiClient';
-import { Users, FileDown, Plus, X, Edit2, Trash2, Loader, Tag, HelpCircle, UploadCloud, History } from 'lucide-react';
+import { Users, FileDown, Plus, X, Edit2, Trash2, Loader, Tag, HelpCircle, UploadCloud, History, Trophy } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
 import { customerTypesApi, customersApi, getApiErrorMessage } from '../utils/apiClient';
 import { globalSyncEmitter } from '../utils/eventEmitter';
 
 const API = resolveApiUrl('');
+const formatVND = value => `${Math.round(Number(value) || 0).toLocaleString('vi-VN')} đ`;
 
 export default function Customers() {
   const navigate = useNavigate();
@@ -79,7 +80,7 @@ export default function Customers() {
     return () => window.clearTimeout(timer);
   }, [showTypeForm]);
 
-  const getErrorMessage = (err, fallback = 'Thao t?c th?t bđi.') => getApiErrorMessage(err?.data || err, err?.message || fallback);
+  const getErrorMessage = (err, fallback = 'Thao tác thất bại.') => getApiErrorMessage(err?.data || err, err?.message || fallback);
 
   const fetchCustomers = async () => {
     try {
@@ -147,15 +148,15 @@ export default function Customers() {
         });
         setShowForm(false);
         await fetchCustomers();
-        alert(editing ? '? ?? cập nhật khách hàng!' : '? ?? thêm khách hàng!');
+        alert(editing ? 'Đã cập nhật khách hàng!' : 'Đã thêm khách hàng!');
       }
     } catch (err) {
-      alert(getErrorMessage(err, editing ? 'Không th? cập nhật khách hàng.' : 'Không th? thêm khách hàng.'));
+      alert(getErrorMessage(err, editing ? 'Không thể cập nhật khách hàng.' : 'Không thể thêm khách hàng.'));
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Xóa khách hàng n?y? Dữ liệu đơn hàng liđơn quan sẽ được giá nguyđơn.')) return;
+    if (!confirm('Xóa khách hàng này? Dữ liệu đơn hàng liên quan sẽ được giữ nguyên.')) return;
     try {
       const data = await customersApi.remove(id);
       if (data.ok) {
@@ -205,6 +206,16 @@ export default function Customers() {
       (c.tax_code || '').toLowerCase().includes(keyword)
     );
   }, [customers, search]);
+
+  const topCustomers = useMemo(() => (
+    [...customers]
+      .sort((a, b) => {
+        const revenueDiff = (Number(b.total_revenue) || 0) - (Number(a.total_revenue) || 0);
+        if (revenueDiff !== 0) return revenueDiff;
+        return (Number(b.invoice_count) || 0) - (Number(a.invoice_count) || 0);
+      })
+      .slice(0, 10)
+  ), [customers]);
 
   const visibleCustomerIds = useMemo(() => filtered.map(c => c.id).filter(id => id !== undefined && id !== null), [filtered]);
   const selectedIdSet = useMemo(() => new Set(selectedCustomerIds.map(id => String(id))), [selectedCustomerIds]);
@@ -512,6 +523,62 @@ export default function Customers() {
           </button>
         </div>
       </div>
+
+      <section className="card mb-4 overflow-hidden border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-4 sm:p-5">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-base font-bold text-amber-900">
+              <Trophy size={19} className="text-amber-500" /> Top 10 khách hàng theo doanh thu
+            </h2>
+            <p className="mt-1 text-xs text-amber-700/80">Xếp hạng dựa trên tổng doanh thu các đơn hàng không bị hủy.</p>
+          </div>
+          {topCustomers.length > 0 && <span className="text-xs font-medium text-amber-700">{topCustomers.length} khách hàng dẫn đầu</span>}
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+            <Loader size={16} className="animate-spin" /> Đang tải xếp hạng...
+          </div>
+        ) : topCustomers.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-amber-200 bg-white/70 px-4 py-8 text-center text-sm text-gray-500">
+            Chưa có dữ liệu doanh thu khách hàng.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            {topCustomers.map((customer, index) => {
+              const rank = index + 1;
+              const rankStyle = rank === 1
+                ? 'border-amber-300 bg-amber-100/80'
+                : rank === 2
+                  ? 'border-slate-300 bg-slate-100/80'
+                  : rank === 3
+                    ? 'border-orange-300 bg-orange-100/70'
+                    : 'border-gray-200 bg-white/80';
+              return (
+                <button
+                  key={customer.id}
+                  type="button"
+                  onClick={() => setSearch(customer.name || '')}
+                  className={`rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md ${rankStyle}`}
+                  title="Lọc danh sách theo khách hàng này"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-white px-2 text-sm font-extrabold text-amber-700 shadow-sm">
+                      #{rank}
+                    </span>
+                    <span className="text-[11px] text-gray-500">{Number(customer.invoice_count) || 0} đơn</span>
+                  </div>
+                  <div className="mt-3 truncate text-sm font-bold text-gray-900" title={customer.name || 'Khách hàng'}>
+                    {customer.name || 'Khách hàng'}
+                  </div>
+                  <div className="mt-1 truncate text-xs text-gray-500">{customer.phone || customer.email || 'Chưa có liên hệ'}</div>
+                  <div className="mt-3 text-base font-extrabold text-emerald-700">{formatVND(customer.total_revenue)}</div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <input className="input-field md:flex-1" placeholder=" Tạm khách hàng theo tồn, S?T, email, mã KH, MST..." value={search} onChange={e => setSearch(e.target.value)} />

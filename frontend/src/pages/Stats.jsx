@@ -330,28 +330,28 @@ export default function Stats() {
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
         <div className="card border-t-4 border-blue-500 text-center">
           <div className="mb-1 flex items-center justify-center gap-2 text-xs text-gray-500">
-            <Calendar size={14} /> H?M NAY
+            <Calendar size={14} /> HÔM NAY
           </div>
           <div className="text-2xl font-bold text-blue-600">{formatVND(summary.today?.total_revenue)}</div>
           <div className="mt-1 text-xs text-gray-400">{summary.today?.total_orders || 0} don</div>
         </div>
         <div className="card border-t-4 border-green-500 text-center">
           <div className="mb-1 flex items-center justify-center gap-2 text-xs text-gray-500">
-            <Calendar size={14} /> TH?NG N?Y
+            <Calendar size={14} /> THÁNG NÀY
           </div>
           <div className="text-2xl font-bold text-green-600">{formatVND(summary.month?.revenue)}</div>
           <div className="mt-1 text-xs text-gray-400">{summary.month?.orders || 0} don</div>
         </div>
         <div className="card border-t-4 border-purple-500 text-center">
           <div className="mb-1 flex items-center justify-center gap-2 text-xs text-gray-500">
-            <TrendingUp size={14} /> T?NG QUAN
+            <TrendingUp size={14} /> TỔNG QUAN
           </div>
           <div className="text-2xl font-bold text-purple-600">{formatVND(summary.allTime?.revenue)}</div>
           <div className="mt-1 text-xs text-gray-400">{summary.allTime?.orders || 0} don</div>
         </div>
         <div className="card border-t-4 border-emerald-500 text-center">
           <div className="mb-1 flex items-center justify-center gap-2 text-xs text-gray-500">
-            <DollarSign size={14} /> LỢI NHUẬN U?C T?NH
+            <DollarSign size={14} /> LỢI NHUẬN ƯỚC TÍNH
           </div>
           <div className="text-2xl font-bold text-emerald-600">{formatVND(periodTotals.profit)}</div>
           <div className="mt-1 text-xs text-gray-400">{periodRange.from} - {periodRange.to}</div>

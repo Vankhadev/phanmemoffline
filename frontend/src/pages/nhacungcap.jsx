@@ -395,7 +395,7 @@ export default function NhaCungCap() {
       { wch: 22 },
     ];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Nh? cung cấp');
+    XLSX.utils.book_append_sheet(wb, ws, 'Nhà cung cấp');
     XLSX.writeFile(wb, `nha_cung_cap_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
@@ -462,7 +462,7 @@ export default function NhaCungCap() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <span className="text-orange-500"></span>
-          <span>Quản lý Nh? cung cấp</span>
+          <span>Quản lý Nhà cung cấp</span>
         </h1>
         <div className="flex gap-2">
           <input
@@ -558,7 +558,7 @@ export default function NhaCungCap() {
           <div className="relative z-10 bg-white rounded-xl shadow-2xl p-6 w-[520px]">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center gap-2 text-orange-700">
-                ?? {editing ? 'Sửa Nh? cung cấp' : 'Thêm Nh? cung cấp mới'}
+                {editing ? 'Sửa Nhà cung cấp' : 'Thêm Nhà cung cấp mới'}
               </h2>
               <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xl">?</button>
             </div>
@@ -657,13 +657,13 @@ export default function NhaCungCap() {
       {/* Help Modal */}
       {showHelp && (
         <HelpModal
-          title="Hướng dẫn sử dụng Quản lý Nh? cung cấp"
+          title="Hướng dẫn sử dụng Quản lý Nhà cung cấp"
           onClose={() => setShowHelp(false)}
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Tổng quan</h3>
-                <p>Trang Nh? cung cấp giáp bđơn quản lý thông tin các dài t?c cung cấp h?ng hđã. Mới nhà cung cấp có thể được liđơn kỳt vđi sản phẩm d? luu thông tin giá nhập về loại hóa đơn.</p>
+                <p>Trang Nhà cung cấp giúp quản lý thông tin các đối tác cung cấp hàng hóa. Mỗi nhà cung cấp có thể được liên kết với sản phẩm để lưu thông tin giá nhập và loại hóa đơn.</p>
               </div>
 
               <div>

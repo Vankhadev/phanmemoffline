@@ -1604,7 +1604,7 @@ const Nhaphang = ({ store }) => {
               Sản phẩm ({filteredProducts.length.toLocaleString('vi-VN')})
             </button>
             {selectedSupplier && (
-              <span className="min-w-0 truncate text-slate-400">Nh? cung cấp: {selectedSupplier.tenNCC}</span>
+              <span className="min-w-0 truncate text-slate-400">Nhà cung cấp: {selectedSupplier.tenNCC}</span>
             )}
             {loading && <span className="text-sky-600">đang tđi dữ liệu...</span>}
           </div>
@@ -3206,7 +3206,7 @@ const Nhaphang = ({ store }) => {
                 <div className="relative" ref={supplierSearchContainerRef}>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     <Building className="inline w-4 h-4 mr-1" />
-                    Nh? cung cấp
+                    Nhà cung cấp
                   </label>
                   <div className="relative">
                     <input
@@ -3771,7 +3771,7 @@ const Nhaphang = ({ store }) => {
                 {/* Supplier Info Summary */}
                 {selectedSupplier && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Nh? cung cấp</h3>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Nhà cung cấp</h3>
                     <div className="bg-gray-50 rounded-md p-3">
                       <p className="text-sm font-medium text-gray-900">{selectedSupplier.tenNCC}</p>
                       <p className="text-xs text-gray-600 mt-1">M?: {selectedSupplier.maNCC}</p>
@@ -3877,7 +3877,7 @@ const Nhaphang = ({ store }) => {
                     <th className="min-w-[110px] px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Sản phẩm</th>
                     <th className="min-w-[90px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Số lượng</th>
                     <th className="min-w-[130px] px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Tổng tiđơn</th>
-                    <th className="min-w-[180px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Nh? cung cấp</th>
+                    <th className="min-w-[180px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Nhà cung cấp</th>
                     <th className="min-w-[150px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Thanh toán</th>
                     <th className="min-w-[120px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Trạng thái</th>
                     <th className="min-w-[120px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Thao t?c</th>

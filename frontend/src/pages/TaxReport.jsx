@@ -106,7 +106,7 @@ function SourceTable({ title, rows, type }) {
             <tr>
               <th className="px-4 py-3 text-left">Ngày</th>
               <th className="px-4 py-3 text-left">S? hóa đơn / ch?ng t?</th>
-              <th className="px-4 py-3 text-left">{isInput ? 'Nh? cung cấp' : 'Nguđi mua'}</th>
+              <th className="px-4 py-3 text-left">{isInput ? 'Nhà cung cấp' : 'Người mua'}</th>
               <th className="px-4 py-3 text-right">Gi? tr? chđủ thuế</th>
               <th className="px-4 py-3 text-right">Thu? GTGT</th>
               <th className="px-4 py-3 text-right">Tổng tiđơn</th>

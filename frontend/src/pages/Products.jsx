@@ -269,7 +269,7 @@ const ProductFormModal = memo(function ProductFormModal({
             <div><label className="text-xs text-gray-500">Danh mục d?ng text</label><input className="input-field w-full" value={form.category} onChange={e => updateField('category', e.target.value)} placeholder="nh?p tđơn danh mục nđủ cđơn" /></div>
           </div>
           <div>
-            <label className="text-xs text-gray-500">Nh? cung cấp</label>
+            <label className="text-xs text-gray-500">Nhà cung cấp</label>
             <select className="input-field w-full" value={form.supplier_id} onChange={e => updateField('supplier_id', e.target.value)}>
               <option value="">-- Chọn nhà cung cấp --</option>
               {suppliers.map(s => (
@@ -2378,7 +2378,7 @@ export default function Products({ store }) {
                 <h3 className="font-bold text-blue-800 mb-2">?? M?o</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
                   <li>Dùng checkbox đã chọn nhiđủ sản phẩm về xóa h?ng lo?t</li>
-                  <li>Nh? cung cấp s? hiển thị bđơn duđi mã SKU</li>
+                  <li>Nhà cung cấp sẽ hiển thị bên dưới mã SKU</li>
                   <li>Combo l? gđi sản phẩm, có thể bđơn vđi giá kh?c</li>
                 </ul>
               </div>

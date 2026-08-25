@@ -199,11 +199,11 @@ const PERIOD_OPTIONS = [
   { value: 'day', label: 'Theo ngày' },
   { value: 'month', label: 'Theo tháng' },
   { value: 'year', label: 'Theo nam' },
-  { value: 'custom', label: 'Kho?ng ngày t?y ch?nh' },
+  { value: 'custom', label: 'Khoảng ngày tùy chỉnh' },
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'completed', label: 'đơn hođơn th?nh' },
+  { value: 'completed', label: 'Đơn hoàn thành' },
   { value: 'exclude_cancelled', label: 'Tất cả tr? don h?y' },
 ];
 
@@ -1347,7 +1347,7 @@ export default function ProductReport() {
                     <div className="flex items-start gap-2 text-sm font-bold text-blue-800">
                       <Calendar size={16} className="mt-0.5 shrink-0" />
                       <div>
-                        <div>Kho?ng ngày t?y ch?nh</div>
+                        <div>Khoảng ngày tùy chỉnh</div>
                         <p className="mt-1 text-xs font-medium text-blue-700/75">
                           Chọn d?c l?p ngày bắt đầu về ngày kết thúc, hệ thống l?c bao gâm c? hai ngày đã chọn.
                         </p>

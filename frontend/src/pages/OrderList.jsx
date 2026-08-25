@@ -28,7 +28,7 @@ const STATUS_LABELS = {
   pending: { text: 'Chờ xác nhận', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500', icon: '⏳' },
   processing: { text: 'Đang xử lý', color: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500', icon: '🔄' },
   completed: { text: 'Hoàn thành', color: 'bg-green-100 text-green-700', dot: 'bg-green-500', icon: '✅' },
-  cancelled: { text: 'D? h?y', color: 'bg-red-100 text-red-600', dot: 'bg-red-500', icon: '?' },
+  cancelled: { text: 'Đã hủy', color: 'bg-red-100 text-red-600', dot: 'bg-red-500', icon: '❌' },
 };
 const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: 'Công nợ' };
 const SOURCE_BADGES = {
@@ -544,7 +544,7 @@ export default function OrderList() {
     { key: 'pending', label: 'Chờ xác nhận', count: displayOrders.filter(inv => inv.status === 'pending').length },
     { key: 'processing', label: 'Đang xử lý', count: displayOrders.filter(inv => inv.status === 'processing').length },
     { key: 'completed', label: 'Hoàn thành', count: displayOrders.filter(inv => inv.status === 'completed').length },
-    { key: 'cancelled', label: 'D? h?y', count: displayOrders.filter(inv => isCancelledOrderStatus(inv.status)).length },
+    { key: 'cancelled', label: 'Đã hủy', count: displayOrders.filter(inv => isCancelledOrderStatus(inv.status)).length },
     { key: 'offline', label: 'Offline', count: displayOrders.filter(inv => inv._isOffline).length },
   ];
 
@@ -603,7 +603,7 @@ export default function OrderList() {
       }
 
       const totalAffected = successCount + offlineOrders.length;
-      alert(`? D? h?y ${totalAffected} đơn hàng! Don d? h?y s? tự động xóa sau 24 gi?.`);
+      alert(`Đã hủy ${totalAffected} đơn hàng! Đơn đã hủy sẽ tự động xóa sau 24 giờ.`);
       setSelectedOrders([]);
       // Refresh data - cancelled online orders remain visible for 24h before automatic cleanup.
       notifyOrderChanged({ reason: 'orders-cancelled' });
@@ -1307,7 +1307,7 @@ export default function OrderList() {
         // Refresh product stock
         await fetchInvoices();
         apiJson('/products/all/with-variants').catch(() => { });
-        alert('? Đã hủy đơn hàng! Đơn sẻ tự động xóa sau 24 giờ.');
+        alert('Đã hủy đơn hàng! Đơn sẽ tự động xóa sau 24 giờ.');
       }
     } catch {
       alert('📡 Không thể kết nối server!');
@@ -1498,7 +1498,7 @@ export default function OrderList() {
               <option value="pending">⏳ Chờ xác nhận</option>
               <option value="processing">🔄 Đang xử lý</option>
               <option value="completed">✅ Hoàn thành</option>
-              <option value="cancelled">? D? h?y</option>
+              <option value="cancelled">❌ Đã hủy</option>
               <option value="offline">📡 Offline</option>
             </select>
             <select className="input-field" value={filterSource} onChange={e => setFilterSource(e.target.value)}>
@@ -2046,7 +2046,7 @@ export default function OrderList() {
                     <option value="pending">⏳ Chờ xác nhận</option>
                     <option value="processing">🔄 Đang xử lý</option>
                     <option value="completed">✅ Hoàn thành</option>
-                    <option value="cancelled">? D? h?y</option>
+                    <option value="cancelled">❌ Đã hủy</option>
                   </select>
                 </div>
                 <div>
@@ -2448,7 +2448,7 @@ export default function OrderList() {
 
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowHelp(false)} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
-                D? hiđủ
+                Đóng
               </button>
             </div>
           </div>

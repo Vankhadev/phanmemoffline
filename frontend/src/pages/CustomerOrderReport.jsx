@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 const STATUS_LABELS = {
-  pending: 'Ch? xác nhận',
+  pending: 'Chờ xác nhận',
   processing: 'đang xử lý',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',

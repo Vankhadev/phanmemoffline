@@ -27,6 +27,7 @@ import {
   Sliders,
 
   Truck,
+  Trophy,
   Users,
   Wallet,
   Warehouse,
@@ -57,6 +58,7 @@ const CreateOrder = lazy(() => import('./pages/CreateOrder'));
 const NhaCungCap = lazy(() => import('./pages/nhacungcap'));
 const Products = lazy(() => import('./pages/Products'));
 const Customers = lazy(() => import('./pages/Customers'));
+const TopCustomers = lazy(() => import('./pages/TopCustomers'));
 const Stats = lazy(() => import('./pages/Stats'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Login = lazy(() => import('./pages/Login'));
@@ -145,6 +147,7 @@ const ROUTE_PERMISSIONS = {
   '/nhap-hang': ['imports.read'],
   '/san-pham': ['products.read'],
   '/khach-hang': ['customers.read'],
+  '/top-khach-hang': ['customers.read'],
   '/thong-ke': ['stats.read'],
   '/so-quy': ['cashbook.read'],
   '/ke-toan': ['accounting.read', 'revenue_reports.read'],
@@ -594,7 +597,7 @@ function AppLayout({
   const [openMenus, setOpenMenus] = useState(() => ({
     don_hang: location.pathname.startsWith('/tao-don-hang') || location.pathname.startsWith('/danh-sach-don-hang'),
     danh_muc: location.pathname.startsWith('/san-pham') || location.pathname.startsWith('/kho-hang') || location.pathname.startsWith('/khach-hang') || location.pathname.startsWith('/nhap-hang') || location.pathname.startsWith('/nha-cung-cap'),
-    quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat'),
+    quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/top-khach-hang') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat'),
   }));
   const [updateToast, setUpdateToast] = useState(null);
   const [updateToastVisible, setUpdateToastVisible] = useState(false);
@@ -670,7 +673,7 @@ function AppLayout({
       const autoOpenMatchers = {
         don_hang: ['/tao-don-hang', '/danh-sach-don-hang'],
         danh_muc: ['/san-pham', '/kho-hang', '/khach-hang', '/nhap-hang', '/nha-cung-cap'],
-        quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/bang-luong-nhan-vien', '/cai-dat'],
+        quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/top-khach-hang', '/bang-luong-nhan-vien', '/cai-dat'],
       };
 
       Object.entries(autoOpenMatchers).forEach(([key, routes]) => {
@@ -728,6 +731,7 @@ function AppLayout({
           { to: '/so-quy', label: 'Sổ quỹ', icon: Wallet },
           { to: '/bao-cao-theo-don-hang', label: 'Báo cáo theo đơn hàng', icon: FileText },
           { to: '/bao-cao-theo-san-pham', label: 'Báo cáo sản phẩm', icon: Boxes },
+          { to: '/top-khach-hang', label: 'Top khách hàng', icon: Trophy },
           { to: '/cai-dat', label: 'Cài đặt', icon: SettingsIcon },
         ],
       },
@@ -879,6 +883,7 @@ function AppLayout({
             <Route path="/nhap-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/nhap-hang"><ErrorBoundary><Nhaphang store={store} /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/san-pham"><ErrorBoundary><Products store={store} /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/khach-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/khach-hang"><ErrorBoundary><Customers /></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/top-khach-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/top-khach-hang"><ErrorBoundary><TopCustomers /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/thong-ke" element={<ProtectedRoute user={user} permissions={permissions} path="/thong-ke"><ErrorBoundary><Stats /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/so-quy" element={<ProtectedRoute user={user} permissions={permissions} path="/so-quy"><ErrorBoundary><CashBook /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/ke-toan" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan"><ErrorBoundary><AccountingDashboard user={user} /></ErrorBoundary></ProtectedRoute>} />

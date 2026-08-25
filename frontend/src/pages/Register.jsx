@@ -95,7 +95,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
 
   const completeLogin = async (payload) => {
     if (!payload?.token || !payload?.user) {
-      throw new Error('Server không tr? d? thông tin đăng nhập.');
+      throw new Error('Server không trả đủ thông tin đăng nhập.');
     }
     const result = await onLogin?.(payload);
     navigate(result?.defaultRoute || '/', { replace: true });
@@ -147,7 +147,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      setError('Email không hợp l?.');
+      setError('Email không hợp lệ.');
       return false;
     }
 
@@ -244,7 +244,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
               disabled={checkingSetup || loading}
               className="text-xs font-semibold text-red-700 underline decoration-red-300 hover:text-red-900 disabled:text-red-300 disabled:cursor-not-allowed"
             >
-              Th? lỗi
+              Thử lại
             </button>
           </div>
         )}
