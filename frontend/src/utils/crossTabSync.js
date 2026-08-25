@@ -1,5 +1,6 @@
 import { SYNC_BROADCAST_REQUEST_EVENT, SYNC_UPDATED_EVENT, resolveApiUrl } from './apiClient';
 import { emitGlobalSyncEvents } from './eventEmitter';
+import { getAuthToken } from './authStorage';
 
 const CROSS_TAB_SYNC_CHANNEL = 'vankha-cross-tab-sync';
 const CROSS_TAB_SYNC_STORAGE_KEY = 'vankha.cross-tab-sync.payload';
@@ -131,6 +132,7 @@ function handleIncomingPayload(payload) {
 
 function connectRealtimeSyncSSE() {
   if (!isBrowserRuntime() || typeof EventSource === 'undefined') return;
+  if (!getAuthToken()) return;
   if (sseConnection) return;
 
   const lastSyncTime = window.localStorage.getItem('kha_last_sync_time') || Date.now();
@@ -228,5 +230,8 @@ export function installCrossTabSyncBridge() {
     postCrossTabPayload(event.detail || {});
   });
 
+}
+
+export function startAuthenticatedRealtimeSync() {
   connectRealtimeSyncSSE();
 }

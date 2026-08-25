@@ -5,6 +5,7 @@
     .replace(/[đĐ]/g, match => (match === 'Đ' ? 'D' : 'd'))
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'D')
+    .replace(/(\d+)\s*t\s*(\d+)/g, '$1t$2')
     .toLowerCase()
     .replace(/(\d+)\s*(cm|mm|m|ml|l|kg|g)\b/g, '$1$2')
     .replace(/\b(cm|mm|m|ml|l|kg|g)\s+(\d+)\b/g, '$2$1')
@@ -326,6 +327,10 @@ function buildProductSearchData(item = {}, parent = null, context = createSearch
   const parentCategory = findCategoryForProduct(parent, categoriesById);
   const categoryFieldsText = getCachedCategoryFields(category, context).join(' ');
   const fields = [
+    item?.parent_name,
+    item?.parent_sku,
+    item?.parentName,
+    item?.parentSku,
     parent?.name,
     parent?.sku,
     parent?.category,
@@ -541,4 +546,3 @@ export function searchFlatProducts(products = [], query = '', options = {}) {
     : rows.sort((a, b) => (b._searchScore || 0) - (a._searchScore || 0) || String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
   return limit > 0 ? sortedRows.slice(0, limit) : sortedRows;
 }
-

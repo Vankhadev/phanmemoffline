@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary'
 import { installAuthenticatedFetch, probeBackendHealth } from './utils/apiClient'
-import { installCrossTabSyncBridge } from './utils/crossTabSync'
+import { installCrossTabSyncBridge, startAuthenticatedRealtimeSync } from './utils/crossTabSync'
 import { installElectronInputFocusGuard } from './utils/electronFocusGuard'
 import { installNativeRuntimeGuards, isNativeAppRuntime } from './utils/mobileAppRuntime'
 import './index.css'
@@ -20,6 +20,9 @@ if (!nativeRuntime && typeof window !== 'undefined' && !(window.khaDesktop?.apiB
 }
 
 installCrossTabSyncBridge()
+if (typeof window !== 'undefined') {
+  window.addEventListener('kha-authenticated', startAuthenticatedRealtimeSync)
+}
 installElectronInputFocusGuard()
 
 if (!nativeRuntime && 'serviceWorker' in navigator && import.meta.env.PROD) {

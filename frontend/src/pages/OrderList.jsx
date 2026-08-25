@@ -46,6 +46,16 @@ function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
 }
 
+function formatMoneyInput(value) {
+  const amount = Math.max(0, Math.trunc(Number(value) || 0));
+  return amount.toLocaleString('vi-VN');
+}
+
+function parseMoneyInput(value) {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits ? Math.max(0, Number(digits)) : 0;
+}
+
 function getInvoicePaymentSummary(invoice = {}) {
   const total = Math.max(0, Number(invoice.total) || 0);
   const paid = Math.max(0, Number(invoice.paid_amount) || 0);
@@ -2199,9 +2209,22 @@ export default function OrderList() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Đã thu</label>
-                    <div className="font-bold text-emerald-700 text-lg pt-1.5">
-                      {formatVND(editForm.paid_amount)}
-                    </div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formatMoneyInput(editForm.paid_amount)}
+                      onChange={e => {
+                        const paid = parseMoneyInput(e.target.value);
+                        const total = Math.max(0, Number(editForm.total) || 0);
+                        setEditForm(f => ({
+                          ...f,
+                          paid_amount: paid,
+                          remaining_amount: Math.max(0, total - paid),
+                          change_amount: Math.max(0, paid - total),
+                        }));
+                      }}
+                      className="input-field w-full text-right text-sm font-bold text-emerald-700"
+                    />
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Còn nợ</label>

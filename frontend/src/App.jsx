@@ -843,8 +843,18 @@ function AppLayout({
             })}
           </nav>
         </aside>
-        <div className="app-main-scroll flex-1 min-h-0 min-w-0 overflow-x-auto overflow-y-auto p-3 sm:p-4">
-          <div className="mb-3 flex items-center justify-end gap-3 no-print">
+          <div className="app-main-scroll flex-1 min-h-0 min-w-0 overflow-x-auto overflow-y-auto p-3 sm:p-4">
+          <div className="mb-3 flex items-center justify-between gap-3 no-print">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen?.(current => !current)}
+              className="hidden min-h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 md:inline-flex"
+              aria-label={sidebarOpen ? 'Thu gọn menu' : 'Mở menu'}
+              title={sidebarOpen ? 'Thu gọn menu' : 'Mở menu'}
+            >
+              <Menu size={20} aria-hidden="true" />
+            </button>
+            <div className="flex items-center justify-end gap-3">
             <LiveSyncBadge
               tables={['invoices', 'invoice_details', 'customers', 'customer_types', 'partners', 'products', 'product_categories', 'combos', 'import_logs', 'import_details', 'cash_book', 'accounting']}
               className="hidden sm:inline-flex"
@@ -856,6 +866,7 @@ function AppLayout({
             >
               <HelpCircle size={16} /> Hướng dẫn
             </button>
+            </div>
           </div>
           <Suspense fallback={<RouteLoading />}>
             <Routes>
@@ -1224,6 +1235,7 @@ function DesktopApp() {
 
   const handleAuthenticated = useCallback(async (payload) => {
     const result = await applyServerPayload(payload, { persistMode: 'session', redirect: true, sync: true });
+    window.dispatchEvent(new Event('kha-authenticated'));
     setBootstrapStatus(null);
     return result;
   }, [applyServerPayload]);

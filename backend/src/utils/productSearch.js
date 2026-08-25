@@ -5,6 +5,7 @@
     .replace(/[đĐ]/g, match => (match === 'Đ' ? 'D' : 'd'))
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'D')
+    .replace(/(\d+)\s*t\s*(\d+)/g, '$1t$2')
     .toLowerCase()
     .replace(/(\d+)\s*(cm|mm|m|ml|l|kg|g)\b/g, '$1$2')
     .replace(/\b(cm|mm|m|ml|l|kg|g)\s+(\d+)\b/g, '$2$1')
@@ -152,4 +153,3 @@ module.exports = {
   scoreProductMatch,
   searchFlatProducts,
 };
-

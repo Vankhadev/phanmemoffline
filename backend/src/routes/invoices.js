@@ -780,6 +780,7 @@ router.put('/:id', async (req, res) => {
         total: persistedTotal,
         remaining_amount: Math.max(0, persistedTotal - persistedPaid),
         change_amount: Math.max(0, persistedPaid - persistedTotal),
+        payment_status: derivePaymentStatus({ ...updatedInvoice, total: persistedTotal, paid_amount: persistedPaid }),
         total_profit: persistedProfit,
       }, { skipSave: true });
       const recalculatedInvoice = getOne('invoices', i => Number(i.id) === Number(inv.id));

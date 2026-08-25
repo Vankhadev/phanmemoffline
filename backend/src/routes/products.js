@@ -4,7 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, replaceTable, now, withAtomicDbWrite, generateNextDocumentCode } = require('../db/database');
-const { normalizeSearchText, parseKeywordList, searchFlatProducts } = require('../utils/productSearch');
+const { normalizeSearchText, parseKeywordList, searchFlatProducts, scoreProductMatch } = require('../utils/productSearch');
 const {
   getMinimumAllowedProductStock,
   getNegativeStockLimitMessage,
@@ -615,6 +615,7 @@ router.get('/sale-candidates', (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 50000);
     const categoriesById = getCategoriesById();
     const rows = [];
+    const parentById = new Map();
 
     for (const parent of activeParents()) {
       const variants = activeVariants(parent.id);
@@ -623,6 +624,7 @@ router.get('/sale-candidates', (req, res) => {
         continue;
       }
       const enrichedParent = enrichProduct(parent, null, categoriesById);
+      parentById.set(Number(parent.id), enrichedParent);
       variants.forEach(variant => rows.push({
         ...enrichProduct(variant, enrichedParent, categoriesById),
         parent_id: variant.parent_id || parent.id,
@@ -634,13 +636,22 @@ router.get('/sale-candidates', (req, res) => {
 
     const normalizedQuery = normalizeSearchText(query);
     const matches = normalizedQuery
-      ? rows.filter(row => normalizeSearchText([
-        row.name, row.sku, row.barcode, row.parent_name, row.parent_sku,
-      ].filter(Boolean).join(' ')).includes(normalizedQuery))
+      ? rows
+        .map(row => {
+          const parent = row.parent_id ? parentById.get(Number(row.parent_id)) : null;
+          const result = scoreProductMatch(row, normalizedQuery, parent, categoriesById);
+          const parentResult = parent ? scoreProductMatch(parent, normalizedQuery, null, categoriesById) : null;
+          return {
+            row,
+            matched: result.matched || Boolean(parentResult?.matched),
+            score: Math.max(result.score, (parentResult?.score || 0) - 25),
+          };
+        })
+        .filter(item => item.matched)
+        .sort((left, right) => right.score - left.score)
+        .map(item => item.row)
       : rows;
-    res.json(matches
-      .sort((left, right) => String(left.name || '').localeCompare(String(right.name || ''), 'vi'))
-      .slice(0, limit));
+    res.json(matches.slice(0, limit));
   } catch (err) {
     res.status(500).json({ error: 'Lỗi khi lấy danh sách sản phẩm bán hàng', detail: err.message });
   }

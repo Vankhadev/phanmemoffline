@@ -491,7 +491,7 @@ export default function CreateOrder({ user, store }) {
       setLoading(prev => ({ ...prev, products: true }));
       try {
         const endpoint = query
-          ? `/products/search?q=${encodeURIComponent(query)}&limit=100`
+          ? `/products/sale-candidates?q=${encodeURIComponent(query)}&limit=100`
           : '/products/sale-candidates?limit=50000';
         const data = await apiJsonChecked(endpoint, { signal: controller.signal }, 'Không tải được sản phẩm.');
         if (productSearchRequestRef.current === requestId) {
