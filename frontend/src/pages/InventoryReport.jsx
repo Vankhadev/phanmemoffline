@@ -286,7 +286,7 @@ export default function InventoryReport() {
                   </td>
                   <td className="px-4 py-3 text-gray-600">
                     <div>{row.warehouse_name || row.warehouse || 'Kho mặc định'}</div>
-                    <div className="mt-0.5 text-xs text-gray-400">{row.category_name || row.category || 'Chua phđơn loại'}</div>
+                    <div className="mt-0.5 text-xs text-gray-400">{row.category_name || row.category || 'Chưa phân loại'}</div>
                   </td>
                   <td className={`px-4 py-3 text-right text-base font-extrabold ${Number(row.stock) < 0 ? 'text-rose-700' : Number(row.stock) === 0 ? 'text-red-600' : Number(row.stock) <= threshold ? 'text-amber-700' : 'text-emerald-700'}`}>{formatNumber(row.stock)}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{formatVND(row.cost_price ?? row.import_price)}</td>

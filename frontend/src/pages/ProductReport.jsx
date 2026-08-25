@@ -1248,7 +1248,7 @@ export default function ProductReport() {
         ) : !report ? (
           <div className="py-16 text-center">
             <div className="mb-3 text-5xl opacity-20">?Y"S</div>
-            <div className="font-semibold text-gray-600">Chua c? dữ liệu báo cáo</div>
+            <div className="font-semibold text-gray-600">Chưa có dữ liệu báo cáo</div>
             <div className="mt-1 text-sm text-gray-400">Chọn bộ lọc thời gian rđi nhân ?Tháng k?.</div>
           </div>
         ) : null}

@@ -1613,7 +1613,7 @@ const Nhaphang = ({ store }) => {
               filteredProducts.map(product => renderImportProductPickerRow(product))
             ) : !loading ? (
               <div className="flex h-56 items-center justify-center px-6 text-center text-sm text-slate-400">
-                {searchQuery.trim() ? 'Không tâm th?y sản phẩm phù hợp' : 'Chua c? sản phẩm cho nhà cung cấp n?y'}
+                {searchQuery.trim() ? 'Không tìm thấy sản phẩm phù hợp' : 'Chưa có sản phẩm cho nhà cung cấp này'}
               </div>
             ) : null}
           </div>
@@ -2663,7 +2663,7 @@ const Nhaphang = ({ store }) => {
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-gray-900">{selectedSupplier.tenNCC}</div>
                         <div className="mt-1 text-xs text-gray-600">M?: {selectedSupplier.maNCC || 'N/A'}</div>
-                        <div className="mt-0.5 truncate text-xs text-gray-600">{selectedSupplier.diaChi || 'Chua c? địa chỉ'}</div>
+                        <div className="mt-0.5 truncate text-xs text-gray-600">{selectedSupplier.diaChi || 'Chưa có địa chỉ'}</div>
                       </div>
                       <button
                         type="button"
@@ -2679,7 +2679,7 @@ const Nhaphang = ({ store }) => {
                 ) : (
                   <div className="sapo-muted-empty">
                     <Building className="h-10 w-10 text-gray-300" />
-                    <div>Chua c? thông tin nhà cung cấp</div>
+                    <div>Chưa có thông tin nhà cung cấp</div>
                   </div>
                 )}
               </div>
@@ -2820,7 +2820,7 @@ const Nhaphang = ({ store }) => {
                             })
                           ) : (
                             <div className="p-3 text-center text-sm text-gray-500">
-                              {searchQuery.trim() ? 'Không có sản phẩm phù hợp' : 'Chua c? sản phẩm trong hệ thống'}
+                              {searchQuery.trim() ? 'Không có sản phẩm phù hợp' : 'Chưa có sản phẩm trong hệ thống'}
                             </div>
                           )}
                         </div>
@@ -3417,7 +3417,7 @@ const Nhaphang = ({ store }) => {
                               })
                             ) : (
                               <div className="p-3 text-sm text-gray-500 text-center">
-                                {searchQuery.trim() ? 'Không có sản phẩm phù hợp' : 'Chua c? sản phẩm trong hệ thống'}
+                                {searchQuery.trim() ? 'Không có sản phẩm phù hợp' : 'Chưa có sản phẩm trong hệ thống'}
                               </div>
                             )}
                           </div>

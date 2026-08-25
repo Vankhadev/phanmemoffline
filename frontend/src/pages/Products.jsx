@@ -1908,7 +1908,7 @@ export default function Products({ store }) {
                 <div className="min-w-0">
                   <div className="font-semibold text-sm text-gray-800 truncate">{category.name}</div>
                   <div className="text-xs text-gray-500 truncate">Nhâm: {category.group_name || '?'}</div>
-                  <div className="text-[11px] text-teal-600 truncate">{[...(category.keywords || []), ...(category.aliases || [])].join(', ') || 'Chua c? từ khóa'}</div>
+                  <div className="text-[11px] text-teal-600 truncate">{[...(category.keywords || []), ...(category.aliases || [])].join(', ') || 'Chưa có từ khóa'}</div>
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <button onClick={() => openCategoryEdit(category)} className="text-blue-600 hover:text-blue-800 p-1 border border-blue-200 rounded" title="Sửa danh mục"><Edit2 size={12} /></button>
@@ -1916,7 +1916,7 @@ export default function Products({ store }) {
                 </div>
               </div>
             ))}
-            {activeCategories.length === 0 && <div className="text-sm text-gray-400 border-2 border-dashed rounded-lg p-6 text-center md:col-span-2 xl:col-span-4">Chua c? danh mục mặc định</div>}
+            {activeCategories.length === 0 && <div className="text-sm text-gray-400 border-2 border-dashed rounded-lg p-6 text-center md:col-span-2 xl:col-span-4">Chưa có danh mục mặc định</div>}
           </div>
         </div>
       )}
@@ -1936,7 +1936,7 @@ export default function Products({ store }) {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {combos.length === 0 && (
               <div className="md:col-span-2 xl:col-span-3 text-center text-gray-400 py-10 border-2 border-dashed rounded-xl">
-                Chua c? combo n?o ? nhân "Tạo Combo" d? bắt đầu
+                Chưa có combo nào. Nhấn "Tạo Combo" để bắt đầu
               </div>
             )}
             {combos.map(c => (

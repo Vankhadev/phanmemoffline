@@ -644,7 +644,7 @@ export default function CustomerOrderReport() {
                             </div>
                           </div>
                           <div className="mt-0.5 truncate text-[11px] text-gray-500">
-                            {[customer.customer_code ? `M?: ${customer.customer_code}` : '', customer.phone, customer.email].filter(Boolean).join(' ? ') || 'Chua c? thông tin liđơn h?'}
+                             {[customer.customer_code ? `Mã: ${customer.customer_code}` : '', customer.phone, customer.email].filter(Boolean).join(' | ') || 'Chưa có thông tin liên hệ'}
                           </div>
                         </button>
                       ))
@@ -712,7 +712,7 @@ export default function CustomerOrderReport() {
           <div>
             <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Khách hàng</span>
             <span className="mt-1 block font-bold text-gray-900">{selectedCustomer.name}</span>
-            <span className="mt-0.5 block text-xs text-gray-500">{[selectedCustomer.phone, selectedCustomer.email].filter(Boolean).join(' ? ') || 'Chua c? S?T/Email'}</span>
+             <span className="mt-0.5 block text-xs text-gray-500">{[selectedCustomer.phone, selectedCustomer.email].filter(Boolean).join(' | ') || 'Chưa có SĐT/Email'}</span>
           </div>
           <div>
             <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">M? / Nhâm khách</span>
@@ -894,7 +894,7 @@ export default function CustomerOrderReport() {
         ) : !report ? (
           <div className="py-16 text-center">
             <div className="mb-3 text-5xl opacity-20">??</div>
-            <div className="font-semibold text-gray-600">Chua c? dữ liệu báo cáo</div>
+             <div className="font-semibold text-gray-600">Chưa có dữ liệu báo cáo</div>
             <div className="mt-1 text-sm text-gray-400 font-medium">Nhập thông tin khách hàng về chọn kho?ng thời gian d? tạo báo cáo chi tiết.</div>
           </div>
         ) : null}

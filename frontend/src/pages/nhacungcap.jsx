@@ -417,10 +417,10 @@ export default function NhaCungCap() {
     }
 
     if (paymentLoaded) {
-      return { payment_status: 'none', label: 'Chua c? phiếu', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: 0 };
+      return { payment_status: 'none', label: 'Chưa có phiếu', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: 0 };
     }
 
-    return { payment_status: 'unknown', label: 'Chua c? dữ liệu', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
+    return { payment_status: 'unknown', label: 'Chưa có dữ liệu', total_amount: 0, paid_amount: 0, remaining_amount: 0, import_count: null };
   };
 
   const getSupplierPaymentLabel = (summary) => {
@@ -521,7 +521,7 @@ export default function NhaCungCap() {
             {!loading && filtered.length === 0 && (
               <tr>
                 <td colSpan={8} className="text-center text-gray-400 py-10">
-                  {search ? 'Không tâm th?y nhà cung cấp' : 'Chua c? nhà cung cấp n?o'}
+                  {search ? 'Không tìm thấy nhà cung cấp' : 'Chưa có nhà cung cấp nào'}
                 </td>
               </tr>
             )}

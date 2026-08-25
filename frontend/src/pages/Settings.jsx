@@ -161,13 +161,13 @@ function getUpdateStatusLabel(status) {
     cancelled: '?? h?y tđi',
     error: 'C? lỗi',
   };
-  return labels[status] || 'Chua kiểm tra';
+  return labels[status] || 'Chưa kiểm tra';
 }
 
 function getUpdateErrorMessage(error) {
   if (!error) return '';
   const messages = {
-    MANIFEST_URL_MISSING: 'Chua x?c d?nh được URL cập nhật. Mặc định ứng dụng d?ng GitHub Releases latest.yml.',
+    MANIFEST_URL_MISSING: 'Chưa xác định được URL cập nhật. Mặc định ứng dụng dùng GitHub Releases latest.yml.',
     CONFIG_INVALID: 'File cấu hình cập nhật không hợp l?.',
     URL_INVALID: 'URL cập nhật ho?c installer không hợp l?.',
     DEV_UPDATER_DISABLED: 'Auto-update b? tốt khi ch?y development/unpacked. Hủy test trđơn bđơn d? cái bằng NSIS ho?c bắt KHA_ENABLE_ELECTRON_UPDATER=1 c? ch? d?ch.',
@@ -183,7 +183,7 @@ function getUpdateErrorMessage(error) {
     UPDATE_METADATA_MISSING_RUNTIME_INSTALLER: 'GitHub Release chưa c? installer ri?ng cho kiđơn tr?c mãy n?y. Cđơn upload asset cấu hình t? -x64.exe ho?c -ia32.exe về cập nhật latest.yml.',
     UPDATE_METADATA_SELECTED_INSTALLER_MISMATCH: 'Metadata cập nhật dang chọn installer không kh?p kiđơn tr?c mãy. Không tđi d? tr?nh lỗi Windows không ch?y được ứng dụng.',
     UPDATE_ASSET_NOT_ACCESSIBLE_OR_PRIVATE: 'Không tải được installer/blockmap. Asset có thể thiđủ, tđơn không kh?p latest.yml ho?c repo private tr? 404.',
-    UPDATE_RELEASE_NOT_PUBLISHED: 'Chua c? production release d? publish d? electron-updater chọn lâm latest.',
+    UPDATE_RELEASE_NOT_PUBLISHED: 'Chưa có production release được publish để electron-updater chọn làm latest.',
     UPDATE_FEED_RATE_LIMITED: 'GitHub dang giới hạn truy c?p feed cập nhật, vui l?ng thử lại sau.',
     UPDATE_NETWORK_ERROR: 'Không kết nối được tđi GitHub Releases. Vui lòng kiểm tra Internet, DNS, proxy/firewall.',
     NETWORK_ERROR: 'Không th? kết nối tđi mãy ch? cập nhật. Vui lòng kiểm tra mãng.',
@@ -202,7 +202,7 @@ function getUpdateErrorMessage(error) {
     DOWNLOAD_CANCELLED: 'Nguđi d?ng d? h?y tđi cập nhật.',
     CHECKSUM_MISMATCH: 'Checksum không kh?p. Gửi cập nhật d? b? xóa về s? không được ch?y.',
     INSTALLER_NOT_DOWNLOADED: 'Chua tđi gđi cập nhật.',
-    UPDATE_NOT_DOWNLOADED: 'Chua c? bđơn cập nhật đã tải xong d? cài đặt.',
+    UPDATE_NOT_DOWNLOADED: 'Chưa có bản cập nhật đã tải xong để cài đặt.',
     INSTALLER_NOT_FOUND: 'Không tâm th?y installer đã tải. Vui lòng tải lại.',
     INSTALL_IN_PROGRESS: 'ứng dụng dang chuđơn b? cài đặt bđơn cập nhật.',
     SPAWN_INSTALLER_FAILED: 'Không th? ch?y installer cập nhật.',
@@ -1645,7 +1645,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             </div>
           ) : employees.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
-              Chua c? nhân viên n?o.
+              Chưa có nhân viên nào.
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border">
@@ -1736,7 +1736,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             </div>
           ) : customerTypes.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500">
-              Chua c? loại khách hàng n?o.
+              Chưa có loại khách hàng nào.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -1962,7 +1962,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   </button>
                 </div>
               )}
-              Chua c? mẫu in hóa đơn. Nhân ?Thêm mẫu in? d? tạo mđủ đầu tiđơn.
+              Chưa có mẫu in hóa đơn. Nhấn "Thêm mẫu in" để tạo mẫu đầu tiên.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -2039,10 +2039,10 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
             <SectionNotice notice={backupNotice} />
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Lđơn backup gđơn nh?t</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.lastBackupAt || 'Chua c?'}</div></div>
-              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Lđơn backup kỳ ti?p</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.nextBackupAt || 'Chua x?c d?nh'}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Lần backup gần nhất</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.lastBackupAt || 'Chưa có'}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Lần backup kế tiếp</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.nextBackupAt || 'Chưa xác định'}</div></div>
               <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Tổng s? file</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.totalBackups ?? backupItems.length}</div></div>
-              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Trạng thái</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.scheduleRunning ? 'đang ch?y' : 'đang d?ng'}</div></div>
+              <div className="rounded-xl border bg-gray-50 p-4"><div className="text-xs text-gray-500">Trạng thái</div><div className="mt-1 font-bold text-gray-900">{backupStatus?.scheduleRunning ? 'Đang chạy' : 'Đang dừng'}</div></div>
             </div>
           </div>
 
@@ -2077,7 +2077,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                     </tr>
                   ))}
                   {!backupItems.length && (
-                    <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">Chua c? backup n?o.</td></tr>
+                    <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">Chưa có backup nào.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -2093,7 +2093,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                   <div className="text-xs text-gray-500">{formatDateTime(log.created_at)} ? {formatBytes(log.file_size)} ? {log.detail || ''}</div>
                 </div>
               ))}
-              {!backupLogs.length && <div className="text-gray-500">Chua c? log backup.</div>}
+              {!backupLogs.length && <div className="text-gray-500">Chưa có log backup.</div>}
             </div>
           </div>
         </div>
@@ -2269,7 +2269,7 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 <div className="mt-2 text-xs text-gray-500">Nguđơn: {manifestSourceLabel}</div>
                 {updateState?.manifestUrlDefault && (
                   <div className="mt-2 inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
-                    đang d?ng GitHub Release feed mặc định
+                    Đang dùng GitHub Release feed mặc định
                   </div>
                 )}
               </div>

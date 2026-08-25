@@ -455,7 +455,7 @@ export default function Stats() {
                   );
                 })}
                 {dailyRows.length === 0 && (
-                  <tr><td colSpan={5} className="py-10 text-center text-gray-400">Chua c? dữ liệu</td></tr>
+                  <tr><td colSpan={5} className="py-10 text-center text-gray-400">Chưa có dữ liệu</td></tr>
                 )}
                 {dailyRows.length > 0 && (
                   <tr className="bg-emerald-50 font-bold text-emerald-700">
@@ -494,7 +494,7 @@ function FragmentRow({ row, expanded, onToggle }) {
         <tr className="border-b bg-slate-50">
           <td colSpan={5} className="p-3">
             {row.orders.length === 0 ? (
-              <div className="text-sm text-gray-500">Chua c? chi tiết đơn hàng cho ngày n?y.</div>
+              <div className="text-sm text-gray-500">Chưa có chi tiết đơn hàng cho ngày này.</div>
             ) : (
               <div className="space-y-3">
                 <div className="overflow-x-auto rounded border border-slate-200 bg-white">

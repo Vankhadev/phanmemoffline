@@ -58,7 +58,7 @@ export default function LiveSyncBadge({
               {showSyncRelative ? <span className="text-gray-400">({relative})</span> : null}
             </span>
           ) : (
-            <span className="text-gray-400">chưa có</span>
+            <span className="text-gray-400">Chưa có</span>
           )}
         </span>
       )}

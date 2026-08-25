@@ -273,7 +273,7 @@ export default function CashBook() {
             {loading ? (
               <tr><td colSpan={7} className="text-center text-gray-400 py-10">đang tđi...</td></tr>
             ) : transactions.length === 0 ? (
-              <tr><td colSpan={7} className="text-center text-gray-400 py-10">Chua c? giao dịch</td></tr>
+              <tr><td colSpan={7} className="text-center text-gray-400 py-10">Chưa có giao dịch</td></tr>
             ) : (
               transactions.map(t => (
                 <tr key={t.id} className="border-b hover:bg-gray-50">
