@@ -171,6 +171,15 @@ function isComboProductRecord(product) {
   return Boolean(product?.is_combo || product?.isCombo || type === 'combo' || type === 'bundle');
 }
 
+function formatMoneyInput(value) {
+  return Math.max(0, Math.trunc(Number(value) || 0)).toLocaleString('vi-VN');
+}
+
+function parseMoneyInput(value) {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits ? Number(digits) : 0;
+}
+
 export default function CreateOrder({ user, store }) {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
@@ -189,6 +198,7 @@ export default function CreateOrder({ user, store }) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [paidAmount, setPaidAmount] = useState(0);
+  const [oldDebtAmount, setOldDebtAmount] = useState(0);
   const [note, setNote] = useState('');
   const [splitLine, setSplitLine] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -875,8 +885,9 @@ export default function CreateOrder({ user, store }) {
     ? subtotal * (discountAmount / 100)
     : discountAmount;
   const grandTotal = subtotal + vatAmount - discountVal + deliveryFee;
-  const remainingAmount = Math.max(0, grandTotal - paidAmount);
-  const changeAmount = Math.max(0, paidAmount - grandTotal);
+  const payableAmount = grandTotal + oldDebtAmount;
+  const remainingAmount = Math.max(0, payableAmount - paidAmount);
+  const changeAmount = Math.max(0, paidAmount - payableAmount);
 
   const buildComboCartLine = (combo, quantity = 1) => {
     const unit_price = getComboPrice(combo);
@@ -1635,6 +1646,8 @@ export default function CreateOrder({ user, store }) {
       discount_percent: deliveryFeeMode === 'percent' ? discountAmount : 0,
       discount_amount: discountVal,
       total: grandTotal, payment_method: paymentMethod, note,
+      old_debt: oldDebtAmount,
+      payable_amount: payableAmount,
       paid_amount: paidAmount,
       change_amount: changeAmount,
       remaining_amount: remainingAmount,
@@ -1655,6 +1668,8 @@ export default function CreateOrder({ user, store }) {
         customer_id: selectedCustomer?.id || null,
         customer_name: selectedCustomer?.name || 'Khách lẻ',
         total: grandTotal,
+        old_debt: oldDebtAmount,
+        payable_amount: payableAmount,
         subtotal,
         vatPercent,
         vatAmount,
@@ -1857,6 +1872,7 @@ export default function CreateOrder({ user, store }) {
     setExpandedParents({});
     setExpandedComboRows({});
     setSelectedCustomer(null);
+    setOldDebtAmount(0);
     setPriceType('retail');
     setVatPercent(0);
     setDiscountAmount(0);
@@ -1994,6 +2010,7 @@ export default function CreateOrder({ user, store }) {
                       <button key={c.id}
                         onClick={() => {
                           setSelectedCustomer(c);
+                          setOldDebtAmount(0);
                           setCustomerSearch('');
                           setShowCustomerDropdown(false);
                           // Tự động chọn loại giá theo loại khách hàng
@@ -2278,9 +2295,9 @@ export default function CreateOrder({ user, store }) {
                               className={`pos-table-input text-center ${rowStockInvalid ? 'bg-red-100 text-red-700 border-red-300' : rowNearLimit ? 'bg-orange-50 text-orange-700 border-orange-300' : rowProjectedStockNegative ? 'bg-red-50 text-red-700 border-red-200' : ''}`} />
                           </td>
                           <td>
-                            <input type="number" min="0"
-                              value={item.unit_price}
-                              onChange={e => updateCartItem(item.id, 'unit_price', +e.target.value)}
+                            <input type="text" inputMode="numeric"
+                              value={formatMoneyInput(item.unit_price)}
+                              onChange={e => updateCartItem(item.id, 'unit_price', parseMoneyInput(e.target.value))}
                               className="pos-table-input text-right" />
                           </td>
                           <td>
@@ -2527,13 +2544,17 @@ export default function CreateOrder({ user, store }) {
 
                 <div className="order-payment-total">
                   <span>Tổng tiền hóa đơn</span>
-                  <strong>{formatVND(grandTotal)}</strong>
+                  <strong>{formatVND(payableAmount)}</strong>
                   <small>Giá tạm tính + thuế GTGT - chiết khấu + phí giao hàng</small>
                 </div>
 
                 <div className="order-payment-received">
+                  <label htmlFor="order-old-debt">Nợ cũ</label>
+                  <input id="order-old-debt" type="text" inputMode="numeric" value={formatMoneyInput(oldDebtAmount)} onChange={e => setOldDebtAmount(parseMoneyInput(e.target.value))} />
                   <label>Khách phải trả</label>
-                  <strong>{formatVND(grandTotal)}</strong>
+                  <strong>{formatVND(payableAmount)}</strong>
+                  <label>Nợ cũ</label>
+                  <strong className="text-amber-700">{formatVND(oldDebtAmount)}</strong>
                   <label htmlFor="order-paid-amount">Khách thanh toán</label>
                   <input id="order-paid-amount" type="number" min="0" value={paidAmount} onChange={e => setPaidAmount(+e.target.value)} />
                   <div>

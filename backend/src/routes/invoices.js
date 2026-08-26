@@ -356,6 +356,8 @@ function buildInvoicePrintPayload(idOrCode) {
     discount_amount: toMoney(invoice.discount_amount),
     delivery_fee: toMoney(invoice.delivery_fee),
     total: Number.isFinite(Number(invoice.total)) ? toMoney(invoice.total) : subtotal,
+    old_debt: toMoney(invoice.old_debt),
+    payable_amount: toMoney(invoice.payable_amount || (toMoney(invoice.total) + toMoney(invoice.old_debt))),
     paid_amount: toMoney(invoice.paid_amount),
     change_amount: toMoney(invoice.change_amount),
     remaining_amount: toMoney(invoice.remaining_amount),
@@ -689,7 +691,7 @@ router.put('/:id', async (req, res) => {
         subtotal, vat_percent, vat_amount,
         discount_amount, discount_percent,
         total, delivery_date, status,
-        paid_amount, change_amount, remaining_amount, delivery_fee,
+        paid_amount, change_amount, remaining_amount, delivery_fee, old_debt, payable_amount,
         invoice_writer, receiver_name,
         details,
       } = req.body;
@@ -708,6 +710,8 @@ router.put('/:id', async (req, res) => {
         ...(paid_amount !== undefined && { paid_amount: Math.max(0, +paid_amount || 0) }),
         ...(change_amount !== undefined && { change_amount: Math.max(0, +change_amount || 0) }),
         ...(remaining_amount !== undefined && { remaining_amount: Math.max(0, +remaining_amount || 0) }),
+        ...(old_debt !== undefined && { old_debt: Math.max(0, +old_debt || 0) }),
+        ...(payable_amount !== undefined && { payable_amount: Math.max(0, +payable_amount || 0) }),
         ...(delivery_fee !== undefined && { delivery_fee: +delivery_fee || 0 }),
         ...(delivery_date !== undefined && { delivery_date: delivery_date || null }),
         ...(invoice_writer !== undefined && { invoice_writer }),
@@ -772,15 +776,19 @@ router.put('/:id', async (req, res) => {
         : Math.max(0, Number(updatedInvoice.discount_amount) || 0);
       const persistedDeliveryFee = Math.max(0, Number(updatedInvoice.delivery_fee) || 0);
       const persistedTotal = Math.max(0, persistedSubtotal + persistedVatAmount - persistedDiscountAmount + persistedDeliveryFee);
+      const persistedOldDebt = Math.max(0, Number(updatedInvoice.old_debt) || 0);
+      const persistedPayable = Math.max(0, persistedTotal + persistedOldDebt);
       const persistedPaid = Math.max(0, Number(updatedInvoice.paid_amount) || 0);
       update('invoices', updatedInvoice.id, {
         subtotal: persistedSubtotal,
         vat_amount: persistedVatAmount,
         discount_amount: persistedDiscountAmount,
         total: persistedTotal,
-        remaining_amount: Math.max(0, persistedTotal - persistedPaid),
-        change_amount: Math.max(0, persistedPaid - persistedTotal),
-        payment_status: derivePaymentStatus({ ...updatedInvoice, total: persistedTotal, paid_amount: persistedPaid }),
+        old_debt: persistedOldDebt,
+        payable_amount: persistedPayable,
+        remaining_amount: Math.max(0, persistedPayable - persistedPaid),
+        change_amount: Math.max(0, persistedPaid - persistedPayable),
+        payment_status: derivePaymentStatus({ ...updatedInvoice, total: persistedPayable, paid_amount: persistedPaid }),
         total_profit: persistedProfit,
       }, { skipSave: true });
       const recalculatedInvoice = getOne('invoices', i => Number(i.id) === Number(inv.id));

@@ -183,6 +183,8 @@ function normalizePayload(payload = {}, template = {}, settings = {}, logoPrevie
   const paidAmount = toMoneyNumber(paymentSource.paid_amount ?? totalsSource.paid_amount ?? invoice.paid_amount, 0);
   const remainingAmount = toMoneyNumber(paymentSource.remaining_amount ?? totalsSource.remaining_amount ?? invoice.remaining_amount, Math.max(0, total - paidAmount));
   const changeAmount = toMoneyNumber(paymentSource.change_amount ?? totalsSource.change_amount ?? invoice.change_amount, Math.max(0, paidAmount - total));
+  const oldDebtAmount = toMoneyNumber(totalsSource.old_debt ?? invoice.old_debt, 0);
+  const payableAmount = toMoneyNumber(totalsSource.payable_amount ?? invoice.payable_amount, total + oldDebtAmount);
   const userName = firstNonEmpty(metadata.user_name, metadata.created_by_user_name, invoice.user_name, invoice.invoice_writer, invoice.created_by_name);
   const documentTitle = firstNonEmpty(metadata.document_title, metadata.documentTitle, invoice.document_title, invoice.documentTitle, source.document_title, source.documentTitle);
   const printMode = firstNonEmpty(metadata.print_mode, metadata.printMode, invoice.print_mode, invoice.printMode, source.print_mode, source.printMode);
@@ -202,6 +204,8 @@ function normalizePayload(payload = {}, template = {}, settings = {}, logoPrevie
       ...totalsSource,
       subtotal,
       total,
+      old_debt: oldDebtAmount,
+      payable_amount: payableAmount,
       vat_percent: toMoneyNumber(totalsSource.vat_percent ?? invoice.vat_percent, 0),
       vat_amount: toMoneyNumber(totalsSource.vat_amount ?? invoice.vat_amount, 0),
       discount_percent: toMoneyNumber(totalsSource.discount_percent ?? invoice.discount_percent, 0),
@@ -922,7 +926,7 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
             <MoneyLine label="Tiền thừa" value={totals.change_amount} hiddenWhenZero />
             <MoneyLine label="Còn nợ" value={totals.remaining_amount} hiddenWhenZero />
             {oldDebtAmount > 0 && <MoneyLine label="Nợ cũ" value={oldDebtAmount} />}
-            <MoneyLine label="Thành tiền" value={payableAmount} highlight />
+            <MoneyLine label="Tổng cần trả" value={payableAmount} highlight />
           </div>
 
           {settings.showSignature && (
@@ -932,7 +936,7 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
                 <p>(Ký và ghi rõ họ tên)</p>
               </div>
               <div>
-                <h3>{signatures.seller?.label || 'Ng?đi bđơn'}</h3>
+                <h3>{signatures.seller?.label || 'Người Bán'}</h3>
                 <p>(Ký và ghi rõ họ tên)</p>
               </div>
             </div>

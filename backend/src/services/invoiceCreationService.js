@@ -513,10 +513,12 @@ function buildInvoiceMoneyFields(payload = {}, details = []) {
   const delivery_fee = toNumber(payload.delivery_fee, 0);
   const fallbackTotal = subtotal + vat_amount - discount_amount + delivery_fee;
   const total = toNumber(payload.total, fallbackTotal);
+  const old_debt = Math.max(0, toNumber(payload.old_debt, 0));
+  const payable_amount = Math.max(0, toNumber(payload.payable_amount, total + old_debt));
   const raw_paid = toNumber(payload.paid_amount, 0);
   const paid_amount = Math.max(0, raw_paid);
-  const change_amount = toNumber(payload.change_amount, Math.max(0, paid_amount - total));
-  const remaining_amount = Math.max(0, toNumber(payload.remaining_amount, Math.max(0, total - paid_amount)));
+  const change_amount = toNumber(payload.change_amount, Math.max(0, paid_amount - payable_amount));
+  const remaining_amount = Math.max(0, toNumber(payload.remaining_amount, Math.max(0, payable_amount - paid_amount)));
 
   return {
     subtotal,
@@ -525,6 +527,8 @@ function buildInvoiceMoneyFields(payload = {}, details = []) {
     discount_amount,
     discount_percent,
     total,
+    old_debt,
+    payable_amount,
     paid_amount,
     change_amount,
     remaining_amount,
@@ -663,7 +667,7 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
   const creatorMetadata = buildCreatorMetadata(payload, req, options);
   const status = payload.status
     || options.defaultStatus
-    || (money.total > 0 && money.paid_amount >= money.total ? 'completed' : 'pending');
+    || (money.payable_amount > 0 && money.paid_amount >= money.payable_amount ? 'completed' : 'pending');
   const invoiceCreatedAt = payload.created_at || now();
 
   const runCreation = () => {

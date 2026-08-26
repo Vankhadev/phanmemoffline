@@ -51,12 +51,14 @@ router.get('/', (req, res) => {
     // Efficiently calculate overall stats in O(invoices) time
     const invoiceCountMap = new Map();
     const invoiceRevenueMap = new Map();
+    const invoiceDebtMap = new Map();
     for (const inv of invoices) {
       if (inv.status === 'cancelled') continue;
       const cid = Number(inv.customer_id);
       if (cid) {
         invoiceCountMap.set(cid, (invoiceCountMap.get(cid) || 0) + 1);
         invoiceRevenueMap.set(cid, (invoiceRevenueMap.get(cid) || 0) + (Number(inv.total) || 0));
+        invoiceDebtMap.set(cid, (invoiceDebtMap.get(cid) || 0) + Math.max(0, Number(inv.remaining_amount) || 0));
       }
     }
 
@@ -67,6 +69,7 @@ router.get('/', (req, res) => {
         customer_type_name: ct ? ct.name : c.customer_type || 'Khách lẻ',
         invoice_count: invoiceCountMap.get(Number(c.id)) || 0,
         total_revenue: invoiceRevenueMap.get(Number(c.id)) || 0,
+        total_debt: invoiceDebtMap.get(Number(c.id)) || 0,
       };
     });
 

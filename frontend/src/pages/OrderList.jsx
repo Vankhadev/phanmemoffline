@@ -34,7 +34,7 @@ const PAYMENT_LABELS = { cash: 'Tiền mặt', bank: 'Chuyển khoản', debt: '
 const SOURCE_BADGES = {
   app: { text: 'App', color: 'bg-gray-100 text-gray-600' },
   direct: { text: 'App', color: 'bg-gray-100 text-gray-600' },
-  web: { text: 'Web', color: 'bg-blue-50 text-blue-700' },
+  web: { text: 'App', color: 'bg-gray-100 text-gray-600' },
   sync: { text: 'Sync', color: 'bg-purple-50 text-purple-700' },
   offline: { text: 'Offline', color: 'bg-orange-50 text-orange-700' },
 };
@@ -551,7 +551,7 @@ export default function OrderList() {
   const sourceOptions = [
     { key: 'all', label: 'Tất cả nguồn', count: displayOrders.length },
     { key: 'offline', label: 'Offline local', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'offline').length },
-    { key: 'web', label: 'Web', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'web').length },
+    { key: 'web', label: 'App', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'web').length },
     { key: 'sync', label: 'Sync', count: displayOrders.filter(inv => getOrderSourceKey(inv) === 'sync').length },
   ];
 
@@ -827,6 +827,8 @@ export default function OrderList() {
         discount_percent: inv.discount_percent || 0,
         discount_amount: inv.discount_amount || 0,
         delivery_fee: inv.delivery_fee || 0,
+        old_debt: inv.old_debt || 0,
+        payable_amount: inv.payable_amount || ((inv.total || 0) + (inv.old_debt || 0)),
         paid_amount: inv.paid_amount || 0,
         change_amount: inv.change_amount || 0,
         remaining_amount: inv.remaining_amount || 0,
@@ -864,6 +866,8 @@ export default function OrderList() {
         discount_percent: data.discount_percent || inv.discount_percent || 0,
         discount_amount: data.discount_amount || inv.discount_amount || 0,
         delivery_fee: data.delivery_fee || inv.delivery_fee || 0,
+        old_debt: data.old_debt || inv.old_debt || 0,
+        payable_amount: data.payable_amount || ((data.total || inv.total || 0) + (data.old_debt || inv.old_debt || 0)),
         paid_amount: data.paid_amount || inv.paid_amount || 0,
         change_amount: data.change_amount || inv.change_amount || 0,
         remaining_amount: data.remaining_amount || inv.remaining_amount || 0,
@@ -983,8 +987,8 @@ export default function OrderList() {
         subtotal,
         vat_amount: vat,
         total,
-        remaining_amount: Math.max(0, total - paid),
-        change_amount: Math.max(0, paid - total),
+                           remaining_amount: Math.max(0, (total + (Number(f.old_debt) || 0)) - paid),
+                           change_amount: Math.max(0, paid - total - (Number(f.old_debt) || 0)),
       }));
       return updated;
     });
@@ -1171,6 +1175,8 @@ export default function OrderList() {
         discount_amount: editForm.discount_amount || 0,
         total: editForm.total || 0,
         delivery_fee: editForm.delivery_fee || 0,
+        old_debt: editForm.old_debt || 0,
+        payable_amount: (editForm.total || 0) + (editForm.old_debt || 0),
         paid_amount: editForm.paid_amount || 0,
         change_amount: editForm.change_amount || 0,
         remaining_amount: editForm.remaining_amount || 0,
@@ -2129,9 +2135,9 @@ export default function OrderList() {
     className={`w-16 text-center border rounded px-1 py-1 text-sm ${rowStockInvalid ? 'bg-red-100 text-red-700 border-red-300' : rowNearLimit ? 'bg-orange-50 text-orange-700 border-orange-300' : ''}`} />
 </td>}
 {editVisibleColumns.unitPrice && <td className="py-2 px-3 text-right">
-  <input type="number" min="0"
-    value={d.unit_price}
-    onChange={e => updateDetail(idx, 'unit_price', +e.target.value)}
+  <input type="text" inputMode="numeric"
+    value={formatMoneyInput(d.unit_price)}
+    onChange={e => updateDetail(idx, 'unit_price', parseMoneyInput(e.target.value))}
     className="w-24 text-right border rounded px-2 py-1 text-sm" />
 </td>}
 {editVisibleColumns.discount && <td className="py-2 px-3 text-center">
@@ -2177,7 +2183,8 @@ export default function OrderList() {
                         const disc = editForm.discount_percent ? sub * editForm.discount_percent / 100 : (editForm.discount_amount || 0);
                         const total = sub + vat - disc + (+editForm.delivery_fee || 0);
                         const paid = +editForm.paid_amount || 0;
-                        setEditForm(f => ({ ...f, vat_percent: vp, vat_amount: vat, total, remaining_amount: Math.max(0, total - paid), change_amount: Math.max(0, paid - total) }));
+                        const payable = total + (Number(editForm.old_debt) || 0);
+                        setEditForm(f => ({ ...f, vat_percent: vp, vat_amount: vat, total, payable_amount: payable, remaining_amount: Math.max(0, payable - paid), change_amount: Math.max(0, paid - payable) }));
                       }}
                       className="input-field w-full text-sm" />
                   </div>
@@ -2191,7 +2198,8 @@ export default function OrderList() {
                         const vat = sub * (editForm.vat_percent / 100);
                         const total = sub + vat - disc + (+editForm.delivery_fee || 0);
                         const paid = +editForm.paid_amount || 0;
-                        setEditForm(f => ({ ...f, discount_amount: disc, total, remaining_amount: Math.max(0, total - paid), change_amount: Math.max(0, paid - total) }));
+                        const payable = total + (Number(editForm.old_debt) || 0);
+                        setEditForm(f => ({ ...f, discount_amount: disc, total, payable_amount: payable, remaining_amount: Math.max(0, payable - paid), change_amount: Math.max(0, paid - payable) }));
                       }}
                       className="input-field w-full text-sm" />
                   </div>
@@ -2208,6 +2216,21 @@ export default function OrderList() {
                     </div>
                   </div>
                   <div>
+                    <label className="text-xs text-gray-500 block mb-1">Nợ cũ</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formatMoneyInput(editForm.old_debt)}
+                      onChange={e => {
+                        const oldDebt = parseMoneyInput(e.target.value);
+                        const total = Math.max(0, Number(editForm.total) || 0);
+                        const paid = Math.max(0, Number(editForm.paid_amount) || 0);
+                        setEditForm(f => ({ ...f, old_debt: oldDebt, payable_amount: total + oldDebt, remaining_amount: Math.max(0, total + oldDebt - paid), change_amount: Math.max(0, paid - total - oldDebt) }));
+                      }}
+                      className="input-field w-full text-right text-sm font-bold text-amber-700"
+                    />
+                  </div>
+                  <div>
                     <label className="text-xs text-gray-500 block mb-1">Đã thu</label>
                     <input
                       type="text"
@@ -2219,8 +2242,8 @@ export default function OrderList() {
                         setEditForm(f => ({
                           ...f,
                           paid_amount: paid,
-                          remaining_amount: Math.max(0, total - paid),
-                          change_amount: Math.max(0, paid - total),
+                          remaining_amount: Math.max(0, (total + (Number(f.old_debt) || 0)) - paid),
+                          change_amount: Math.max(0, paid - total - (Number(f.old_debt) || 0)),
                         }));
                       }}
                       className="input-field w-full text-right text-sm font-bold text-emerald-700"

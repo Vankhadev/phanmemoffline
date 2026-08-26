@@ -80,6 +80,8 @@ function normalizeData(data = {}) {
   const total = Number(totals.total ?? totals.grand_total ?? invoice.total) || subtotal;
   const paidAmount = Number(payment.paid_amount ?? totals.paid_amount ?? invoice.paid_amount) || 0;
   const remainingAmount = Number(payment.remaining_amount ?? totals.remaining_amount ?? invoice.remaining_amount) || Math.max(0, total - paidAmount);
+  const oldDebtAmount = Number(totals.old_debt ?? invoice.old_debt) || 0;
+  const payableAmount = Number(totals.payable_amount ?? invoice.payable_amount) || (total + oldDebtAmount);
 
   return {
     ...data,
@@ -102,7 +104,11 @@ function normalizeData(data = {}) {
       subtotal,
       subtotal_text: formatVND(subtotal),
       total,
-      total_text: formatVND(total),
+      old_debt: oldDebtAmount,
+      payable_amount: payableAmount,
+       total_text: formatVND(total),
+       payable_amount_text: formatVND(payableAmount),
+       old_debt_text: formatVND(oldDebtAmount),
       discount_amount_text: formatVND(totals.discount_amount || 0),
       vat_amount_text: formatVND(totals.vat_amount || 0),
       delivery_fee_text: formatVND(totals.delivery_fee || 0),
@@ -237,13 +243,13 @@ export const SAPO_TEMPLATE_VARIABLE_GROUPS = Object.freeze([
       { label: 'Tên cửa hàng', token: '{{store.name}}' },
       { label: 'Địa chỉ', token: '{{store.address}}' },
       { label: 'Số điện thoại', token: '{{store.phone}}' },
-      { label: 'M? s? thuế', token: '{{store.tax_code}}' },
+      { label: 'Mã số thuế', token: '{{store.tax_code}}' },
     ],
   },
   {
     group: 'Đơn hàng',
     variables: [
-      { label: 'M? don', token: '{{invoice.code}}' },
+      { label: 'Mã đơn', token: '{{invoice.code}}' },
       { label: 'Ngày tạo', token: '{{invoice.created_at_text}}' },
       { label: 'Nhân viên', token: '{{metadata.user_name}}' },
       { label: 'Ghi chú', token: '{{invoice.note}}' },
@@ -264,7 +270,7 @@ export const SAPO_TEMPLATE_VARIABLE_GROUPS = Object.freeze([
       { label: 'Tổng hàng', token: '{{totals.subtotal_text}}' },
       { label: 'Giảm giá', token: '{{totals.discount_amount_text}}' },
       { label: 'Phải trả', token: '{{totals.total_text}}' },
-      { label: 'D? tr?', token: '{{totals.paid_amount_text}}' },
+      { label: 'Đã trả', token: '{{totals.paid_amount_text}}' },
       { label: 'Còn nợ', token: '{{totals.remaining_amount_text}}' },
     ],
   },
