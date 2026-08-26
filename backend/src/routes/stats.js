@@ -296,6 +296,7 @@ router.get('/product-report', (req, res) => {
     }
 
     const productsById = new Map(getAll('products').map(product => [Number(product.id), product]));
+    const customersById = new Map(getAll('customers').map(customer => [Number(customer.id), customer]));
     const comboItemsByComboId = new Map();
     for (const item of getAll('combo_items')) {
       const comboId = Number(item?.combo_id);
@@ -406,8 +407,13 @@ router.get('/product-report', (req, res) => {
         date: dateKey,
         invoiceId,
         invoiceCode: invoice.invoice_code || String(invoiceId || ''),
-        customerName: invoice.customer_name || 'Khách lẻ',
-        customerPhone: invoice.customer_phone || invoice.phone || '',
+        customerName: customersById.get(Number(invoice.customer_id))?.name
+          || invoice.customer_name
+          || invoice.customerName
+          || invoice.receiver_name
+          || invoice.buyer_name
+          || 'Khách lẻ',
+        customerPhone: customersById.get(Number(invoice.customer_id))?.phone || invoice.customer_phone || invoice.phone || '',
         createdAt: invoice.created_at,
         revenueBeforeTax: roundMoney(orderRevenueBeforeTax),
         costAmount: roundMoney(orderCost),
