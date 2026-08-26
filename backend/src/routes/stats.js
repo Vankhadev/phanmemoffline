@@ -407,6 +407,7 @@ router.get('/product-report', (req, res) => {
         invoiceId,
         invoiceCode: invoice.invoice_code || String(invoiceId || ''),
         customerName: invoice.customer_name || 'Khách lẻ',
+        customerPhone: invoice.customer_phone || invoice.phone || '',
         createdAt: invoice.created_at,
         revenueBeforeTax: roundMoney(orderRevenueBeforeTax),
         costAmount: roundMoney(orderCost),

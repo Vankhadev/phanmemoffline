@@ -30,7 +30,7 @@ export default function TopCustomers() {
       if (revenueDiff !== 0) return revenueDiff;
       return (Number(b.invoice_count) || 0) - (Number(a.invoice_count) || 0);
     })
-    .slice(0, 10), [customers]);
+    .slice(0, 200), [customers]);
 
   return (
     <div className="min-w-0 space-y-4">
@@ -38,7 +38,7 @@ export default function TopCustomers() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2 text-amber-100"><Trophy size={22} /> Xếp hạng khách hàng</div>
-            <h1 className="mt-2 text-2xl font-extrabold">Top 10 khách hàng</h1>
+            <h1 className="mt-2 text-2xl font-extrabold">Top 200 khách hàng</h1>
             <p className="mt-1 text-sm text-amber-50">Xếp theo doanh thu cao nhất từ các đơn hàng không bị hủy.</p>
           </div>
           <button type="button" onClick={loadCustomers} disabled={loading} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold hover:bg-white/25 disabled:opacity-60">

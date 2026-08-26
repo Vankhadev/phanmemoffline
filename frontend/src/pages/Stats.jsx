@@ -304,7 +304,7 @@ export default function Stats() {
             <HelpCircle size={16} /> Hướng dẫn
           </button>
           <div className="flex gap-2">
-            {[['day', 'Hâm nay'], ['week', 'Tuđơn'], ['month', 'Tháng'], ['year', 'Nam']].map(([key, label]) => (
+             {[['day', 'Hôm nay'], ['week', '7 ngày'], ['month', 'Tháng'], ['year', 'Năm']].map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -333,21 +333,21 @@ export default function Stats() {
             <Calendar size={14} /> HÔM NAY
           </div>
           <div className="text-2xl font-bold text-blue-600">{formatVND(summary.today?.total_revenue)}</div>
-          <div className="mt-1 text-xs text-gray-400">{summary.today?.total_orders || 0} don</div>
+             <div className="mt-1 text-xs text-gray-400">{summary.today?.total_orders || 0} đơn</div>
         </div>
         <div className="card border-t-4 border-green-500 text-center">
           <div className="mb-1 flex items-center justify-center gap-2 text-xs text-gray-500">
             <Calendar size={14} /> THÁNG NÀY
           </div>
           <div className="text-2xl font-bold text-green-600">{formatVND(summary.month?.revenue)}</div>
-          <div className="mt-1 text-xs text-gray-400">{summary.month?.orders || 0} don</div>
+             <div className="mt-1 text-xs text-gray-400">{summary.month?.orders || 0} đơn</div>
         </div>
         <div className="card border-t-4 border-purple-500 text-center">
           <div className="mb-1 flex items-center justify-center gap-2 text-xs text-gray-500">
             <TrendingUp size={14} /> TỔNG QUAN
           </div>
           <div className="text-2xl font-bold text-purple-600">{formatVND(summary.allTime?.revenue)}</div>
-          <div className="mt-1 text-xs text-gray-400">{summary.allTime?.orders || 0} don</div>
+             <div className="mt-1 text-xs text-gray-400">{summary.allTime?.orders || 0} đơn</div>
         </div>
         <div className="card border-t-4 border-emerald-500 text-center">
           <div className="mb-1 flex items-center justify-center gap-2 text-xs text-gray-500">
@@ -436,7 +436,7 @@ export default function Stats() {
               <thead>
                 <tr className="bg-gray-100 text-gray-600">
                   <th className="p-2 text-left">Ngày</th>
-                  <th className="p-2 text-right">S? don</th>
+                   <th className="p-2 text-right">Số đơn</th>
                   <th className="p-2 text-right">Doanh thu</th>
                   <th className="p-2 text-right">Gi? vđơn u?c t?nh</th>
                   <th className="p-2 text-right">Lỗi nhuđơn u?c t?nh</th>
@@ -459,7 +459,7 @@ export default function Stats() {
                 )}
                 {dailyRows.length > 0 && (
                   <tr className="bg-emerald-50 font-bold text-emerald-700">
-                    <td className="p-2">Tổng kho?ng dang xem</td>
+                     <td className="p-2">Tổng khoảng đang xem</td>
                     <td className="p-2 text-right">{formatNumber(periodTotals.orders)}</td>
                     <td className="p-2 text-right">{formatVND(periodTotals.revenue)}</td>
                     <td className="p-2 text-right">{formatVND(periodTotals.cost)}</td>
@@ -492,7 +492,7 @@ function FragmentRow({ row, expanded, onToggle }) {
       </tr>
       {expanded && (
         <tr className="border-b bg-slate-50">
-          <td colSpan={5} className="p-3">
+           <td colSpan={6} className="p-3">
             {row.orders.length === 0 ? (
               <div className="text-sm text-gray-500">Chưa có chi tiết đơn hàng cho ngày này.</div>
             ) : (
@@ -501,7 +501,8 @@ function FragmentRow({ row, expanded, onToggle }) {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-slate-100 text-gray-500">
-                        <th className="px-3 py-2 text-left">M? don</th>
+                         <th className="px-3 py-2 text-left">Mã đơn</th>
+                        <th className="px-3 py-2 text-left">Khách hàng</th>
                         <th className="px-3 py-2 text-right">Doanh thu</th>
                         <th className="px-3 py-2 text-right">Gi? vđơn</th>
                         <th className="px-3 py-2 text-right">Lỗi nhuđơn</th>
@@ -511,6 +512,7 @@ function FragmentRow({ row, expanded, onToggle }) {
                       {row.orders.map(order => (
                         <tr key={`${order.invoiceId}-${order.invoiceCode}`} className="border-t border-slate-100">
                           <td className="px-3 py-2 font-bold text-gray-800">{order.invoiceCode}</td>
+                          <td className="px-3 py-2"><div className="font-medium text-gray-800">{order.customerName || 'Khách lẻ'}</div>{order.customerPhone && <div className="text-xs text-gray-500">{order.customerPhone}</div>}</td>
                           <td className="px-3 py-2 text-right font-semibold text-blue-600">{formatVND(order.revenueBeforeTax)}</td>
                           <td className="px-3 py-2 text-right text-gray-600">{formatVND(order.costAmount)}</td>
                           <td className="px-3 py-2 text-right font-bold text-green-600">{formatVND(order.estimatedProfit)}</td>
@@ -520,8 +522,8 @@ function FragmentRow({ row, expanded, onToggle }) {
                   </table>
                 </div>
                 <div className="flex flex-wrap justify-end gap-4 border-t border-slate-200 pt-2 text-sm font-bold text-emerald-700">
-                  <span>Tổng {formatNumber(row.orders.length)} don</span>
-                  <span>Lỗi nhuđơn ngày: {formatVND(row.estimatedProfit)}</span>
+                   <span>Tổng {formatNumber(row.orders.length)} đơn</span>
+                   <span>Lợi nhuận ngày: {formatVND(row.estimatedProfit)}</span>
                 </div>
               </div>
             )}

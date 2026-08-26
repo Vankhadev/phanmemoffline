@@ -123,6 +123,8 @@ export default function Home({ user, store = {} }) {
   const [showHelp, setShowHelp] = useState(false);
   const [statsMessage, setStatsMessage] = useState('');
   const [statsMessageTone, setStatsMessageTone] = useState('info');
+  const [todayOrders, setTodayOrders] = useState([]);
+  const [todayOrdersLoading, setTodayOrdersLoading] = useState(true);
   const { settings: negativeStockSettings } = useNegativeStockSettings();
   const negativeStockLimitLabel = useMemo(() => getNegativeStockLimitLabel(negativeStockSettings), [negativeStockSettings]);
   const negativeStockNearLimitLabel = useMemo(() => getNegativeStockNearLimitLabel(negativeStockSettings), [negativeStockSettings]);
@@ -181,11 +183,36 @@ export default function Home({ user, store = {} }) {
     }
   }, [negativeStockSettings]);
 
+  const fetchTodayOrders = useCallback(async () => {
+    setTodayOrdersLoading(true);
+    try {
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const rows = await apiJsonChecked(`/invoices?from=${today}&to=${today}&limit=1000`, {}, 'Không thể tải đơn hàng hôm nay.');
+      const activeRows = (Array.isArray(rows) ? rows : []).filter(order => !['cancelled', 'canceled'].includes(String(order.status || '').toLowerCase()));
+      const detailedRows = await Promise.all(activeRows.map(async order => {
+        try {
+          const detail = await apiJsonChecked(`/invoices/${encodeURIComponent(order.id)}`, {}, 'Không thể tải chi tiết đơn hàng.');
+          return { ...order, ...detail, details: Array.isArray(detail?.details) ? detail.details : [] };
+        } catch (_) {
+          return { ...order, details: [] };
+        }
+      }));
+      setTodayOrders(detailedRows);
+    } catch (_) {
+      setTodayOrders([]);
+    } finally {
+      setTodayOrdersLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchStats();
+    fetchTodayOrders();
 
     const handleSyncRefresh = () => {
       fetchStats(false);
+      fetchTodayOrders();
       console.log('[SYNC] Dashboard refreshed');
     };
 
@@ -196,7 +223,7 @@ export default function Home({ user, store = {} }) {
       unsubscribeCreated();
       unsubscribeDeleted();
     };
-  }, [fetchStats]);
+  }, [fetchStats, fetchTodayOrders]);
 
   const statCards = useMemo(() => ([
     {
@@ -438,6 +465,53 @@ export default function Home({ user, store = {} }) {
           </div>
         )}
       </div>
+
+      <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800"><ShoppingCart size={20} className="text-green-600" /> Đơn hàng bán hôm nay</h2>
+            <p className="mt-1 text-xs text-gray-500">Danh sách tự động đổi sang ngày mới và chỉ lấy đơn của hôm nay.</p>
+          </div>
+          <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-semibold text-green-700">{todayOrders.length} đơn</span>
+        </div>
+        {todayOrdersLoading ? (
+          <div className="py-8 text-center text-sm text-gray-400">Đang tải đơn hàng hôm nay...</div>
+        ) : todayOrders.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-200 px-4 py-10 text-center text-sm text-gray-400">Chưa có đơn hàng bán hôm nay.</div>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-gray-200">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500">
+                <tr>
+                  <th className="px-3 py-3">Mã đơn</th>
+                  <th className="px-3 py-3">Khách hàng</th>
+                  <th className="px-3 py-3">Sản phẩm</th>
+                  <th className="px-3 py-3 text-right">Số lượng</th>
+                  <th className="px-3 py-3 text-right">Giá tiền</th>
+                  <th className="px-3 py-3 text-right">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {todayOrders.map(order => (
+                  <tr key={order.id} className="border-t border-gray-100 align-top hover:bg-gray-50">
+                    <td className="whitespace-nowrap px-3 py-3 font-bold text-blue-700">{order.invoice_code || order.code || `#${order.id}`}</td>
+                    <td className="px-3 py-3"><div className="font-medium text-gray-800">{order.customer_name || 'Khách lẻ'}</div><div className="text-xs text-gray-400">{order.customer_phone || order.phone || ''}</div></td>
+                    <td className="px-3 py-3">
+                      <div className="space-y-1">
+                        {(order.details || []).map((item, index) => <div key={item.id || index} className="max-w-[320px] truncate text-gray-700" title={item.product_name || item.name}>{item.product_name || item.name || item.sku || 'Sản phẩm'}</div>)}
+                        {order.details?.length === 0 && <span className="text-gray-400">Chưa có chi tiết sản phẩm</span>}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-right text-gray-700">{(order.details || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0).toLocaleString('vi-VN')}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-emerald-700">{formatVND(order.total)}</td>
+                    <td className="px-3 py-3 text-right"><span className="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">{order.payment_status === 'paid' ? 'Đã thanh toán' : 'Còn công nợ'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-gray-800">
