@@ -328,8 +328,13 @@ export default function PropertiesPanel({
               <h4>Dòng hiển thị</h4>
               <ToggleField label="Tổng tiền hàng" checked={element.style?.showSubtotal !== false} onChange={value => updateElementStyle({ showSubtotal: value })} />
               <ToggleField label="Chiết khấu" checked={element.style?.showDiscount !== false} onChange={value => updateElementStyle({ showDiscount: value })} />
+              <ToggleField label="Phí giao hàng" checked={element.style?.showDelivery !== false} onChange={value => updateElementStyle({ showDelivery: value })} />
               <ToggleField label="Tổng tiền" checked={element.style?.showGrandTotal !== false} onChange={value => updateElementStyle({ showGrandTotal: value })} />
-              <ToggleField label="Công nợ" checked={element.style?.showDebt !== false} onChange={value => updateElementStyle({ showDebt: value })} />
+              <ToggleField label="Công nợ cũ" checked={element.style?.showOldDebt !== false} onChange={value => updateElementStyle({ showOldDebt: value })} />
+              <ToggleField label="Thành tiền cần thanh toán" checked={element.style?.showPayable !== false} onChange={value => updateElementStyle({ showPayable: value })} />
+              <ToggleField label="Đã thanh toán" checked={element.style?.showPaid !== false} onChange={value => updateElementStyle({ showPaid: value })} />
+              <ToggleField label="Còn nợ" checked={element.style?.showDebt !== false} onChange={value => updateElementStyle({ showDebt: value })} />
+              <ToggleField label="Tiền thừa" checked={element.style?.showChange !== false} onChange={value => updateElementStyle({ showChange: value })} />
               <p className="invoice-editor-prop-note">Tắt dòng nào thì dòng đó ẩn khỏi khung thiết kế và bản in hóa đơn.</p>
             </section>
           )}

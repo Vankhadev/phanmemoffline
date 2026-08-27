@@ -208,14 +208,24 @@ function ElementContent({ element, template, payload }) {
     const remaining = Number(totals.remaining_amount ?? totals.debt_amount ?? Math.max(0, (Number(totals.total) || 0) - paid)) || 0;
     const showSubtotal = style.showSubtotal !== false;
     const showDiscount = style.showDiscount !== false;
+    const showDelivery = style.showDelivery !== false;
     const showGrandTotal = style.showGrandTotal !== false;
+    const showOldDebt = style.showOldDebt !== false;
+    const showPayable = style.showPayable !== false;
+    const showPaid = style.showPaid !== false;
     const showDebt = style.showDebt !== false;
+    const showChange = style.showChange !== false;
     return (
       <div className="invoice-editor-preview-totals" style={baseStyle}>
         {showSubtotal && <div><span>Tổng tiền hàng</span><b>{formatVND(totals.subtotal ?? totals.total)}</b></div>}
         {showDiscount && <div><span>Chiết khấu</span><b>{formatVND(totals.discount_amount)}</b></div>}
+        {showDelivery && <div><span>Phí giao hàng</span><b>{formatVND(totals.delivery_fee)}</b></div>}
         {showGrandTotal && <div className="is-total"><span>Tổng tiền</span><b>{formatVND(totals.total ?? totals.grand_total)}</b></div>}
-        {showDebt && <div><span>Công nợ</span><b>{formatVND(remaining)}</b></div>}
+        {showOldDebt && <div><span>Công nợ cũ</span><b>{formatVND(totals.old_debt)}</b></div>}
+        {showPayable && <div className="is-total"><span>Thành tiền cần thanh toán</span><b>{formatVND(totals.payable_amount ?? totals.total)}</b></div>}
+        {showPaid && <div><span>Đã thanh toán</span><b>{formatVND(paid)}</b></div>}
+        {showDebt && <div><span>Còn nợ</span><b>{formatVND(remaining)}</b></div>}
+        {showChange && <div><span>Tiền thừa</span><b>{formatVND(totals.change_amount)}</b></div>}
       </div>
     );
   }
@@ -641,4 +651,3 @@ export default function EditorCanvas({
     </section>
   );
 }
-
