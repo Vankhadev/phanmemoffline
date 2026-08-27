@@ -71,9 +71,21 @@ function buildNegativeStockDashboardStats() {
 
 router.get('/', (req, res) => {
   const { from = '1970-01-01', to = '2099-12-31' } = req.query;
-  const rows = getNormalizedDailyStatsRows()
-    .filter(r => r.stat_date >= from && r.stat_date <= to)
-    .sort((a, b) => b.stat_date.localeCompare(a.stat_date));
+  const rowsByDate = new Map();
+  for (const invoice of getAll('invoices')) {
+    if (!invoice?.created_at || isCancelledStatus(invoice.status)) continue;
+    const date = localDateKey(invoice.created_at);
+    if (!date || date < from || date > to) continue;
+    const row = rowsByDate.get(date) || { stat_date: date, total_revenue: 0, total_orders: 0 };
+    row.total_revenue += normalizeNumber(invoice.total ?? invoice.total_amount, 0);
+    row.total_orders += 1;
+    rowsByDate.set(date, row);
+  }
+  // Keep manually recorded daily rows for dates without invoice records.
+  for (const row of getNormalizedDailyStatsRows()) {
+    if (row.stat_date >= from && row.stat_date <= to && !rowsByDate.has(row.stat_date)) rowsByDate.set(row.stat_date, row);
+  }
+  const rows = Array.from(rowsByDate.values()).sort((a, b) => b.stat_date.localeCompare(a.stat_date));
   res.json(rows);
 });
 

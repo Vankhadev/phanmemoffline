@@ -297,7 +297,7 @@ export default function Stats() {
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-xl font-bold">
-          <TrendingUp className="text-green-600" size={24} /> Tháng kỳ Doanh thu
+             <TrendingUp className="text-green-600" size={24} /> Thống kê doanh thu
         </h1>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => setShowHelp(true)} className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100">
@@ -406,14 +406,14 @@ export default function Stats() {
       {chartData.length > 0 && (
         <div className="card mb-4">
           <h3 className="mb-4 flex items-center gap-2 font-bold">
-            <TrendingUp className="text-blue-600" size={18} /> Biđủ d? doanh thu
+             <TrendingUp className="text-blue-600" size={18} /> Biểu đồ doanh thu theo ngày
           </h3>
           <div className="flex h-48 items-end gap-1">
             {chartData.map((day, index) => (
               <div key={`${day.stat_date}-${index}`} className="group flex flex-1 flex-col items-center">
-                <div className="relative w-full rounded-t bg-blue-400 transition group-hover:bg-blue-600" style={{ height: `${Math.max(2, (toNumber(day.total_revenue) / maxRevenue) * 100)}%` }}>
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-black px-1 text-xs text-white opacity-0 group-hover:opacity-100">
-                    {formatVND(day.total_revenue)}
+                 <div className="relative w-full rounded-t bg-blue-400 transition group-hover:bg-blue-600" style={{ height: `${Math.max(2, (toNumber(day.total_revenue) / maxRevenue) * 100)}%` }}>
+                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-black px-1 text-xs text-white opacity-0 group-hover:opacity-100">
+                     {formatVND(day.total_revenue)} · {formatNumber(day.total_orders)} đơn
                   </div>
                 </div>
                 <div className="mt-1 text-xs text-gray-400">{formatDateShort(day.stat_date)}</div>

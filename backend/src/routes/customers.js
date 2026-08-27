@@ -52,13 +52,21 @@ router.get('/', (req, res) => {
     const invoiceCountMap = new Map();
     const invoiceRevenueMap = new Map();
     const invoiceDebtMap = new Map();
+    const normalizeCustomerName = value => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const invoiceByCustomerName = new Map();
     for (const inv of invoices) {
       if (inv.status === 'cancelled') continue;
       const cid = Number(inv.customer_id);
+      const name = normalizeCustomerName(inv.customer_name || inv.customerName || inv.receiver_name || inv.buyer_name);
+      const revenue = Number(inv.total ?? inv.total_amount) || 0;
+      const debt = Math.max(0, Number(inv.remaining_amount) || 0);
       if (cid) {
         invoiceCountMap.set(cid, (invoiceCountMap.get(cid) || 0) + 1);
-        invoiceRevenueMap.set(cid, (invoiceRevenueMap.get(cid) || 0) + (Number(inv.total) || 0));
-        invoiceDebtMap.set(cid, (invoiceDebtMap.get(cid) || 0) + Math.max(0, Number(inv.remaining_amount) || 0));
+        invoiceRevenueMap.set(cid, (invoiceRevenueMap.get(cid) || 0) + revenue);
+        invoiceDebtMap.set(cid, (invoiceDebtMap.get(cid) || 0) + debt);
+      } else if (name && name !== 'khách lẻ') {
+        const current = invoiceByCustomerName.get(name) || { count: 0, revenue: 0, debt: 0 };
+        invoiceByCustomerName.set(name, { count: current.count + 1, revenue: current.revenue + revenue, debt: current.debt + debt });
       }
     }
 
@@ -67,9 +75,9 @@ router.get('/', (req, res) => {
       return {
         ...c,
         customer_type_name: ct ? ct.name : c.customer_type || 'Khách lẻ',
-        invoice_count: invoiceCountMap.get(Number(c.id)) || 0,
-        total_revenue: invoiceRevenueMap.get(Number(c.id)) || 0,
-        total_debt: invoiceDebtMap.get(Number(c.id)) || 0,
+        invoice_count: invoiceCountMap.get(Number(c.id)) || invoiceByCustomerName.get(normalizeCustomerName(c.name))?.count || 0,
+        total_revenue: invoiceRevenueMap.get(Number(c.id)) || invoiceByCustomerName.get(normalizeCustomerName(c.name))?.revenue || 0,
+        total_debt: invoiceDebtMap.get(Number(c.id)) || invoiceByCustomerName.get(normalizeCustomerName(c.name))?.debt || 0,
       };
     });
 

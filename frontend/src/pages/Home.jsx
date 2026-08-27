@@ -513,31 +513,6 @@ export default function Home({ user, store = {} }) {
         )}
       </section>
 
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-gray-800">
-          <TrendingUp size={20} className="text-blue-500" />
-          Truy cập nhanh
-        </h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-          {quickActions.map(action => {
-            const Icon = action.icon;
-
-            return (
-              <Link
-                key={action.to}
-                to={action.to}
-                className={`group flex min-h-[132px] flex-col items-center justify-center gap-3 rounded-xl border-2 p-4 text-center transition ${action.borderClass}`}
-              >
-                <div className={`flex h-12 w-12 items-center justify-center rounded-full transition ${action.iconWrapClass}`}>
-                  <Icon size={24} className={action.iconClass} />
-                </div>
-                <span className="text-sm font-medium leading-5 text-gray-700">{action.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
       {showHelp && (
         <HelpModal
           title="Hướng dẫn sử dụng Trang chủ"
@@ -553,20 +528,6 @@ export default function Home({ user, store = {} }) {
                   <li><strong>Tổng sản phẩm:</strong> Tổng số sản phẩm trong kho, gồm sản phẩm cha và biến thể</li>
                   <li><strong>Cảnh báo tồn kho:</strong> Số lượng sản phẩm tồn 0, sắp hết hoặc đang âm kho</li>
                   <li><strong>Âm kho:</strong> Sản phẩm có tồn âm, cảnh báo gần ngưỡng {negativeStockLimitLabel}</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="mb-2 font-bold text-gray-800">Truy cập nhanh</h3>
-                <p>7 nút truy cập nhanh đến các chức năng chính:</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li><strong>Quản lý sản phẩm:</strong> Thêm, sửa, xóa sản phẩm về biến thể</li>
-                  <li><strong>Đơn hàng:</strong> Xem danh sách đơn hàng, lọc và xử lý trạng thái</li>
-                  <li><strong>Thống kê:</strong> Xem biểu đồ doanh thu theo ngày/tuần/tháng</li>
-                  <li><strong>Báo cáo đơn hàng:</strong> Xem báo cáo theo đơn hàng</li>
-                  <li><strong>Kho hàng:</strong> Theo dài tồn kho về cảnh báo h?ng hđã</li>
-                  <li><strong>Nhà cung cấp:</strong> Quản lý thông tin nhà cung cấp</li>
-                  <li><strong>Báo cáo sản phẩm:</strong> Xem báo cáo theo sản phẩm</li>
                 </ul>
               </div>
 
