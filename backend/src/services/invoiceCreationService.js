@@ -678,6 +678,11 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
     const sync_status = payload.sync_status || (payload_hash ? 'applied' : '');
     const synced_at = payload.synced_at || (payload_hash ? now() : null);
     const sync_device_id = payload.sync_device_id || null;
+    const customerRow = payload.customer_id
+      ? getOne('customers', c => Number(c.id) === Number(payload.customer_id) || String(c.id) === String(payload.customer_id))
+      : null;
+    const resolvedCustomerName = firstNonEmpty(payload.customer_name, customerRow?.name);
+    const resolvedCustomerPhone = firstNonEmpty(payload.customer_phone, customerRow?.phone);
     const invoice_id = insert('invoices', {
       account_id: accountId,
       invoice_code,
@@ -690,12 +695,14 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
       idempotency_key,
       client_created_at: payload.client_created_at || null,
       customer_id: payload.customer_id || null,
+      customer_name: resolvedCustomerName,
+      customer_phone: resolvedCustomerPhone,
       user_id: payload.user_id || req?.user?.id || null,
       ...money,
       payment_method: normalizePaymentMethod(payload.payment_method),
       note: payload.note || '',
       invoice_writer: payload.invoice_writer || req?.user?.name || '',
-      receiver_name: payload.receiver_name || '',
+      receiver_name: payload.receiver_name || resolvedCustomerName || '',
       delivery_date: payload.delivery_date || null,
       status,
       stock_effect_status: 'deducted_on_create',

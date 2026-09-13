@@ -4,14 +4,23 @@ setlocal EnableExtensions EnableDelayedExpansion
 set "ROOT_DIR=%~dp0"
 if "%ROOT_DIR:~-1%"=="\" set "ROOT_DIR=%ROOT_DIR:~0,-1%"
 if not defined KHA_BACKEND_HOST set "KHA_BACKEND_HOST=127.0.0.1"
-if not defined KHA_BACKEND_PORT set "KHA_BACKEND_PORT=3001"
+if not defined KHA_BACKEND_PORT set "KHA_BACKEND_PORT=7000"
 set "BACKEND_HOST=%KHA_BACKEND_HOST%"
 set "BACKEND_PORT=%KHA_BACKEND_PORT%"
+set "PORT=%KHA_BACKEND_PORT%"
 set "FRONTEND_HOST=127.0.0.1"
 set "FRONTEND_PORT=5174"
 set "BACKEND_HEALTH_URL=http://%BACKEND_HOST%:%BACKEND_PORT%/api/health"
 set "FRONTEND_URL=http://%FRONTEND_HOST%:%FRONTEND_PORT%"
 set "DB_PATH=%ROOT_DIR%\backend\data\phanmienoffline.db.json"
+
+echo %ROOT_DIR% | findstr /i "AppData\Local\Temp Windows\Temp" >nul
+if %errorlevel% equ 0 (
+    echo [CANH BAO]: Ban dang chay phan mem truc tiep tu file nen hoac thu muc Tam (Temp)!
+    echo Du lieu co the BI MAT neu Windows tu dong don dep thu muc Temp.
+    echo Vui long GIAI NEN (Extract) thu muc ra o dia C: hoac D: de luu du lieu lau dai.
+    echo.
+)
 
 echo ========================================
 echo KHA POS - Web App Starter

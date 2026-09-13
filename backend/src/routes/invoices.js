@@ -190,13 +190,14 @@ function buildStorePrintInfo(store = {}) {
 }
 
 function buildCustomerPrintInfo(invoice = {}, customer = {}) {
+  const resolvedName = firstNonEmpty(invoice.customer_name, customer?.name, invoice.receiver_name);
   return {
     id: customer?.id || invoice.customer_id || null,
-    name: firstNonEmpty(customer?.name, invoice.customer_name, 'Khách lẻ'),
-    phone: firstNonEmpty(customer?.phone, invoice.customer_phone),
-    email: firstNonEmpty(customer?.email, invoice.customer_email),
-    address: firstNonEmpty(customer?.address, invoice.customer_address),
-    tax_code: firstNonEmpty(customer?.tax_code, invoice.customer_tax_code),
+    name: resolvedName || (invoice.customer_id ? `Khách #${invoice.customer_id}` : 'Khách lẻ'),
+    phone: firstNonEmpty(invoice.customer_phone, customer?.phone),
+    email: firstNonEmpty(invoice.customer_email, customer?.email),
+    address: firstNonEmpty(invoice.customer_address, customer?.address),
+    tax_code: firstNonEmpty(invoice.customer_tax_code, customer?.tax_code),
     customer_type: firstNonEmpty(customer?.customer_type),
   };
 }
@@ -356,11 +357,11 @@ function buildInvoicePrintPayload(idOrCode) {
     discount_amount: toMoney(invoice.discount_amount),
     delivery_fee: toMoney(invoice.delivery_fee),
     total: Number.isFinite(Number(invoice.total)) ? toMoney(invoice.total) : subtotal,
-    old_debt: toMoney(invoice.old_debt),
-    payable_amount: toMoney(invoice.payable_amount || (toMoney(invoice.total) + toMoney(invoice.old_debt))),
+    old_debt: toMoney(invoice.old_debt || (!invoice.payable_amount && toMoney(invoice.remaining_amount) > toMoney(invoice.total) ? toMoney(invoice.remaining_amount) : 0)),
+    payable_amount: toMoney(invoice.payable_amount || (toMoney(invoice.total) + toMoney(invoice.old_debt || (!invoice.payable_amount && toMoney(invoice.remaining_amount) > toMoney(invoice.total) ? toMoney(invoice.remaining_amount) : 0)))),
     paid_amount: toMoney(invoice.paid_amount),
     change_amount: toMoney(invoice.change_amount),
-    remaining_amount: toMoney(invoice.remaining_amount),
+    remaining_amount: Math.max(0, toMoney(invoice.payable_amount || (toMoney(invoice.total) + toMoney(invoice.old_debt || (!invoice.payable_amount && toMoney(invoice.remaining_amount) > toMoney(invoice.total) ? toMoney(invoice.remaining_amount) : 0)))) - toMoney(invoice.paid_amount)),
   };
   const payment = buildPaymentPrintInfo(invoice, store);
 
@@ -442,8 +443,23 @@ router.get('/reports/customer-orders', (req, res) => {
       .filter(inv => isInvoiceVisibleInActiveList(inv))
       .filter(inv => Number(inv.customer_id) === customerId)
       .filter(inv => {
+        if (isCancelledInvoiceStatus(inv.status)) return false;
+        // Chỉ lấy những đơn chưa thanh toán. Đơn đã thanh toán rồi không được lấy vô.
+        const remAmt = Number(inv.remaining_amount);
+        const total = Number(inv.total ?? inv.total_amount) || 0;
+        const paid = Number(inv.paid_amount) || 0;
+        const calculatedRemaining = Number.isFinite(remAmt) ? remAmt : (total - paid);
+        const isPaid = (inv.status === 'completed' && calculatedRemaining <= 0)
+          || inv.payment_status === 'paid'
+          || calculatedRemaining <= 0;
+
+        // Nếu client yêu cầu chỉ đơn chưa thanh toán (hoặc mặc định cho báo cáo đơn hàng khách hàng)
+        if (req.query.unpaid_only === '1' || !status || status === 'unpaid') {
+          return !isPaid && calculatedRemaining > 0;
+        }
+
         if (status && status !== 'all') return invoiceMatchesStatus(inv, status);
-        return !isCancelledInvoiceStatus(inv.status);
+        return true;
       })
       .filter(inv => {
         const createdAt = parseInvoiceDate(inv.created_at);
@@ -582,7 +598,11 @@ router.get('/', async (req, res) => {
       .filter(inv => isInvoiceVisibleInActiveList(inv))
       .map(inv => ({
         ...inv,
-        customer_name: getOne('customers', c => Number(c.id) === Number(inv.customer_id))?.name || '',
+        customer_name: firstNonEmpty(
+          inv.customer_name,
+          getOne('customers', c => Number(c.id) === Number(inv.customer_id) || String(c.id) === String(inv.customer_id))?.name,
+          inv.receiver_name
+        ),
         user_name: getOne('users', u => Number(u.id) === Number(inv.user_id))?.name || '',
         total: Number(inv.total) || 0,
         subtotal: Number(inv.subtotal) || 0,
@@ -637,8 +657,9 @@ router.get('/:id', async (req, res) => {
         ...detail,
         ...resolveInvoiceDetailDisplayFields(detail, id => getOne('products', product => Number(product.id) === Number(id))),
       }));
-    const customer = getOne('customers', c => Number(c.id) === Number(inv.customer_id));
-    res.json({ ok: true, ...inv, payment_status: derivePaymentStatus(inv), customer_name: customer?.name || '', details });
+    const customer = getOne('customers', c => Number(c.id) === Number(inv.customer_id) || String(c.id) === String(inv.customer_id));
+    const customer_name = firstNonEmpty(inv.customer_name, customer?.name, inv.receiver_name);
+    res.json({ ok: true, ...inv, payment_status: derivePaymentStatus(inv), customer_name, details });
   } catch (err) {
     res.status(500).json({ ok: false, error: 'Lỗi: ' + err.message });
   }
@@ -697,8 +718,15 @@ router.put('/:id', async (req, res) => {
       } = req.body;
 
 
+      const customerRow = (customer_id !== undefined && customer_id)
+        ? getOne('customers', c => Number(c.id) === Number(customer_id) || String(c.id) === String(customer_id))
+        : null;
+      const updatedCustomerName = firstNonEmpty(req.body.customer_name, customerRow?.name);
+
       update('invoices', inv.id, {
         ...(customer_id !== undefined && { customer_id: customer_id || null }),
+        ...(updatedCustomerName && { customer_name: updatedCustomerName }),
+        ...(req.body.customer_phone !== undefined && { customer_phone: req.body.customer_phone }),
         ...(payment_method && { payment_method: normalizePaymentMethod(payment_method) }),
         ...(note !== undefined && { note }),
         ...(subtotal !== undefined && { subtotal: +subtotal }),
@@ -715,7 +743,7 @@ router.put('/:id', async (req, res) => {
         ...(delivery_fee !== undefined && { delivery_fee: +delivery_fee || 0 }),
         ...(delivery_date !== undefined && { delivery_date: delivery_date || null }),
         ...(invoice_writer !== undefined && { invoice_writer }),
-        ...(receiver_name !== undefined && { receiver_name }),
+        ...(receiver_name !== undefined && { receiver_name: receiver_name || updatedCustomerName || '' }),
         ...(status !== undefined && { status: status || 'pending' }),
         ...(req.body.created_at && { created_at: req.body.created_at }),
       }, { skipSave: true });

@@ -130,3 +130,10 @@ _tmp_*
 *.token
 *.key
 backups/
+.antigravity/
+.antigravityrules
+.kilo/
+.playwright-mcp/
+backend/data/.kha-admin-recovery
+release/phanmienoffline-electron-*.7z
+release-v*/

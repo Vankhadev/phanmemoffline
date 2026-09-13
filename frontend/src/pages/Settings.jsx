@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle,
   Edit2,
@@ -2281,16 +2281,16 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
 
             <div className="mt-4 grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
               <div className="rounded-xl border bg-gray-50 p-4">
-                <div className="text-gray-500">Phiên bđơn hiện tại</div>
+                <div className="text-gray-500">Phiên bản hiện tại</div>
                 <div className="mt-1 text-2xl font-bold text-gray-800">{currentVersion}</div>
                 <div className="mt-2 text-xs text-gray-500">
-                  Nđơn tổng: {appInfo?.platform || window.khaDesktop?.platform || 'web'} ? Kiđơn tr?c: {appInfo?.arch || 'unknown'}
+                  Nền tảng: {appInfo?.platform || window.khaDesktop?.platform || 'web'} · Kiến trúc: {appInfo?.arch || 'unknown'}
                 </div>
               </div>
               <div className="rounded-xl border bg-gray-50 p-4">
                 <div className="text-gray-500">Feed cập nhật</div>
-                <div className="mt-1 break-all font-medium text-gray-800">{manifestUrl || 'Chua n?p URL feed'}</div>
-                <div className="mt-2 text-xs text-gray-500">Nguđơn: {manifestSourceLabel}</div>
+                <div className="mt-1 break-all font-medium text-gray-800">{manifestUrl || 'Chưa nạp URL feed'}</div>
+                <div className="mt-2 text-xs text-gray-500">Nguồn: {manifestSourceLabel}</div>
                 {updateState?.manifestUrlDefault && (
                   <div className="mt-2 inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
                     Đang dùng GitHub Release feed mặc định

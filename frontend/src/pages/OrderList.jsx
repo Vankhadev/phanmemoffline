@@ -398,18 +398,35 @@ export default function OrderList() {
   // Load products for edit validation/picker
   useEffect(() => {
     if (!showProductPicker && !showEdit) return;
+    if (editProducts.length === 0) {
+      setEditProductsState('loading');
+    }
     apiJson('/products/all/with-variants', {}, 'Không tải được sản phẩm.')
-      .then(data => setEditProducts(Array.isArray(data) ? data : []))
-      .catch(() => setEditProducts([]));
-  }, [showProductPicker, showEdit]);
+      .then(data => {
+        const list = Array.isArray(data) ? data : [];
+        setEditProducts(list);
+        setEditProductsState(list.length ? 'loaded' : 'empty');
+      })
+      .catch(() => {
+        setEditProducts([]);
+        setEditProductsState('error');
+      });
+  }, [showProductPicker, showEdit, editProducts.length]);
 
   // Tự động cập nhật danh sách sản phẩm khi có thay đổi (sửa/nhập) ở các tab khác
   useEffect(() => {
     const handleProductChange = () => {
       if (!showProductPicker && !showEdit) return;
       apiJson('/products/all/with-variants', {}, 'Không tải được sản phẩm.')
-        .then(data => setEditProducts(Array.isArray(data) ? data : []))
-        .catch(() => setEditProducts([]));
+        .then(data => {
+          const list = Array.isArray(data) ? data : [];
+          setEditProducts(list);
+          setEditProductsState(list.length ? 'loaded' : 'empty');
+        })
+        .catch(() => {
+          setEditProducts([]);
+          setEditProductsState('error');
+        });
     };
     const unsubUpdated = globalSyncEmitter.on('PRODUCT_UPDATED', handleProductChange);
     const unsubImported = globalSyncEmitter.on('PRODUCT_IMPORTED', handleProductChange);
@@ -744,7 +761,12 @@ export default function OrderList() {
     });
   }, [customers, repriceEditDetailsForCustomer]);
 
-  const editProductsStateLabel = { loading: 'đang tđi dữ liệu sản phẩm...', loaded: '', empty: 'Không có dữ liệu sản phẩm d? kiểm tra tồn kho.', error: 'Không tải được dữ liệu sản phẩm, vđơn cho phép luu.' }[editProductsState] || '';
+  const editProductsStateLabel = {
+    loading: 'Đang tải dữ liệu sản phẩm...',
+    loaded: '',
+    empty: 'Không có dữ liệu sản phẩm để kiểm tra tồn kho.',
+    error: 'Không tải được dữ liệu sản phẩm, vẫn cho phép lưu.'
+  }[editProductsState] || '';
 
   const filteredEditCustomers = useMemo(() => {
     const query = String(editCustomerSearch || '').trim().toLowerCase();
@@ -813,12 +835,14 @@ export default function OrderList() {
         line_total: c.line_total || 0,
       })) || [];
       const nextDetails = mergeDuplicateProducts(cartDetails);
+      const offlineCustomerName = inv.customer_name || inv.receiver_name || '';
       setEditDetails(nextDetails);
       setEditBaselineDetails([]);
       setEditProductsState('loaded');
+      setEditCustomerSearch(offlineCustomerName);
       setEditForm({
         customer_id: inv.customer_id || null,
-        customer_name: inv.customer_name || 'Khách lẻ',
+        customer_name: offlineCustomerName || 'Khách lẻ',
         payment_method: inv.payment_method || 'cash',
         note: inv.note || '',
         subtotal: inv.subtotal || 0,
@@ -851,13 +875,16 @@ export default function OrderList() {
         id: detail.id ?? detail.order_item_id ?? null,
         order_item_id: detail.order_item_id ?? detail.id ?? null,
       })) : [];
+      const matchedCustomer = findCustomerForOrder({ ...inv, ...data });
+      const resolvedCustomerName = matchedCustomer?.name || data.customer_name || inv.customer_name || inv.receiver_name || '';
       setEditDetails(nextDetails);
       setEditBaselineDetails(nextDetails.map(item => ({ ...item })));
-      setEditProductsState('loading');
+      setEditProductsState(editProducts.length > 0 ? 'loaded' : 'loading');
+      setEditCustomerSearch(resolvedCustomerName);
       setEditForm({
-        customer_id: (findCustomerForOrder({ ...inv, ...data })?.id ?? data.customer_id ?? inv.customer_id) || null,
-        customer_name: findCustomerForOrder({ ...inv, ...data })?.name || data.customer_name || inv.customer_name || 'Khách lẻ',
-        customer_type: findCustomerForOrder({ ...inv, ...data })?.customer_type || data.customer_type || inv.customer_type || 'Khách lẻ',
+        customer_id: (matchedCustomer?.id ?? data.customer_id ?? inv.customer_id) || null,
+        customer_name: resolvedCustomerName || 'Khách lẻ',
+        customer_type: matchedCustomer?.customer_type || data.customer_type || inv.customer_type || 'Khách lẻ',
         payment_method: data.payment_method || inv.payment_method || 'cash',
         note: data.note || inv.note || '',
         subtotal: data.subtotal || inv.subtotal || 0,
@@ -1518,38 +1545,16 @@ export default function OrderList() {
             <div className="flex flex-wrap items-center gap-2 text-gray-500">
               <span className="rounded-full bg-blue-50 text-blue-700 px-3 py-1 font-medium">Hiển thị {filtered.length} đơn</span>
               {selectedOrders.length > 0 && (
-                <span className="rounded-full bg-amber-50 text-amber-700 px-3 py-1 font-medium">D? chọn {selectedOrders.length} don</span>
+                <span className="rounded-full bg-amber-50 text-amber-700 px-3 py-1 font-medium">Đã chọn {selectedOrders.length} đơn</span>
               )}
-              {!serverOnline && (
-                <span className="rounded-full bg-red-50 text-red-600 px-3 py-1 font-medium">Đang ở chế độ offline</span>
-              )}
-            </div>
-            <div className="text-xs text-gray-400">
-              Uu tiđơn dữ liệu server khi tr?ng mã don, vđơn giá don local d? thao t?c ti?p.
             </div>
           </div>
         </div>
 
         <div className="border-t border-gray-100 lg:hidden">
           {loading ? (
-            <div className="text-center text-gray-400 py-12 flex flex-col items-center justify-center gap-3">
-              <Loader size={28} className="animate-spin text-blue-400" />
-              <div>
-                <div className="font-medium text-gray-600">Đang tải danh sách đơn hàng...</div>
-                {!serverOnline && <div className="text-xs text-red-400 mt-1">⚠️ Server đang offline</div>}
-              </div>
-            </div>
-          ) : !serverOnline && filtered.length === 0 ? (
-            <div className="text-center py-12 px-4">
-              <div className="text-5xl mb-3 opacity-30">📡</div>
-              <div className="font-semibold text-gray-500 mb-1">Server đang offline</div>
-              <div className="text-sm text-gray-400 mb-4">Danh sách đang hiển thị từ dữ liệu cục bộ nếu có.</div>
-              <button onClick={() => {
-                setLoading(true);
-                fetchInvoices().finally(() => setLoading(false));
-              }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
-                🔄 Thử lại
-              </button>
+            <div className="text-center text-blue-500 py-12 flex items-center justify-center">
+              <Loader size={28} className="animate-spin text-blue-500" />
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center text-gray-400 py-12 px-4">
@@ -1605,7 +1610,7 @@ export default function OrderList() {
                         </button>
                         <div className="min-w-0">
                           <div className="font-semibold text-blue-700">{displayOrderCode(inv.invoice_code)}</div>
-                          <div className="mt-1 truncate text-sm font-medium text-gray-800">{inv.customer_name || 'Khách lẻ'}</div>
+                          <div className="mt-1 truncate text-sm font-medium text-gray-800">{inv.customer_name || inv.receiver_name || 'Khách lẻ'}</div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
                             <span className={`rounded-full px-2 py-0.5 font-medium ${sourceBadge.color}`}>{sourceBadge.text}</span>
                             <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${st.color}`}>
@@ -1801,8 +1806,12 @@ export default function OrderList() {
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${sourceBadge.color}`}>{sourceBadge.text}</span>
                     </td>
                     <td>
-                      <div className="font-medium text-gray-800 table-text-clip">{inv.customer_name || 'Khách lẻ'}</div>
-                      <div className="mt-1 text-xs text-gray-400">{inv.receiver_name || 'Chưa có người nhận'}</div>
+                      <div className="font-medium text-gray-800 table-text-clip">{inv.customer_name || inv.receiver_name || 'Khách lẻ'}</div>
+                      <div className="mt-1 text-xs text-gray-400">
+                        {inv.receiver_name && inv.customer_name && inv.receiver_name !== inv.customer_name
+                          ? `Người nhận: ${inv.receiver_name}`
+                          : inv.customer_phone || (inv.customer_name || inv.receiver_name ? '' : 'Chưa có người nhận')}
+                      </div>
                     </td>
                     <td className="text-right">
                       <div className="font-bold text-gray-900">{formatVND(paymentSummary.total)}</div>
@@ -1870,24 +1879,8 @@ export default function OrderList() {
           </table>
 
           {loading ? (
-            <div className="text-center text-gray-400 py-16 flex flex-col items-center justify-center gap-3">
-              <Loader size={32} className="animate-spin text-blue-400" />
-              <div>
-                <div className="font-medium text-gray-600">Đang tải danh sách đơn hàng...</div>
-                {!serverOnline && <div className="text-xs text-red-400 mt-1">⚠️ Server đang offline</div>}
-              </div>
-            </div>
-          ) : !serverOnline && filtered.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="text-5xl mb-3 opacity-30">📡</div>
-              <div className="font-semibold text-gray-500 mb-1">Server đang offline</div>
-              <div className="text-sm text-gray-400 mb-4">Danh sách đang hiển thị từ dữ liệu cục bộ nếu có.</div>
-              <button onClick={() => {
-                setLoading(true);
-                fetchInvoices().finally(() => setLoading(false));
-              }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
-                🔄 Thử lại
-              </button>
+            <div className="text-center text-blue-500 py-16 flex items-center justify-center">
+              <Loader size={32} className="animate-spin text-blue-500" />
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center text-gray-400 py-16">
@@ -1910,7 +1903,7 @@ export default function OrderList() {
 
             {/* Thông tin chung */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-sm">
-              <div><span className="text-gray-500">Khách hàng:</span> <b>{showView.customer_name || 'Khách lẻ'}</b></div>
+              <div><span className="text-gray-500">Khách hàng:</span> <b>{showView.customer_name || showView.receiver_name || 'Khách lẻ'}</b></div>
               <div><span className="text-gray-500">Ngày tạo:</span> <b>{formatDate(showView.created_at)}</b></div>
               <div><span className="text-gray-500">Thanh toán:</span> <b>{formatPaymentMethod(showView.payment_method)}</b></div>
               <div><span className="text-gray-500">Trạng thái:</span> <b>{getOrderStatusMeta(showView.status)?.text}</b></div>
@@ -2005,11 +1998,12 @@ export default function OrderList() {
                   <input
                     className="input-field w-full text-sm"
                     value={editCustomerSearch}
-                    placeholder="Tạm khách hàng theo tồn, SDT, m?..."
-                    onFocus={() => setEditCustomerSearch(editForm.customer_name || "")}
+                    placeholder="Tìm khách hàng theo tên, SĐT, mã..."
+                    onFocus={() => { if (!editCustomerSearch && editForm.customer_name) setEditCustomerSearch(editForm.customer_name); }}
                     onChange={e => {
                       const value = e.target.value;
                       setEditCustomerSearch(value);
+                      setEditForm(f => ({ ...f, customer_name: value }));
                       if (!value.trim()) applyEditCustomer("");
                     }}
                   />
@@ -2026,7 +2020,7 @@ export default function OrderList() {
                           }}
                         >
                           <div className="font-semibold text-gray-800">{customer.name}</div>
-                          <div className="text-xs text-gray-500">{customer.phone || ""}{customer.customer_type ? " ? " + customer.customer_type : ""}</div>
+                          <div className="text-xs text-gray-500">{customer.phone || ""}{customer.customer_type ? " · " + customer.customer_type : ""}</div>
                         </button>
                       ))}
                     </div>
@@ -2064,8 +2058,8 @@ export default function OrderList() {
               </div>
 
               {/* Bảng sản phẩm có thể sửa */}
-              <div className="border rounded-lg overflow-hidden">
-                <div className="bg-gray-100 px-4 py-2 flex items-center justify-between">
+              <div className="border rounded-lg bg-white">
+                <div className="bg-gray-100 px-4 py-2 flex items-center justify-between rounded-t-lg">
                   <span className="text-sm font-semibold text-gray-700">Chi tiết sản phẩm</span>
                   <div className="flex items-center gap-2">
                     <OrderColumnCustomizer
@@ -2091,6 +2085,7 @@ export default function OrderList() {
                       <tr className="bg-gray-50 text-gray-500 text-xs border-b">
                         {editVisibleColumns.stt && <th className="py-2 px-3 text-center w-8">STT</th>}
                         {editVisibleColumns.productName && <th className="py-2 px-3 text-left">Tên sản phẩm</th>}
+                        {editVisibleColumns.unit && <th className="py-2 px-3 text-center w-16">ĐVT</th>}
                         {editVisibleColumns.quantity && <th className="py-2 px-3 text-center w-20">SL</th>}
                         {editVisibleColumns.unitPrice && <th className="py-2 px-3 text-right w-28">Giá (VND)</th>}
                         {editVisibleColumns.discount && <th className="py-2 px-3 text-center w-16">CK%</th>}
@@ -2128,6 +2123,7 @@ export default function OrderList() {
     </div>
   )}
 </td>}
+{editVisibleColumns.unit && <td className="py-2 px-3 text-center text-gray-500 text-xs">{d.unit || d.product_unit || 'cái'}</td>}
 {editVisibleColumns.quantity && <td className="py-2 px-3 text-center">
   <input type="number" min="1"
     value={d.quantity}
@@ -2159,7 +2155,7 @@ export default function OrderList() {
                       })}
                       {editDetails.length === 0 && (
                         <tr>
-                          <td colSpan={[editVisibleColumns.stt, editVisibleColumns.productName, editVisibleColumns.quantity, editVisibleColumns.unitPrice, editVisibleColumns.discount, editVisibleColumns.lineTotal].filter(Boolean).length + 1} className="text-center text-gray-400 py-8">
+                          <td colSpan={[editVisibleColumns.stt, editVisibleColumns.productName, editVisibleColumns.unit, editVisibleColumns.quantity, editVisibleColumns.unitPrice, editVisibleColumns.discount, editVisibleColumns.lineTotal].filter(Boolean).length + 1} className="text-center text-gray-400 py-8">
                             Chưa có sản phẩm nào
                           </td>
                         </tr>

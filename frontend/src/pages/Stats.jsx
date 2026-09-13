@@ -15,21 +15,28 @@ function getLocalDateKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-function getPeriodRange(period, selectedMonth = '') {
+function getPeriodRange(period, selectedMonth = '', selectedYear = '') {
   const now = new Date();
   const today = getLocalDateKey(now);
   if (period === 'day') return { from: today, to: today };
   if (period === 'week') {
-    const fromDate = new Date(now);
-    fromDate.setDate(fromDate.getDate() - 7);
-    return { from: getLocalDateKey(fromDate), to: today };
+    const dayOfWeek = now.getDay(); // 0: Chủ nhật, 1: Thứ 2, ..., 6: Thứ 7
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - diffToMonday);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return { from: getLocalDateKey(monday), to: getLocalDateKey(sunday) };
   }
   if (period === 'month') {
     const month = /^\d{4}-\d{2}$/.test(selectedMonth) ? selectedMonth : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const [year, monthNumber] = month.split('-').map(Number);
     const lastDay = new Date(year, monthNumber, 0).getDate();
-    const currentMonth = today.slice(0, 7);
-    return { from: `${month}-01`, to: month === currentMonth ? today : `${month}-${String(lastDay).padStart(2, '0')}` };
+    return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, '0')}` };
+  }
+  if (period === 'year') {
+    const year = /^\d{4}$/.test(String(selectedYear)) ? String(selectedYear) : String(now.getFullYear());
+    return { from: `${year}-01-01`, to: `${year}-12-31` };
   }
   return { from: `${now.getFullYear()}-01-01`, to: today };
 }
@@ -81,11 +88,14 @@ function buildProfitGroups(report = {}) {
 
   (report.orders || []).forEach(order => {
     const group = ensureGroup(order.date);
+    const orderRev = toNumber(order.revenueBeforeTax, toNumber(order.total));
+    const orderCost = toNumber(order.costAmount);
+    const orderProfit = toNumber(order.estimatedProfit, orderRev - orderCost);
     const normalizedOrder = {
       ...order,
-      revenueBeforeTax: toNumber(order.revenueBeforeTax),
-      costAmount: toNumber(order.costAmount),
-      estimatedProfit: toNumber(order.estimatedProfit),
+      revenueBeforeTax: orderRev,
+      costAmount: orderCost,
+      estimatedProfit: orderProfit,
       products: Array.isArray(order.products) ? order.products : [],
     };
     group.orders.push(normalizedOrder);
@@ -124,17 +134,38 @@ export default function Stats() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [reportYear, setReportYear] = useState(() => String(new Date().getFullYear()));
   const [showHelp, setShowHelp] = useState(false);
 
-  const periodRange = useMemo(() => getPeriodRange(period, reportMonth), [period, reportMonth]);
+  const periodRange = useMemo(() => getPeriodRange(period, reportMonth, reportYear), [period, reportMonth, reportYear]);
 
   const profitGroups = useMemo(() => buildProfitGroups(profitReport || {}), [profitReport]);
 
-  const chartData = useMemo(() => (
-    dailyStats
-      .slice()
-      .sort((left, right) => String(left.stat_date || '').localeCompare(String(right.stat_date || '')))
-  ), [dailyStats]);
+  const chartData = useMemo(() => {
+    const datesMap = new Map();
+    dailyStats.forEach(d => {
+      if (d.stat_date) {
+        datesMap.set(d.stat_date, {
+          stat_date: d.stat_date,
+          total_revenue: toNumber(d.total_revenue),
+          total_orders: toNumber(d.total_orders),
+        });
+      }
+    });
+
+    profitGroups.forEach((group, dateKey) => {
+      if (!dateKey) return;
+      if (!datesMap.has(dateKey)) {
+        datesMap.set(dateKey, {
+          stat_date: dateKey,
+          total_revenue: group.revenueBeforeTax,
+          total_orders: group.orders.length,
+        });
+      }
+    });
+
+    return Array.from(datesMap.values()).sort((left, right) => String(left.stat_date || '').localeCompare(String(right.stat_date || '')));
+  }, [dailyStats, profitGroups]);
 
   const dailyRows = useMemo(() => chartData.map(day => {
     const group = profitGroups.get(day.stat_date) || null;
@@ -162,7 +193,7 @@ export default function Stats() {
   const fetchSummary = useCallback(async () => {
     const response = await fetch(`${API}/stats/summary`);
     const data = await response.json();
-    if (!response.ok) throw new Error(data?.error || 'Không thử lại tháng kỳ tổng quan.');
+    if (!response.ok) throw new Error(data?.error || 'Không thể tải thống kê tổng quan.');
     setSummary(data);
   }, []);
 
@@ -174,7 +205,7 @@ export default function Stats() {
         from: periodRange.from,
         to: periodRange.to,
         period: 'custom',
-        status: 'completed',
+        status: 'all',
       });
       const [statsResponse, profitResponse] = await Promise.all([
         fetch(`${API}/stats?from=${periodRange.from}&to=${periodRange.to}`),
@@ -182,8 +213,8 @@ export default function Stats() {
       ]);
       const statsData = await statsResponse.json();
       const profitData = await profitResponse.json();
-      if (!statsResponse.ok) throw new Error(statsData?.error || 'Không thử lại báo cáo doanh thu.');
-      if (!profitResponse.ok) throw new Error(profitData?.error || 'Không thử lại lợi nhuận u?c t?nh.');
+      if (!statsResponse.ok) throw new Error(statsData?.error || 'Không thể lấy báo cáo doanh thu.');
+      if (!profitResponse.ok) throw new Error(profitData?.error || 'Không thể lấy lợi nhuận ước tính.');
 
       const rows = Array.isArray(statsData) ? statsData : [];
       setDailyStats(rows);
@@ -201,7 +232,7 @@ export default function Stats() {
         return next;
       });
     } catch (err) {
-      setError(err?.message || 'Không thử lại tháng k?.');
+      setError(err?.message || 'Không thể tải thống kê.');
       setDailyStats([]);
       setProfitReport(null);
     } finally {
@@ -245,7 +276,7 @@ export default function Stats() {
 
   const exportRows = (rows, fileName, title) => {
     if (rows.length === 0) {
-      alert('Không có dữ liệu d? xu?t.');
+      alert('Không có dữ liệu để xuất.');
       return;
     }
 
@@ -268,8 +299,8 @@ export default function Stats() {
       acc.profit += toNumber(row.estimatedProfit);
       return acc;
     }, { orders: 0, revenue: 0, cost: 0, profit: 0 });
-    csv += ['Tổng c?ng', total.orders, Math.round(total.revenue), Math.round(total.cost), Math.round(total.profit)].map(escapeCsv).join(',') + '\n';
-    csv += `Ngày xu?t,${escapeCsv(new Date().toLocaleString('vi-VN'))}\n`;
+    csv += ['Tổng cộng', total.orders, Math.round(total.revenue), Math.round(total.cost), Math.round(total.profit)].map(escapeCsv).join(',') + '\n';
+    csv += `Ngày xuất,${escapeCsv(new Date().toLocaleString('vi-VN'))}\n`;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -286,20 +317,20 @@ export default function Stats() {
       const [rowYear, rowMonth] = String(row.stat_date || '').split('-');
       return rowYear === year && rowMonth === month;
     });
-    exportRows(rows, `BaoCaoDoanhThu_LoiNhuan_${month}_${year}.csv`, `B?O C?O DOANH THU LỢI NHUẬN TH?NG ${month}/${year}`);
+    exportRows(rows, `BaoCaoDoanhThu_LoiNhuan_${month}_${year}.csv`, `BÁO CÁO DOANH THU LỢI NHUẬN THÁNG ${month}/${year}`);
   };
 
   const exportCurrentRangeReport = () => {
-    exportRows(dailyRows, `BaoCaoDoanhThu_LoiNhuan_${periodRange.from}_${periodRange.to}.csv`, `B?O C?O DOANH THU LỢI NHUẬN ${periodRange.from} - ${periodRange.to}`);
+    exportRows(dailyRows, `BaoCaoDoanhThu_LoiNhuan_${periodRange.from}_${periodRange.to}.csv`, `BÁO CÁO DOANH THU LỢI NHUẬN ${periodRange.from} - ${periodRange.to}`);
   };
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-xl font-bold">
              <TrendingUp className="text-green-600" size={24} /> Thống kê doanh thu
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setShowHelp(true)} className="inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100">
             <HelpCircle size={16} /> Hướng dẫn
           </button>
@@ -323,6 +354,18 @@ export default function Stats() {
               onChange={event => setReportMonth(event.target.value)}
               aria-label="Chọn tháng xem thống kê"
             />
+          )}
+          {period === 'year' && (
+            <select
+              className="input-field h-9 text-sm"
+              value={reportYear}
+              onChange={event => setReportYear(event.target.value)}
+              aria-label="Chọn năm xem thống kê"
+            >
+              {[2026, 2025, 2024, 2023, 2022].map(y => (
+                <option key={y} value={y}>Năm {y}</option>
+              ))}
+            </select>
           )}
         </div>
       </div>
@@ -371,7 +414,7 @@ export default function Stats() {
             <FileDown size={16} /> Xuất Excel tháng
           </button>
           <button type="button" onClick={exportCurrentRangeReport} className="flex items-center gap-1 rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-700">
-            <FileDown size={16} /> tổng lợi nhận
+            <FileDown size={16} /> Tổng lợi nhuận
           </button>
         </div>
       </div>
@@ -380,22 +423,22 @@ export default function Stats() {
         <HelpModal
           show={showHelp}
           onClose={() => setShowHelp(false)}
-          title="Hướng dẫn tháng kỳ doanh thu"
+          title="Hướng dẫn thống kê doanh thu"
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">C?ch d?c mđơn h?nh</h3>
+                <h3 className="font-bold text-gray-800 mb-2">Cách xem thống kê</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Chọn mãc thời gian theo ngày, tuđơn, tháng ho?c nam.</li>
-                  <li>Xem các th? tổng quan d? kiểm tra doanh thu về lợi nhuận.</li>
-                  <li>Dùng n?t xu?t Excel đã tải báo cáo chi tiết.</li>
+                  <li>Chọn mốc thời gian theo ngày, 7 ngày (từ Thứ 2 đến Chủ nhật), tháng hoặc năm.</li>
+                  <li>Xem các thẻ tổng quan để kiểm tra doanh thu, số đơn và lợi nhuận ước tính.</li>
+                  <li>Dùng nút xuất Excel để tải báo cáo chi tiết về máy.</li>
                 </ul>
               </div>
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
+                <h3 className="font-bold text-gray-800 mb-2">Lưu ý</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Báo cáo t? lâm mới khi dữ liệu đơn hàng thay đổi.</li>
-                  <li>C? th? mở rộng tổng ngày d? xem chi tiết đơn hàng.</li>
+                  <li>Thống kê lấy đầy đủ toàn bộ đơn hàng khi lên ở phần mềm (cả đơn đã thanh toán và chưa thanh toán).</li>
+                  <li>Có thể bấm vào từng ngày trong bảng để xem chi tiết danh sách đơn và trạng thái thanh toán (Đã TT / Chưa TT).</li>
                 </ul>
               </div>
             </div>
@@ -429,7 +472,7 @@ export default function Stats() {
         </h3>
         {error && <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
         {loading ? (
-          <div className="py-8 text-center text-gray-400">đang tđi...</div>
+          <div className="py-8 text-center text-gray-400">Đang tải...</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -438,8 +481,8 @@ export default function Stats() {
                   <th className="p-2 text-left">Ngày</th>
                    <th className="p-2 text-right">Số đơn</th>
                   <th className="p-2 text-right">Doanh thu</th>
-                  <th className="p-2 text-right">Gi? vđơn u?c t?nh</th>
-                  <th className="p-2 text-right">Lỗi nhuđơn u?c t?nh</th>
+                  <th className="p-2 text-right">Giá vốn ước tính</th>
+                  <th className="p-2 text-right">Lợi nhuận ước tính</th>
                 </tr>
               </thead>
               <tbody>
@@ -476,6 +519,9 @@ export default function Stats() {
 }
 
 function FragmentRow({ row, expanded, onToggle }) {
+  const paidCount = row.orders.filter(o => o.isPaid || o.paymentStatusLabel === 'Đã TT').length;
+  const unpaidCount = row.orders.length - paidCount;
+
   return (
     <>
       <tr className="border-b hover:bg-gray-50">
@@ -500,19 +546,38 @@ function FragmentRow({ row, expanded, onToggle }) {
                 <div className="overflow-x-auto rounded border border-slate-200 bg-white">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-100 text-gray-500">
-                         <th className="px-3 py-2 text-left">Mã đơn</th>
+                      <tr className="bg-slate-100 text-gray-600">
+                        <th className="px-3 py-2 text-left">Mã đơn</th>
                         <th className="px-3 py-2 text-left">Khách hàng</th>
+                        <th className="px-3 py-2 text-center">Trạng thái</th>
                         <th className="px-3 py-2 text-right">Doanh thu</th>
-                        <th className="px-3 py-2 text-right">Gi? vđơn</th>
-                        <th className="px-3 py-2 text-right">Lỗi nhuđơn</th>
+                        <th className="px-3 py-2 text-right">Giá vốn</th>
+                        <th className="px-3 py-2 text-right">Lợi nhuận</th>
                       </tr>
                     </thead>
                     <tbody>
                       {row.orders.map(order => (
-                        <tr key={`${order.invoiceId}-${order.invoiceCode}`} className="border-t border-slate-100">
+                        <tr key={`${order.invoiceId}-${order.invoiceCode}`} className="border-t border-slate-100 hover:bg-slate-50">
                           <td className="px-3 py-2 font-bold text-gray-800">{order.invoiceCode}</td>
-                          <td className="px-3 py-2"><div className="font-medium text-gray-800">{order.customerName || 'Khách lẻ'}</div>{order.customerPhone && <div className="text-xs text-gray-500">{order.customerPhone}</div>}</td>
+                          <td className="px-3 py-2">
+                            <div className="font-medium text-gray-800">{order.customerName || 'Khách lẻ'}</div>
+                            {order.customerPhone && <div className="text-xs text-gray-500">{order.customerPhone}</div>}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {order.isPaid || order.paymentStatusLabel === 'Đã TT' ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                Đã TT
+                              </span>
+                            ) : order.paymentStatusLabel === 'TT 1 phần' ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300">
+                                TT 1 phần
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                                Chưa TT
+                              </span>
+                            )}
+                          </td>
                           <td className="px-3 py-2 text-right font-semibold text-blue-600">{formatVND(order.revenueBeforeTax)}</td>
                           <td className="px-3 py-2 text-right text-gray-600">{formatVND(order.costAmount)}</td>
                           <td className="px-3 py-2 text-right font-bold text-green-600">{formatVND(order.estimatedProfit)}</td>
@@ -521,9 +586,16 @@ function FragmentRow({ row, expanded, onToggle }) {
                     </tbody>
                   </table>
                 </div>
-                <div className="flex flex-wrap justify-end gap-4 border-t border-slate-200 pt-2 text-sm font-bold text-emerald-700">
-                   <span>Tổng {formatNumber(row.orders.length)} đơn</span>
-                   <span>Lợi nhuận ngày: {formatVND(row.estimatedProfit)}</span>
+                <div className="flex flex-wrap justify-between items-center gap-4 border-t border-slate-200 pt-2 text-sm font-bold text-emerald-700">
+                   <div className="flex gap-3 text-xs text-gray-600">
+                     <span>Tổng: <b className="text-gray-800">{formatNumber(row.orders.length)}</b> đơn</span>
+                     <span className="text-emerald-700">({paidCount} Đã TT, {unpaidCount} Chưa TT)</span>
+                   </div>
+                   <div className="flex gap-4">
+                     <span className="text-gray-600">Doanh thu: {formatVND(row.total_revenue)}</span>
+                     <span className="text-gray-600">Giá vốn: {formatVND(row.costAmount)}</span>
+                     <span className="text-green-600">Lợi nhuận: {formatVND(row.estimatedProfit)}</span>
+                   </div>
                 </div>
               </div>
             )}

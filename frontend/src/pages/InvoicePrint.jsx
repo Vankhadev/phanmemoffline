@@ -175,8 +175,8 @@ export default function InvoicePrint() {
   const autoPrint = searchParams.get('print') === '1';
   const templateId = searchParams.get('template_id') || searchParams.get('templateId') || '';
   const documentMode = (searchParams.get('mode') || searchParams.get('type')) === 'estimate' ? 'estimate' : 'invoice';
-  const documentLabel = documentMode === 'estimate' ? 'Tạm t?nh' : 'Hóa don';
-  const documentTitle = documentMode === 'estimate' ? 'PHI?U T?M T?NH' : 'HÓA ĐƠN BÁN HÀNG';
+  const documentLabel = documentMode === 'estimate' ? 'Tạm tính' : 'Hóa đơn';
+  const documentTitle = documentMode === 'estimate' ? 'PHIẾU TẠM TÍNH' : 'HÓA ĐƠN BÁN HÀNG';
   const printRef = useRef(null);
   const autoPrintedRef = useRef(false);
   const [data, setData] = useState(null);

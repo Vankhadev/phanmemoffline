@@ -293,7 +293,7 @@ export const DEFAULT_SAPO_TEMPLATE_HTML = `
     </div>
     <div class="sapo-title">
       <h1>HÓA ĐƠN BÁN HÀNG</h1>
-      <p>M? don: <strong>{{invoice.code}}</strong></p>
+      <p>Mã đơn: <strong>{{invoice.code}}</strong></p>
       <p>Ngày: {{invoice.created_at_text}}</p>
     </div>
   </header>
@@ -313,7 +313,7 @@ export const DEFAULT_SAPO_TEMPLATE_HTML = `
     <div><span>Phí giao hàng</span><strong>{{totals.delivery_fee_text}}</strong></div>
     <div class="grand-total"><span>Thành tiền cần thanh toán</span><strong>{{totals.payable_amount_text}}</strong></div>
     <div><span>Công nợ cũ</span><strong>{{totals.old_debt_text}}</strong></div>
-    <div><span>Khách d? tr?</span><strong>{{totals.paid_amount_text}}</strong></div>
+    <div><span>Khách đã trả</span><strong>{{totals.paid_amount_text}}</strong></div>
     <div><span>Còn nợ</span><strong>{{totals.remaining_amount_text}}</strong></div>
   </section>
 

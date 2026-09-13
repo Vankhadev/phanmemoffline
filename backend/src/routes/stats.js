@@ -14,120 +14,6 @@ router.use((req, res, next) => {
   next();
 });
 
-function normalizeDailyStatsRow(row = {}) {
-  return {
-    ...row,
-    stat_date: normalizeDateKey(row.stat_date || row.date || row.created_at),
-    total_revenue: normalizeNumber(row.total_revenue ?? row.revenue, 0),
-    total_orders: Math.max(0, Math.round(normalizeNumber(row.total_orders ?? row.orders, 0))),
-  };
-}
-
-function getNormalizedDailyStatsRows() {
-  return getAll('daily_stats')
-    .map(normalizeDailyStatsRow)
-    .filter(row => row.stat_date);
-}
-
-function serializeStockAlertProduct(product = {}) {
-  return {
-    id: product.id,
-    sku: product.sku || '',
-    name: product.name || product.product_name || `ID ${product.id}`,
-    stock: Number(product.stock) || 0,
-    parent_id: product.parent_id || null,
-    active: product.active === 0 ? 0 : 1,
-  };
-}
-
-function buildNegativeStockDashboardStats() {
-  const policy = getNegativeStockPolicy();
-  const products = getAll('products', product => product && product.active !== 0);
-  const negativeProducts = products
-    .map(serializeStockAlertProduct)
-    .filter(product => product.stock < 0)
-    .sort((a, b) => a.stock - b.stock || String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
-  const nearLimitProducts = policy.enabled
-    ? negativeProducts.filter(product => product.stock <= policy.warningThreshold && product.stock >= policy.minimumAllowedStock)
-    : [];
-  const breachedProducts = negativeProducts.filter(product => product.stock < policy.minimumAllowedStock);
-
-  return {
-    enabled: policy.enabled,
-    negative_stock_enabled: policy.enabled,
-    negative_stock_limit: policy.negative_stock_limit,
-    minimum_allowed_stock: policy.minimumAllowedStock,
-    warning_threshold: policy.warningThreshold,
-    negative_count: negativeProducts.length,
-    near_limit_count: nearLimitProducts.length,
-    breached_count: breachedProducts.length,
-    lowest_stock: negativeProducts.length > 0 ? negativeProducts[0].stock : 0,
-    total_negative_stock: negativeProducts.reduce((sum, product) => sum + product.stock, 0),
-    products: negativeProducts.slice(0, 20),
-    near_limit_products: nearLimitProducts.slice(0, 20),
-    breached_products: breachedProducts.slice(0, 20),
-  };
-}
-
-router.get('/', (req, res) => {
-  const { from = '1970-01-01', to = '2099-12-31' } = req.query;
-  const rowsByDate = new Map();
-  for (const invoice of getAll('invoices')) {
-    if (!invoice?.created_at || isCancelledStatus(invoice.status)) continue;
-    const date = localDateKey(invoice.created_at);
-    if (!date || date < from || date > to) continue;
-    const row = rowsByDate.get(date) || { stat_date: date, total_revenue: 0, total_orders: 0 };
-    row.total_revenue += normalizeNumber(invoice.total ?? invoice.total_amount, 0);
-    row.total_orders += 1;
-    rowsByDate.set(date, row);
-  }
-  // Keep manually recorded daily rows for dates without invoice records.
-  for (const row of getNormalizedDailyStatsRows()) {
-    if (row.stat_date >= from && row.stat_date <= to && !rowsByDate.has(row.stat_date)) rowsByDate.set(row.stat_date, row);
-  }
-  const rows = Array.from(rowsByDate.values()).sort((a, b) => b.stat_date.localeCompare(a.stat_date));
-  res.json(rows);
-});
-
-router.get('/summary', (req, res) => {
-  const todayStr = today();
-  const monthStr = `${todayStr.slice(0, 7)}-01`;
-  const dailyStats = getNormalizedDailyStatsRows();
-
-  const todayStats = dailyStats.find(s => s.stat_date === todayStr) || {
-    stat_date: todayStr,
-    total_revenue: 0,
-    total_orders: 0,
-  };
-  const monthStats = dailyStats
-    .filter(s => s.stat_date >= monthStr)
-    .reduce((acc, s) => {
-      acc.revenue += s.total_revenue || 0;
-      acc.orders += s.total_orders || 0;
-      return acc;
-    }, { revenue: 0, orders: 0 });
-  const allTime = dailyStats
-    .reduce((acc, s) => {
-      acc.revenue += s.total_revenue || 0;
-      acc.orders += s.total_orders || 0;
-      return acc;
-    }, { revenue: 0, orders: 0 });
-
-  const negativeStock = buildNegativeStockDashboardStats();
-
-  res.json({
-    today: todayStats,
-    month: monthStats,
-    allTime,
-    stock: { negative_stock: negativeStock },
-    negativeStock,
-  });
-});
-
-router.get('/stock-alerts', (_req, res) => {
-  res.json({ ok: true, negativeStock: buildNegativeStockDashboardStats() });
-});
-
 const PRODUCT_REPORT_TIMEZONE = 'Asia/Saigon';
 const CANCELLED_STATUSES = new Set(['cancelled', 'canceled', 'da_huy', 'da huy', 'đã hủy', 'dã hủy', 'huy', 'hủy']);
 const VALID_PRODUCT_REPORT_PERIODS = new Set(['day', 'month', 'year', 'custom']);
@@ -190,14 +76,178 @@ function localDateKey(value = new Date()) {
   return fallbackMatch ? `${fallbackMatch[1]}-${fallbackMatch[2]}-${fallbackMatch[3]}` : '';
 }
 
+function normalizeDailyStatsRow(row = {}) {
+  return {
+    ...row,
+    stat_date: normalizeDateKey(row.stat_date || row.date || row.created_at),
+    total_revenue: normalizeNumber(row.total_revenue ?? row.revenue, 0),
+    total_orders: Math.max(0, Math.round(normalizeNumber(row.total_orders ?? row.orders, 0))),
+  };
+}
+
+function getNormalizedDailyStatsRows() {
+  return getAll('daily_stats')
+    .map(normalizeDailyStatsRow)
+    .filter(row => row.stat_date);
+}
+
+function serializeStockAlertProduct(product = {}) {
+  return {
+    id: product.id,
+    sku: product.sku || '',
+    name: product.name || product.product_name || `ID ${product.id}`,
+    stock: Number(product.stock) || 0,
+    parent_id: product.parent_id || null,
+    active: product.active === 0 ? 0 : 1,
+  };
+}
+
+function buildNegativeStockDashboardStats() {
+  const policy = getNegativeStockPolicy();
+  const products = getAll('products', product => product && product.active !== 0);
+  const negativeProducts = products
+    .map(serializeStockAlertProduct)
+    .filter(product => product.stock < 0)
+    .sort((a, b) => a.stock - b.stock || String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
+  const nearLimitProducts = policy.enabled
+    ? negativeProducts.filter(product => product.stock <= policy.warningThreshold && product.stock >= policy.minimumAllowedStock)
+    : [];
+  const breachedProducts = negativeProducts.filter(product => product.stock < policy.minimumAllowedStock);
+
+  return {
+    enabled: policy.enabled,
+    negative_stock_enabled: policy.enabled,
+    negative_stock_limit: policy.negative_stock_limit,
+    minimum_allowed_stock: policy.minimumAllowedStock,
+    warning_threshold: policy.warningThreshold,
+    negative_count: negativeProducts.length,
+    near_limit_count: nearLimitProducts.length,
+    breached_count: breachedProducts.length,
+    lowest_stock: negativeProducts.length > 0 ? negativeProducts[0].stock : 0,
+    total_negative_stock: negativeProducts.reduce((sum, product) => sum + product.stock, 0),
+    products: negativeProducts.slice(0, 20),
+    near_limit_products: nearLimitProducts.slice(0, 20),
+    breached_products: breachedProducts.slice(0, 20),
+  };
+}
+
+function getInvoicesSummary() {
+  const todayKey = localDateKey(new Date());
+  const monthKey = todayKey.slice(0, 7);
+
+  let todayRevenue = 0;
+  let todayOrders = 0;
+  let monthRevenue = 0;
+  let monthOrders = 0;
+  let allRevenue = 0;
+  let allOrders = 0;
+
+  const invoices = getAll('invoices');
+  for (const invoice of invoices) {
+    if (!invoice?.created_at || isCancelledStatus(invoice.status)) continue;
+    const date = localDateKey(invoice.created_at);
+    const amount = normalizeNumber(invoice.total ?? invoice.total_amount, 0);
+
+    allRevenue += amount;
+    allOrders += 1;
+
+    if (date === todayKey) {
+      todayRevenue += amount;
+      todayOrders += 1;
+    }
+
+    if (date && date.startsWith(monthKey)) {
+      monthRevenue += amount;
+      monthOrders += 1;
+    }
+  }
+
+  // Nếu bảng invoices chưa có dữ liệu lịch sử cũ, bổ sung từ daily_stats
+  if (allOrders === 0) {
+    const dailyStats = getNormalizedDailyStatsRows();
+    const todayStats = dailyStats.find(s => s.stat_date === todayKey) || { total_revenue: 0, total_orders: 0 };
+    const monthStats = dailyStats.filter(s => s.stat_date >= `${monthKey}-01`).reduce((acc, s) => {
+      acc.revenue += s.total_revenue || 0;
+      acc.orders += s.total_orders || 0;
+      return acc;
+    }, { revenue: 0, orders: 0 });
+    const allTimeStats = dailyStats.reduce((acc, s) => {
+      acc.revenue += s.total_revenue || 0;
+      acc.orders += s.total_orders || 0;
+      return acc;
+    }, { revenue: 0, orders: 0 });
+
+    return {
+      today: { stat_date: todayKey, total_revenue: todayStats.total_revenue, total_orders: todayStats.total_orders },
+      month: monthStats,
+      allTime: allTimeStats,
+    };
+  }
+
+  return {
+    today: {
+      stat_date: todayKey,
+      total_revenue: roundMoney(todayRevenue),
+      total_orders: todayOrders,
+    },
+    month: {
+      revenue: roundMoney(monthRevenue),
+      orders: monthOrders,
+    },
+    allTime: {
+      revenue: roundMoney(allRevenue),
+      orders: allOrders,
+    },
+  };
+}
+
+router.get('/', (req, res) => {
+  const { from = '1970-01-01', to = '2099-12-31' } = req.query;
+  const rowsByDate = new Map();
+  for (const invoice of getAll('invoices')) {
+    if (!invoice?.created_at || isCancelledStatus(invoice.status)) continue;
+    const date = localDateKey(invoice.created_at);
+    if (!date || date < from || date > to) continue;
+    const row = rowsByDate.get(date) || { stat_date: date, total_revenue: 0, total_orders: 0 };
+    row.total_revenue += normalizeNumber(invoice.total ?? invoice.total_amount, 0);
+    row.total_orders += 1;
+    rowsByDate.set(date, row);
+  }
+  // Bổ sung các ngày có ghi chép trong daily_stats nếu chưa có trong invoices
+  for (const row of getNormalizedDailyStatsRows()) {
+    if (row.stat_date >= from && row.stat_date <= to && !rowsByDate.has(row.stat_date)) {
+      rowsByDate.set(row.stat_date, row);
+    }
+  }
+  const rows = Array.from(rowsByDate.values()).sort((a, b) => b.stat_date.localeCompare(a.stat_date));
+  res.json(rows);
+});
+
+router.get('/summary', (req, res) => {
+  const calculated = getInvoicesSummary();
+  const negativeStock = buildNegativeStockDashboardStats();
+
+  res.json({
+    today: calculated.today,
+    month: calculated.month,
+    allTime: calculated.allTime,
+    stock: { negative_stock: negativeStock },
+    negativeStock,
+  });
+});
+
+router.get('/stock-alerts', (_req, res) => {
+  res.json({ ok: true, negativeStock: buildNegativeStockDashboardStats() });
+});
+
 function normalizePeriod(period) {
   const normalized = String(period || 'custom').trim().toLowerCase();
   return VALID_PRODUCT_REPORT_PERIODS.has(normalized) ? normalized : 'custom';
 }
 
 function normalizeStatusFilter(status) {
-  const normalized = normalizeVietnameseText(status || 'completed');
-  return normalized || 'completed';
+  const normalized = normalizeVietnameseText(status || 'all');
+  return normalized || 'all';
 }
 
 function buildProductReportRange(query = {}) {
@@ -251,9 +301,9 @@ function buildProductReportRange(query = {}) {
 }
 
 function includeInvoiceByStatus(invoice, statusFilter) {
-  const invoiceStatus = normalizeStatusFilter(invoice?.status);
+  const invoiceStatus = normalizeVietnameseText(invoice?.status);
   if (isCancelledStatus(invoiceStatus)) return false;
-  if (statusFilter === 'all' || statusFilter === 'exclude_cancelled') return true;
+  if (!statusFilter || statusFilter === 'all' || statusFilter === 'exclude_cancelled') return true;
   return invoiceStatus === statusFilter;
 }
 
@@ -271,24 +321,21 @@ function getDetailSku(detail = {}, productsById = new Map()) {
   return '';
 }
 
-// ─────────────────────────────────────────────
-// GET /api/stats/product-report
-// Báo cáo thống kê bán hàng theo sản phẩm trong khoảng ngày local Asia/Saigon
-// Query: from, to (YYYY-MM-DD), period=day|month|year|custom, status=completed mặc định
-// ─────────────────────────────────────────────
-function getDetailUnitCost(detail = {}) {
+function getDetailUnitCost(detail = {}, product = null) {
   return [
     detail.cost_price_at_sale,
     detail.import_price,
     detail.purchase_price,
     detail.cost_price,
+    product?.cost_price,
+    product?.import_price,
   ].map(value => toNumber(value, Number.NaN)).find(value => Number.isFinite(value) && value > 0) || 0;
 }
 
 router.get('/product-report', (req, res) => {
   try {
     const { from, to, period } = buildProductReportRange(req.query);
-    const statusFilter = normalizeStatusFilter(req.query.status || 'completed');
+    const statusFilter = req.query.status ? normalizeStatusFilter(req.query.status) : 'all';
 
     const invoices = getAll('invoices')
       .filter(inv => inv && inv.created_at)
@@ -334,85 +381,115 @@ router.get('/product-report', (req, res) => {
       const invoiceSubtotal = toNumber(invoice.subtotal);
       const invoiceDiscount = toNumber(invoice.discount_amount);
       const invoiceVat = toNumber(invoice.vat_amount);
+      const invoiceTotal = toNumber(invoice.total ?? invoice.total_amount);
+      const paidAmount = toNumber(invoice.paid_amount);
+      const remainingAmount = toNumber(invoice.remaining_amount, Math.max(0, invoiceTotal - paidAmount));
+      const rawStatus = normalizeVietnameseText(invoice.status);
+      const paymentStatusRaw = normalizeVietnameseText(invoice.payment_status);
+
+      let isPaid = false;
+      let paymentStatusLabel = 'Chưa TT';
+
+      if (rawStatus === 'completed' || paymentStatusRaw === 'paid' || (paidAmount >= invoiceTotal && invoiceTotal > 0)) {
+        isPaid = true;
+        paymentStatusLabel = 'Đã TT';
+      } else if (paidAmount > 0 && paidAmount < invoiceTotal) {
+        isPaid = false;
+        paymentStatusLabel = 'TT 1 phần';
+      } else {
+        isPaid = false;
+        paymentStatusLabel = 'Chưa TT';
+      }
+
       const orderProducts = [];
       let orderRevenueBeforeTax = 0;
       let orderCost = 0;
       let orderEstimatedProfit = 0;
 
-      for (const detail of details) {
-        const quantity = toNumber(detail.quantity);
-        const unitPrice = toNumber(detail.unit_price);
-        const grossAmount = quantity * unitPrice;
-        const productDiscount = toNumber(detail.discount_amount);
-        const lineTotal = toNumber(detail.line_total, grossAmount - productDiscount);
-        const ratio = invoiceSubtotal > 0 && lineTotal > 0 ? lineTotal / invoiceSubtotal : 0;
-        const allocatedDiscount = invoiceDiscount * ratio;
-        const taxAmount = invoiceVat * ratio;
-        const revenueBeforeTax = grossAmount - productDiscount - allocatedDiscount;
-        const netAmount = grossAmount - productDiscount - allocatedDiscount + taxAmount;
-        const unitCost = getDetailUnitCost(detail);
-        const costAmount = quantity * unitCost;
-        const estimatedProfit = revenueBeforeTax - costAmount;
-        const productName = getDetailProductName(detail, productsById);
-        const sku = getDetailSku(detail, productsById);
-        const type = detail.type || detail.item_type || (detail.combo_id ? 'combo' : 'product');
-        const rowKey = [dateKey, type, detail.product_id || '', detail.variant_id || '', detail.combo_id || '', sku, productName].join('|');
+      if (details.length === 0) {
+        orderRevenueBeforeTax = invoiceTotal;
+        orderCost = 0;
+        orderEstimatedProfit = invoiceTotal;
+        totalGrossAmount += invoiceTotal;
+        totalNetAmount += invoiceTotal;
+        totalEstimatedProfit += invoiceTotal;
+      } else {
+        for (const detail of details) {
+          const quantity = toNumber(detail.quantity);
+          const unitPrice = toNumber(detail.unit_price);
+          const grossAmount = quantity * unitPrice;
+          const productDiscount = toNumber(detail.discount_amount);
+          const lineTotal = toNumber(detail.line_total, grossAmount - productDiscount);
+          const ratio = invoiceSubtotal > 0 && lineTotal > 0 ? lineTotal / invoiceSubtotal : 0;
+          const allocatedDiscount = invoiceDiscount * ratio;
+          const taxAmount = invoiceVat * ratio;
+          const revenueBeforeTax = grossAmount - productDiscount - allocatedDiscount;
+          const netAmount = grossAmount - productDiscount - allocatedDiscount + taxAmount;
+          const product = productsById.get(Number(detail.variant_id)) || productsById.get(Number(detail.product_id));
+          const unitCost = getDetailUnitCost(detail, product);
+          const costAmount = quantity * unitCost;
+          const estimatedProfit = revenueBeforeTax - costAmount;
+          const productName = getDetailProductName(detail, productsById);
+          const sku = getDetailSku(detail, productsById);
+          const type = detail.type || detail.item_type || (detail.combo_id ? 'combo' : 'product');
+          const rowKey = [dateKey, type, detail.product_id || '', detail.variant_id || '', detail.combo_id || '', sku, productName].join('|');
 
-        if (!rowMap.has(rowKey)) {
-          rowMap.set(rowKey, {
-            date: dateKey,
+          if (!rowMap.has(rowKey)) {
+            rowMap.set(rowKey, {
+              date: dateKey,
+              productName,
+              sku,
+              type,
+              productId: detail.product_id || null,
+              variantId: detail.variant_id || null,
+              comboId: detail.combo_id || null,
+              quantitySold: 0,
+              grossAmount: 0,
+              productDiscount: 0,
+              allocatedDiscount: 0,
+              taxAmount: 0,
+              netAmount: 0,
+              revenueBeforeTax: 0,
+              costAmount: 0,
+              estimatedProfit: 0,
+              orderCount: 0,
+              _invoiceIds: new Set(),
+            });
+          }
+
+          const row = rowMap.get(rowKey);
+          row.quantitySold += quantity;
+          row.grossAmount += grossAmount;
+          row.productDiscount += productDiscount;
+          row.allocatedDiscount += allocatedDiscount;
+          row.taxAmount += taxAmount;
+          row.netAmount += netAmount;
+          row.revenueBeforeTax += revenueBeforeTax;
+          row.costAmount += costAmount;
+          row.estimatedProfit += estimatedProfit;
+          row._invoiceIds.add(invoiceId);
+
+          orderProducts.push({
             productName,
             sku,
             type,
-            productId: detail.product_id || null,
-            variantId: detail.variant_id || null,
-            comboId: detail.combo_id || null,
-            quantitySold: 0,
-            grossAmount: 0,
-            productDiscount: 0,
-            allocatedDiscount: 0,
-            taxAmount: 0,
-            netAmount: 0,
-            revenueBeforeTax: 0,
-            costAmount: 0,
-            estimatedProfit: 0,
-            orderCount: 0,
-            _invoiceIds: new Set(),
+            quantity: roundMoney(quantity),
+            revenueBeforeTax: roundMoney(revenueBeforeTax),
+            costAmount: roundMoney(costAmount),
+            estimatedProfit: roundMoney(estimatedProfit),
           });
+          orderRevenueBeforeTax += revenueBeforeTax;
+          orderCost += costAmount;
+          orderEstimatedProfit += estimatedProfit;
+          totalQuantity += quantity;
+          totalGrossAmount += grossAmount;
+          totalProductDiscount += productDiscount;
+          totalAllocatedDiscount += allocatedDiscount;
+          totalTaxAmount += taxAmount;
+          totalNetAmount += netAmount;
+          totalCost += costAmount;
+          totalEstimatedProfit += estimatedProfit;
         }
-
-        const row = rowMap.get(rowKey);
-        row.quantitySold += quantity;
-        row.grossAmount += grossAmount;
-        row.productDiscount += productDiscount;
-        row.allocatedDiscount += allocatedDiscount;
-        row.taxAmount += taxAmount;
-        row.netAmount += netAmount;
-        row.revenueBeforeTax += revenueBeforeTax;
-        row.costAmount += costAmount;
-        row.estimatedProfit += estimatedProfit;
-        row._invoiceIds.add(invoiceId);
-
-        orderProducts.push({
-          productName,
-          sku,
-          type,
-          quantity: roundMoney(quantity),
-          revenueBeforeTax: roundMoney(revenueBeforeTax),
-          costAmount: roundMoney(costAmount),
-          estimatedProfit: roundMoney(estimatedProfit),
-        });
-        orderRevenueBeforeTax += revenueBeforeTax;
-        orderCost += costAmount;
-        orderEstimatedProfit += estimatedProfit;
-        totalQuantity += quantity;
-        totalGrossAmount += grossAmount;
-        totalProductDiscount += productDiscount;
-        totalAllocatedDiscount += allocatedDiscount;
-        totalTaxAmount += taxAmount;
-        totalNetAmount += netAmount;
-        totalCost += costAmount;
-        totalEstimatedProfit += estimatedProfit;
       }
 
       orders.push({
@@ -427,6 +504,12 @@ router.get('/product-report', (req, res) => {
           || 'Khách lẻ',
         customerPhone: customersById.get(Number(invoice.customer_id))?.phone || invoice.customer_phone || invoice.phone || '',
         createdAt: invoice.created_at,
+        status: invoice.status || 'pending',
+        isPaid,
+        paymentStatusLabel,
+        total: roundMoney(invoiceTotal),
+        paidAmount: roundMoney(paidAmount),
+        remainingAmount: roundMoney(remainingAmount),
         revenueBeforeTax: roundMoney(orderRevenueBeforeTax),
         costAmount: roundMoney(orderCost),
         estimatedProfit: roundMoney(orderEstimatedProfit),

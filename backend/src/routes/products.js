@@ -612,45 +612,76 @@ router.get('/search', (req, res) => {
 router.get('/sale-candidates', (req, res) => {
   try {
     const query = String(req.query.q || req.query.search || '').trim();
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 50000);
+    const rawLimit = parseInt(req.query.limit, 10);
+    // Giới hạn hợp lý: không bao giờ đổ 50.000 records làm đơ trình duyệt desktop
+    const limit = Math.min(Math.max(rawLimit || (query ? 100 : 50), 1), 300);
     const categoriesById = getCategoriesById();
     const rows = [];
     const parentById = new Map();
 
-    for (const parent of activeParents()) {
-      const variants = activeVariants(parent.id);
+    // TỐI ƯU O(N): Đọc 1 lần duy nhất và gom nhóm variants bằng Map thay vì lặp lồng O(N^2)
+    const allActive = getAll('products', p => isActiveProduct(p));
+    const variantsByParent = new Map();
+    const parents = [];
+
+    for (const p of allActive) {
+      if (hasParentId(p.parent_id)) {
+        const pId = Number(p.parent_id);
+        if (!variantsByParent.has(pId)) variantsByParent.set(pId, []);
+        variantsByParent.get(pId).push(p);
+      } else {
+        parents.push(p);
+      }
+    }
+
+    for (const parent of parents) {
+      const variants = variantsByParent.get(Number(parent.id)) || [];
       if (variants.length === 0) {
         rows.push(enrichProduct(parent, null, categoriesById));
         continue;
       }
       const enrichedParent = enrichProduct(parent, null, categoriesById);
       parentById.set(Number(parent.id), enrichedParent);
-      variants.forEach(variant => rows.push({
-        ...enrichProduct(variant, enrichedParent, categoriesById),
-        parent_id: variant.parent_id || parent.id,
-        parent_name: variant.parent_name || parent.name,
-        parent_sku: variant.parent_sku || parent.sku,
-        is_variant: true,
-      }));
+      for (const variant of variants) {
+        rows.push({
+          ...enrichProduct(variant, enrichedParent, categoriesById),
+          parent_id: variant.parent_id || parent.id,
+          parent_name: variant.parent_name || parent.name,
+          parent_sku: variant.parent_sku || parent.sku,
+          is_variant: true,
+        });
+      }
     }
 
     const normalizedQuery = normalizeSearchText(query);
-    const matches = normalizedQuery
-      ? rows
-        .map(row => {
-          const parent = row.parent_id ? parentById.get(Number(row.parent_id)) : null;
-          const result = scoreProductMatch(row, normalizedQuery, parent, categoriesById);
-          const parentResult = parent ? scoreProductMatch(parent, normalizedQuery, null, categoriesById) : null;
-          return {
-            row,
-            matched: result.matched || Boolean(parentResult?.matched),
-            score: Math.max(result.score, (parentResult?.score || 0) - 25),
-          };
-        })
-        .filter(item => item.matched)
-        .sort((left, right) => right.score - left.score)
-        .map(item => item.row)
-      : rows;
+    if (!normalizedQuery) {
+      // Nếu không tìm kiếm, trả về ngay danh sách giới hạn cực nhanh (dưới 5ms)
+      return res.json(rows.slice(0, limit));
+    }
+
+    // Khi có tìm kiếm: lọc nhanh các từ khóa trước khi chấm điểm chi tiết
+    const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+    const candidateRows = rows.filter(row => {
+      const parent = row.parent_id ? parentById.get(Number(row.parent_id)) : null;
+      const haystack = normalizeSearchText(`${row.name || ''} ${row.sku || ''} ${row.barcode || ''} ${parent?.name || ''}`);
+      return tokens.every(token => haystack.includes(token));
+    });
+
+    const matches = candidateRows
+      .map(row => {
+        const parent = row.parent_id ? parentById.get(Number(row.parent_id)) : null;
+        const result = scoreProductMatch(row, normalizedQuery, parent, categoriesById);
+        const parentResult = parent ? scoreProductMatch(parent, normalizedQuery, null, categoriesById) : null;
+        return {
+          row,
+          matched: result.matched || Boolean(parentResult?.matched),
+          score: Math.max(result.score, (parentResult?.score || 0) - 25),
+        };
+      })
+      .filter(item => item.matched)
+      .sort((left, right) => right.score - left.score)
+      .map(item => item.row);
+
     res.json(matches.slice(0, limit));
   } catch (err) {
     res.status(500).json({ error: 'Lỗi khi lấy danh sách sản phẩm bán hàng', detail: err.message });

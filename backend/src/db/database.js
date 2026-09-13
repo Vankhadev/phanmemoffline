@@ -408,9 +408,13 @@ function resolveDBPath() {
   if (electronOwned && isBackupPath(defaultPath)) {
     throw new Error(`[KHA DB] Refusing to use backup file as DB_PATH: ${defaultPath}`);
   }
-  const configuredPath = currentConfigPath && !isBackupPath(currentConfigPath) ? currentConfigPath : null;
+  const configuredPath = currentConfigPath && fs.existsSync(currentConfigPath) && !isBackupPath(currentConfigPath) ? currentConfigPath : null;
   if (currentConfigPath && !configuredPath) {
-    console.error(`[KHA DB] Ignoring unsafe backup path from config: ${currentConfigPath}`);
+    if (!fs.existsSync(currentConfigPath)) {
+      console.warn(`[KHA DB] Configured database path does not exist on this machine, falling back to default: ${currentConfigPath}`);
+    } else {
+      console.error(`[KHA DB] Ignoring unsafe backup path from config: ${currentConfigPath}`);
+    }
   }
   const activePath = electronOwned ? defaultPath : (configuredPath || defaultPath);
   const activeStats = getDbFileStats(activePath);
@@ -3008,6 +3012,16 @@ function shouldSkipAccountScope(options = {}) {
 
 function isRowVisibleForCurrentScope(table, row, options = {}) {
   if (!isAccountScoped(table) || shouldSkipAccountScope(options)) return true;
+  // BẢO VỆ DỮ LIỆU OFFLINE: Trong phần mềm offline, các bảng cốt lõi (hóa đơn, khách hàng, sản phẩm, sổ quỹ)
+  // không bao giờ bị ẩn chỉ vì account_id bị lệch giữa các tài khoản thu ngân hoặc session.
+  const OFFLINE_UNIVERSAL_TABLES = new Set([
+    'invoices', 'invoice_details', 'orders', 'order_items', 'customers', 'products',
+    'product_categories', 'categories', 'suppliers', 'partners', 'cash_book', 'cash_fund',
+    'print_templates', 'invoice_templates', 'combos', 'combo_items', 'customer_debts', 'supplier_debts'
+  ]);
+  if (OFFLINE_UNIVERSAL_TABLES.has(table)) {
+    return true;
+  }
   const accountId = getActiveAccountId();
   if (accountId == null) return true;
   return row?.account_id == null || Number(row.account_id) === Number(accountId);

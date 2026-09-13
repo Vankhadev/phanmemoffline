@@ -54,6 +54,17 @@ function exportCustomerDebtReport(customerId, fromDate, toDate) {
         .filter(inv => Number(inv.customer_id) === Number(customerId))
         .filter(inv => !isCancelledInvoiceStatus(inv.status))
         .filter(inv => {
+          // Chỉ lấy những đơn chưa thanh toán. Đơn đã thanh toán rồi không được lấy vô.
+          const remAmt = Number(inv.remaining_amount);
+          const total = Number(inv.total ?? inv.total_amount) || 0;
+          const paid = Number(inv.paid_amount) || 0;
+          const calculatedRemaining = Number.isFinite(remAmt) ? remAmt : (total - paid);
+          const isPaid = (inv.status === 'completed' && calculatedRemaining <= 0)
+            || inv.payment_status === 'paid'
+            || calculatedRemaining <= 0;
+          return !isPaid && calculatedRemaining > 0;
+        })
+        .filter(inv => {
           const createdAt = parseInvoiceDate(inv.created_at);
           return createdAt && createdAt >= fromBoundary && createdAt <= toBoundary;
         })

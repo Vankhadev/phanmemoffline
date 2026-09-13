@@ -243,18 +243,18 @@ export default function TaxReport() {
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">Quy tr?nh sử dụng</h3>
+                <h3 className="font-bold text-gray-800 mb-2">Quy trình sử dụng</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Chọn kỳ báo cáo theo tháng ho?c kho?ng ngày.</li>
-                  <li>Nhân Xem báo cáo d? n?p dữ liệu.</li>
-                  <li>Dùng Luu snapshot kỳ n?y d? luu trạng thái báo cáo.</li>
-                  <li>Kiểm tra bằng đầu vào về đầu ra trước khi kỳt xu?t.</li>
+                  <li>Chọn kỳ báo cáo theo tháng hoặc khoảng ngày.</li>
+                  <li>Nhấn Xem báo cáo để nạp dữ liệu.</li>
+                  <li>Dùng Lưu snapshot kỳ này để lưu trạng thái báo cáo.</li>
+                  <li>Kiểm tra bảng đầu vào và đầu ra trước khi kết xuất.</li>
                 </ul>
               </div>
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
+                <h3 className="font-bold text-gray-800 mb-2">Lưu ý</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Báo cáo dđã trđơn hóa đơn về phiếu nhập trong hệ thống.</li>
+                  <li>Báo cáo dựa trên hóa đơn và phiếu nhập trong hệ thống.</li>
                 </ul>
               </div>
             </div>

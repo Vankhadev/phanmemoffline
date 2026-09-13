@@ -1,4 +1,11 @@
-﻿## [2.4.6] - 2026-06-30
+## [3.1.16] - 2026-09-13
+
+### Changed & Fixed
+- **Báo cáo đơn hàng theo khách hàng:** Lấy trọn vẹn cả tháng (ngày 01 đến cuối tháng), chỉ lấy các đơn hàng chưa thanh toán (còn nợ), giữ nguyên 100% mẫu Excel có sẵn của hệ thống.
+- **An toàn dữ liệu máy khách:** Gia cố kiểm tra `fs.existsSync` cho đường dẫn cấu hình, bảo đảm cô lập môi trường máy khách an toàn, bảo vệ cơ chế Atomic Write chống mất điện đột ngột. Thêm cảnh báo chạy trong thư mục Temp trên `start-web.bat`.
+- **Giao diện tiếng Việt:** Chuẩn hóa toàn bộ câu chữ, khắc phục triệt để lỗi dấu hỏi `?` và lỗi font trên các màn hình Thống kê, Báo cáo thuế, Cài đặt, Báo cáo công nợ.
+
+## [2.4.6] - 2026-06-30
 
 ### Fixed
 - Sửa lỗi Quét file backup bị chặn bởi restore-import lock cũ/stale.

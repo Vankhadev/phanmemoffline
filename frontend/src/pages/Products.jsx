@@ -258,15 +258,15 @@ const ProductFormModal = memo(function ProductFormModal({
               onLimitError={onStockLimitError}
               settings={negativeStockSettings}
             />
-            <div><label className="text-xs text-gray-500">đơn về t?nh</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="don về t?nh" /></div>
+            <div><label className="text-xs text-gray-500">Đơn vị tính</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="cái, hộp, kg..." /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-500">M? sản phẩm</label>
-              <input className="input-field bg-gray-100 text-gray-500 cursor-not-allowed" value={form.sku} readOnly disabled placeholder="T? sinh SP00001" />
-              <span className="text-[10px] text-blue-500">{editing ? 'M? đã cóp được giá nguyđơn.' : 'Hệ thống t? c?p mã sau khi luu.'}</span>
+              <label className="text-xs text-gray-500">Mã sản phẩm</label>
+              <input className="input-field bg-gray-100 text-gray-500 cursor-not-allowed" value={form.sku} readOnly disabled placeholder="Tự sinh SP00001" />
+              <span className="text-[10px] text-blue-500">{editing ? 'Mã đã cấp giữ nguyên.' : 'Hệ thống tự cấp mã sau khi lưu.'}</span>
             </div>
-            <div><label className="text-xs text-gray-500">Danh mục d?ng text</label><input className="input-field w-full" value={form.category} onChange={e => updateField('category', e.target.value)} placeholder="nh?p tđơn danh mục nđủ cđơn" /></div>
+            <div><label className="text-xs text-gray-500">Danh mục (dạng text)</label><input className="input-field w-full" value={form.category} onChange={e => updateField('category', e.target.value)} placeholder="Nhập tên danh mục nếu cần" /></div>
           </div>
           <div>
             <label className="text-xs text-gray-500">Nhà cung cấp</label>
@@ -386,15 +386,15 @@ const VariantFormModal = memo(function VariantFormModal({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-500">SKU biến thể (hệ thống t? sinh)</label>
-              <input className="input-field w-full bg-gray-100 text-gray-500 cursor-not-allowed" value={editingVariant ? (form.sku || '') : ''} readOnly disabled placeholder="T? sinh sau khi luu" />
-              <span className="text-[10px] text-blue-500">{editingVariant ? 'M? đã cóp được giá nguyđơn.' : 'Hệ thống t? c?p mã SP ti?p theo sau khi luu.'}</span>
+              <label className="text-xs text-gray-500">SKU biến thể (hệ thống tự sinh)</label>
+              <input className="input-field w-full bg-gray-100 text-gray-500 cursor-not-allowed" value={editingVariant ? (form.sku || '') : ''} readOnly disabled placeholder="Tự sinh sau khi lưu" />
+              <span className="text-[10px] text-blue-500">{editingVariant ? 'Mã đã cấp giữ nguyên.' : 'Hệ thống tự cấp mã SP tiếp theo sau khi lưu.'}</span>
             </div>
-            <div><label className="text-xs text-gray-500">đơn về t?nh</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="cái" /></div>
+            <div><label className="text-xs text-gray-500">Đơn vị tính</label><input className="input-field" value={form.unit} onChange={e => updateField('unit', e.target.value)} placeholder="cái" /></div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
             <button type="submit" disabled={saving || Boolean(stockError)} className="btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
-              ?? {saving ? 'đang luu...' : 'Luu biến thể'}
+              💾 {saving ? 'Đang lưu...' : 'Lưu biến thể'}
             </button>
             <button type="button" onClick={onClose} className="btn-danger flex-1">Hủy</button>
           </div>

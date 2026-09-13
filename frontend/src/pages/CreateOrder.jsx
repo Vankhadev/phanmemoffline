@@ -37,25 +37,36 @@ function normalizePriceType(value) {
   return PRICE_TYPE_KEYS.has(key) ? key : 'retail';
 }
 
-function readPriceField(source, key) {
+function readValidPositivePrice(source, key) {
   if (!source || !Object.prototype.hasOwnProperty.call(source, key)) return null;
   const raw = source[key];
   if (raw === undefined || raw === null || String(raw).trim() === '') return null;
   const number = Number(raw);
-  return Number.isFinite(number) ? Math.max(0, number) : null;
+  return Number.isFinite(number) && number > 0 ? number : null;
 }
 
 function getPriceValueByType(source, currentPriceType = 'retail') {
+  if (!source || typeof source !== 'object') return 0;
   const activeType = normalizePriceType(currentPriceType);
-  const exact = readPriceField(source, `${activeType}_price`);
+
+  // 1. Tìm giá theo đúng loại yêu cầu (Bán lẻ / Sỉ / VIP) với điều kiện > 0
+  const exact = readValidPositivePrice(source, `${activeType}_price`);
   if (exact !== null) return exact;
 
-  const retail = readPriceField(source, 'retail_price');
+  // 2. Nếu là giá sỉ hoặc VIP mà sản phẩm chưa thiết lập (> 0), fallback về giá bán lẻ chuẩn
+  const retail = readValidPositivePrice(source, 'retail_price');
   if (retail !== null) return retail;
 
-  for (const key of ['price', 'unit_price', 'sale_price', 'selling_price', 'wholesale_price', 'vip_price']) {
-    const value = readPriceField(source, key);
+  // 3. Fallback các trường giá bán thông dụng (> 0)
+  for (const key of ['price', 'sale_price', 'selling_price', 'unit_price']) {
+    const value = readValidPositivePrice(source, key);
     if (value !== null) return value;
+  }
+
+  // 4. Nếu vẫn chưa có và loại yêu cầu là lẻ, thử xem có giá sỉ hoặc VIP không
+  if (activeType === 'retail') {
+    const fallbackWholesale = readValidPositivePrice(source, 'wholesale_price') || readValidPositivePrice(source, 'vip_price');
+    if (fallbackWholesale !== null) return fallbackWholesale;
   }
 
   return 0;
@@ -501,8 +512,8 @@ export default function CreateOrder({ user, store }) {
       setLoading(prev => ({ ...prev, products: true }));
       try {
         const endpoint = query
-          ? `/products/sale-candidates?q=${encodeURIComponent(query)}&limit=100`
-          : '/products/sale-candidates?limit=50000';
+          ? `/products/sale-candidates?q=${encodeURIComponent(query)}&limit=50`
+          : '/products/sale-candidates?limit=40';
         const data = await apiJsonChecked(endpoint, { signal: controller.signal }, 'Không tải được sản phẩm.');
         if (productSearchRequestRef.current === requestId) {
           setProducts(Array.isArray(data) ? data : []);
@@ -648,6 +659,12 @@ export default function CreateOrder({ user, store }) {
   };
   const handleProductSearchFocus = () => {
     setShowProductSearchResults(true);
+    // Kích hoạt nhận phím tức thì trên Desktop Electron, chống trễ / mất focus cửa sổ
+    try {
+      if (typeof window !== 'undefined' && window.desktopApi?.window?.ensureInputFocus) {
+        window.desktopApi.window.ensureInputFocus({ reason: 'product-search-input' }).catch(() => {});
+      }
+    } catch (_) {}
     if (productResultFilter === 'combo') fetchCombos();
   };
   const handleProductSearchChange = (event) => {
@@ -680,19 +697,13 @@ export default function CreateOrder({ user, store }) {
 
   const subtotal = cart.reduce((s, i) => s + (Number(i.line_total) || 0), 0);
 
-  // L?y giá d?ng theo loại khách hàng đã chọn
+  // Lấy giá đúng theo loại giá đang chọn (Bán lẻ / Bán sỉ / VIP)
   const getPrice = (product) => {
-    const activePriceType = selectedCustomer
-      ? customerTypeToPriceType(selectedCustomer.customer_type)
-      : priceType;
-    return getPriceValueByType(product, activePriceType);
+    return getPriceValueByType(product, priceType);
   };
 
   const getComboPrice = (combo) => {
-    const activePriceType = selectedCustomer
-      ? customerTypeToPriceType(selectedCustomer.customer_type)
-      : priceType;
-    return getComboPriceValue(combo, activePriceType);
+    return getComboPriceValue(combo, priceType);
   };
 
   const getComboById = (id) => (combos || []).find(c => Number(c.id) === Number(id));
@@ -1639,8 +1650,10 @@ export default function CreateOrder({ user, store }) {
     if (!guardCartStockBeforeSubmit()) return;
     setCreating(true);
     const clientOrderId = generateClientOrderId();
+    const resolvedCustomerName = (selectedCustomer?.name || customerSearch.trim() || '').trim();
     const orderPayload = attachClientOrderMetadata({
       customer_id: selectedCustomer?.id || null,
+      customer_name: resolvedCustomerName,
       user_id: user?.id,
       subtotal, vat_percent: vatPercent, vat_amount: vatAmount,
       discount_percent: deliveryFeeMode === 'percent' ? discountAmount : 0,
@@ -1652,7 +1665,7 @@ export default function CreateOrder({ user, store }) {
       change_amount: changeAmount,
       remaining_amount: remainingAmount,
       delivery_fee: deliveryFee,
-      invoice_writer: invoiceWriter, receiver_name: receiverName,
+      invoice_writer: invoiceWriter, receiver_name: receiverName || resolvedCustomerName,
       delivery_date: deliveryDate || null,
       details: buildOrderDetailsPayload(),
     }, { client_order_id: clientOrderId });
@@ -1666,7 +1679,7 @@ export default function CreateOrder({ user, store }) {
         client_order_id: orderPayload.client_order_id,
         payload: payloadForStorage,
         customer_id: selectedCustomer?.id || null,
-        customer_name: selectedCustomer?.name || 'Khách lẻ',
+        customer_name: resolvedCustomerName || 'Khách lẻ',
         total: grandTotal,
         old_debt: oldDebtAmount,
         payable_amount: payableAmount,
@@ -1777,8 +1790,10 @@ export default function CreateOrder({ user, store }) {
     if (!guardServiceLinesBeforeSubmit()) return;
     if (!guardCartStockBeforeSubmit()) return;
     setCreating(true);
+    const resolvedCustomerName = (selectedCustomer?.name || customerSearch.trim() || lastInvoice?.customer_name || '').trim();
     const payload = {
       customer_id: selectedCustomer?.id || null,
+      customer_name: resolvedCustomerName,
       payment_method: paymentMethod,
       note,
       subtotal,
@@ -1792,6 +1807,7 @@ export default function CreateOrder({ user, store }) {
       remaining_amount: remainingAmount,
       delivery_fee: deliveryFee,
       delivery_date: deliveryDate || null,
+      receiver_name: receiverName || resolvedCustomerName,
       details: buildOrderDetailsPayload(),
     };
 
@@ -1808,7 +1824,7 @@ export default function CreateOrder({ user, store }) {
       const updatedInvoice = {
         id: editingInvoiceId,
         invoice_code: lastInvoice?.invoice_code || '',
-        customer_name: selectedCustomer?.name || 'Khách lẻ',
+        customer_name: resolvedCustomerName || 'Khách lẻ',
         total: grandTotal,
         subtotal,
         vatPercent,
@@ -2077,22 +2093,25 @@ export default function CreateOrder({ user, store }) {
                   onChange={handleProductSearchChange} />
               </div>
               <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 2xl:w-auto 2xl:flex 2xl:flex-wrap 2xl:items-center 2xl:justify-end">
-                {selectedCustomer ? (
-                  <span className={`order-toolbar-pill border ${customerTypeToPriceType(selectedCustomer.customer_type) === 'wholesale'
+                <div className="flex items-center gap-1">
+                  {Object.entries(PRICE_LABELS).map(([k, v]) => (
+                    <button key={k} onClick={() => applyPriceTypeToCart(k)}
+                      type="button"
+                      title={`Bấm để chuyển sang Bảng giá ${v}`}
+                      className={`order-toolbar-pill border transition ${priceType === k ? 'bg-blue-600 text-white border-blue-600 font-bold shadow-sm' : 'border-gray-300 text-gray-600 hover:border-blue-400 bg-white'}`}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+                {selectedCustomer && (
+                  <span className={`order-toolbar-pill border text-xs ${customerTypeToPriceType(selectedCustomer.customer_type) === 'wholesale'
                     ? 'bg-orange-100 text-orange-700 border-orange-300'
                     : customerTypeToPriceType(selectedCustomer.customer_type) === 'vip'
                       ? 'bg-purple-100 text-purple-700 border-purple-300'
                       : 'bg-blue-100 text-blue-700 border-blue-300'
                     }`}>
-                    {selectedCustomer.customer_type || 'Khách lẻ'}
+                    KH: {selectedCustomer.customer_type || 'Khách lẻ'}
                   </span>
-                ) : (
-                  Object.entries(PRICE_LABELS).map(([k, v]) => (
-                    <button key={k} onClick={() => applyPriceTypeToCart(k)}
-                      className={`order-toolbar-pill border transition ${priceType === k ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:border-blue-400'}`}>
-                      {v}
-                    </button>
-                  ))
                 )}
                 <button
                   onClick={openOrderProductPicker}
@@ -2148,7 +2167,7 @@ export default function CreateOrder({ user, store }) {
                       </div>
                     </div>
                   ))}
-                  {selectableProductRows.map(item => {
+                  {selectableProductRows.slice(0, 40).map(item => {
                     const isVariant = Boolean(item._isVariantOption || item.is_variant);
                     const parent = item.parent || null;
                     const displayName = isVariant ? getProductDisplayName(item, parent) : getProductDisplayName(item);
@@ -2436,7 +2455,7 @@ export default function CreateOrder({ user, store }) {
                       </div>
                     </div>
                   ))}
-                  {selectableProductRows.map(item => {
+                  {selectableProductRows.slice(0, 50).map(item => {
                     const isVariant = Boolean(item._isVariantOption || item.is_variant);
                     const parent = item.parent || null;
                     const displayName = isVariant ? getProductDisplayName(item, parent) : getProductDisplayName(item);

@@ -363,7 +363,7 @@ function V2Element({ element, data, template }) {
     return (
       <div className="invoice-template-v2-title" style={getElementCssStyle(element)}>
         {isStyleEnabled(style, 'showTitle') && <h1>{runtimeTitle || style.titleText || 'HÓA ĐƠN'}</h1>}
-        {isStyleEnabled(style, 'showSubtitle') && <h2>{style.subtitleText || 'BÁN HÀNG'}</h2>}
+        {isStyleEnabled(style, 'showSubtitle') && !runtimeTitle && <h2>{style.subtitleText || 'BÁN HÀNG'}</h2>}
         {isStyleEnabled(style, 'showInvoiceCode') && <div>{invoiceCode}</div>}
       </div>
     );
@@ -384,7 +384,7 @@ function V2Element({ element, data, template }) {
   if (element.type === 'invoiceMeta') {
     return (
       <div className="invoice-template-v2-pairs" style={getElementCssStyle(element)}>
-        {isStyleEnabled(style, 'showOrderCode') && <InfoPair label={style.orderCodeLabel || 'M? don'} value={invoiceCode} strong />}
+        {isStyleEnabled(style, 'showOrderCode') && <InfoPair label={style.orderCodeLabel || 'Mã đơn'} value={invoiceCode} strong />}
         {isStyleEnabled(style, 'showOrderDate') && <InfoPair label={style.orderDateLabel || 'Ngày'} value={formatDateTime(invoice.created_at)} />}
         {isStyleEnabled(style, 'showSeller') && <InfoPair label={style.sellerLabelShort || 'NV'} value={metadata.user_name} />}
         {isStyleEnabled(style, 'showOrderSource', false) && <InfoPair label={style.orderSourceLabel || 'Nguồn'} value={invoice.source} />}
@@ -435,7 +435,7 @@ function V2Element({ element, data, template }) {
           <p>{style.buyerHint || '(Ký và ghi rõ họ tên)'}</p>
         </div>
         <div>
-          <h3>{style.sellerLabel || signatures.seller?.label || 'Ng?đi bđơn'}</h3>
+          <h3>{style.sellerLabel || signatures.seller?.label || 'Người bán'}</h3>
           <p>{style.sellerHint || '(Ký và ghi rõ họ tên)'}</p>
         </div>
       </div>

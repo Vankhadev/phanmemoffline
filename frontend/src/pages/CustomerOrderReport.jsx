@@ -39,9 +39,13 @@ function toDateInputValue(date) {
 
 function getDefaultRange() {
   const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
   return {
-    from: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)),
-    to: toDateInputValue(now),
+    from: toDateInputValue(firstDay),
+    to: toDateInputValue(lastDay),
   };
 }
 
@@ -50,7 +54,7 @@ function formatVND(value) {
 }
 
 function formatDateTime(value) {
-  if (!value) return '?';
+  if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('vi-VN', {
@@ -63,7 +67,7 @@ function formatDateTime(value) {
 }
 
 function formatDateOnly(value) {
-  if (!value) return '?';
+  if (!value) return '-';
   const match = String(value).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (match) return `${match[3]}/${match[2]}/${match[1]}`;
   const date = new Date(value);
@@ -72,7 +76,7 @@ function formatDateOnly(value) {
 }
 
 function statusLabel(status) {
-  return STATUS_LABELS[status] || status || '?';
+  return STATUS_LABELS[status] || status || '-';
 }
 
 function safeSheetName(name) {
@@ -84,7 +88,7 @@ function normalizeCustomerSearch(value) {
   return String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[d?]/g, 'd')
+    .replace(/[đĐ]/g, 'd')
     .toLowerCase()
     .trim();
 }
@@ -135,7 +139,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
         <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-5 py-4">
           <div>
             <h3 className="text-lg font-bold text-gray-950">Chi tiết đơn hàng</h3>
-            <p className="text-xs text-gray-500">M? don: {invoice.invoice_code}</p>
+            <p className="text-xs text-gray-500">Mã đơn: {invoice.invoice_code}</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
             <X size={18} />
@@ -149,7 +153,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
             {/* Invoice Header */}
             <div className="text-center pb-4 border-b border-dashed border-gray-200">
               <h2 className="text-xl font-bold text-gray-900 tracking-wide">HÓA ĐƠN BÁN HÀNG</h2>
-              <p className="mt-1 text-xs text-gray-500">M?: {invoice.invoice_code} ? {formatDateTime(invoice.created_at)}</p>
+              <p className="mt-1 text-xs text-gray-500">Mã: {invoice.invoice_code} - {formatDateTime(invoice.created_at)}</p>
             </div>
 
             {/* Invoice Meta */}
@@ -159,14 +163,14 @@ function InvoiceDetailModal({ invoice, onClose }) {
                 <span className="font-semibold text-gray-900">{invoice.customer_name || 'Khách lẻ'}</span>
               </div>
               <div>
-                <span className="text-gray-400">Phuong th?c:</span>{' '}
+                <span className="text-gray-400">Phương thức:</span>{' '}
                 <span className="font-semibold text-gray-950">
-                  {invoice.payment_method === 'cash' ? 'Tiền một' : invoice.payment_method === 'bank' ? 'Chuyển khoản' : 'Cùng n?'}
+                  {invoice.payment_method === 'cash' ? 'Tiền mặt' : invoice.payment_method === 'bank' ? 'Chuyển khoản' : 'Công nợ'}
                 </span>
               </div>
               {invoice.customer_phone && (
                 <div>
-                  <span className="text-gray-400">điện thođi:</span>{' '}
+                  <span className="text-gray-400">Điện thoại:</span>{' '}
                   <span className="font-semibold text-gray-900">{invoice.customer_phone}</span>
                 </div>
               )}
@@ -178,7 +182,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
               </div>
               {invoice.note && (
                 <div className="col-span-2">
-                  <span className="text-gray-400">Ghi ch?:</span>{' '}
+                  <span className="text-gray-400">Ghi chú:</span>{' '}
                   <span className="text-gray-700 italic">{invoice.note}</span>
                 </div>
               )}
@@ -191,8 +195,8 @@ function InvoiceDetailModal({ invoice, onClose }) {
                   <tr className="border-b border-gray-200 text-gray-500 font-semibold uppercase tracking-wider">
                     <th className="py-2">Sản phẩm</th>
                     <th className="py-2 text-right">SL</th>
-                    <th className="py-2 text-right">đơn giá</th>
-                    <th className="py-2 text-right">Thành tiđơn</th>
+                    <th className="py-2 text-right">Đơn giá</th>
+                    <th className="py-2 text-right">Thành tiền</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -214,29 +218,29 @@ function InvoiceDetailModal({ invoice, onClose }) {
             {/* Invoice Footer Summary */}
             <div className="pt-4 border-t border-dashed border-gray-200 text-xs space-y-1.5 ml-auto w-2/3">
               <div className="flex justify-between text-gray-500">
-                <span>Tạm t?nh:</span>
+                <span>Tạm tính:</span>
                 <span className="font-semibold text-gray-800">{formatVND(invoice.subtotal)}</span>
               </div>
               {invoice.discount_amount > 0 && (
                 <div className="flex justify-between text-rose-600 font-medium">
-                  <span>Giâm giá:</span>
+                  <span>Giảm giá:</span>
                   <span>-{formatVND(invoice.discount_amount)}</span>
                 </div>
               )}
               {invoice.vat_amount > 0 && (
                 <div className="flex justify-between text-gray-500">
-                  <span>Thu? (VAT):</span>
+                  <span>Thuế (VAT):</span>
                   <span>+{formatVND(invoice.vat_amount)}</span>
                 </div>
               )}
               {invoice.delivery_fee > 0 && (
                 <div className="flex justify-between text-gray-500">
-                  <span>Ph? vđơn chuyđơn:</span>
+                  <span>Phí vận chuyển:</span>
                   <span>+{formatVND(invoice.delivery_fee)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-100 pt-1.5">
-                <span>Tổng c?ng:</span>
+                <span>Tổng cộng:</span>
                 <span className="text-blue-700">{formatVND(invoice.total)}</span>
               </div>
             </div>
@@ -254,7 +258,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
             In hóa đơn
           </button>
           <button type="button" onClick={onClose} className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800">
-            ?đơng
+            Đóng
           </button>
         </div>
       </div>
@@ -311,7 +315,10 @@ export default function CustomerOrderReport() {
   const reportStats = useMemo(() => {
     if (!report || invoices.length === 0) return null;
     let totalProducts = 0;
+    let totalUnpaid = 0;
     for (const inv of invoices) {
+      const rem = Number(inv.remaining_amount !== undefined ? inv.remaining_amount : (Number(inv.total || 0) - Number(inv.paid_amount || 0)));
+      totalUnpaid += rem > 0 ? rem : Number(inv.total || 0);
       for (const d of inv.details || []) {
         totalProducts += Number(d.quantity) || 0;
       }
@@ -320,9 +327,9 @@ export default function CustomerOrderReport() {
     const latest = sorted[0];
     return {
       totalInvoices: invoices.length,
-      totalAmount: summary.total_amount,
+      totalAmount: totalUnpaid > 0 ? totalUnpaid : summary.total_amount,
       totalProducts,
-      latestCode: latest?.invoice_code || '?',
+      latestCode: latest?.invoice_code || '-',
       latestDate: latest?.created_at || null,
     };
   }, [report, invoices, summary]);
@@ -337,7 +344,6 @@ export default function CustomerOrderReport() {
     }
     setCustomerSearch(customerDisplayName(selectedCustomer));
   }, [selectedCustomer]);
-
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -364,31 +370,32 @@ export default function CustomerOrderReport() {
 
   const fetchReport = useCallback(async () => {
     if (!customerId) {
-      setError('Vui lòng chọn khách hàng d? xem báo cáo.');
+      setError('Vui lòng chọn khách hàng để xem báo cáo.');
       return;
     }
     if (!from || !to) {
-      setError('Vui lòng chọn đầy đủ ngày bắt đầu về ngày kết thúc.');
+      setError('Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc.');
       return;
     }
     if (from > to) {
-      setError('Ngày bắt đầu không được lđơn hon ngày kết thúc.');
+      setError('Ngày bắt đầu không được lớn hơn ngày kết thúc.');
       return;
     }
 
     setLoadingReport(true);
     setError('');
     try {
-      const params = new URLSearchParams({ customer_id: customerId, from, to });
-      const data = await apiJson(`/invoices/reports/customer-orders?${params.toString()}`, {}, 'Không l?p được báo cáo');
+      const params = new URLSearchParams({ customer_id: customerId, from, to, unpaid_only: '1' });
+      const data = await apiJson(`/invoices/reports/customer-orders?${params.toString()}`, {}, 'Không lập được báo cáo');
       setReport(data);
     } catch (err) {
       setReport(null);
-      setError(err.message || 'Không l?p được báo cáo');
+      setError(err.message || 'Không lập được báo cáo');
     } finally {
       setLoadingReport(false);
     }
   }, [customerId, from, to]);
+
   useEffect(() => {
     if (!customerId) return;
     fetchReport();
@@ -428,7 +435,7 @@ export default function CustomerOrderReport() {
     setLoadingReport(true);
     setError('');
     try {
-      const params = new URLSearchParams({ customer_id: customerId, from, to });
+      const params = new URLSearchParams({ customer_id: customerId, from, to, unpaid_only: '1' });
       const exportUrl = resolveApiUrl(`/invoices/reports/customer-orders/export?${params.toString()}`);
       
       const response = await fetch(exportUrl, {
@@ -485,11 +492,11 @@ export default function CustomerOrderReport() {
     tempDiv.innerHTML = `
       <div style="text-align: center; padding-bottom: 15px; border-bottom: 1px dashed #e2e8f0;">
         <h2 style="margin: 0; font-size: 18px; color: #1a202c;">HÓA ĐƠN BÁN HÀNG</h2>
-        <p style="margin: 5px 0 0; font-size: 11px; color: #718096;">M?: ${invoice.invoice_code} ? ${formatDateTime(invoice.created_at)}</p>
+        <p style="margin: 5px 0 0; font-size: 11px; color: #718096;">Mã: ${invoice.invoice_code} - ${formatDateTime(invoice.created_at)}</p>
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 15px 0; font-size: 11px; border-bottom: 1px dashed #e2e8f0; color: #2d3748;">
         <div><strong>Khách hàng:</strong> ${invoice.customer_name || 'Khách lẻ'}</div>
-        <div><strong>Phuong th?c:</strong> ${invoice.payment_method === 'cash' ? 'Tiền một' : invoice.payment_method === 'bank' ? 'Chuyển khoản' : 'Cùng n?'}</div>
+        <div><strong>Phương thức:</strong> ${invoice.payment_method === 'cash' ? 'Tiền mặt' : invoice.payment_method === 'bank' ? 'Chuyển khoản' : 'Công nợ'}</div>
         <div><strong>Trạng thái:</strong> ${statusLabel(invoice.status)}</div>
       </div>
       <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 15px;">
@@ -497,8 +504,8 @@ export default function CustomerOrderReport() {
           <tr style="border-bottom: 1px solid #cbd5e0; text-align: left; color: #718096;">
             <th style="padding: 6px 0;">Sản phẩm</th>
             <th style="padding: 6px 0; text-align: right;">SL</th>
-            <th style="padding: 6px 0; text-align: right;">đơn giá</th>
-            <th style="padding: 6px 0; text-align: right;">Thành tiđơn</th>
+            <th style="padding: 6px 0; text-align: right;">Đơn giá</th>
+            <th style="padding: 6px 0; text-align: right;">Thành tiền</th>
           </tr>
         </thead>
         <tbody>
@@ -513,10 +520,10 @@ export default function CustomerOrderReport() {
         </tbody>
       </table>
       <div style="margin-top: 15px; border-top: 1px dashed #e2e8f0; padding-top: 10px; font-size: 11px; margin-left: auto; width: 60%; text-align: right; color: #4a5568;">
-        <div style="margin-bottom: 4px;">Tạm t?nh: <strong>${formatVND(invoice.subtotal)}</strong></div>
-        ${invoice.discount_amount > 0 ? `<div style="margin-bottom: 4px; color: #e53e3e;">Giâm giá: -${formatVND(invoice.discount_amount)}</div>` : ''}
+        <div style="margin-bottom: 4px;">Tạm tính: <strong>${formatVND(invoice.subtotal)}</strong></div>
+        ${invoice.discount_amount > 0 ? `<div style="margin-bottom: 4px; color: #e53e3e;">Giảm giá: -${formatVND(invoice.discount_amount)}</div>` : ''}
         ${invoice.vat_amount > 0 ? `<div style="margin-bottom: 4px;">VAT: +${formatVND(invoice.vat_amount)}</div>` : ''}
-        <div style="font-size: 13px; font-weight: bold; color: #2b6cb0; margin-top: 6px;">Tổng c?ng: ${formatVND(invoice.total)}</div>
+        <div style="font-size: 13px; font-weight: bold; color: #2b6cb0; margin-top: 6px;">Tổng cộng: ${formatVND(invoice.total)}</div>
       </div>
     `;
     
@@ -539,7 +546,7 @@ export default function CustomerOrderReport() {
       pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
       pdf.save(`HoaDon_${invoice.invoice_code || invoice.id}.pdf`);
     } catch (err) {
-      console.error('Không th? xu?t PDF:', err);
+      console.error('Không thể xuất PDF:', err);
     } finally {
       document.body.removeChild(tempDiv);
     }
@@ -561,7 +568,7 @@ export default function CustomerOrderReport() {
                 </div>
               </div>
               <p className="text-sm text-blue-100/80 max-w-3xl">
-                Chọn khách hàng về kho?ng ngày d? xem đầy đủ hóa đơn bđơn h?ng trong k?. Kho?ng ngày được t?nh t? 00:00 ngày bắt đầu đến 23:59:59 ngày kết thúc theo ngày local.
+                Chọn khách hàng và khoảng ngày để xem đầy đủ hóa đơn bán hàng chưa thanh toán trong kỳ. Khoảng ngày được tính từ 00:00 ngày bắt đầu đến 23:59:59 ngày kết thúc theo ngày local.
               </p>
             </div>
 
@@ -575,7 +582,7 @@ export default function CustomerOrderReport() {
           </div>
         </div>
 
-        <div className="p-5 bg-gray-50 border-t border-white/10 rounded-b-2xl">
+        <div className="p-5 bg-gray-50 border-t border-white/10 rounded-b-2xl space-y-3">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(240px,1fr)_180px_180px_auto]">
             <div>
               <label className="mb-1 block text-xs font-semibold text-gray-500">Khách hàng</label>
@@ -601,7 +608,7 @@ export default function CustomerOrderReport() {
                       }}
                       onFocus={handleInputFocus}
                       onClick={handleInputFocus}
-                      placeholder={loadingCustomers ? 'đang tđi khách hàng...' : 'Tạm tđơn, S?T, email, mã KH...'}
+                      placeholder={loadingCustomers ? 'Đang tải khách hàng...' : 'Tìm tên, SĐT, email, mã KH...'}
                     />
                     {customerSearch && (
                       <button
@@ -623,11 +630,11 @@ export default function CustomerOrderReport() {
                 {showCustomerResults && (
                   <div className="absolute right-0 left-0 z-30 mt-2 max-h-80 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-2xl">
                     <div className="border-b border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                      Danh sách gđi ? (A-Z)
+                      Danh sách gợi ý (A-Z)
                     </div>
                     {loadingCustomers && customers.length === 0 ? (
                       <div className="px-3 py-3 text-xs text-gray-400 flex items-center gap-2">
-                        <Loader size={12} className="animate-spin text-blue-500" /> đang tđi gđi ?...
+                        <Loader size={12} className="animate-spin text-blue-500" /> Đang tải gợi ý...
                       </div>
                     ) : customers.length > 0 ? (
                       customers.map(customer => (
@@ -640,7 +647,7 @@ export default function CustomerOrderReport() {
                           <div className="flex items-center justify-between">
                             <div className="truncate text-sm font-semibold text-gray-800">{customer.name || 'Khách hàng'}</div>
                             <div className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full whitespace-nowrap">
-                              {customer.invoice_count || 0} don
+                              {customer.invoice_count || 0} đơn
                             </div>
                           </div>
                           <div className="mt-0.5 truncate text-[11px] text-gray-500">
@@ -649,7 +656,7 @@ export default function CustomerOrderReport() {
                         </button>
                       ))
                     ) : (
-                      <div className="px-3 py-3 text-sm text-gray-400">Không tâm th?y khách hàng phù hợp</div>
+                      <div className="px-3 py-3 text-sm text-gray-400">Không tìm thấy khách hàng phù hợp</div>
                     )}
                   </div>
                 )}
@@ -657,7 +664,7 @@ export default function CustomerOrderReport() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-500">T? ngày</label>
+              <label className="mb-1 block text-xs font-semibold text-gray-500">Từ ngày</label>
               <div className="relative">
                 <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="date" className="input-field w-full pl-9" value={from} onChange={e => setFrom(e.target.value)} />
@@ -665,7 +672,7 @@ export default function CustomerOrderReport() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-500">?đơn ngày</label>
+              <label className="mb-1 block text-xs font-semibold text-gray-500">Đến ngày</label>
               <div className="relative">
                 <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="date" className="input-field w-full pl-9" value={to} onChange={e => setTo(e.target.value)} />
@@ -688,15 +695,46 @@ export default function CustomerOrderReport() {
                   setSelectedCustomer(null);
                   setCustomerSearch('');
                   setShowCustomerResults(false);
-                  setFrom(defaultRange.from);
-                  setTo(defaultRange.to);
+                  const def = getDefaultRange();
+                  setFrom(def.from);
+                  setTo(def.to);
                 }}
                 className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-500 hover:bg-gray-100"
-                title="??t lỗi bộ lọc"
+                title="Đặt lại bộ lọc"
               >
                 <RefreshCw size={16} />
               </button>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1 text-xs text-gray-500">
+            <span>Chọn nhanh tháng:</span>
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date();
+                const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+                const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                setFrom(toDateInputValue(firstDay));
+                setTo(toDateInputValue(lastDay));
+              }}
+              className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-blue-700 font-medium hover:bg-blue-100"
+            >
+              Tháng này (cả tháng)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date();
+                const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+                setFrom(toDateInputValue(firstDay));
+                setTo(toDateInputValue(lastDay));
+              }}
+              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-gray-700 font-medium hover:bg-gray-100"
+            >
+              Tháng trước
+            </button>
           </div>
 
           {error && (
@@ -715,8 +753,8 @@ export default function CustomerOrderReport() {
              <span className="mt-0.5 block text-xs text-gray-500">{[selectedCustomer.phone, selectedCustomer.email].filter(Boolean).join(' | ') || 'Chưa có SĐT/Email'}</span>
           </div>
           <div>
-            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">M? / Nhâm khách</span>
-            <span className="mt-1 block font-bold text-gray-900">{selectedCustomer.customer_code || '?'}</span>
+            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Mã / Nhóm khách</span>
+            <span className="mt-1 block font-bold text-gray-900">{selectedCustomer.customer_code || '-'}</span>
             <span className="mt-0.5 block text-xs text-gray-500">{selectedCustomer.customer_type_name || 'Khách lẻ'}</span>
           </div>
           <div>
@@ -725,9 +763,9 @@ export default function CustomerOrderReport() {
             <span className="mt-0.5 block text-xs text-gray-500">Lịch sử hệ thống</span>
           </div>
           <div>
-            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Doanh thu trđơn dài</span>
+            <span className="block text-xs font-semibold text-blue-500 uppercase tracking-wider">Doanh thu trọn đời</span>
             <span className="mt-1 block font-bold text-blue-700">{formatVND(selectedCustomer.total_revenue || 0)}</span>
-            <span className="mt-0.5 block text-xs text-emerald-600 font-semibold">{selectedCustomer.invoice_count || 0} đơn hàng thành công</span>
+            <span className="mt-0.5 block text-xs text-emerald-600 font-semibold">{selectedCustomer.invoice_count || 0} đơn hàng đã phát sinh</span>
           </div>
         </div>
       )}
@@ -737,41 +775,41 @@ export default function CustomerOrderReport() {
           <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3.5 text-blue-700 shadow-sm flex items-start gap-3">
             <div className="mt-0.5 rounded-lg bg-blue-100 p-2"><ShoppingCart size={17} /></div>
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">S? đơn hàng</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">Số đơn chưa TT</div>
               <div className="mt-1 text-xl font-extrabold">{reportStats.totalInvoices}</div>
-              <div className="text-[10px] opacity-75">Trong kỳ l?c</div>
+              <div className="text-[10px] opacity-75">Trong kỳ lọc</div>
             </div>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3.5 text-emerald-700 shadow-sm flex items-start gap-3">
             <div className="mt-0.5 rounded-lg bg-emerald-100 p-2"><DollarSign size={17} /></div>
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">Tổng tiđơn mua</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">Tiền chưa thanh toán</div>
               <div className="mt-1 text-xl font-extrabold">{formatVND(reportStats.totalAmount)}</div>
-              <div className="text-[10px] opacity-75">Không t?nh don h?y</div>
+              <div className="text-[10px] opacity-75">Chỉ tính đơn chưa thanh toán</div>
             </div>
           </div>
           <div className="rounded-2xl border border-purple-100 bg-purple-50 px-4 py-3.5 text-purple-700 shadow-sm flex items-start gap-3">
             <div className="mt-0.5 rounded-lg bg-purple-100 p-2"><Package size={17} /></div>
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">S? sản phẩm</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">Số sản phẩm</div>
               <div className="mt-1 text-xl font-extrabold">{reportStats.totalProducts}</div>
-              <div className="text-[10px] opacity-75">Tổng lu?ng h?ng nh?p</div>
+              <div className="text-[10px] opacity-75">Tổng lượng hàng trong đơn</div>
             </div>
           </div>
           <div className="rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3.5 text-orange-700 shadow-sm flex items-start gap-3">
             <div className="mt-0.5 rounded-lg bg-orange-100 p-2"><ShoppingCart size={17} /></div>
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">đơn gđơn nh?t</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85">Đơn gần nhất</div>
               <div className="mt-1 text-lg font-extrabold truncate max-w-[120px]">{reportStats.latestCode}</div>
-              <div className="text-[10px] opacity-75">M? ch?ng t? cuđi</div>
+              <div className="text-[10px] opacity-75">Mã chứng từ cuối</div>
             </div>
           </div>
           <div className="rounded-2xl border border-pink-100 bg-pink-50 px-4 py-3.5 text-pink-750 shadow-sm flex items-start gap-3 col-span-2 sm:col-span-1">
             <div className="mt-0.5 rounded-lg bg-pink-100 p-2"><Clock size={17} className="text-pink-600" /></div>
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85 text-pink-700">Ngày mua cuđi</div>
-              <div className="mt-1 text-base font-extrabold text-pink-700">{reportStats.latestDate ? formatDateTime(reportStats.latestDate) : '?'}</div>
-              <div className="text-[10px] text-pink-600 opacity-75">Thời gian thanh toán</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider opacity-85 text-pink-700">Ngày mua cuối</div>
+              <div className="mt-1 text-base font-extrabold text-pink-700">{reportStats.latestDate ? formatDateTime(reportStats.latestDate) : '-'}</div>
+              <div className="text-[10px] text-pink-600 opacity-75">Thời gian lập đơn</div>
             </div>
           </div>
         </div>
@@ -780,12 +818,12 @@ export default function CustomerOrderReport() {
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="flex flex-col gap-2 border-b border-gray-100 px-5 py-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-bold text-gray-800">Danh sách hóa đơn mua h?ng</h2>
-            <p className="text-xs text-gray-500">Hiện th? chi tiết sản phẩm, don giá, số lượng về tổng tiđơn của tổng hóa đơn.</p>
+            <h2 className="font-bold text-gray-800">Danh sách hóa đơn chưa thanh toán</h2>
+            <p className="text-xs text-gray-500">Hiển thị chi tiết sản phẩm, đơn giá, số lượng và tổng tiền của các hóa đơn chưa thanh toán.</p>
           </div>
           {report && (
             <div className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
-              {summary.total_invoices || 0} hóa đơn ? {formatVND(summary.total_amount)}
+              {summary.total_invoices || 0} hóa đơn · {formatVND(summary.total_amount)}
             </div>
           )}
         </div>
@@ -794,18 +832,18 @@ export default function CustomerOrderReport() {
           <table className="w-full min-w-[1000px] text-sm">
             <thead>
               <tr className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                <th className="px-4 py-3 text-left w-32">M? don</th>
-                <th className="px-4 py-3 text-left w-44">Ngày bđơn</th>
+                <th className="px-4 py-3 text-left w-32">Mã đơn</th>
+                <th className="px-4 py-3 text-left w-44">Ngày bán</th>
                 <th className="px-4 py-3 text-left">Sản phẩm & chi tiết</th>
-                <th className="px-4 py-3 text-right w-40">Tổng c?ng</th>
+                <th className="px-4 py-3 text-right w-40">Tổng tiền đơn</th>
                 <th className="px-4 py-3 text-left w-36">Trạng thái</th>
-                <th className="px-4 py-3 text-center w-48 no-print">Thao t?c</th>
+                <th className="px-4 py-3 text-center w-48 no-print">Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {invoices.map(invoice => (
                 <tr key={invoice.id || invoice.invoice_code} className="border-t border-gray-100 align-top hover:bg-gray-50/50 transition">
-                  <td className="px-4 py-3 font-semibold text-blue-700">{invoice.invoice_code || '?'}</td>
+                  <td className="px-4 py-3 font-semibold text-blue-700">{invoice.invoice_code || '-'}</td>
                   <td className="px-4 py-3 text-xs text-gray-600">{formatDateTime(invoice.created_at)}</td>
                   <td className="px-4 py-3">
                     <div className="space-y-1.5">
@@ -815,15 +853,15 @@ export default function CustomerOrderReport() {
                             <div className="font-semibold text-gray-900">{detail.product_name || 'Sản phẩm'}</div>
                             <div className="mt-0.5 text-gray-500 flex flex-wrap items-center gap-1.5">
                               <span>Số lượng: <strong className="text-gray-800">{detail.quantity}</strong></span>
-                              <span>?</span>
-                              <span>đơn giá: <strong className="text-gray-800">{formatVND(detail.unit_price)}</strong></span>
-                              <span>?</span>
-                              <span>Thành tiđơn: <strong className="text-blue-600 font-semibold">{formatVND(detail.line_total)}</strong></span>
+                              <span>·</span>
+                              <span>Đơn giá: <strong className="text-gray-800">{formatVND(detail.unit_price)}</strong></span>
+                              <span>·</span>
+                              <span>Thành tiền: <strong className="text-blue-600 font-semibold">{formatVND(detail.line_total)}</strong></span>
                             </div>
                           </div>
                         ))
                       ) : (
-                        <div className="text-xs text-gray-400 italic">Không có chi tiết h?ng hđã</div>
+                        <div className="text-xs text-gray-400 italic">Không có chi tiết hàng hóa</div>
                       )}
                     </div>
                   </td>
@@ -853,7 +891,7 @@ export default function CustomerOrderReport() {
                         type="button"
                         onClick={() => handlePrintRow(invoice)}
                         className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        title="In don"
+                        title="In đơn"
                       >
                         <Printer size={12} /> In
                       </button>
@@ -871,7 +909,7 @@ export default function CustomerOrderReport() {
               ))}
               {invoices.length > 0 && (
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                  <td className="px-4 py-3" colSpan={3}>Tổng c?ng tất cả các don trong kỳ</td>
+                  <td className="px-4 py-3" colSpan={3}>Tổng cộng tiền chưa thanh toán trong kỳ</td>
                   <td className="px-4 py-3 text-right text-blue-700 text-base font-extrabold">{formatVND(summary.total_amount)}</td>
                   <td className="px-4 py-3" colSpan={2}></td>
                 </tr>
@@ -883,19 +921,19 @@ export default function CustomerOrderReport() {
         {loadingReport ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
             <Loader size={32} className="animate-spin text-blue-400" />
-            <div className="font-semibold text-gray-600">đang tháng kỳ dữ liệu đơn hàng...</div>
+            <div className="font-semibold text-gray-600">Đang tải dữ liệu đơn hàng...</div>
           </div>
         ) : report && invoices.length === 0 ? (
           <div className="py-16 text-center">
-            <div className="mb-3 text-5xl opacity-20">??</div>
-            <div className="font-semibold text-gray-600">Không tâm th?y đơn hàng trong kho?ng thời gian đã chọn</div>
-            <div className="mt-1 text-sm text-gray-400">Hủy diđủ ch?nh lỗi kho?ng thời gian l?c ho?c chọn khách hàng kh?c.</div>
+            <div className="mb-3 text-5xl opacity-20">📋</div>
+            <div className="font-semibold text-gray-600">Không có đơn hàng chưa thanh toán trong khoảng thời gian đã chọn</div>
+            <div className="mt-1 text-sm text-gray-400">Hãy điều chỉnh lại khoảng thời gian lọc hoặc chọn khách hàng khác.</div>
           </div>
         ) : !report ? (
           <div className="py-16 text-center">
-            <div className="mb-3 text-5xl opacity-20">??</div>
+            <div className="mb-3 text-5xl opacity-20">📋</div>
              <div className="font-semibold text-gray-600">Chưa có dữ liệu báo cáo</div>
-            <div className="mt-1 text-sm text-gray-400 font-medium">Nhập thông tin khách hàng về chọn kho?ng thời gian d? tạo báo cáo chi tiết.</div>
+            <div className="mt-1 text-sm text-gray-400 font-medium">Nhập thông tin khách hàng và chọn khoảng thời gian để tạo báo cáo chi tiết.</div>
           </div>
         ) : null}
       </div>
@@ -913,11 +951,11 @@ export default function CustomerOrderReport() {
           onClose={() => setShowHelp(false)}
           title="Hướng dẫn báo cáo theo đơn hàng"
           content={[
-            'Bu?c 1: Chọn khách hàng về kho?ng thời gian cđơn xem lịch sử mua h?ng.',
-            'Bu?c 2: Nhân tạo ho?c lâm mới báo cáo đã tải d?ng dữ liệu đơn hàng theo bộ lọc.',
-            'Bu?c 3: Xem phđơn tổng hợp d? nâm s? don, doanh thu, sản phẩm về thđi diâm mua gđơn nh?t.',
-            'Bu?c 4: Dùng n?t Xem d? mã chi tiết tổng don ngay trong popup mã không rđi mđơn h?nh.',
-            'Bu?c 5: C? th? in ho?c tđi PDF tổng don trực tiếp t? bằng kết quả khi cđơn dài chiđủ.',
+            'Bước 1: Chọn khách hàng và khoảng thời gian (từ đầu tháng đến cuối tháng) cần kiểm tra.',
+            'Bước 2: Hệ thống tự động lọc chỉ các đơn hàng chưa thanh toán của khách hàng trong kỳ đó.',
+            'Bước 3: Đơn hàng đã thanh toán rồi sẽ không được lấy vào báo cáo.',
+            'Bước 4: Kiểm tra lại danh sách đơn và ấn nút Xuất Excel để tải file báo cáo công nợ.',
+            'Bước 5: Mẫu Excel chuẩn đã tích hợp sẵn đầy đủ STT, Thời gian, Mã đơn và Tiền còn phải trả.',
           ]}
         />
       )}
