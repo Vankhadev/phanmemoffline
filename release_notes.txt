@@ -1,1 +1,1 @@
-v3.1.16 - Báo cáo đơn hàng theo khách hàng chỉ lấy đơn chưa thanh toán cả tháng, bảo vệ an toàn dữ liệu trên máy khách
+v3.1.17 - Tích hợp 12 Bot Telegram báo cáo tự động, Hỗ trợ PWA cho iPhone & Android, Đồng bộ dữ liệu Offline 4G và sửa lỗi điều hướng di động

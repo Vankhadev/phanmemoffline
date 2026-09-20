@@ -18,11 +18,11 @@ import {
 } from 'lucide-react';
 
 const initialForm = {
-  name: 'Vankha',
-  email: 'vankhaqc@gmail.com',
-  phone: '0904045075',
-  password: 'Vankhammo07@',
-  confirmPassword: 'Vankhammo07@',
+  name: '',
+  email: '',
+  phone: '',
+  password: '',
+  confirmPassword: '',
 };
 
 const normalizeEmail = (email) => email.trim().toLowerCase();
@@ -52,7 +52,7 @@ export default function Register({ onLogin, bootstrapStatus }) {
   const pageContent = useMemo(() => {
     if (checkingSetup) {
       return {
-        title: 'đang kiểm tra hệ thống',
+        title: 'Đang kiểm tra hệ thống',
         description: 'Vui lòng đợi trong giây lát trước khi đăng ký tài khoản',
       };
     }
@@ -60,20 +60,20 @@ export default function Register({ onLogin, bootstrapStatus }) {
     if (registeredData) {
       return {
         title: 'Tạo tài khoản thành công',
-        description: 'Tài khoản của bạn đã sẵn sàng sử dụng',
+        description: 'Tài khoản của bạn đã sẵn sàng sử dụng và kết nối kho hàng máy chủ.',
       };
     }
 
     if (isFirstAccount) {
       return {
-        title: 'Đăng ký tài khoản',
-        description: 'Chào mừng bạn đến với hệ thống đăng ký tài khoản của phần mềm',
+        title: 'Thiết lập tài khoản Quản trị',
+        description: 'Tạo tài khoản quản trị viên đầu tiên cho cửa hàng.',
       };
     }
 
     return {
-      title: 'Đăng ký tài khoản',
-      description: 'Chào mừng bạn đến với hệ thống đăng ký tài khoản của phần mềm',
+      title: 'Đăng ký tài khoản nhân viên',
+      description: 'Tài khoản mới sẽ tự động dùng chung danh mục sản phẩm, khách hàng của máy chủ.',
     };
   }, [checkingSetup, isFirstAccount, registeredData]);
 
@@ -166,8 +166,8 @@ export default function Register({ onLogin, bootstrapStatus }) {
       return false;
     }
 
-    if (form.password.length < 8) {
-      setError('Mật khẩu phải có ít nhất 8 ký tự.');
+    if (form.password.length < 6) {
+      setError('Mật khẩu phải có ít nhất 6 ký tự.');
       return false;
     }
 

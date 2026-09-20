@@ -1,4 +1,4 @@
-﻿import { Component, useEffect, useState } from 'react';
+import { Component, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   authApi,
@@ -225,15 +225,12 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
   const validateLogin = () => {
     const input = form.email.trim();
     if (!input) {
-      setError('Vui lòng nhập email hoặc số điện thoại.');
+      setError('Vui lòng nhập email, số điện thoại hoặc tên đăng nhập.');
       return false;
     }
 
-    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
-    const isPhone = /^0\d{9,10}$/.test(normalizePhone(input));
-
-    if (!isEmail && !isPhone) {
-      setError('Email hoặc số điện thoại không hợp lệ.');
+    if (input.length < 2) {
+      setError('Tên đăng nhập hoặc email quá ngắn.');
       return false;
     }
 
@@ -266,8 +263,8 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
       return false;
     }
 
-    if (form.password.length < 8) {
-      setError('Mật khẩu phải có ít nhất 8 ký tự.');
+    if (form.password.length < 6) {
+      setError('Mật khẩu phải có ít nhất 6 ký tự.');
       return false;
     }
 
@@ -281,8 +278,10 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
 
   const loginWithCredentials = async (email, password) => {
     try {
+      const cleanInput = String(email || '').trim();
+      const sendEmail = cleanInput.includes('@') ? normalizeEmail(cleanInput) : cleanInput;
       const data = await authApi.login({
-        email: normalizeEmail(email),
+        email: sendEmail,
         password,
         ...getClientDeviceMetadata(),
       });
@@ -291,7 +290,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
         throw new Error('Server không trả đủ thông tin đăng nhập.');
       }
 
-      await rememberMobileOfflineAccount({ email, password, payload: data });
+      await rememberMobileOfflineAccount({ email: cleanInput, password, payload: data });
       return data;
     } catch (err) {
       const localPayload = await authenticateMobileOfflineAccount(email, password);
@@ -639,8 +638,8 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
                   <AlertTriangle size={18} className="shrink-0 mt-0.5" />
                   <div>
-                    <div className="font-semibold">Đăng ký tài khoản</div>
-                    <div>Nhập thông tin để tạo tài khoản mới.</div>
+                    <div className="font-semibold">Đăng ký tài khoản cửa hàng</div>
+                    <div>Tài khoản mới sẽ dùng chung toàn bộ danh mục sản phẩm, khách hàng của máy chủ.</div>
                   </div>
                 </div>
                 <div>
@@ -653,7 +652,7 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     <span className="inline-flex items-center gap-1"><Mail size={14} /> Email <span className="text-red-500">*</span></span>
                   </label>
-                  <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="user@domain.com" className="input-field w-full pl-4" autoComplete="email" required />
+                  <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="nhanvien@cuahang.com" className="input-field w-full pl-4" autoComplete="email" required />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -684,21 +683,60 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                   </div>
                 </div>
                 <button type="submit" disabled={loading} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2">
-                  {loading ? 'Đang lưu...' : 'Đăng ký'}
+                  {loading ? 'Đang tạo...' : 'Đăng ký'}
                 </button>
               </form>
             )}
+
+            {/* Form đăng nhập tài khoản */}
             {authMode === 'login' && (
               <form onSubmit={handleLogin} className="space-y-4">
+                {/* GỢI Ý TÀI KHOẢN MÁY CHỦ SẴN CÓ */}
+                <div className="rounded-xl border border-blue-100 bg-blue-50/80 p-3 text-xs text-blue-900 space-y-2">
+                  <div className="font-bold flex items-center justify-between">
+                    <span>💡 Chọn nhanh tài khoản máy chủ:</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        set('email', 'dongphuongqc@gmail.com');
+                        set('password', 'khongnoiduoc');
+                      }}
+                      className="rounded-lg border border-blue-200 bg-white p-2 text-left hover:bg-blue-100/50 transition flex items-center gap-2 shadow-2xs cursor-pointer"
+                    >
+                      <ShieldCheck size={16} className="text-blue-600 shrink-0" />
+                      <div className="truncate">
+                        <div className="font-bold text-[11px] text-gray-800">Chủ cửa hàng (Admin)</div>
+                        <div className="text-[10px] text-gray-500 font-mono truncate">dongphuongqc@gmail.com</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        set('email', '0904045075');
+                        set('password', 'khongnoiduoc');
+                      }}
+                      className="rounded-lg border border-blue-200 bg-white p-2 text-left hover:bg-blue-100/50 transition flex items-center gap-2 shadow-2xs cursor-pointer"
+                    >
+                      <Phone size={16} className="text-emerald-600 shrink-0" />
+                      <div className="truncate">
+                        <div className="font-bold text-[11px] text-gray-800">Đăng nhập bằng SĐT</div>
+                        <div className="text-[10px] text-gray-500 font-mono">0904045075</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    <span className="inline-flex items-center gap-1"><Mail size={14} /> Email hoặc số điện thoại</span>
+                    <span className="inline-flex items-center gap-1"><Mail size={14} /> Email, Số điện thoại hoặc Tên đăng nhập</span>
                   </label>
                   <input
                     type="text"
                     value={form.email}
                     onChange={event => set('email', event.target.value)}
-                    placeholder="nguyenvana@gmail.com hoặc 0904045075"
+                    placeholder="dongphuongqc@gmail.com, 0904045075 hoặc tên nhân viên"
                     className="input-field w-full pl-4"
                     autoComplete="username"
                     required
@@ -743,11 +781,11 @@ export default function Login({ onLogin, bootstrapStatus, onBootstrapStatus }) {
                 </button>
 
                 <Link to="/dang-ky" className="login-register-link">
-                  <UserPlus size={16} /> Đăng ký tài khoản mới
+                  <UserPlus size={16} /> Đăng ký tài khoản mới (dùng chung dữ liệu máy chủ)
                 </Link>
               </form>
             )}
-
+            
             {/* Khôi phục dữ liệu section */}
             <div className="login-recovery">
               <div className="flex gap-2">

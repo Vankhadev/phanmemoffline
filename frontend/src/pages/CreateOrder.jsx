@@ -7,6 +7,17 @@ import {
 import { buildCategoriesById, filterProductTree, normalizeSearchText, getProductDisplayName, getProductVariants, getVariantIdentity } from '../utils/productSearch';
 import { attachClientOrderMetadata, generateClientOrderId } from '../utils/clientOrderId';
 import { broadcastSyncUpdate } from '../utils/crossTabSync';
+import OfflineSyncBadge from '../components/OfflineSyncBadge';
+import {
+  addPendingOrder,
+  removePendingOrder,
+  getPendingOrders,
+  cacheCatalogData,
+  getCachedCatalogData,
+  searchOfflineProducts,
+  checkServerReachable,
+  PENDING_ORDERS_CHANGED_EVENT,
+} from '../utils/offlineSyncManager';
 import {
   buildSaleStockValidation,
   formatStockValue,
@@ -516,13 +527,28 @@ export default function CreateOrder({ user, store }) {
           : '/products/sale-candidates?limit=40';
         const data = await apiJsonChecked(endpoint, { signal: controller.signal }, 'Không tải được sản phẩm.');
         if (productSearchRequestRef.current === requestId) {
-          setProducts(Array.isArray(data) ? data : []);
+          const items = Array.isArray(data) ? data : [];
+          setProducts(items);
           setLoadError(prev => ({ ...prev, products: false }));
+          if (items.length > 0) {
+            // Cập nhật bộ đệm ngoại tuyến
+            const currentCached = getCachedCatalogData('products');
+            const map = new Map(currentCached.map(p => [p.id, p]));
+            items.forEach(p => p && p.id && map.set(p.id, p));
+            cacheCatalogData('products', Array.from(map.values()));
+          }
         }
       } catch (error) {
         if (error.name !== 'AbortError' && productSearchRequestRef.current === requestId) {
-          setProducts([]);
-          setLoadError(prev => ({ ...prev, products: true }));
+          // Thử tra cứu từ bộ nhớ đệm sản phẩm ngoại tuyến
+          const offlineMatches = searchOfflineProducts(query);
+          if (offlineMatches.length > 0) {
+            setProducts(offlineMatches);
+            setLoadError(prev => ({ ...prev, products: false }));
+          } else {
+            setProducts([]);
+            setLoadError(prev => ({ ...prev, products: true }));
+          }
         }
       } finally {
         if (productSearchRequestRef.current === requestId) setLoading(prev => ({ ...prev, products: false }));
@@ -560,14 +586,30 @@ export default function CreateOrder({ user, store }) {
     const refreshCustomers = () => {
       fetch(resolveApiUrl('/customers'))
         .then(r => r.json())
-        .then(d => setCustomers(Array.isArray(d) ? d : []))
-        .catch(() => { });
+        .then(d => {
+          if (Array.isArray(d)) {
+            setCustomers(d);
+            cacheCatalogData('customers', d);
+          }
+        })
+        .catch(() => {
+          const cached = getCachedCatalogData('customers');
+          if (cached.length > 0) setCustomers(cached);
+        });
     };
     const refreshCategories = () => {
       fetch(resolveApiUrl('/product-categories'))
         .then(r => r.json())
-        .then(d => setCategories(Array.isArray(d) ? d : []))
-        .catch(() => { });
+        .then(d => {
+          if (Array.isArray(d)) {
+            setCategories(d);
+            cacheCatalogData('categories', d);
+          }
+        })
+        .catch(() => {
+          const cached = getCachedCatalogData('categories');
+          if (cached.length > 0) setCategories(cached);
+        });
     };
     const refreshSuppliers = () => {
       fetch(resolveApiUrl('/partners'))
@@ -575,6 +617,16 @@ export default function CreateOrder({ user, store }) {
         .then(d => setSuppliers(Array.isArray(d) ? d : []))
         .catch(() => { });
     };
+
+    // Preload toàn bộ sản phẩm vào bộ nhớ đệm để dùng khi mất mạng / ngoài quán
+    fetch(resolveApiUrl('/products/all/with-variants'))
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d) && d.length > 0) {
+          cacheCatalogData('products', d);
+        }
+      })
+      .catch(() => {});
     const onSyncUpdated = (event) => {
       const changedTables = event.detail?.changedTables || [];
       if (changedTables.some(table => ['products', 'invoices', 'invoice_details', 'imports', 'import_logs', 'import_details'].includes(table))) {
@@ -1703,27 +1755,19 @@ export default function CreateOrder({ user, store }) {
       };
 
       try {
-        const pending = JSON.parse(localStorage.getItem('kha_pending_orders') || '[]');
         if (saveToPending) {
-          const exists = pending.find(o =>
-            (inv.client_order_id && o.client_order_id === inv.client_order_id) ||
-            (inv.client_order_id && o.payload?.client_order_id === inv.client_order_id) ||
-            o.invoice_code === inv.invoice_code
+          addPendingOrder(inv);
+          setPendingOrders(getPendingOrders());
+          alert(
+            `📦 ĐÃ LƯU ĐƠN HÀNG VÀO MÁY (CHẾ ĐỘ OFFLINE)!\n\n` +
+            `• Mã đơn tạm: ${inv.invoice_code}\n` +
+            `• Khách hàng: ${inv.customer_name || 'Khách lẻ'}\n` +
+            `• Tổng tiền: ${(Number(inv.total) || 0).toLocaleString('vi-VN')} đ\n\n` +
+            `🛡️ Dữ liệu được bảo vệ an toàn 100% trong bộ nhớ máy. Khi về quán kết nối Wi-Fi hoặc bấm nút [Đồng bộ dữ liệu], đơn sẽ tự động chuyển lên máy tính chủ PC!`
           );
-          if (!exists) {
-            const updatedPending = [inv, ...pending].slice(0, 50);
-            localStorage.setItem('kha_pending_orders', JSON.stringify(updatedPending));
-            setPendingOrders(updatedPending);
-          }
         } else {
-          const cleaned = pending.filter(o =>
-            !(
-              (inv.client_order_id && (o.client_order_id === inv.client_order_id || o.payload?.client_order_id === inv.client_order_id)) ||
-              o.invoice_code === inv.invoice_code
-            )
-          );
-          localStorage.setItem('kha_pending_orders', JSON.stringify(cleaned));
-          setPendingOrders(cleaned);
+          removePendingOrder(inv.client_order_id);
+          setPendingOrders(getPendingOrders());
         }
       } catch (_) { }
 
@@ -1743,8 +1787,15 @@ export default function CreateOrder({ user, store }) {
     };
     let timeoutId;
     try {
+      // Nếu thiết bị báo rõ ràng đang ngắt mạng (offline)
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        showSuccess(`OFFLINE_${Date.now().toString(36).toUpperCase()}`, null, true);
+        return;
+      }
+
       const controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 10000);
+      // Timeout 3.5s để khi ở ngoài quán (4G không thấy LAN máy chủ) không bị treo lâu
+      timeoutId = setTimeout(() => controller.abort(), 3500);
       const data = await apiJsonChecked('/invoices', {
         method: 'POST',
         body: orderPayload,
@@ -1752,12 +1803,21 @@ export default function CreateOrder({ user, store }) {
       }, 'Không thể tạo đơn hàng.');
       showSuccess(data.invoice_code, data.invoice_id || null, false);
     } catch (error) {
-      if (error instanceof ApiError) {
+      // Chỉ từ chối nếu máy chủ phản hồi lỗi HTTP 4xx (400, 422, 403)
+      const isHttpRejection = error instanceof ApiError &&
+        error.status &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        error.status !== 408;
+
+      if (isHttpRejection) {
         setCreating(false);
         alert(getApiErrorMessage(error.data, error.message || 'Không thể tạo đơn hàng.'));
         return;
       }
-      showSuccess(`LOCAL_${Date.now().toString(36).toUpperCase()}`, null, true);
+
+      // Lỗi mạng hoặc server LAN không phản hồi (4G ngoài quán): Lưu offline an toàn 100%!
+      showSuccess(`OFFLINE_${Date.now().toString(36).toUpperCase()}`, null, true);
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
     }
@@ -1925,7 +1985,8 @@ export default function CreateOrder({ user, store }) {
         <h1 className="sapo-page-title">
           {editingInvoiceId ? 'Sửa đơn hàng' : 'Tạo đơn hàng'}
         </h1>
-        <div className="sapo-actions">
+        <div className="sapo-actions flex items-center gap-2">
+          <OfflineSyncBadge className="mr-1" />
           {lastInvoice && !editingInvoiceId && !lastInvoice.id && (
             <button
               onClick={handleStartEdit}

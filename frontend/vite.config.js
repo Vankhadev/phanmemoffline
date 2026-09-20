@@ -33,7 +33,7 @@ const backendHost = readEnvText(process.env.VITE_BACKEND_HOST)
 const devHost = readEnvText(process.env.VITE_DEV_HOST)
   || readEnvText(process.env.PHANMEM_FRONTEND_HOST)
   || readEnvText(process.env.PHANMEM_HOST)
-  || '127.0.0.1'
+  || '0.0.0.0'
 const devPort = Number(readPortValue(process.env.VITE_DEV_PORT) || readPortValue(process.env.PHANMEM_FRONTEND_PORT) || '5174')
 const strictPort = String(process.env.VITE_STRICT_PORT || 'true').trim().toLowerCase() !== 'false'
 const configDir = path.dirname(fileURLToPath(import.meta.url))

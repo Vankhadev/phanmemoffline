@@ -15,6 +15,7 @@ const {
 } = require('../utils/negativeStock');
 const { isActiveProduct, findExistingProduct, upsertProduct } = require('../services/productUpsertService');
 const { normalizeVietnamese } = require('../utils/productKey');
+const { notifyTelegram } = require('../services/telegramService');
 
 function getCategories() {
   return getAll('product_categories', c => c.active !== 0);
@@ -1087,6 +1088,14 @@ router.post('/', (req, res) => {
       return { ok: true, id, sku: finalData.sku, message: 'Tạo sản phẩm thành công', action: 'created' };
     });
 
+    if (result && result.ok) {
+      notifyTelegram('bot_products', result.action === 'updated' ? 'Cập nhật sản phẩm' : 'Thêm sản phẩm mới', {
+        action: result.action === 'updated' ? 'Cập nhật' : 'Thêm mới',
+        product: { ...req.body, id: result.id, sku: result.sku },
+        user: req.user?.name,
+      });
+    }
+
     res.json(result);
   } catch (err) {
     const status = err.status || err.statusCode || 500;
@@ -1131,6 +1140,26 @@ router.put('/:id', (req, res) => {
       return { ok: true, id: updated.id, sku: updated.sku, message: 'Cập nhật sản phẩm thành công' };
     });
 
+    if (result && result.ok) {
+      notifyTelegram('bot_products', 'Cập nhật sản phẩm', {
+        action: 'Cập nhật',
+        product: { ...product, ...req.body, id, sku: result.sku },
+        user: req.user?.name,
+      });
+
+      if (req.body.stock !== undefined && Number(req.body.stock) !== Number(product.stock)) {
+        notifyTelegram('bot_inventory', 'Biến động kho hàng', {
+          action: 'Điều chỉnh tồn kho',
+          product: { ...product, ...req.body, id, sku: result.sku },
+          oldStock: product.stock,
+          newStock: Number(req.body.stock),
+          change: Number(req.body.stock) - Number(product.stock),
+          reason: 'Cập nhật tồn kho từ quản lý sản phẩm / kho hàng',
+          user: req.user?.name,
+        });
+      }
+    }
+
     res.json(result);
   } catch (err) {
     const status = err.status || err.statusCode || 500;
@@ -1158,6 +1187,14 @@ router.delete('/:id', (req, res) => {
       update('products', id, { active: 0, status: 'deleted', deleted: true, updated_at: now() });
       return { ok: true, message: product.parent_id ? 'Đã xóa biến thể' : 'Đã xóa sản phẩm và tất cả biến thể' };
     });
+
+    if (result && result.ok) {
+      notifyTelegram('bot_products', 'Xóa sản phẩm', {
+        action: 'Xóa',
+        product,
+        user: req.user?.name,
+      });
+    }
 
     res.json(result);
   } catch (err) {

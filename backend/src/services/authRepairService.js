@@ -16,7 +16,7 @@ const adminAlertService = require('./adminAlertService');
 function ensureAuthSchema() {
   const dbModule = require('../db/database');
   const { hashPassword } = require('../utils/password');
-  
+
   const current = dbModule.getDb();
   let modified = false;
 
@@ -142,6 +142,12 @@ function repairUserAuthSystem() {
         modified = true;
         console.warn('[AUTH REPAIR] Restored active/approved state for designated administrator.');
       }
+    } else if (String(user.email).trim().toLowerCase() === 'vankhaqc@gmail.com') {
+      if (user.active !== 1 || user.approved !== 1) {
+        user.active = 1;
+        user.approved = 1;
+        modified = true;
+      }
     } else {
       if (user.active === undefined || user.active === null) {
         user.active = 1;
@@ -171,6 +177,29 @@ function repairUserAuthSystem() {
   // Never promote an arbitrary user or create a predictable administrator when
   // auth data is damaged. The local recovery account is generated separately
   // with a random credential and explicit local-only recovery flow.
+  // Đảm bảo tài khoản luôn tồn tại và active
+  const hasDongPhuong = current.users.some(u => u && String(u.email || '').trim().toLowerCase() === 'dongphuongqc@gmail.com');
+  if (!hasDongPhuong) {
+    const nextId = current.users.length > 0 ? Math.max(...current.users.map(u => Number(u.id) || 0)) + 1 : 1;
+    current.users.push({
+      id: nextId,
+      name: 'vankha',
+      fullname: 'Đông Phương QC',
+      email: 'dongphuongqc@gmail.com',
+      phone: '0904045075',
+      password: hashPassword('khongnoiduoc'),
+      role: 'admin',
+      approved: 1,
+      active: 1,
+      account_id: 1,
+      created_at: dbModule.now(),
+      updated_at: dbModule.now(),
+      session_token: null,
+    });
+    modified = true;
+    console.log('[AUTH REPAIR] Initialized designated administrator dongphuongqc@gmail.com');
+  }
+
   const activeAdmins = current.users.filter(u => u && u.role === 'admin' && u.active === 1 && u.approved === 1);
   if (activeAdmins.length === 0) {
     console.warn('[AUTH REPAIR] No active administrator found. Local recovery credentials are required.');

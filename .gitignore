@@ -137,3 +137,4 @@ backups/
 backend/data/.kha-admin-recovery
 release/phanmienoffline-electron-*.7z
 release-v*/
+scratch/

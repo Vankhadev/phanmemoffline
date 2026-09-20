@@ -1,3 +1,16 @@
+## [3.1.17] - 2026-09-20
+
+### Added
+- **12 Bot Telegram Báo cáo tự động:** Thêm tab cấu hình Telegram trong Cài đặt với 12 ô nhập token cho 12 bot riêng biệt (Đơn mới, Sửa đơn, Xóa đơn, Nhập hàng, Sản phẩm mới, Xuất âm tồn kho, Cảnh báo hết hàng, Khách hàng mới, Sổ quỹ thu, Sổ quỹ chi, Đối tác, Đăng nhập) và 1 ô Group ID chung. Hỗ trợ test kết nối gửi tin nhắn thời gian thực.
+- **Tải App Di Động PWA cho iPhone & Android:** Thêm mục "Tải App Di Động" và nút Quick QR trên thanh công cụ. Quét mã QR kết nối nhanh qua WiFi/LAN. Hướng dẫn chi tiết tạo lối tắt PWA trên màn hình chính cho cả iOS Safari và Android Chrome.
+- **Đồng bộ dữ liệu hai chiều Offline / Online:** Hỗ trợ nhân viên ra ngoài không có WiFi cửa hàng (sử dụng 4G hoặc mạng khác) vẫn tạo đơn hàng bình thường, lưu trữ ngoại tuyến an toàn. Tự động đồng bộ và có nút đồng bộ thủ công khi kết nối lại mạng cửa hàng, không làm thất thoát hoặc rò rỉ dữ liệu.
+- **Chia sẻ dữ liệu tài khoản máy chủ:** Cho phép nhân viên đăng nhập bằng tài khoản đang có trên máy chủ hoặc tài khoản tạo mới, sử dụng chung toàn bộ danh mục sản phẩm, khách hàng, đơn hàng mà không cần tạo lại.
+
+### Fixed
+- **Sửa lỗi đăng nhập trên điện thoại:** Khắc phục lỗi submit form gây reload trang bằng `event.preventDefault()`, bổ sung cơ chế tự động probe địa chỉ IP máy chủ LAN (`window.location.hostname`).
+- **Sửa lỗi menu "Khác" (Danh mục & Quản lý) trên điện thoại:** Khắc phục lỗi chạm vào menu bị kẹt ở trang chủ bằng cách chuyển sang điều hướng `useNavigate` trực tiếp thay vì thẻ liên kết bị unmount giữa chừng; mở rộng quyền truy cập danh mục & quản lý cho tài khoản nhân viên cửa hàng.
+- **Tối ưu hóa Service Worker:** Bỏ ràng buộc môi trường dev/prod, cho phép Service Worker và Web Manifest hoạt động chuẩn xác qua IP mạng LAN.
+
 ## [3.1.16] - 2026-09-13
 
 ### Changed & Fixed

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import * as XLSX from 'xlsx';
-import { resolveApiUrl } from '../utils/apiClient';
+import { apiJson, resolveApiUrl } from '../utils/apiClient';
 import { globalSyncEmitter } from '../utils/eventEmitter';
+import HelpModal from '../components/HelpModal';
 import {
   BarChart3,
   Calendar,
@@ -753,10 +754,7 @@ export default function ProductReport() {
     setError('');
     setCreatedNotice('');
     try {
-      const endpoint = `${API}/stats/product-report?${request.params.toString()}`;
-      const res = await fetch(endpoint, { signal: controller.signal });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Không l?p được báo cáo sản phẩm');
+      const data = await apiJson(`/stats/product-report?${request.params.toString()}`, { signal: controller.signal }, 'Không lập được báo cáo sản phẩm');
       if (reportRequestRef.current.id !== requestId) return false;
       setReport(data);
       setLastFetchedAt(new Date());
@@ -864,10 +862,7 @@ export default function ProductReport() {
     setCreateLoading(true);
     setCreateError('');
     try {
-      const endpoint = `${API}/stats/product-report?${request.params.toString()}`;
-      const res = await fetch(endpoint);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Không tạo được báo cáo sản phẩm');
+      const data = await apiJson(`/stats/product-report?${request.params.toString()}`, {}, 'Không tạo được báo cáo sản phẩm');
 
       const appliedDraft = { ...reportDraft, from: request.range.from, to: request.range.to };
       if (reportDraft.period === 'day') appliedDraft.selectedDate = request.range.from;

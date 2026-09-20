@@ -2,7 +2,10 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { HashRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate, } from 'react-router-dom';
 import LiveSyncBadge from './components/LiveSyncBadge';
 import HelpModal from './components/HelpModal';
+import QuickMobileConnectModal from './components/QuickMobileConnectModal';
 import ErrorBoundary from './components/ErrorBoundary'; // page-level error guard
+import OfflineSyncBadge from './components/OfflineSyncBadge';
+import { initOfflineAutoSync } from './utils/offlineSyncManager';
 import {
   BarChart3,
   Box,
@@ -25,7 +28,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Sliders,
-
+  Smartphone,
   Truck,
   Trophy,
   Users,
@@ -183,12 +186,19 @@ function getRestoredSessionRoute(defaultRoute, user, permissions) {
 }
 
 function isAdminUser(user) {
-  return String(user?.role || '').trim().toLowerCase() === 'admin';
+  const role = String(user?.role || '').trim().toLowerCase();
+  return role === 'admin' || role === 'owner';
 }
 
 function hasAnyPermission(user, permissions, required = []) {
   if (!required || required.length === 0) return true;
   if (isAdminUser(user)) return true;
+
+  // Thành viên cửa hàng (nhân viên / người dùng máy chủ) được phép truy cập đầy đủ các chức năng bán hàng & quản lý của cửa hàng
+  const role = String(user?.role || '').trim().toLowerCase();
+  if (role === 'employee' || role === 'user' || role === 'cashier' || role === 'staff') {
+    return true;
+  }
 
   const permissionSet = new Set(normalizePermissions(permissions));
   return required.some(permission => permissionSet.has(permission));
@@ -204,12 +214,25 @@ function canAccessRoute(route, user, permissions) {
 function ProtectedRoute({ user, permissions, path, children }) {
   if (!user) return <Navigate to={LOGIN_REGISTER_ROUTE} replace />;
   if (!canAccessRoute(path, user, permissions)) {
-    const accessibleRoute = firstAccessibleRoute(user, permissions);
-    // Tránh redirect loop: nếu không có route nào accessible, giữ nguyên route hiện tại
-    if (accessibleRoute === HOME_ROUTE && !canAccessRoute(HOME_ROUTE, user, permissions)) {
-      return <div className="flex items-center justify-center min-h-screen"><div className="text-center p-6 bg-white rounded-lg shadow-lg"><h2 className="text-xl font-bold text-gray-800 mb-2">Không có quyền truy cập</h2><p className="text-gray-600">Vui lòng liên hệ quản trị viên.</p></div></div>;
-    }
-    return <Navigate to={accessibleRoute} replace />;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
+        <div className="rounded-2xl bg-white p-8 shadow-sm border border-gray-100 max-w-md w-full">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+            <ShieldCheck size={28} />
+          </div>
+          <h2 className="text-lg font-bold text-gray-800 mb-2">Chức năng cần quyền truy cập</h2>
+          <p className="text-sm text-gray-500 mb-6">
+            Tài khoản hiện tại chưa được cấp quyền truy cập mục này. Vui lòng liên hệ quản trị viên để mở quyền.
+          </p>
+          <NavLink
+            to={HOME_ROUTE}
+            className="inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition"
+          >
+            Quay về Trang chủ
+          </NavLink>
+        </div>
+      </div>
+    );
   }
   return children;
 }
@@ -270,7 +293,34 @@ function FullScreenLoading({ message = 'Đang khởi tạo ứng dụng...' }) {
 }
 
 function RouteLoading() {
-  return <FullScreenLoading message="Đang tải màn hình..." />;
+  const [delayed, setDelayed] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDelayed(true), 4000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="flex min-h-[400px] flex-col items-center justify-center p-6">
+      <div className="w-full max-w-sm rounded-2xl bg-white px-8 py-7 text-center shadow-xl border border-gray-100">
+        <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
+        <div className="text-lg font-bold text-gray-800">Bán Hàng Pos</div>
+        <div className="mt-2 text-sm text-gray-500">Đang tải màn hình...</div>
+        {delayed && (
+          <div className="mt-4 pt-3 border-t border-gray-100 space-y-2">
+            <p className="text-xs text-amber-600 font-medium">Tải trang lâu hơn thường lệ.</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition"
+            >
+              Tải lại trang
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function withStartupTimeout(promise, timeoutMs = 8000) {
@@ -491,12 +541,23 @@ function buildScreenGuide(navGroups, currentPath) {
   };
 }
 
-function MobileActionSheet({ activePanel, moreGroups, user, currentPath, onClose, onLogout }) {
+function MobileActionSheet({ activePanel, moreGroups, user, currentPath, onClose, onLogout, onNavigate }) {
   if (!activePanel) return null;
 
+  const navigate = useNavigate();
   const isAccountPanel = activePanel === 'account';
   const displayName = getUserDisplayName(user);
   const subtitle = getUserSubtitle(user);
+
+  const handleRouteSelect = (targetRoute) => {
+    if (typeof onNavigate === 'function') {
+      onNavigate(targetRoute);
+    } else {
+      navigate(targetRoute);
+      onClose?.();
+    }
+  };
+
   const accountTools = (
     <div className="mobile-account-panel mobile-account-panel-compact">
       <div className="mobile-account-summary">
@@ -558,16 +619,16 @@ function MobileActionSheet({ activePanel, moreGroups, user, currentPath, onClose
                     {group.items.map(item => {
                       const active = isRouteActive(currentPath, item.to);
                       return (
-                        <NavLink
+                        <button
                           key={item.to}
-                          to={item.to}
+                          type="button"
                           className={`mobile-sheet-route ${active ? 'mobile-sheet-route-active' : ''}`}
                           aria-current={active ? 'page' : undefined}
-                          onClick={onClose}
+                          onClick={() => handleRouteSelect(item.to)}
                         >
                           {item.icon && <NavMenuIcon icon={item.icon} className="h-5 w-5 shrink-0" />}
                           <span>{item.label}</span>
-                        </NavLink>
+                        </button>
                       );
                     })}
                   </div>
@@ -606,6 +667,7 @@ function AppLayout({
   const [compactSidebarAnimating, setCompactSidebarAnimating] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null);
   const [showScreenGuide, setShowScreenGuide] = useState(false);
+  const [showMobileModal, setShowMobileModal] = useState(false);
   const user = authState.user;
   const permissions = authState.permissions;
   const canAccess = useCallback((route) => canAccessRoute(route, user, permissions), [permissions, user]);
@@ -619,6 +681,11 @@ function AppLayout({
   }, [canAccess, navigate, onRedirected, redirectPath]);
 
   useEffect(() => {
+    const scrollContainer = document.querySelector('.app-main-scroll');
+    if (scrollContainer) scrollContainer.scrollTop = 0;
+  }, [location.pathname]);
+
+  useEffect(() => {
     const handleUpdateToast = (event) => {
       const detail = event?.detail || {};
       if (!detail?.available) return;
@@ -627,6 +694,10 @@ function AppLayout({
     };
     window.addEventListener('kha-update-available', handleUpdateToast);
     return () => window.removeEventListener('kha-update-available', handleUpdateToast);
+  }, []);
+
+  useEffect(() => {
+    initOfflineAutoSync();
   }, []);
 
   useEffect(() => {
@@ -858,7 +929,18 @@ function AppLayout({
             >
               <Menu size={20} aria-hidden="true" />
             </button>
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-2.5 sm:gap-3">
+            <OfflineSyncBadge />
+            <button
+              type="button"
+              onClick={() => setShowMobileModal(true)}
+              className="inline-flex min-h-10 items-center gap-1.5 sm:gap-2 rounded-full border border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-purple-700 hover:from-purple-100 hover:to-indigo-100 shadow-xs transition"
+              title="Quét mã QR kết nối điện thoại iPhone / Android"
+            >
+              <Smartphone size={16} className="text-purple-600" />
+              <span className="hidden sm:inline">App Di Động</span>
+              <span className="rounded-full bg-purple-600 px-1.5 py-0.2 text-[10px] font-bold text-white">QR</span>
+            </button>
             <LiveSyncBadge
               tables={['invoices', 'invoice_details', 'customers', 'customer_types', 'partners', 'products', 'product_categories', 'combos', 'import_logs', 'import_details', 'cash_book', 'accounting']}
               className="hidden sm:inline-flex"
@@ -872,35 +954,37 @@ function AppLayout({
             </button>
             </div>
           </div>
-          <Suspense fallback={<RouteLoading />}>
-            <Routes>
-            <Route path={HOME_ROUTE} element={<ErrorBoundary><Home user={user} store={store} /></ErrorBoundary>} />
-            <Route path="/tao-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/tao-don-hang"><ErrorBoundary><CreateOrder user={user} store={store} /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/danh-sach-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/danh-sach-don-hang"><ErrorBoundary><OrderList store={store} /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/hoa-don-in/:idOrCode" element={<ProtectedRoute user={user} permissions={permissions} path="/hoa-don-in"><ErrorBoundary><InvoicePrint /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/kho-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/kho-hang"><ErrorBoundary><KhoHang /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/nha-cung-cap" element={<ProtectedRoute user={user} permissions={permissions} path="/nha-cung-cap"><ErrorBoundary><NhaCungCap /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/nhap-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/nhap-hang"><ErrorBoundary><Nhaphang store={store} /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/san-pham"><ErrorBoundary><Products store={store} /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/khach-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/khach-hang"><ErrorBoundary><Customers /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/top-khach-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/top-khach-hang"><ErrorBoundary><TopCustomers /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/thong-ke" element={<ProtectedRoute user={user} permissions={permissions} path="/thong-ke"><ErrorBoundary><Stats /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/so-quy" element={<ProtectedRoute user={user} permissions={permissions} path="/so-quy"><ErrorBoundary><CashBook /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/ke-toan" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan"><ErrorBoundary><AccountingDashboard user={user} /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/ke-toan/bao-cao-thue" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-thue"><ErrorBoundary><TaxReport /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/ke-toan/bao-cao-ton-kho" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-ton-kho"><ErrorBoundary><InventoryReport /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/ke-toan/nhat-ky" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/nhat-ky"><ErrorBoundary><AccountingLogs /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><ErrorBoundary><CustomerOrderReport /></ErrorBoundary></ProtectedRoute>} />
-            <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ErrorBoundary><ProductReport /></ErrorBoundary></ProtectedRoute>} />
+          <ErrorBoundary>
+            <Suspense fallback={<RouteLoading />}>
+              <Routes>
+              <Route path={HOME_ROUTE} element={<ErrorBoundary><Home user={user} store={store} /></ErrorBoundary>} />
+              <Route path="/tao-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/tao-don-hang"><ErrorBoundary><CreateOrder user={user} store={store} /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/danh-sach-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/danh-sach-don-hang"><ErrorBoundary><OrderList store={store} /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/hoa-don-in/:idOrCode" element={<ProtectedRoute user={user} permissions={permissions} path="/hoa-don-in"><ErrorBoundary><InvoicePrint /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/kho-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/kho-hang"><ErrorBoundary><KhoHang /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/nha-cung-cap" element={<ProtectedRoute user={user} permissions={permissions} path="/nha-cung-cap"><ErrorBoundary><NhaCungCap /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/nhap-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/nhap-hang"><ErrorBoundary><Nhaphang store={store} /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/san-pham"><ErrorBoundary><Products store={store} /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/khach-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/khach-hang"><ErrorBoundary><Customers /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/top-khach-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/top-khach-hang"><ErrorBoundary><TopCustomers /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/thong-ke" element={<ProtectedRoute user={user} permissions={permissions} path="/thong-ke"><ErrorBoundary><Stats /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/so-quy" element={<ProtectedRoute user={user} permissions={permissions} path="/so-quy"><ErrorBoundary><CashBook /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/ke-toan" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan"><ErrorBoundary><AccountingDashboard user={user} /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/ke-toan/bao-cao-thue" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-thue"><ErrorBoundary><TaxReport /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/ke-toan/bao-cao-ton-kho" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-ton-kho"><ErrorBoundary><InventoryReport /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/ke-toan/nhat-ky" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/nhat-ky"><ErrorBoundary><AccountingLogs /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/bao-cao-theo-don-hang" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-don-hang"><ErrorBoundary><CustomerOrderReport /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/bao-cao-theo-san-pham" element={<ProtectedRoute user={user} permissions={permissions} path="/bao-cao-theo-san-pham"><ErrorBoundary><ProductReport /></ErrorBoundary></ProtectedRoute>} />
 
-            <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><ErrorBoundary><Settings store={store} onStoreChange={onStoreChange} permissions={permissions} user={user} /></ErrorBoundary></ProtectedRoute>} />
-            <Route path={LOGIN_REGISTER_ROUTE} element={<Navigate to={firstAccessibleRoute(user, permissions)} replace />} />
-            {Object.entries(ROUTE_ALIASES).map(([from, to]) => (
-              <Route key={from} path={from} element={<Navigate to={canAccess(to) ? to : firstAccessibleRoute(user, permissions)} replace />} />
-            ))}
-            <Route path="*" element={<Navigate to={canAccessAny(Object.keys(ROUTE_PERMISSIONS)) ? firstAccessibleRoute(user, permissions) : HOME_ROUTE} replace />} />
-            </Routes>
-          </Suspense>
+              <Route path="/cai-dat" element={<ProtectedRoute user={user} permissions={permissions} path="/cai-dat"><ErrorBoundary><Settings store={store} onStoreChange={onStoreChange} permissions={permissions} user={user} /></ErrorBoundary></ProtectedRoute>} />
+              <Route path={LOGIN_REGISTER_ROUTE} element={<Navigate to={firstAccessibleRoute(user, permissions)} replace />} />
+              {Object.entries(ROUTE_ALIASES).map(([from, to]) => (
+                <Route key={from} path={from} element={<Navigate to={canAccess(to) ? to : firstAccessibleRoute(user, permissions)} replace />} />
+              ))}
+              <Route path="*" element={<Navigate to={canAccessAny(Object.keys(ROUTE_PERMISSIONS)) ? firstAccessibleRoute(user, permissions) : HOME_ROUTE} replace />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </div>
       <MobileActionSheet
@@ -909,6 +993,10 @@ function AppLayout({
         user={user}
         currentPath={location.pathname}
         onClose={() => setMobilePanel(null)}
+        onNavigate={(to) => {
+          setMobilePanel(null);
+          navigate(to);
+        }}
         onLogout={onLogout}
       />
       <MobileBottomNavigation
@@ -934,6 +1022,10 @@ function AppLayout({
           }
         />
       )}
+      <QuickMobileConnectModal
+        isOpen={showMobileModal}
+        onClose={() => setShowMobileModal(false)}
+      />
       {upgradeToast && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-200">

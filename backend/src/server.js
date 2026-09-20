@@ -1,4 +1,4 @@
-﻿/**
+/**
  *  Bán hàng offline - by Van kha mmo
  *  Backend: Node.js + Express + JSON file database
  */
@@ -72,6 +72,8 @@ const excelImportsRoutes = require('./routes/excelImports');
 const inventoryRoutes = require('./routes/inventory');
 const accountingRoutes = require('./routes/accounting');
 const settingsRoutes = require('./routes/settings');
+const telegramRoutes = require('./routes/telegram');
+const mobileRoutes = require('./routes/mobile');
 const printTemplatesRoutes = require('./routes/printTemplates');
 const marketplacesRoutes = require('./routes/marketplaces');
 const databaseRoutes = require('./routes/database');
@@ -87,17 +89,15 @@ const restoreRoutes = require('./routes/restore');
 const app  = express();
 const PREFERRED_PORT = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || process.env.PHANMEM_PORT || 7000);
 let   PORT = PREFERRED_PORT; // se duoc gan lai boi getAvailablePort khi startServer
-const HOST = String(
-  process.env.KHA_BACKEND_HOST ||
-  process.env.PHANMEM_HOST ||
-  process.env.HOST ||
-  '127.0.0.1'
-).trim() || '127.0.0.1';
+const HOST = (() => {
+  const envHost = String(process.env.KHA_BACKEND_HOST || process.env.PHANMEM_HOST || process.env.HOST || '').trim();
+  if (envHost && envHost !== '127.0.0.1') return envHost;
+  return '0.0.0.0';
+})();
 const SERVER_STARTED_AT = new Date().toISOString();
 const BACKEND_INSTANCE_ID = String(process.env.KHA_BACKEND_INSTANCE_ID || '').slice(0, 100);
 const AUTOMATIC_BACKUPS_DISABLED = String(process.env.KHA_DISABLE_AUTOMATIC_BACKUPS || '').trim() === '1';
 const LOCAL_LIGHTWEIGHT_MODE = String(process.env.KHA_LOCAL_LIGHTWEIGHT_MODE || '').trim() === '1';
-
 function maskDbPath(filePath) {
   const normalized = String(filePath || '');
   const fileName = path.basename(normalized);
@@ -310,6 +310,8 @@ app.use('/api/updates', updatesRoutes);
 app.use('/api/inventory', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'inventory_reports.read']), inventoryRoutes);
 app.use('/api/accounting', requireAuth, requireAnyPermission(['accounting.read', 'accounting.manage', 'tax_reports.read', 'tax_reports.manage', 'revenue_reports.read', 'profit_reports.read', 'debts.read', 'einvoices.read', 'bank_accounts.read', 'activity_logs.read']), accountingRoutes);
 app.use('/api/settings', requireAuth, requireAnyPermission(['settings.read', 'settings.manage']), settingsRoutes);
+app.use('/api/telegram', requireAuth, requireAnyPermission(['settings.read', 'settings.manage']), telegramRoutes);
+app.use('/api/mobile', mobileRoutes);
 app.use('/api/excel-imports', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'customers.read', 'customers.manage', 'invoices.read', 'invoices.manage']), excelImportsRoutes);
 app.use('/api/print-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);
 app.use('/api/invoice-templates', requireAuth, requireAnyPermission(['print_templates.read', 'print_templates.manage']), printTemplatesRoutes);

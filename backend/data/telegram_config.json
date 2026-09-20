@@ -1,0 +1,66 @@
+{
+  "enabled": true,
+  "group_id": "-1001234567890",
+  "bots": {
+    "bot_create_order": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Tạo đơn hàng"
+    },
+    "bot_order_list": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Danh sách đơn hàng"
+    },
+    "bot_products": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Sản phẩm"
+    },
+    "bot_inventory": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Kho hàng"
+    },
+    "bot_customers": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Khách hàng"
+    },
+    "bot_imports": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Nhập hàng"
+    },
+    "bot_partners": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Đối Tác"
+    },
+    "bot_stats": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Thống kê"
+    },
+    "bot_cashbook": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Sổ quỹ"
+    },
+    "bot_order_reports": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Báo cáo theo đơn hàng"
+    },
+    "bot_product_reports": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Báo cáo sản phẩm"
+    },
+    "bot_top_customers": {
+      "token": "",
+      "enabled": true,
+      "name": "Bot Top khách hàng"
+    }
+  }
+}

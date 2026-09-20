@@ -9,7 +9,9 @@ import {
   Package,
   Plus,
   RotateCcw,
+  Send,
   Settings2,
+  Smartphone,
   Star,
   Store,
   Tag,
@@ -17,6 +19,8 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import TelegramSettingsPanel from '../components/TelegramSettingsPanel';
+import MobileAppDownloadPanel from '../components/MobileAppDownloadPanel';
 import HelpModal from '../components/HelpModal';
 import PrintTemplateEditorModal from '../components/invoice-print/PrintTemplateEditorModal';
 import { buildTemplateJsonFromSettings, DEFAULT_INVOICE_TEMPLATE_SETTINGS, normalizePrintTemplate } from '../components/invoice-print/templateDefaults';
@@ -1006,8 +1010,8 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
       setEmpNotice({ tone: 'error', message: 'Vui lượng nhập mật khẩu cho nhân viên mới.' });
       return;
     }
-    if (payload.password && String(payload.password).length < 8) {
-      setEmpNotice({ tone: 'error', message: 'Mật khẩu phđi c? ?t nh?t 8 kỳ t?.' });
+    if (payload.password && String(payload.password).length < 6) {
+      setEmpNotice({ tone: 'error', message: 'Mật khẩu phải có ít nhất 6 ký tự.' });
       return;
     }
 
@@ -1497,6 +1501,8 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
     if (canViewPrintTemplates) nextTabs.push({ key: 'print-templates', label: 'Mẫu in hóa đơn', icon: <FileText size={16} /> });
     if (canAccessSection(['settings.read', 'settings.manage'])) nextTabs.push({ key: 'backup', label: 'Backup', icon: <Image size={16} /> });
     if (canAccessSection(['settings.read', 'settings.manage'])) nextTabs.push({ key: 'recovery', label: 'Khôi phục DL', icon: <RotateCcw size={16} /> });
+    if (canAccessSection(['settings.read', 'settings.manage'])) nextTabs.push({ key: 'telegram', label: 'Telegram Bot', icon: <Send size={16} /> });
+    if (canAccessSection(['settings.read', 'settings.manage'])) nextTabs.push({ key: 'mobile-app', label: 'Tải App Di Động', icon: <Smartphone size={16} /> });
     if (canViewUpdates) nextTabs.push({ key: 'updates', label: 'Cập nhật', icon: <Settings2 size={16} /> });
     return nextTabs;
   }, [canAccessSection, canViewCustomerTypes, canViewEmployees, canViewNegativeStock, canViewPrintTemplates, canViewStore, canViewUpdates]);
@@ -2487,6 +2493,14 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
         </div>
       )}
 
+      {!initialLoading && tab === 'telegram' && (
+        <TelegramSettingsPanel />
+      )}
+
+      {!initialLoading && tab === 'mobile-app' && (
+        <MobileAppDownloadPanel />
+      )}
+
       {showEmpModal && canManageEmployees && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="employee-modal-title">
@@ -2548,8 +2562,9 @@ export default function Settings({ store, onStoreChange, permissions = [], user 
                 </div>
               </div>
 
-              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                Vai tr? hỗ trợ: admin, kế toán, thu ngđơn, nhân viên về user cu. Khi tạo mới, backend vđơn t? c?p role ban đầu theo co ch? cu; client s? cập nhật lỗi role đã chọn ngay sau khi tạo nđủ c? quyđơn quản lý nguđi d?ng.
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-800 space-y-1">
+                <div className="font-bold text-blue-900">💡 Hướng dẫn cho nhân viên bán hàng trên điện thoại (Phương án 3):</div>
+                <div>Sau khi thêm nhân viên tại đây, bạn chỉ cần gửi <b>Email / Tên đăng nhập</b> và <b>Mật khẩu</b> cho nhân viên. Nhân viên mở điện thoại, đăng nhập vào là dùng được ngay kho hàng, khách hàng của quán mà không cần tạo mới!</div>
               </div>
             </div>
 

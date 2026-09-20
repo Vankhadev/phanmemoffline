@@ -5,6 +5,8 @@ import { globalSyncEmitter } from '../utils/eventEmitter';
 import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud, Printer, FileDown } from 'lucide-react';
 import { getProductDisplayName, scoreProductMatch } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
+import OfflineSyncBadge from '../components/OfflineSyncBadge';
+import { PENDING_ORDERS_CHANGED_EVENT } from '../utils/offlineSyncManager';
 import {
   NEGATIVE_STOCK_LIMIT_MESSAGE,
   buildSaleStockValidation,
@@ -486,11 +488,16 @@ export default function OrderList() {
     const unsubscribeDeleted = globalSyncEmitter.on('ORDER_DELETED', handleSyncRefresh);
     const unsubscribeCustomer = globalSyncEmitter.on('CUSTOMER_UPDATED', handleCustomerSync);
 
+    window.addEventListener(PENDING_ORDERS_CHANGED_EVENT, handleSyncRefresh);
+    window.addEventListener('kha-order-created', handleSyncRefresh);
+
     return () => {
       unsubscribeCreated();
       unsubscribeUpdated();
       unsubscribeDeleted();
       unsubscribeCustomer();
+      window.removeEventListener(PENDING_ORDERS_CHANGED_EVENT, handleSyncRefresh);
+      window.removeEventListener('kha-order-created', handleSyncRefresh);
     };
   }, []);
 
@@ -1419,6 +1426,7 @@ export default function OrderList() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+              <OfflineSyncBadge />
               <button
                 onClick={() => setShowHelp(true)}
                 className="px-3.5 py-2 rounded-xl border border-white/15 bg-white/10 hover:bg-white/15 text-sm font-medium flex items-center gap-2"

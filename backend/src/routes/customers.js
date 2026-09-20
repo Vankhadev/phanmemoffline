@@ -4,6 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, now } = require('../db/database');
+const { notifyTelegram } = require('../services/telegramService');
 
 function normalizeCustomerRow(row = {}) {
   return {
@@ -105,6 +106,11 @@ router.post('/', (req, res) => {
     active: 1,
     created_at: now(),
   });
+  notifyTelegram('bot_customers', 'Thêm khách hàng mới', {
+    action: 'Thêm mới',
+    customer: { id, name, phone, address, customer_type: typeName },
+    user: req.user?.name,
+  });
   res.json({ id, ok: true });
 });
 
@@ -125,6 +131,11 @@ router.put('/:id', (req, res) => {
   });
   update('customers', +req.params.id, updatedPayload);
   const updated = getOne('customers', row => Number(row.id) === Number(req.params.id), { skipAccountScope: true });
+  notifyTelegram('bot_customers', 'Cập nhật thông tin khách hàng', {
+    action: 'Cập nhật',
+    customer: { id: +req.params.id, name, phone, address, customer_type: typeName },
+    user: req.user?.name,
+  });
   res.json({ ok: true, item: normalizeCustomerRow(updated || { id: +req.params.id, ...updatedPayload }) });
 });
 

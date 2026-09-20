@@ -36,6 +36,7 @@ const {
 const { resolveInvoicePrintTemplate } = require('../services/printTemplateService');
 const { logActivity } = require('../services/accountingLogService');
 const { exportCustomerDebtReport } = require('../services/customerDebtReportService');
+const { notifyTelegram } = require('../services/telegramService');
 
 // ─────────────────────────────────────────────
 // Helper: hợp nhất chi tiết trùng product_id (chống duplicate)
@@ -672,6 +673,13 @@ router.post('/', async (req, res) => {
   try {
     const result = await Promise.resolve(createInvoiceFromPayload(req.body, req, { orderSource: 'direct' }));
 
+    if (result && result.invoice && !result.existing) {
+      notifyTelegram('bot_create_order', 'Tạo đơn mới', {
+        invoice: result.invoice,
+        creator: req.user?.name || req.body?.invoice_writer,
+      });
+    }
+
     res.json({
       ok: true,
       invoice_id: result.invoice_id,
@@ -829,6 +837,15 @@ router.put('/:id', async (req, res) => {
       return { ok: true, invoice: recalculatedInvoice, details: updatedDetails };
     }));
 
+    if (result && result.invoice) {
+      notifyTelegram('bot_order_list', 'Cập nhật đơn hàng', {
+        invoice: result.invoice,
+        action: 'Sửa đơn hàng',
+        newStatus: result.invoice.status,
+        user: req.user?.name,
+      });
+    }
+
     res.json(result);
   } catch (err) {
     const status = err.status || 500;
@@ -887,6 +904,13 @@ router.delete('/:id', async (req, res) => {
 
       return { ok: true, invoice_id: inv.id, status: 'cancelled', cancelled_at: cancelledInvoice.cancelled_at || cancelledAt };
     }));
+
+    notifyTelegram('bot_order_list', 'Hủy đơn hàng', {
+      invoice: { id: req.params.id, status: 'cancelled' },
+      action: 'Hủy đơn',
+      newStatus: 'cancelled',
+      user: req.user?.name,
+    });
 
     res.json(result);
   } catch (err) {

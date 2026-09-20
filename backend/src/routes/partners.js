@@ -4,6 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const { getAll, insert, update, now } = require('../db/database');
+const { notifyTelegram } = require('../services/telegramService');
 
 // Lấy danh sách NCC
 router.get('/', (req, res) => {
@@ -28,6 +29,11 @@ router.post('/', (req, res) => {
     active: 1,
     created_at: now(),
   });
+  notifyTelegram('bot_partners', 'Thêm đối tác mới', {
+    action: 'Thêm mới',
+    partner: { id, name, phone, address, tax_code },
+    user: req.user?.name,
+  });
   res.json({ id, ok: true });
 });
 
@@ -38,6 +44,11 @@ router.put('/:id', (req, res) => {
     name, phone: phone || '', tax_code: tax_code || '', email: email || '',
     address: address || '', note: note || '',
     invoice_type: invoice_type || undefined
+  });
+  notifyTelegram('bot_partners', 'Cập nhật đối tác', {
+    action: 'Cập nhật',
+    partner: { id: +req.params.id, name, phone, address, tax_code },
+    user: req.user?.name,
   });
   res.json({ ok: true });
 });

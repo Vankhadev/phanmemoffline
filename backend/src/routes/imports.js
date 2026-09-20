@@ -6,6 +6,7 @@ const router = express.Router();
 const { getAll, getOne, insert, update, remove, now, withAtomicDbWrite, generateNextDocumentCode } = require('../db/database');
 const accountingService = require('../services/accountingService');
 const { logActivity, logDataDeletion } = require('../services/accountingLogService');
+const { notifyTelegram } = require('../services/telegramService');
 
 function genImportCode() {
   return generateNextDocumentCode('import', { skipSave: true });
@@ -633,6 +634,22 @@ router.post('/', (req, res) => {
     };
     });
 
+    if (result && result.ok) {
+      notifyTelegram('bot_imports', 'Tạo phiếu nhập mới', {
+        action: 'Tạo phiếu nhập mới',
+        importData: {
+          id: result.import_id,
+          code: result.import_code,
+          total: req.body?.total,
+          paid_amount: result.paid_amount,
+          debt_amount: result.remaining_amount,
+          note: req.body?.note,
+          items: req.body?.details,
+        },
+        user: req.user?.name,
+      });
+    }
+
     res.json(result);
   } catch (err) {
     sendImportError(res, err, 'Lỗi khi tạo phiếu nhập');
@@ -829,6 +846,14 @@ router.post('/:idOrCode/cancel', (req, res) => {
       stock_rolled_back: importLog.stock_applied === true,
     };
     });
+
+    if (result && result.ok) {
+      notifyTelegram('bot_imports', 'Hủy phiếu nhập hàng', {
+        action: 'Hủy phiếu nhập',
+        importData: { code: req.params.idOrCode, note: req.body?.lyDo || req.body?.reason },
+        user: req.user?.name,
+      });
+    }
 
     res.json(result);
   } catch (err) {

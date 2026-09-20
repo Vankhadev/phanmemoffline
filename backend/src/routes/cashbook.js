@@ -5,6 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const { getAll, getOne, insert, update, now } = require('../db/database');
+const { notifyTelegram } = require('../services/telegramService');
 
 function normalizeAmount(value) {
   const amount = Number(value);
@@ -89,6 +90,12 @@ router.post('/', (req, res) => {
       active: 1,
       created_at: now(),
       updated_at: now(),
+    });
+
+    notifyTelegram('bot_cashbook', type === 'income' ? 'Phiếu thu mới' : 'Phiếu chi mới', {
+      action: type === 'income' ? 'Phiếu thu' : 'Phiếu chi',
+      transaction: { id, type, category, amount: normalizedAmount, note, date },
+      user: req.user?.name,
     });
 
     res.json({ ok: true, id, message: 'Thêm giao dịch thành công' });

@@ -3,7 +3,7 @@ const CACHE_NAME = 'ban-hang-offline-shell-v1';
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(['./', './manifest.webmanifest', './icons/app-icon.svg']))
+      .then(cache => cache.addAll(['/', '/manifest.webmanifest', '/icons/app-icon-192.png']))
       .then(() => self.skipWaiting())
   );
 });

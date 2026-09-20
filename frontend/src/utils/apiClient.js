@@ -1,4 +1,4 @@
-﻿import {
+import {
   clearAuthSession,
   getAuthToken,
   getPendingLocalData,
@@ -398,16 +398,18 @@ function getBrowserLanApiBase() {
 
   if (locationProtocol !== 'http:' && locationProtocol !== 'https:') return '';
 
+  // Khi thiết bị di động truy cập qua WiFi (IP LAN như 192.168.x.x), 
+  // API Backend phải kết nối trực tiếp đến IP máy chủ đó thay vì loopback (127.0.0.1) của điện thoại
+  if (!isLoopbackHost(currentHost)) {
+    return buildHttpApiBase(currentHost, configuredPort, locationProtocol);
+  }
+
   if (configuredHost) {
     const protocol = isLoopbackHost(configuredHost) ? 'http:' : locationProtocol;
     return buildHttpApiBase(configuredHost, configuredPort, protocol);
   }
 
-  if (isLoopbackHost(currentHost)) {
-    return buildHttpApiBase('127.0.0.1', configuredPort, 'http:');
-  }
-
-  return buildHttpApiBase(currentHost, configuredPort, locationProtocol);
+  return buildHttpApiBase('127.0.0.1', configuredPort, 'http:');
 }
 
 function resolveApiBaseDetails() {

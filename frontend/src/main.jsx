@@ -16,7 +16,20 @@ installAuthenticatedFetch()
 // de tim backend dang chay (co the la 7000/7001/.../7100). Luu vao localStorage kha_backend_base_url.
 // Trong Electron thi window.khaDesktop.apiBase da co san -> probe bo qua nhanh.
 if (!nativeRuntime && typeof window !== 'undefined' && !(window.khaDesktop?.apiBase || window.electronAPI?.apiBase)) {
-  void probeBackendHealth({ host: '127.0.0.1' }).catch(() => {});
+  // Probe 127.0.0.1 (local PC) và hostname hiện tại (LAN IP từ điện thoại)
+  const currentHost = window.location.hostname;
+  const hostsToProbe = ['127.0.0.1'];
+  if (currentHost && currentHost !== '127.0.0.1' && currentHost !== 'localhost') {
+    hostsToProbe.unshift(currentHost); // Ưu tiên hostname LAN IP trước
+  }
+  (async () => {
+    for (const host of hostsToProbe) {
+      try {
+        const result = await probeBackendHealth({ host });
+        if (result) break;
+      } catch (_) {}
+    }
+  })();
 }
 
 installCrossTabSyncBridge()
@@ -25,9 +38,9 @@ if (typeof window !== 'undefined') {
 }
 installElectronInputFocusGuard()
 
-if (!nativeRuntime && 'serviceWorker' in navigator && import.meta.env.PROD) {
+if (!nativeRuntime && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
 }
 
