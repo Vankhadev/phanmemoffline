@@ -1164,6 +1164,8 @@ export const accountingApi = {
 export const inventoryApi = {
   report(params = {}) { return apiJsonChecked(`/inventory/report${buildQuerySuffix(params)}`, {}, 'Không thể tải báo cáo tồn kho.'); },
   negativeStock(params = {}) { return apiJsonChecked(`/inventory/negative-stock${buildQuerySuffix(params)}`, {}, 'Không thể tải danh sách âm kho.'); },
+  sendTelegramReport(payload = {}) { return apiJsonChecked('/inventory/telegram-report', { method: 'POST', body: payload }, 'Không thể gửi báo cáo kiểm kho về Telegram.'); },
+  previewTelegramReport(params = {}) { return apiJsonChecked(`/inventory/telegram-report/preview${buildQuerySuffix(params)}`, {}, 'Không thể xem trước báo cáo kiểm kho Telegram.'); },
 };
 
 export const excelImportApi = {

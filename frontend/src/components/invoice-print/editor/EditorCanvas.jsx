@@ -205,7 +205,10 @@ function ElementContent({ element, template, payload }) {
 
   if (element.type === 'totals') {
     const paid = Number(totals.paid_amount ?? totals.paid ?? 0) || 0;
-    const remaining = Number(totals.remaining_amount ?? totals.debt_amount ?? Math.max(0, (Number(totals.total) || 0) - paid)) || 0;
+    const orderTotal = Number(totals.total ?? totals.grand_total ?? 0) || 0;
+    const oldDebt = Number(totals.old_debt ?? 0) || 0;
+    const finalPayable = Math.max(0, orderTotal + oldDebt - paid);
+
     const showSubtotal = style.showSubtotal !== false;
     const showDiscount = style.showDiscount !== false;
     const showDelivery = style.showDelivery !== false;
@@ -213,18 +216,20 @@ function ElementContent({ element, template, payload }) {
     const showOldDebt = style.showOldDebt !== false;
     const showPayable = style.showPayable !== false;
     const showPaid = style.showPaid !== false;
-    const showDebt = style.showDebt !== false;
     const showChange = style.showChange !== false;
+
+    const hasAdjustments = (Number(totals.vat_amount) > 0) || (Number(totals.discount_amount) > 0) || (Number(totals.delivery_fee) > 0);
+    const shouldShowSubtotal = showSubtotal && (hasAdjustments || !showGrandTotal);
+
     return (
       <div className="invoice-editor-preview-totals" style={baseStyle}>
-        {showSubtotal && <div><span>Tổng tiền hàng</span><b>{formatVND(totals.subtotal ?? totals.total)}</b></div>}
+        {shouldShowSubtotal && <div><span>Tổng tiền hàng</span><b>{formatVND(totals.subtotal ?? totals.total)}</b></div>}
         {showDiscount && <div><span>Chiết khấu</span><b>{formatVND(totals.discount_amount)}</b></div>}
         {showDelivery && <div><span>Phí giao hàng</span><b>{formatVND(totals.delivery_fee)}</b></div>}
-        {showGrandTotal && <div className="is-total"><span>Tổng tiền</span><b>{formatVND(totals.total ?? totals.grand_total)}</b></div>}
-        {showOldDebt && <div><span>Công nợ cũ</span><b>{formatVND(totals.old_debt)}</b></div>}
-        {showPayable && <div className="is-total"><span>Thành tiền cần thanh toán</span><b>{formatVND(totals.payable_amount ?? totals.total)}</b></div>}
-        {showPaid && <div><span>Đã thanh toán</span><b>{formatVND(paid)}</b></div>}
-        {showDebt && <div><span>Còn nợ</span><b>{formatVND(remaining)}</b></div>}
+        {showGrandTotal && <div className="is-total"><span>{style.grandTotalLabel || "Khách cần trả"}</span><b>{formatVND(orderTotal)}</b></div>}
+        {showOldDebt && (oldDebt !== 0 || style.showOldDebtZero) && <div><span>{style.oldDebtLabel || "Nợ cũ"}</span><b>{formatVND(oldDebt)}</b></div>}
+        {showPaid && paid > 0 && <div><span>{style.paidLabel || "Đã thu"}</span><b>{formatVND(paid)}</b></div>}
+        {showPayable && <div className="is-total"><span>{style.payableLabel || "Thành tiền cần thanh toán"}</span><b>{formatVND(finalPayable)}</b></div>}
         {showChange && <div><span>Tiền thừa</span><b>{formatVND(totals.change_amount)}</b></div>}
       </div>
     );

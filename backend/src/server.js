@@ -874,6 +874,12 @@ Started: ${SERVER_STARTED_AT}
 ----------------------------------------------
 `);
     writeRuntimePortFile(HOST, PORT);
+    try {
+      const { startTelegramInventoryBotListener } = require('./services/inventoryAuditService');
+      startTelegramInventoryBotListener();
+    } catch (e) {
+      console.warn('[TELEGRAM bot_inventory] Không thể khởi động listener:', e.message);
+    }
     // Recovery must be an explicit, controlled operation. Scanning and merging
     // backups during every ordinary startup can overwrite live business data.
     if (process.env.KHA_RECOVERY_AUTO_ON_START === '1') {

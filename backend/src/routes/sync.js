@@ -3,6 +3,7 @@ const router = express.Router();
 const { getAll, getOne, insert, update, remove, now, getSyncVersions, withAtomicDbWrite, generateNextDocumentCode } = require('../db/database');
 const { requireAuth, requirePermission, requireAnyPermission, publicSession } = require('../middleware/auth');
 const { createInvoiceFromPayload } = require('../services/invoiceCreationService');
+const { notifyTelegram } = require('../services/telegramService');
 const {
   assertProductStockValueWithinLimit,
   logNegativeStockTransition,
@@ -450,6 +451,14 @@ function createPendingOrderFromSync(payload, req) {
       user_id: req.user?.id || payload.user_id || null,
       note: payload.note || 'Đơn đồng bộ từ thiết bị',
     }, req, { orderSource: 'sync' });
+
+    if (result && result.invoice && !result.idempotent) {
+      const detailsList = getAll('invoice_details', d => Number(d.invoice_id) === Number(result.invoice.id || result.invoice_id));
+      notifyTelegram('bot_create_order', 'Tạo đơn mới (Đồng bộ)', {
+        invoice: { ...result.invoice, details: detailsList },
+        creator: req.user?.name || payload.invoice_writer || 'Đồng bộ thiết bị',
+      });
+    }
 
     return {
       id: result.invoice_id,

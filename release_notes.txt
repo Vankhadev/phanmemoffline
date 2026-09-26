@@ -1,1 +1,1 @@
-v3.1.17 - Tích hợp 12 Bot Telegram báo cáo tự động, Hỗ trợ PWA cho iPhone & Android, Đồng bộ dữ liệu Offline 4G và sửa lỗi điều hướng di động
+v3.1.18 - Báo cáo kiểm kho Telegram tự động, Quản lý thanh toán & nợ cũ trực tiếp trên đơn hàng, In ấn hóa đơn A5 hoàn thiện & Fallback thông minh đa Bot

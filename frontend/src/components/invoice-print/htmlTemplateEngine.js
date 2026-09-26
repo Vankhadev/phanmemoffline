@@ -79,9 +79,10 @@ function normalizeData(data = {}) {
   const subtotal = Number(totals.subtotal) || items.reduce((sum, item) => sum + (Number(item.line_total) || 0), 0);
   const total = Number(totals.total ?? totals.grand_total ?? invoice.total) || subtotal;
   const paidAmount = Number(payment.paid_amount ?? totals.paid_amount ?? invoice.paid_amount) || 0;
-  const remainingAmount = Number(payment.remaining_amount ?? totals.remaining_amount ?? invoice.remaining_amount) || Math.max(0, total - paidAmount);
   const oldDebtAmount = Number(totals.old_debt ?? invoice.old_debt) || 0;
-  const payableAmount = Number(totals.payable_amount ?? invoice.payable_amount) || (total + oldDebtAmount);
+  const finalPayable = Math.max(0, total + oldDebtAmount - paidAmount);
+  const payableAmount = finalPayable;
+  const remainingAmount = finalPayable;
 
   return {
     ...data,
@@ -105,10 +106,10 @@ function normalizeData(data = {}) {
       subtotal_text: formatVND(subtotal),
       total,
       old_debt: oldDebtAmount,
-      payable_amount: payableAmount,
-       total_text: formatVND(total),
-       payable_amount_text: formatVND(payableAmount),
-       old_debt_text: formatVND(oldDebtAmount),
+      payable_amount: finalPayable,
+      total_text: formatVND(total),
+      payable_amount_text: formatVND(finalPayable),
+      old_debt_text: formatVND(oldDebtAmount),
       discount_amount_text: formatVND(totals.discount_amount || 0),
       vat_amount_text: formatVND(totals.vat_amount || 0),
       delivery_fee_text: formatVND(totals.delivery_fee || 0),
@@ -308,13 +309,10 @@ export const DEFAULT_SAPO_TEMPLATE_HTML = `
   {{items_table}}
 
   <section class="sapo-summary">
-    <div><span>Tổng tiền hàng</span><strong>{{totals.subtotal_text}}</strong></div>
-    <div><span>Giảm giá</span><strong>{{totals.discount_amount_text}}</strong></div>
-    <div><span>Phí giao hàng</span><strong>{{totals.delivery_fee_text}}</strong></div>
+    <div><span>Khách cần trả</span><strong>{{totals.total_text}}</strong></div>
+    <div><span>Nợ cũ</span><strong>{{totals.old_debt_text}}</strong></div>
+    <div><span>Đã thu</span><strong>{{totals.paid_amount_text}}</strong></div>
     <div class="grand-total"><span>Thành tiền cần thanh toán</span><strong>{{totals.payable_amount_text}}</strong></div>
-    <div><span>Công nợ cũ</span><strong>{{totals.old_debt_text}}</strong></div>
-    <div><span>Khách đã trả</span><strong>{{totals.paid_amount_text}}</strong></div>
-    <div><span>Còn nợ</span><strong>{{totals.remaining_amount_text}}</strong></div>
   </section>
 
   <section class="sapo-note">

@@ -674,8 +674,9 @@ router.post('/', async (req, res) => {
     const result = await Promise.resolve(createInvoiceFromPayload(req.body, req, { orderSource: 'direct' }));
 
     if (result && result.invoice && !result.existing) {
+      const details = getAll('invoice_details', d => Number(d.invoice_id) === Number(result.invoice.id || result.invoice_id));
       notifyTelegram('bot_create_order', 'Tạo đơn mới', {
-        invoice: result.invoice,
+        invoice: { ...result.invoice, details },
         creator: req.user?.name || req.body?.invoice_writer,
       });
     }
@@ -838,11 +839,20 @@ router.put('/:id', async (req, res) => {
     }));
 
     if (result && result.invoice) {
-      notifyTelegram('bot_order_list', 'Cập nhật đơn hàng', {
+      const isPaymentOnly = req.body.details === undefined && (req.body.old_debt !== undefined || req.body.paid_amount !== undefined);
+      const actionName = isPaymentOnly ? 'Cập nhật thanh toán & công nợ' : 'Sửa đơn hàng';
+      const changeNote = isPaymentOnly
+        ? `Nợ cũ: ${Number(result.invoice.old_debt || 0).toLocaleString('vi-VN')} đ, Đã thu: ${Number(result.invoice.paid_amount || 0).toLocaleString('vi-VN')} đ, Cần thanh toán: ${Number(result.invoice.payable_amount || 0).toLocaleString('vi-VN')} đ`
+        : (req.body.note || 'Đã cập nhật chi tiết đơn hàng');
+
+      notifyTelegram('bot_order_list', actionName, {
         invoice: result.invoice,
-        action: 'Sửa đơn hàng',
+        action: actionName,
+        previousStatus: inv.status,
         newStatus: result.invoice.status,
-        user: req.user?.name,
+        note: changeNote,
+        user: req.user?.name || req.body?.invoice_writer,
+        details: result.details || [],
       });
     }
 
@@ -902,15 +912,20 @@ router.delete('/:id', async (req, res) => {
         code: cancelledInvoice.invoice_code,
       }, inv, cancelledInvoice, `Hủy đơn hàng ${cancelledInvoice.invoice_code || cancelledInvoice.id}`, { skipSave: true, accountId: cancelledInvoice.account_id || req.accountId });
 
-      return { ok: true, invoice_id: inv.id, status: 'cancelled', cancelled_at: cancelledInvoice.cancelled_at || cancelledAt };
+      return { ok: true, invoice_id: inv.id, status: 'cancelled', cancelled_at: cancelledInvoice.cancelled_at || cancelledAt, invoice: cancelledInvoice };
     }));
 
-    notifyTelegram('bot_order_list', 'Hủy đơn hàng', {
-      invoice: { id: req.params.id, status: 'cancelled' },
-      action: 'Hủy đơn',
-      newStatus: 'cancelled',
-      user: req.user?.name,
-    });
+    if (result) {
+      const cancelledInv = result.invoice || getOne('invoices', i => Number(i.id) === Number(req.params.id)) || inv;
+      notifyTelegram('bot_order_list', 'Hủy đơn hàng', {
+        invoice: cancelledInv,
+        action: 'Hủy đơn hàng',
+        previousStatus: inv.status,
+        newStatus: 'cancelled',
+        note: 'Đơn hàng đã được hủy thành công. Hàng hóa đã được hoàn trả lại về kho.',
+        user: req.user?.name,
+      });
+    }
 
     res.json(result);
   } catch (err) {
@@ -961,13 +976,46 @@ router.patch('/:id/confirm', async (req, res) => {
         code: completedInvoice.invoice_code,
       }, inv, completedInvoice, `Xác nhận hoàn thành đơn hàng ${completedInvoice.invoice_code || completedInvoice.id}`, { skipSave: true, accountId: completedInvoice.account_id || req.accountId });
 
-      return { ok: true, invoice_id: inv.id, status: 'completed', message: 'Đơn đã được xác nhận' };
+      return { ok: true, invoice_id: inv.id, status: 'completed', message: 'Đơn đã được xác nhận', invoice: completedInvoice };
     }));
+
+    if (result && result.invoice) {
+      notifyTelegram('bot_order_list', 'Xác nhận thanh toán', {
+        invoice: result.invoice,
+        action: 'Xác nhận thanh toán',
+        previousStatus: 'pending',
+        newStatus: 'completed',
+        note: `Đã xác nhận thanh toán đủ đơn hàng (${Number(result.invoice.paid_amount || result.invoice.total || 0).toLocaleString('vi-VN')} đ)`,
+        user: req.user?.name,
+      });
+    }
 
     res.json(result);
   } catch (err) {
     const status = err.status || 500;
     res.status(status).json({ ok: false, error: 'Lỗi khi xác nhận đơn: ' + err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/invoices/:id/notify-print
+// Thông báo thao tác in hóa đơn tới Telegram
+// ─────────────────────────────────────────────
+router.post('/:id/notify-print', async (req, res) => {
+  try {
+    const { quick = false } = req.body || {};
+    const inv = getOne('invoices', i => Number(i.id) === Number(req.params.id) || String(i.invoice_code) === String(req.params.id));
+    if (inv) {
+      notifyTelegram('bot_order_list', quick ? 'In nhanh hóa đơn' : 'In hóa đơn A5', {
+        invoice: inv,
+        action: quick ? 'In nhanh hóa đơn' : 'In hóa đơn A5',
+        note: quick ? 'Đã kích hoạt in nhanh hóa đơn A5' : 'Đã mở xem và in hóa đơn A5',
+        user: req.user?.name,
+      });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
   }
 });
 

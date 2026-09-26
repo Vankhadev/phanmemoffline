@@ -262,7 +262,7 @@ function saveTelegramSettings(input = {}) {
   return next;
 }
 
-async function sendRawTelegramMessage(token, chatId, textHtml) {
+async function sendRawTelegramMessage(token, chatId, textHtml, attempt = 1) {
   if (!token || !chatId || !textHtml) {
     return { ok: false, error: 'Thiếu token, chat_id hoặc nội dung tin nhắn.' };
   }
@@ -273,7 +273,7 @@ async function sendRawTelegramMessage(token, chatId, textHtml) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+    const timeout = setTimeout(() => controller.abort(), 8000);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -288,18 +288,51 @@ async function sendRawTelegramMessage(token, chatId, textHtml) {
     });
 
     clearTimeout(timeout);
-    const data = await response.json();
+    const data = await response.json().catch(() => null);
     if (data && data.ok) {
       return { ok: true, result: data.result };
     }
+
+    // Nếu Telegram báo lỗi entity parsing HTML, tự động gửi lại bằng plain-text
+    const description = String(data?.description || '');
+    if (description.includes("can't parse entities") || description.includes('entity') || description.includes('Bad Request')) {
+      try {
+        const plainText = String(textHtml).replace(/<[^>]+>/g, '').trim();
+        const retryController = new AbortController();
+        const retryTimeout = setTimeout(() => retryController.abort(), 8000);
+        const retryRes = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: cleanChatId,
+            text: plainText,
+            disable_web_page_preview: true,
+          }),
+          signal: retryController.signal,
+        });
+        clearTimeout(retryTimeout);
+        const retryData = await retryRes.json().catch(() => null);
+        if (retryData && retryData.ok) {
+          return { ok: true, result: retryData.result };
+        }
+      } catch (retryErr) {
+        // bỏ qua để trả về description gốc
+      }
+    }
+
     return {
       ok: false,
       error: data?.description || `HTTP ${response.status}: Lỗi từ Telegram API.`,
       code: data?.error_code,
     };
   } catch (err) {
+    if (attempt <= 1) {
+      // Thử lại 1 lần sau 1.2s nếu timeout hoặc gián đoạn mạng
+      await new Promise(r => setTimeout(r, 1200));
+      return sendRawTelegramMessage(token, chatId, textHtml, attempt + 1);
+    }
     if (err.name === 'AbortError') {
-      return { ok: false, error: 'Quá thời gian kết nối (timeout 6s) tới Telegram API.' };
+      return { ok: false, error: 'Quá thời gian kết nối (timeout 8s) tới Telegram API.' };
     }
     return { ok: false, error: err.message || 'Lỗi mạng hoặc không thể kết nối tới Telegram.' };
   }
@@ -377,23 +410,41 @@ async function testAllBots(overrideGroupId = '') {
 function formatCreateOrderMessage(data = {}) {
   const inv = data.invoice || data;
   const items = Array.isArray(inv.details) ? inv.details : [];
+  const total = Number(inv.total) || 0;
+  const oldDebt = Number(inv.old_debt) || 0;
+  const paid = Number(inv.paid_amount) || 0;
+  const payable = Math.max(0, total + oldDebt - paid);
+
   const lines = [
     `🛒 <b>[TẠO ĐƠN HÀNG MỚI]</b>`,
     `━━━━━━━━━━━━━━━━━━`,
     `🔖 <b>Mã đơn:</b> <code>#${escapeHtml(inv.invoice_code || inv.id || 'N/A')}</code>`,
-    `👤 <b>Khách hàng:</b> ${escapeHtml(inv.customer_name || 'Khách lẻ')}${inv.customer_phone ? ` (${escapeHtml(inv.customer_phone)})` : ''}`,
-    `💰 <b>Tổng tiền:</b> <b>${formatVnd(inv.total || inv.payable_amount || 0)}</b>`,
-    `💳 <b>Thanh toán:</b> ${escapeHtml(inv.payment_method || 'Tiền mặt')} (Đã trả: ${formatVnd(inv.paid_amount || 0)})`,
+    `👤 <b>Khách hàng:</b> <b>${escapeHtml(inv.customer_name || 'Khách lẻ')}</b>${inv.customer_phone ? ` (${escapeHtml(inv.customer_phone)})` : ''}`,
+    `💵 <b>Khách cần trả (tiền đơn):</b> <b>${formatVnd(total)}</b>`,
   ];
 
+  if (oldDebt > 0) {
+    lines.push(`💳 <b>Nợ cũ:</b> <code>+${formatVnd(oldDebt)}</code>`);
+  }
+
+  if (paid > 0) {
+    lines.push(`💰 <b>Đã thu:</b> <b>${formatVnd(paid)}</b>`);
+  }
+
+  lines.push(`🔥 <b>Thành tiền cần thanh toán:</b> <b>${formatVnd(payable)}</b>`);
+  lines.push(`💳 <b>Hình thức:</b> ${escapeHtml(inv.payment_method || 'Tiền mặt')}`);
+
   if (items.length > 0) {
-    lines.push(`📦 <b>Chi tiết (${items.length} món):</b>`);
-    const previewItems = items.slice(0, 5);
+    lines.push(`📦 <b>Chi tiết sản phẩm (${items.length} món):</b>`);
+    const previewItems = items.slice(0, 8);
     for (const item of previewItems) {
-      lines.push(` • ${escapeHtml(item.product_name || item.name || 'SP')} x${item.quantity || 1} (${formatVnd(item.subtotal || item.unit_price || 0)})`);
+      const name = item.product_name || item.name || 'Sản phẩm';
+      const qty = item.quantity || item.qty || 1;
+      const price = item.line_total || item.total || (qty * (item.unit_price || item.price || 0));
+      lines.push(` • ${escapeHtml(name)} x${qty} (${formatVnd(price)})`);
     }
-    if (items.length > 5) {
-      lines.push(` • <i>...và ${items.length - 5} mặt hàng khác</i>`);
+    if (items.length > 8) {
+      lines.push(` • <i>...và ${items.length - 8} mặt hàng khác</i>`);
     }
   }
 
@@ -405,19 +456,60 @@ function formatCreateOrderMessage(data = {}) {
 }
 
 function formatOrderListMessage(data = {}) {
-  const { action = 'Cập nhật', invoice = {}, previousStatus = '', newStatus = '', note = '', user = '' } = data;
+  const {
+    action = 'Cập nhật',
+    invoice = {},
+    previousStatus = '',
+    newStatus = '',
+    note = '',
+    user = '',
+    details = [],
+  } = data;
+
+  const total = Number(invoice.total) || 0;
+  const oldDebt = Number(invoice.old_debt) || 0;
+  const paid = Number(invoice.paid_amount) || 0;
+  const payable = Math.max(0, total + oldDebt - paid);
+
+  let icon = '📋';
+  if (action.includes('Hủy') || action.includes('hủy')) icon = '🗑️';
+  else if (action.includes('Thanh toán') || action.includes('thanh toán')) icon = '✅';
+  else if (action.includes('In') || action.includes('in')) icon = '🖨️';
+  else if (action.includes('Sửa') || action.includes('sửa')) icon = '✏️';
+
   const lines = [
-    `📋 <b>[DANH SÁCH ĐƠN HÀNG - ${escapeHtml(action.toUpperCase())}]</b>`,
+    `${icon} <b>[DANH SÁCH ĐƠN HÀNG - ${escapeHtml(action.toUpperCase())}]</b>`,
     `━━━━━━━━━━━━━━━━━━`,
     `🔖 <b>Mã đơn:</b> <code>#${escapeHtml(invoice.invoice_code || invoice.id || 'N/A')}</code>`,
-    `👤 <b>Khách hàng:</b> ${escapeHtml(invoice.customer_name || 'Khách lẻ')}`,
-    `💰 <b>Tổng giá trị:</b> ${formatVnd(invoice.total || 0)}`,
+    `👤 <b>Khách hàng:</b> <b>${escapeHtml(invoice.customer_name || 'Khách lẻ')}</b>`,
+    `💵 <b>Tiền đơn hàng:</b> <b>${formatVnd(total)}</b>`,
   ];
 
-  if (previousStatus && newStatus) {
+  if (oldDebt > 0) {
+    lines.push(`💳 <b>Nợ cũ:</b> +${formatVnd(oldDebt)}`);
+  }
+  if (paid > 0) {
+    lines.push(`💰 <b>Đã thu:</b> ${formatVnd(paid)}`);
+  }
+  if (oldDebt > 0 || paid > 0) {
+    lines.push(`🔥 <b>Thành tiền cần thanh toán:</b> <b>${formatVnd(payable)}</b>`);
+  }
+
+  if (previousStatus && newStatus && previousStatus !== newStatus) {
     lines.push(`🔄 <b>Trạng thái:</b> <code>${escapeHtml(previousStatus)}</code> ➔ <b>${escapeHtml(newStatus)}</b>`);
   } else if (newStatus || invoice.status) {
     lines.push(`📌 <b>Trạng thái:</b> <b>${escapeHtml(newStatus || invoice.status)}</b>`);
+  }
+
+  const items = Array.isArray(details) && details.length > 0 ? details : (Array.isArray(invoice.details) ? invoice.details : []);
+  if (items.length > 0) {
+    lines.push(`📦 <b>Chi tiết (${items.length} món):</b>`);
+    for (const item of items.slice(0, 5)) {
+      lines.push(` • ${escapeHtml(item.product_name || item.name || 'SP')} x${item.quantity || 1} (${formatVnd(item.line_total || item.total || 0)})`);
+    }
+    if (items.length > 5) {
+      lines.push(` • <i>...và ${items.length - 5} mặt hàng khác</i>`);
+    }
   }
 
   if (note) lines.push(`📝 <b>Chi tiết:</b> ${escapeHtml(note)}`);
@@ -655,6 +747,53 @@ function buildNotificationHtml(botKey, eventType, data = {}) {
 }
 
 /**
+ * Tìm token bot phù hợp nhất:
+ * 1. Dùng token riêng của bot được cấu hình
+ * 2. Nếu bot đó chưa có token, tự động dùng token của bất kỳ bot nào khác đã được cấu hình trong hệ thống!
+ * Giúp người dùng dù chỉ dán 1 token Telegram cho 1 bot bất kỳ thì TẤT CẢ các nghiệp vụ đều được thông báo.
+ */
+function resolveBotConfig(settings, botKey) {
+  if (!settings || settings.enabled === false) return null;
+  const groupId = String(settings.group_id || '').trim();
+  if (!groupId) return null;
+
+  // 1. Kiểm tra trực tiếp bot được chỉ định
+  const botCfg = settings.bots?.[botKey];
+  if (botCfg && botCfg.enabled !== false && botCfg.token && String(botCfg.token).trim()) {
+    return {
+      token: String(botCfg.token).trim(),
+      name: botCfg.name || botKey,
+      groupId,
+      key: botKey,
+    };
+  }
+
+  // 2. Kiểm tra token mặc định chung nếu có
+  if (settings.default_token && String(settings.default_token).trim()) {
+    return {
+      token: String(settings.default_token).trim(),
+      name: botCfg?.name || botKey,
+      groupId,
+      key: botKey,
+    };
+  }
+
+  // 3. Fallback thông minh: Dùng token của bot bất kỳ đã nhập token và đang bật
+  for (const [key, cfg] of Object.entries(settings.bots || {})) {
+    if (cfg && cfg.enabled !== false && cfg.token && String(cfg.token).trim()) {
+      return {
+        token: String(cfg.token).trim(),
+        name: botCfg?.name || cfg.name || botKey,
+        groupId,
+        key: botKey,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
  * Gửi thông báo Telegram hoàn toàn BẤT ĐỒNG BỘ KHÔNG CHẶN (fire-and-forget).
  * Mọi ngoại lệ mạng, token sai hoặc timeout đều được cô lập an toàn,
  * đảm bảo hệ thống POS offline không bao giờ bị đơ hay gián đoạn.
@@ -664,14 +803,13 @@ function notifyTelegram(botKey, eventType, data = {}) {
   setImmediate(async () => {
     try {
       const settings = getTelegramSettings();
-      if (!settings.enabled) return;
-      if (!settings.group_id) return;
-
-      const botCfg = settings.bots?.[botKey];
-      if (!botCfg || !botCfg.enabled || !botCfg.token) return;
+      const resolved = resolveBotConfig(settings, botKey);
+      if (!resolved || !resolved.token || !resolved.groupId) {
+        return;
+      }
 
       const html = buildNotificationHtml(botKey, eventType, data);
-      const res = await sendRawTelegramMessage(botCfg.token, settings.group_id, html);
+      const res = await sendRawTelegramMessage(resolved.token, resolved.groupId, html);
       if (!res.ok) {
         console.warn(`[TELEGRAM ${botKey}] Gửi thông báo không thành công:`, res.error);
       }
@@ -688,6 +826,7 @@ module.exports = {
   sendRawTelegramMessage,
   testSingleBot,
   testAllBots,
+  resolveBotConfig,
   notifyTelegram,
   formatCreateOrderMessage,
   formatOrderListMessage,

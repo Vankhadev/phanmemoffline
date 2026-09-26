@@ -60,14 +60,24 @@ function parseMoneyInput(value) {
 
 function getInvoicePaymentSummary(invoice = {}) {
   const total = Math.max(0, Number(invoice.total) || 0);
+  const oldDebt = Math.max(0, Number(invoice.old_debt) || 0);
+  const payable = Math.max(0, Number(invoice.payable_amount) || (total + oldDebt));
+  const targetTotal = payable > 0 ? payable : total;
   const paid = Math.max(0, Number(invoice.paid_amount) || 0);
-  const remaining = Math.max(0, Number.isFinite(Number(invoice.remaining_amount))
-    ? Number(invoice.remaining_amount)
-    : total - paid);
+  const remaining = Math.max(
+    0,
+    Number.isFinite(Number(invoice.remaining_amount))
+      ? Number(invoice.remaining_amount)
+      : Math.max(0, targetTotal - paid)
+  );
 
-  if (paid >= total && total > 0) return { total, paid, remaining: 0, status: 'paid', label: 'Đã thanh toán' };
-  if (paid > 0) return { total, paid, remaining, status: 'partial', label: 'Thanh toán một phần' };
-  return { total, paid: 0, remaining, status: 'unpaid', label: 'Chưa thanh toán' };
+  if (remaining === 0 && (paid > 0 || targetTotal === 0)) {
+    return { total, oldDebt, payable: targetTotal, paid, remaining: 0, status: 'paid', label: 'Đã thanh toán' };
+  }
+  if (paid > 0 && remaining > 0) {
+    return { total, oldDebt, payable: targetTotal, paid, remaining, status: 'partial', label: 'Thanh toán một phần' };
+  }
+  return { total, oldDebt, payable: targetTotal, paid: 0, remaining, status: 'unpaid', label: 'Chưa thanh toán' };
 }
 
 // Chuyển mã đơn hàng thành định dạng "HD000001"; vẫn đọc được mã DH cũ.
@@ -266,6 +276,7 @@ export default function OrderList() {
   const [allOrders, setAllOrders] = useState([]);
 
   const [showView, setShowView] = useState(null);
+  const [savingViewPayment, setSavingViewPayment] = useState(false);
   const [showEdit, setShowEdit] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [editDetails, setEditDetails] = useState([]);
@@ -647,6 +658,14 @@ export default function OrderList() {
       alert('Đơn offline chưa có dữ liệu hóa đơn thật trên server để in. Vui lòng đồng bộ đơn trước khi in.');
       return;
     }
+    const targetId = inv.id || inv.invoice_code;
+    if (targetId) {
+      apiJson(`/invoices/${encodeURIComponent(targetId)}/notify-print`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quick }),
+      }).catch(() => {});
+    }
     navigate(`/hoa-don-in/${encodeURIComponent(getInvoicePrintTarget(inv))}${quick ? '?print=1' : ''}`);
   };
 
@@ -803,16 +822,156 @@ export default function OrderList() {
   const openView = async (inv) => {
     if (inv._isOffline) {
       setInvoiceDetails(inv.cart || []);
-      setShowView(inv);
+      const total = Math.max(0, Number(inv.total) || 0);
+      const oldDebt = Math.max(0, Number(inv.old_debt) || 0);
+      const payable = Math.max(0, Number(inv.payable_amount) || (total + oldDebt));
+      const paid = Math.max(0, Number(inv.paid_amount) || 0);
+      const remaining = Math.max(0, Number.isFinite(Number(inv.remaining_amount)) ? Number(inv.remaining_amount) : Math.max(0, payable - paid));
+      const change = Math.max(0, Number.isFinite(Number(inv.change_amount)) ? Number(inv.change_amount) : Math.max(0, paid - payable));
+      setShowView({
+        ...inv,
+        old_debt: oldDebt,
+        payable_amount: payable,
+        paid_amount: paid,
+        remaining_amount: remaining,
+        change_amount: change,
+        _initialOldDebt: oldDebt,
+        _initialPaidAmount: paid,
+      });
       return;
     }
 
     try {
       const data = await apiJson(`/invoices/${inv.id}`, {}, 'Không tải được chi tiết đơn!');
       setInvoiceDetails(data.details || []);
-      setShowView({ ...inv, ...data });
+      const merged = { ...inv, ...data };
+      const total = Math.max(0, Number(merged.total) || 0);
+      const oldDebt = Math.max(0, Number(merged.old_debt) || 0);
+      const payable = Math.max(0, Number(merged.payable_amount) || (total + oldDebt));
+      const paid = Math.max(0, Number(merged.paid_amount) || 0);
+      const remaining = Math.max(0, Number.isFinite(Number(merged.remaining_amount)) ? Number(merged.remaining_amount) : Math.max(0, payable - paid));
+      const change = Math.max(0, Number.isFinite(Number(merged.change_amount)) ? Number(merged.change_amount) : Math.max(0, paid - payable));
+      setShowView({
+        ...merged,
+        old_debt: oldDebt,
+        payable_amount: payable,
+        paid_amount: paid,
+        remaining_amount: remaining,
+        change_amount: change,
+        _initialOldDebt: oldDebt,
+        _initialPaidAmount: paid,
+      });
     } catch {
       alert('📡 Không kết nối được server!');
+    }
+  };
+
+  const showViewHasChanges = Boolean(
+    showView && (
+      (Number(showView.old_debt) || 0) !== (Number(showView._initialOldDebt) || 0) ||
+      (Number(showView.paid_amount) || 0) !== (Number(showView._initialPaidAmount) || 0)
+    )
+  );
+
+  const handleResetViewPayment = () => {
+    if (!showView) return;
+    const oldDebt = Number(showView._initialOldDebt) || 0;
+    const paid = Number(showView._initialPaidAmount) || 0;
+    const total = Math.max(0, Number(showView.total) || 0);
+    const payable = total + oldDebt;
+    setShowView(v => ({
+      ...v,
+      old_debt: oldDebt,
+      payable_amount: payable,
+      paid_amount: paid,
+      remaining_amount: Math.max(0, payable - paid),
+      change_amount: Math.max(0, paid - payable),
+    }));
+  };
+
+  const handleSaveViewPayment = async () => {
+    if (!showView) return;
+    setSavingViewPayment(true);
+    try {
+      const oldDebt = Math.max(0, Number(showView.old_debt) || 0);
+      const paid = Math.max(0, Number(showView.paid_amount) || 0);
+      const total = Math.max(0, Number(showView.total) || 0);
+      const payable = total + oldDebt;
+      const remaining = Math.max(0, payable - paid);
+      const change = Math.max(0, paid - payable);
+
+      if (showView._isOffline) {
+        const pending = JSON.parse(localStorage.getItem('kha_pending_orders') || '[]');
+        const idx = pending.findIndex(o => sameOrderIdentity(o, showView));
+        if (idx >= 0) {
+          pending[idx].old_debt = oldDebt;
+          pending[idx].payable_amount = payable;
+          pending[idx].paid_amount = paid;
+          pending[idx].remaining_amount = remaining;
+          pending[idx].change_amount = change;
+          pending[idx].payload = {
+            ...(pending[idx].payload || {}),
+            old_debt: oldDebt,
+            payable_amount: payable,
+            paid_amount: paid,
+            remaining_amount: remaining,
+            change_amount: change,
+          };
+          localStorage.setItem('kha_pending_orders', JSON.stringify(pending));
+        }
+        setAllOrders(prev => prev.map(o =>
+          sameOrderIdentity(o, showView)
+            ? { ...o, old_debt: oldDebt, payable_amount: payable, paid_amount: paid, remaining_amount: remaining, change_amount: change }
+            : o
+        ));
+        setShowView(v => ({
+          ...v,
+          old_debt: oldDebt,
+          payable_amount: payable,
+          paid_amount: paid,
+          remaining_amount: remaining,
+          change_amount: change,
+          _initialOldDebt: oldDebt,
+          _initialPaidAmount: paid,
+        }));
+        alert('✅ Đã cập nhật nợ cũ và đã thanh toán!');
+      } else {
+        await apiJsonChecked(`/invoices/${showView.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            old_debt: oldDebt,
+            payable_amount: payable,
+            paid_amount: paid,
+            remaining_amount: remaining,
+            change_amount: change,
+          }),
+        }, 'Không thể cập nhật nợ cũ và đã thanh toán.');
+
+        setAllOrders(prev => prev.map(o =>
+          sameOrderIdentity(o, showView)
+            ? { ...o, old_debt: oldDebt, payable_amount: payable, paid_amount: paid, remaining_amount: remaining, change_amount: change }
+            : o
+        ));
+        setShowView(v => ({
+          ...v,
+          old_debt: oldDebt,
+          payable_amount: payable,
+          paid_amount: paid,
+          remaining_amount: remaining,
+          change_amount: change,
+          _initialOldDebt: oldDebt,
+          _initialPaidAmount: paid,
+        }));
+        notifyOrderChanged({ reason: 'order-payment-updated', invoice_id: showView.id, invoice_code: showView.invoice_code });
+        clearApiCache();
+        await fetchInvoices();
+        alert('✅ Đã cập nhật nợ cũ và đã thanh toán thành công!');
+      }
+    } catch (err) {
+      alert(err.message || 'Lỗi khi cập nhật thanh toán!');
+    } finally {
+      setSavingViewPayment(false);
     }
   };
 
@@ -1021,8 +1180,8 @@ export default function OrderList() {
         subtotal,
         vat_amount: vat,
         total,
-                           remaining_amount: Math.max(0, (total + (Number(f.old_debt) || 0)) - paid),
-                           change_amount: Math.max(0, paid - total - (Number(f.old_debt) || 0)),
+        remaining_amount: Math.max(0, (total + (Number(form.old_debt) || 0)) - paid),
+        change_amount: Math.max(0, paid - total - (Number(form.old_debt) || 0)),
       }));
       return updated;
     });
@@ -1626,6 +1785,11 @@ export default function OrderList() {
                               {st.text}
                             </span>
                             <span className={`rounded-full px-2 py-0.5 font-medium ${paymentSummary.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : paymentSummary.status === 'partial' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>{paymentSummary.label}</span>
+                            {paymentSummary.oldDebt > 0 && (
+                              <span className="rounded-full px-2 py-0.5 font-medium bg-amber-50 text-amber-700">
+                                Nợ cũ: {formatVND(paymentSummary.oldDebt)}
+                              </span>
+                            )}
                           </div>
                           {isCancelled && cancelRemainingText && (
                             <div className="mt-1 inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">
@@ -1830,8 +1994,13 @@ export default function OrderList() {
                         {paymentLabel}
                         <div className="text-xs text-gray-400">{formatPaymentMethod(inv.payment_method)}</div>
                         <div className="text-xs leading-5">
+                          {paymentSummary.oldDebt > 0 && (
+                            <div className="text-amber-700 font-medium">Nợ cũ: {formatVND(paymentSummary.oldDebt)}</div>
+                          )}
                           <div className="text-emerald-700">Đã thu: {formatVND(paymentSummary.paid)}</div>
-                          <div className={paymentSummary.remaining > 0 ? 'text-amber-700' : 'text-gray-400'}>Còn nợ: {formatVND(paymentSummary.remaining)}</div>
+                          <div className={paymentSummary.remaining > 0 ? 'text-amber-700 font-semibold' : 'text-gray-400'}>
+                            Còn nợ: {formatVND(paymentSummary.remaining)}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -1950,27 +2119,215 @@ export default function OrderList() {
             </div>
 
             {/* Tổng kết */}
-            <div className="border-t pt-3 space-y-1 text-sm">
-              <div className="flex justify-between"><span>Tạm tính:</span><span>{formatVND(showView.subtotal)}</span></div>
-              {showView.vat_percent > 0 && <div className="flex justify-between"><span>VAT ({showView.vat_percent}%):</span><span>{formatVND(showView.vat_amount)}</span></div>}
-              {showView.discount_percent > 0 && <div className="flex justify-between text-red-500"><span>Chiết khấu ({showView.discount_percent}%):</span><span>-{formatVND(showView.discount_amount)}</span></div>}
-              <div className="mt-3 grid grid-cols-1 gap-2 border-t pt-3 sm:grid-cols-3">
-                <div className="rounded-lg bg-slate-50 p-3">
-                  <div className="text-xs text-slate-500">Tổng hóa đơn</div>
-                  <div className="mt-1 font-bold text-slate-800">{formatVND(getInvoicePaymentSummary(showView).total)}</div>
+            <div className="border-t pt-3 space-y-1.5 text-sm">
+              <div className="flex justify-between text-gray-600">
+                <span>Tạm tính:</span>
+                <span className="font-medium text-gray-800">{formatVND(showView.subtotal)}</span>
+              </div>
+              {Number(showView.vat_percent) > 0 && (
+                <div className="flex justify-between text-gray-600">
+                  <span>VAT ({showView.vat_percent}%):</span>
+                  <span className="font-medium text-gray-800">{formatVND(showView.vat_amount)}</span>
                 </div>
-                <div className="rounded-lg bg-emerald-50 p-3">
-                  <div className="text-xs text-emerald-700">Đã thu</div>
-                  <div className="mt-1 font-bold text-emerald-800">{formatVND(getInvoicePaymentSummary(showView).paid)}</div>
+              )}
+              {Number(showView.discount_percent) > 0 ? (
+                <div className="flex justify-between text-red-500">
+                  <span>Chiết khấu ({showView.discount_percent}%):</span>
+                  <span className="font-medium">-{formatVND(showView.discount_amount)}</span>
                 </div>
-                <div className="rounded-lg bg-amber-50 p-3">
-                  <div className="text-xs text-amber-700">Còn nợ</div>
-                  <div className="mt-1 font-bold text-amber-800">{formatVND(getInvoicePaymentSummary(showView).remaining)}</div>
+              ) : Number(showView.discount_amount) > 0 ? (
+                <div className="flex justify-between text-red-500">
+                  <span>Chiết khấu:</span>
+                  <span className="font-medium">-{formatVND(showView.discount_amount)}</span>
                 </div>
+              ) : null}
+              {Number(showView.delivery_fee) > 0 && (
+                <div className="flex justify-between text-gray-600">
+                  <span>Phí giao hàng:</span>
+                  <span className="font-medium text-gray-800">+{formatVND(showView.delivery_fee)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold text-gray-900 border-t pt-1.5">
+                <span>Tổng tiền hàng:</span>
+                <span>{formatVND(showView.total)}</span>
+              </div>
+
+              {/* Khung Nợ cũ & Đã thanh toán (Đã thu) */}
+              <div className="mt-3 rounded-xl border border-gray-200 bg-slate-50/80 p-3 sm:p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                    Thanh toán & Công nợ
+                  </span>
+                  {showViewHasChanges && (
+                    <span className="text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full animate-pulse">
+                      Có thay đổi chưa lưu
+                    </span>
+                  )}
+                </div>
+
+                {/* Tóm tắt thanh toán & công nợ theo đúng yêu cầu */}
+                <div className="bg-white rounded-lg border border-gray-200 p-2.5 mb-3 text-xs divide-y divide-gray-100 shadow-sm">
+                  <div className="flex justify-between py-1">
+                    <span className="text-gray-600">Khách cần trả (tiền đơn):</span>
+                    <span className="font-semibold text-gray-900">{formatVND(showView.total)}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-gray-600">Nợ cũ:</span>
+                    <span className="font-semibold text-amber-700">+{formatVND(showView.old_debt || 0)}</span>
+                  </div>
+                  {Number(showView.paid_amount) > 0 && (
+                    <div className="flex justify-between py-1 text-emerald-700">
+                      <span>Đã thu:</span>
+                      <span className="font-semibold">-{formatVND(showView.paid_amount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-1.5 text-sm font-bold text-red-600 border-t border-gray-200">
+                    <span>Thành tiền khách cần thanh toán:</span>
+                    <span>{formatVND(Math.max(0, (Number(showView.total) || 0) + (Number(showView.old_debt) || 0) - (Number(showView.paid_amount) || 0)))}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Khách cần trả (tiền đơn)</label>
+                    <div className="font-bold text-gray-900 text-lg pt-1.5 truncate" title={formatVND(showView.total)}>
+                      {formatVND(showView.total)}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-gray-500">Nợ cũ</label>
+                    </div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formatMoneyInput(showView.old_debt)}
+                      onChange={e => {
+                        const oldDebt = parseMoneyInput(e.target.value);
+                        const total = Math.max(0, Number(showView.total) || 0);
+                        const paid = Math.max(0, Number(showView.paid_amount) || 0);
+                        const payable = total + oldDebt;
+                        setShowView(v => ({
+                          ...v,
+                          old_debt: oldDebt,
+                          payable_amount: payable,
+                          remaining_amount: Math.max(0, payable - paid),
+                          change_amount: Math.max(0, paid - payable),
+                        }));
+                      }}
+                      className="input-field w-full text-right text-sm font-bold text-amber-700 bg-white"
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-gray-500">Đã thu</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const total = Math.max(0, Number(showView.total) || 0);
+                          const oldDebt = Math.max(0, Number(showView.old_debt) || 0);
+                          const payable = total + oldDebt;
+                          setShowView(v => ({
+                            ...v,
+                            paid_amount: payable,
+                            payable_amount: payable,
+                            remaining_amount: 0,
+                            change_amount: 0,
+                          }));
+                        }}
+                        className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-800 hover:underline"
+                        title="Điền đủ số tiền khách phải trả"
+                      >
+                        Trả đủ
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formatMoneyInput(showView.paid_amount)}
+                      onChange={e => {
+                        const paid = parseMoneyInput(e.target.value);
+                        const total = Math.max(0, Number(showView.total) || 0);
+                        const oldDebt = Math.max(0, Number(showView.old_debt) || 0);
+                        const payable = total + oldDebt;
+                        setShowView(v => ({
+                          ...v,
+                          paid_amount: paid,
+                          payable_amount: payable,
+                          remaining_amount: Math.max(0, payable - paid),
+                          change_amount: Math.max(0, paid - payable),
+                        }));
+                      }}
+                      className="input-field w-full text-right text-sm font-bold text-emerald-700 bg-white"
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">
+                      {Number(showView.change_amount) > 0 ? 'Tiền thừa' : 'Khách cần thanh toán'}
+                    </label>
+                    <div className={`font-bold text-lg pt-1.5 truncate ${
+                      Number(showView.change_amount) > 0
+                        ? 'text-emerald-700'
+                        : 'text-red-600'
+                    }`}>
+                      {formatVND(Number(showView.change_amount) > 0
+                        ? showView.change_amount
+                        : Math.max(0, (Number(showView.total) || 0) + (Number(showView.old_debt) || 0) - (Number(showView.paid_amount) || 0))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {showViewHasChanges && (
+                  <div className="mt-3 flex items-center justify-end gap-2 pt-2.5 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={handleResetViewPayment}
+                      disabled={savingViewPayment}
+                      className="px-3 py-1.5 border border-gray-300 text-gray-600 hover:bg-gray-100 rounded-lg text-xs font-medium"
+                    >
+                      Hoàn tác
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveViewPayment}
+                      disabled={savingViewPayment}
+                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 shadow-sm"
+                    >
+                      {savingViewPayment ? 'Đang lưu...' : '💾 Lưu thanh toán'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="flex flex-col gap-2 mt-4 sm:flex-row">
+              {showViewHasChanges && (
+                <button
+                  type="button"
+                  onClick={handleSaveViewPayment}
+                  disabled={savingViewPayment}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold inline-flex items-center justify-center gap-2 shadow-sm"
+                >
+                  {savingViewPayment ? 'Đang lưu...' : '💾 Lưu thay đổi thanh toán'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const target = showView;
+                  setShowView(null);
+                  openEdit(target);
+                }}
+                className="flex-1 py-2.5 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-bold inline-flex items-center justify-center gap-2"
+              >
+                <Edit2 size={16} /> Sửa đơn hàng
+              </button>
               {!showView._isOffline && (
                 <button onClick={() => openInvoicePrint(showView)} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold inline-flex items-center justify-center gap-2">
                   <Printer size={16} /> Mở hóa đơn A5

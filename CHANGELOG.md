@@ -1,3 +1,16 @@
+## [3.1.18] - 2026-09-26
+
+### Added
+- **Bot Kho Hàng Telegram - Báo cáo kiểm kho tự động:** Bổ sung tính năng kiểm kho và gửi báo cáo toàn diện về Telegram ngay trên trang Quản lý Kho Hàng (`/kho-hang`). Thống kê chi tiết tồn kho sản phẩm cha, biến thể, âm kho, cảnh báo sắp hết hàng. Chia nhỏ tin nhắn chống quá tải Telegram (< 3.800 ký tự). Bot hỗ trợ lắng nghe trực tiếp các lệnh `/kiemkho`, `/tonkho`, `/kho` từ nhóm chat Telegram.
+- **Fallback thông minh đa Bot Telegram (`resolveBotConfig`):** Người dùng chỉ cần cấu hình 1 token bot bất kỳ trong hệ thống, tất cả 12 sự kiện thông báo đều tự động sử dụng token đó để gửi về nhóm chung.
+- **Quản lý thanh toán & Nợ cũ trực tiếp trong Xem Đơn Hàng:** Cho phép sửa nhanh nợ cũ (`old_debt`) và tiền đã thu (`paid_amount`) ngay trong modal xem chi tiết đơn hàng, kèm nút "Trả đủ" và nút "Lưu thanh toán" cập nhật thời gian thực.
+- **Thông báo sự kiện In hóa đơn & Đồng bộ thiết bị di động:** Gửi thông báo Telegram khi in nhanh hoặc mở xem/in hóa đơn A5, cũng như khi đơn hàng ngoại tuyến được đồng bộ về máy chủ.
+
+### Improved & Fixed
+- **Chi tiết thông báo Telegram phong phú:** Bổ sung danh sách chi tiết các món hàng (tên, số lượng, thành tiền), tiền đơn, nợ cũ, đã thu và thành tiền cần thanh toán trong thông báo tạo đơn và sửa đơn; hiển thị icon trực quan theo từng hành động.
+- **Hoàn thiện kết xuất mẫu in hóa đơn A5:** Căn lề và tỷ lệ in A5 chuẩn xác, không bị tràn trang.
+- **Dọn dẹp mã nguồn:** Loại bỏ import dư thừa và tăng cường độ ổn định cho dịch vụ tài khoản.
+
 ## [3.1.17] - 2026-09-20
 
 ### Added

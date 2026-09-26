@@ -5,6 +5,11 @@ const express = require('express');
 const router = express.Router();
 const { getAll } = require('../db/database');
 const { normalizeSearchText, parseKeywordList } = require('../utils/productSearch');
+const {
+  buildInventoryAuditData,
+  buildTelegramAuditMessages,
+  sendInventoryAuditTelegramReport,
+} = require('../services/inventoryAuditService');
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 20;
@@ -674,6 +679,42 @@ router.get('/negative-stock', (req, res) => {
       error: 'Lỗi khi lấy danh sách âm kho',
       message: 'Lỗi khi lấy danh sách âm kho',
       detail: err.message,
+    });
+  }
+});
+
+router.post('/telegram-report', async (req, res) => {
+  try {
+    const listLimit = Number(req.body?.listLimit || req.body?.maxPerSection) || 25;
+    const user = req.body?.user || req.user?.username || req.user?.name || 'Quản lý kho';
+    const result = await sendInventoryAuditTelegramReport({ maxPerSection: listLimit, user });
+    if (!result.ok) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({
+      ok: false,
+      error: 'Lỗi khi kiểm kho và gửi báo cáo Telegram: ' + err.message,
+    });
+  }
+});
+
+router.get('/telegram-report/preview', (req, res) => {
+  try {
+    const listLimit = Number(req.query?.listLimit || req.query?.maxPerSection) || 25;
+    const auditData = buildInventoryAuditData();
+    const messages = buildTelegramAuditMessages(auditData, 'Bản xem trước', { maxPerSection: listLimit });
+    return res.json({
+      ok: true,
+      stats: auditData.stats,
+      messages,
+      totalMessages: messages.length,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      ok: false,
+      error: 'Lỗi khi tạo bản xem trước báo cáo kiểm kho: ' + err.message,
     });
   }
 });

@@ -240,8 +240,24 @@ function InvoiceDetailModal({ invoice, onClose }) {
                 </div>
               )}
               <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-100 pt-1.5">
-                <span>Tổng cộng:</span>
+                <span>Khách cần trả (tiền đơn):</span>
                 <span className="text-blue-700">{formatVND(invoice.total)}</span>
+              </div>
+              {Number(invoice.old_debt) > 0 && (
+                <div className="flex justify-between text-amber-700 font-medium">
+                  <span>Nợ cũ:</span>
+                  <span>+{formatVND(invoice.old_debt)}</span>
+                </div>
+              )}
+              {Number(invoice.paid_amount) > 0 && (
+                <div className="flex justify-between text-emerald-700 font-medium">
+                  <span>Đã thu:</span>
+                  <span>-{formatVND(invoice.paid_amount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm font-bold text-red-600 border-t border-gray-100 pt-1.5">
+                <span>Thành tiền cần thanh toán:</span>
+                <span>{formatVND(Math.max(0, (Number(invoice.total) || 0) + (Number(invoice.old_debt) || 0) - (Number(invoice.paid_amount) || 0)))}</span>
               </div>
             </div>
           </div>

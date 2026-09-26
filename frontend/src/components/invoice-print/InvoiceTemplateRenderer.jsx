@@ -181,10 +181,11 @@ function normalizePayload(payload = {}, template = {}, settings = {}, logoPrevie
     : items.reduce((sum, item) => sum + toMoneyNumber(item.line_total), 0);
   const total = toMoneyNumber(totalsSource.total ?? totalsSource.grand_total ?? invoice.total, subtotal);
   const paidAmount = toMoneyNumber(paymentSource.paid_amount ?? totalsSource.paid_amount ?? invoice.paid_amount, 0);
-  const remainingAmount = toMoneyNumber(paymentSource.remaining_amount ?? totalsSource.remaining_amount ?? invoice.remaining_amount, Math.max(0, total - paidAmount));
-  const changeAmount = toMoneyNumber(paymentSource.change_amount ?? totalsSource.change_amount ?? invoice.change_amount, Math.max(0, paidAmount - total));
   const oldDebtAmount = toMoneyNumber(totalsSource.old_debt ?? invoice.old_debt, 0);
-  const payableAmount = toMoneyNumber(totalsSource.payable_amount ?? invoice.payable_amount, total + oldDebtAmount);
+  const finalPayable = Math.max(0, total + oldDebtAmount - paidAmount);
+  const payableAmount = finalPayable;
+  const remainingAmount = finalPayable;
+  const changeAmount = toMoneyNumber(paymentSource.change_amount ?? totalsSource.change_amount ?? invoice.change_amount, Math.max(0, paidAmount - (total + oldDebtAmount)));
   const userName = firstNonEmpty(metadata.user_name, metadata.created_by_user_name, invoice.user_name, invoice.invoice_writer, invoice.created_by_name);
   const documentTitle = firstNonEmpty(metadata.document_title, metadata.documentTitle, invoice.document_title, invoice.documentTitle, source.document_title, source.documentTitle);
   const printMode = firstNonEmpty(metadata.print_mode, metadata.printMode, invoice.print_mode, invoice.printMode, source.print_mode, source.printMode);
@@ -269,7 +270,8 @@ function getOldDebtAmount(totals = {}, customer = {}, invoice = {}) {
 function getPayableAmount(totals = {}, customer = {}, invoice = {}) {
   const total = getInvoiceTotalAmount(totals);
   const oldDebt = getOldDebtAmount(totals, customer, invoice);
-  return Number(totals.payable_amount ?? totals.amount_due ?? totals.final_amount ?? totals.total_payable ?? invoice.payable_amount ?? (total + oldDebt)) || 0;
+  const paid = toMoneyNumber(totals.paid_amount ?? invoice.paid_amount, 0);
+  return Number(totals.payable_amount ?? totals.amount_due ?? totals.final_amount ?? totals.total_payable ?? invoice.payable_amount ?? Math.max(0, total + oldDebt - paid)) || 0;
 }
 
 function getCssFontFamily(value) {
@@ -396,7 +398,10 @@ function V2Element({ element, data, template }) {
 
   if (element.type === 'totals') {
     const paidAmount = Number(totals.paid_amount ?? totals.paid ?? 0) || 0;
-    const remainingAmount = Number(totals.remaining_amount ?? totals.debt_amount ?? Math.max(0, (Number(totals.payable_amount ?? totals.total) || 0) - paidAmount)) || 0;
+    const orderTotal = Number(totals.total ?? totals.grand_total ?? 0) || 0;
+    const oldDebt = Number(totals.old_debt ?? 0) || 0;
+    const finalPayable = Math.max(0, orderTotal + oldDebt - paidAmount);
+
     const showSubtotal = style.showSubtotal !== false;
     const showDiscount = style.showDiscount !== false;
     const showDelivery = style.showDelivery !== false;
@@ -404,19 +409,39 @@ function V2Element({ element, data, template }) {
     const showOldDebt = style.showOldDebt !== false;
     const showPayable = style.showPayable !== false;
     const showPaid = style.showPaid !== false;
-    const showDebt = style.showDebt !== false;
     const showChange = style.showChange !== false;
+
+    const hasAdjustments = (Number(totals.vat_amount) > 0) || (Number(totals.discount_amount) > 0) || (Number(totals.delivery_fee) > 0);
+    const shouldShowSubtotal = showSubtotal && (hasAdjustments || !showGrandTotal);
+
     return (
       <div className="invoice-template-v2-totals" style={getElementCssStyle(element)}>
-        {showSubtotal && <MoneyLine label="Tổng tiền hàng" value={totals.subtotal ?? totals.total_before_discount ?? totals.total} />}
+        {shouldShowSubtotal && <MoneyLine label="Tổng tiền hàng" value={totals.subtotal ?? totals.total_before_discount ?? totals.total} />}
         <MoneyLine label={`VAT (${Number(totals.vat_percent) || 0}%)`} value={totals.vat_amount} hiddenWhenZero />
         {showDiscount && <MoneyLine label="Chiết khấu" value={totals.discount_amount} negative hiddenWhenZero />}
         {showDelivery && <MoneyLine label="Phí giao hàng" value={totals.delivery_fee} hiddenWhenZero />}
-        {showGrandTotal && <MoneyLine label="Tổng tiền" value={totals.total ?? totals.grand_total} highlight />}
-        {showOldDebt && <MoneyLine label="Công nợ cũ" value={totals.old_debt} />}
-        {showPayable && <MoneyLine label="Thành tiền cần thanh toán" value={totals.payable_amount ?? totals.total} highlight />}
-        {showPaid && <MoneyLine label="Đã thanh toán" value={paidAmount} hiddenWhenZero />}
-        {showDebt && <MoneyLine label="Còn nợ" value={remainingAmount} hiddenWhenZero />}
+
+        {/* 1. Giá tiền khách cần trả của đơn hàng */}
+        {showGrandTotal && <MoneyLine label={style.grandTotalLabel || "Khách cần trả"} value={orderTotal} highlight />}
+
+        {/* 2. Nợ cũ dưới giá tiền khách cần trả */}
+        {showOldDebt && (oldDebt !== 0 || style.showOldDebtZero) && (
+          <MoneyLine label={style.oldDebtLabel || "Nợ cũ"} value={oldDebt} />
+        )}
+
+        {/* 3. Đã thu dưới nợ cũ (nếu có thì hiện, không có thì không cần hiện) */}
+        {showPaid && paidAmount > 0 && (
+          <MoneyLine label={style.paidLabel || "Đã thu"} value={paidAmount} />
+        )}
+
+        {/* 4. Thành tiền cần thanh toán = Tiền đơn hàng + Nợ cũ - Đã thu */}
+        {showPayable && (
+          <MoneyLine label={style.payableLabel || "Thành tiền cần thanh toán"} value={finalPayable} highlight />
+        )}
+
+        {/* 5. Đã bỏ dòng Còn nợ dưới thành tiền cần thanh toán */}
+
+        {/* Tiền thừa nếu khách trả nhiều hơn */}
         {showChange && <MoneyLine label="Tiền thừa" value={totals.change_amount} hiddenWhenZero />}
       </div>
     );
@@ -927,13 +952,15 @@ function LegacyRenderer({ refProp, payload, template, settingsOverride, logoPrev
 
         <footer className="invoice-template-footer-block">
           <div className="invoice-template-footer-totals">
-            <MoneyLine label="Tổng tiền hàng" value={totals.subtotal ?? invoiceTotalAmount} />
+            {totals.subtotal !== invoiceTotalAmount && (
+              <MoneyLine label="Tổng tiền hàng" value={totals.subtotal ?? invoiceTotalAmount} />
+            )}
             <MoneyLine label="Giảm giá" value={totals.discount_amount} negative hiddenWhenZero />
-            <MoneyLine label="Khách thanh toán" value={totals.paid_amount} hiddenWhenZero />
-            <MoneyLine label="Tiền thừa" value={totals.change_amount} hiddenWhenZero />
-            <MoneyLine label="Còn nợ" value={totals.remaining_amount} hiddenWhenZero />
+            <MoneyLine label="Khách cần trả" value={invoiceTotalAmount} highlight />
             {oldDebtAmount > 0 && <MoneyLine label="Nợ cũ" value={oldDebtAmount} />}
-            <MoneyLine label="Tổng cần trả" value={payableAmount} highlight />
+            {totals.paid_amount > 0 && <MoneyLine label="Đã thu" value={totals.paid_amount} />}
+            <MoneyLine label="Thành tiền cần thanh toán" value={payableAmount} highlight />
+            <MoneyLine label="Tiền thừa" value={totals.change_amount} hiddenWhenZero />
           </div>
 
           {settings.showSignature && (

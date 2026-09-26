@@ -184,10 +184,10 @@ function repairUserAuthSystem() {
     current.users.push({
       id: nextId,
       name: 'vankha',
-      fullname: 'Đông Phương QC',
+      fullname: 'vankha team',
       email: 'dongphuongqc@gmail.com',
       phone: '0904045075',
-      password: hashPassword('khongnoiduoc'),
+      password: hashPassword('Vankhammo07@'),
       role: 'admin',
       approved: 1,
       active: 1,
