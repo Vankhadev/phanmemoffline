@@ -644,7 +644,7 @@ const normalizeImportQuantity = (value, fallback = 1) => {
 const getImportQuantityInputError = (value) => {
   const quantity = parseImportQuantity(value, NaN);
   if (!Number.isFinite(quantity)) return 'Số lượng phđi l? s? hợp lệ';
-  if (quantity <= 0) return 'Số lượng nh?p phđi lđơn hon 0';
+  if (quantity <= 0) return 'Số lượng nhập phải lớn hơn 0';
   return '';
 };
 
@@ -759,9 +759,9 @@ const Nhaphang = ({ store }) => {
 
   const categoriesById = useMemo(() => buildCategoriesById(categories), [categories]);
   const selectedSupplierId = getSupplierRecordId(selectedSupplier);
-  // Cho ph?p nh?p bắt kỳ sản phẩm n?o vđi bắt kỳ nhà cung cấp n?o.
-  // Trước d?y danh sách sản phẩm bộ lọc theo selectedSupplier khiđơn ch?
-  // nh?ng sản phẩm gđơn vđi NCC d? mới hiện. Gi? luđơn d?ng tođơn b? allProducts.
+  // Cho phép nhập bất kỳ sản phẩm nào với bất kỳ nhà cung cấp nào.
+  // Trước đây danh sách sản phẩm bị lọc theo selectedSupplier khiến chỉ
+  // những sản phẩm gắn với NCC đó mới hiện. Giờ luôn dùng toàn bộ allProducts.
   const getScopedProductSearchResults = useCallback((query = '') => {
     const trimmedQuery = query.trim();
     const scopedProductTree = allProducts;
@@ -783,8 +783,8 @@ const Nhaphang = ({ store }) => {
       && String(order.maDonHang || order.id) !== String(currentOrder?.maDonHang || currentOrder?.id || '')
     ));
     if (duplicatedOrder) {
-      const supplierName = duplicatedOrder.nhaCungCap?.tenNCC || 'nhà cung cấp kh?c';
-      return `M? phiếu ${normalizedImportCodeInput} d? tđơn tđi ? phiếu của ${supplierName}. Khứng dụng chung một mã phiếu cho nhiđủ nhà cung cấp.`;
+      const supplierName = duplicatedOrder.nhaCungCap?.tenNCC || 'nhà cung cấp khác';
+      return `Mã phiếu ${normalizedImportCodeInput} đã tồn tại ở phiếu của ${supplierName}. Không dùng chung một mã phiếu cho nhiều nhà cung cấp.`;
     }
     return '';
   }, [currentOrder?.id, currentOrder?.maDonHang, normalizedImportCodeInput, orderHistory]);
@@ -1004,19 +1004,19 @@ const Nhaphang = ({ store }) => {
     const discount = Number(product.chietKhau || 0);
     const taxPercent = Number(product.thueGTGT ?? product.tax_percent ?? product.vat_percent ?? 0);
 
-    if (!product.tenSP) errors.push('Tồn sản phẩm l? bắt bu?c');
-    if (!product.donVi) errors.push('đơn về l? bắt bu?c');
-    if (!getImportRowKey(product)) errors.push('Dùng sản phẩm thiđủ product_id, variant_id ho?c SKU hợp lệ');
+    if (!product.tenSP) errors.push('Tên sản phẩm là bắt buộc');
+    if (!product.donVi) errors.push('Đơn vị là bắt buộc');
+    if (!getImportRowKey(product)) errors.push('Dòng sản phẩm thiếu product_id, variant_id hoặc SKU hợp lệ');
     const quantityError = getImportQuantityInputError(product.soLuongNhap);
     if (quantityError) errors.push(quantityError);
     if (!Number.isFinite(importPrice) || importPrice < 0) {
-      errors.push('Giá nhập phđi lđơn hon ho?c bằng 0');
+      errors.push('Giá nhập phải lớn hơn hoặc bằng 0');
     }
     if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
-      errors.push('Chi?t khđủ phđi t? 0-100%');
+      errors.push('Chiết khấu phải từ 0-100%');
     }
     if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100) {
-      errors.push('Thu? GTGT phđi t? 0-100%');
+      errors.push('Thuế GTGT phđi t? 0-100%');
     }
     return errors;
   };
@@ -1031,7 +1031,7 @@ const Nhaphang = ({ store }) => {
       errors.push(importCodeInputError);
     }
     if (products.length === 0) {
-      errors.push('Vui lòng thêm ?t nh?t một sản phẩm');
+      errors.push('Vui lòng thêm ít nhất một sản phẩm');
     }
 
     products.forEach((product, index) => {
@@ -1148,7 +1148,7 @@ const Nhaphang = ({ store }) => {
   });
 
   const showSupplierRequiredHint = () => {
-    setError('Vui lòng chọn nhà cung cấp trước khi thêm ho?c luu phiếu nhập.');
+    setError('Vui lòng chọn nhà cung cấp trước khi thêm hoặc lưu phiếu nhập.');
     setTimeout(() => setError(null), 3000);
   };
 
@@ -1361,7 +1361,7 @@ const Nhaphang = ({ store }) => {
     setSelectedProduct(null);
     setEditingProductIndex(null);
     setError(null);
-    setSuccess(changes.length > 0 ? `?? cập nhật ${changes.length} d?ng sản phẩm vào phiếu nhập.` : 'Danh sách chọn tâm đã được giá nguyđơn, không cóng tr?ng sản phẩm.');
+    setSuccess(changes.length > 0 ? `Đã cập nhật ${changes.length} dòng sản phẩm vào phiếu nhập.` : 'Danh sách chọn tạm đã được giữ nguyên, không cộng trùng sản phẩm.');
     setTimeout(() => setSuccess(null), 3000);
   };
 
@@ -1371,7 +1371,7 @@ const Nhaphang = ({ store }) => {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="text-sm font-bold text-blue-800">Sản phẩm đã chọn</div>
-            <div className="text-[11px] text-blue-600">Tổng {importPickerSelections.length.toLocaleString('vi-VN')} d?ng ? {importPickerTotalQuantity.toLocaleString('vi-VN')} sản phẩm</div>
+            <div className="text-[11px] text-blue-600">Tổng {importPickerSelections.length.toLocaleString('vi-VN')} dòng • {importPickerTotalQuantity.toLocaleString('vi-VN')} sản phẩm</div>
           </div>
           <button
             type="button"
@@ -1382,11 +1382,11 @@ const Nhaphang = ({ store }) => {
             Chọn xong
           </button>
         </div>
-        {importPickerHasQuantityError && <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700">Số lượng phđi l? số dưong, không nh?p ch? ho?c s? âm.</div>}
+        {importPickerHasQuantityError && <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-semibold text-red-700">Số lượng phải là số dương, không nhập chữ hoặc số âm.</div>}
       </div>
       <div className="max-h-72 overflow-y-auto p-2 space-y-2 scroll-smooth">
         {importPickerSelections.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-xs text-gray-400">Bâm n?t + mđủ xanh ngay c?nh tđơn sản phẩm d? dua vào danh sách tâm.</div>
+          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-xs text-gray-400">Bấm nút + màu xanh ngay cạnh tên sản phẩm để đưa vào danh sách tạm.</div>
         ) : importPickerSelections.map(selection => {
           const price = Math.max(0, getFirstFiniteNumber(selection.product.giaNhap, selection.product.import_price, selection.product.retail_price));
           const quantity = isValidImportQuantityInput(selection.quantity) ? parseImportQuantity(selection.quantity, 0) : 0;
@@ -1544,7 +1544,7 @@ const Nhaphang = ({ store }) => {
             </span>
           </div>
           {isVariant && parent?.name && (
-            <div className="mt-0.5 truncate text-[11px] text-slate-400">Thu?c: {parent.name}</div>
+            <div className="mt-0.5 truncate text-[11px] text-slate-400">Thuộc: {parent.name}</div>
           )}
         </div>
         <div className="flex min-w-0 flex-col items-end justify-start gap-2 pt-0.5 text-right">
@@ -1579,7 +1579,7 @@ const Nhaphang = ({ store }) => {
               type="button"
               onClick={closeImportProductPicker}
               className="inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-              title="Tho?t"
+              title="Thoát"
             >
               <X size={22} />
             </button>
@@ -1620,7 +1620,7 @@ const Nhaphang = ({ store }) => {
           <div className="border-t border-slate-100 bg-white px-6 py-4">
             {importPickerHasQuantityError && (
               <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-                Số lượng phđi l? số dưong, không nh?p ch? ho?c s? âm.
+                Số lượng phải là số dương, không nhập chữ hoặc số âm.
               </div>
             )}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1634,7 +1634,7 @@ const Nhaphang = ({ store }) => {
                   onClick={closeImportProductPicker}
                   className="inline-flex min-h-10 min-w-20 items-center justify-center rounded border border-sky-600 bg-white px-4 text-sm font-semibold text-sky-700 transition hover:bg-sky-50"
                 >
-                  Tho?t
+                  Thoát
                 </button>
                 <button
                   type="button"
@@ -1743,7 +1743,7 @@ const Nhaphang = ({ store }) => {
     if (isEditingExistingRow && duplicateIndex >= 0) {
       const duplicateName = products[duplicateIndex]?.tenSP || normalizedProduct.tenSP || normalizedProduct.maSP;
       setSuccess(null);
-      setError(`Sản phẩm ${duplicateName} đã có ? d?ng #${duplicateIndex + 1}. Vui lòng sửa số lượng ? d?ng d? ho?c chọn sản phẩm kh?c.`);
+      setError(`Sản phẩm ${duplicateName} đã có ở dòng #${duplicateIndex + 1}. Vui lòng sửa số lượng ở dòng đó hoặc chọn sản phẩm khác.`);
       setTimeout(() => setError(null), 4000);
       return;
     }
@@ -1753,7 +1753,7 @@ const Nhaphang = ({ store }) => {
       setProducts(prev => prev.map((product, index) => (
         index === editingProductIndex ? normalizedProduct : product
       )));
-      setSuccess('?? cập nhật sản phẩm cho d?ng dang chọn.');
+      setSuccess('Đã cập nhật sản phẩm cho dòng đang chọn.');
       setTimeout(() => setSuccess(null), 3000);
     } else if (duplicateIndex >= 0) {
       const duplicateName = products[duplicateIndex]?.tenSP || normalizedProduct.tenSP || normalizedProduct.maSP;
@@ -1776,7 +1776,7 @@ const Nhaphang = ({ store }) => {
           thanhTien: mergedLine.lineTotal
         };
       }));
-      setSuccess(`?? g?p thêm ${quantityToAdd} vào d?ng ${duplicateName}.`);
+      setSuccess(`Đã gộp thêm ${quantityToAdd} vào dòng ${duplicateName}.`);
       setTimeout(() => setSuccess(null), 3000);
     } else {
       setProducts(prev => [...prev, normalizedProduct]);
@@ -1939,7 +1939,7 @@ const Nhaphang = ({ store }) => {
       id: imp.id,
       maDonHang: imp.import_code,
       ngayLap: imp.created_at || imp.updated_at || new Date().toISOString(),
-      nguoiNhap: imp.user_name || 'Nguđi d?ng',
+      nguoiNhap: imp.user_name || 'Người dùng',
       nhaCungCap: {
         id: imp.partner_id,
         maNCC: imp.partner_id,
@@ -2046,7 +2046,7 @@ const Nhaphang = ({ store }) => {
     id: result.import_id || currentOrder?.id || Date.now(),
     maDonHang: result.import_code || importCode,
     ngayLap: currentOrder?.ngayLap || new Date().toISOString(),
-    nguoiNhap: currentOrder?.nguoiNhap || 'Nguđi d?ng',
+    nguoiNhap: currentOrder?.nguoiNhap || 'Người dùng',
     nhaCungCap: {
       id: selectedSupplier.id,
       maNCC: selectedSupplier.maNCC,
@@ -2102,10 +2102,10 @@ const Nhaphang = ({ store }) => {
     const isEditing = Boolean(isEditingOrder && editingImportKey);
     const nextImportCode = isEditing ? (currentOrder.maDonHang || normalizedImportCodeInput || '') : normalizedImportCodeInput;
     const confirmMessage = isEditing
-      ? `Cập nhật phiếu nhập ${nextImportCode || currentOrder.maDonHang || 'mã tự động'}? Hệ thống s? sửa d?ng phiếu hiện tại, không tạo phiếu/mã mới.`
+      ? `Cập nhật phiếu nhập ${nextImportCode || currentOrder.maDonHang || 'mã tự động'}? Hệ thống sẽ sửa dòng phiếu hiện tại, không tạo phiếu/mã mới.`
       : status === 'received'
-        ? 'Tạo về nhập hàng? H?nh d?ng n?y s? cập nhật số lượng tồn kho.'
-        : 'Tạo đơn hàng (chưa nh?p)? đơn h?ng sẽ được luu vào hệ thống.';
+        ? 'Tạo và nhập hàng? Hành động này sẽ cập nhật số lượng tồn kho.'
+        : 'Tạo đơn hàng (chưa nhập)? Đơn hàng sẽ được lưu vào hệ thống.';
     if (!window.confirm(confirmMessage)) return;
 
     setSaving(true);
@@ -2124,7 +2124,7 @@ const Nhaphang = ({ store }) => {
       setSuccess(
         isEditing
           ? `Phiếu ${savedOrder.maDonHang} đã được cập nhật. Trạng thái thanh toán: ${getPaymentLabel(savedOrder.payment_status)}.`
-          : `đơn h?ng ${savedOrder.maDonHang} đã được tạo${status === 'received' ? ', nh?p kho thành công' : ' về luu tâm'}; thanh toán: ${getPaymentLabel(savedOrder.payment_status)}.`
+          : `Đơn hàng ${savedOrder.maDonHang} đã được tạo${status === 'received' ? ', nhập kho thành công' : ' và lưu tạm'}; thanh toán: ${getPaymentLabel(savedOrder.payment_status)}.`
       );
       setCurrentOrder(savedOrder);
       setIsEditingOrder(true);
@@ -2165,7 +2165,7 @@ const Nhaphang = ({ store }) => {
   // Exit/Reset
   const handleExit = () => {
     if (products.length > 0 || note || tags.length > 0) {
-      const confirmExit = window.confirm('Bản c? ch?c chọn muđơn tho?t? Dữ liệu chưa luu s? b? một.');
+      const confirmExit = window.confirm('Bạn có chắc chắn muốn thoát? Dữ liệu chưa lưu sẽ bị mất.');
       if (!confirmExit) return;
     }
     handleReset();
@@ -2173,7 +2173,7 @@ const Nhaphang = ({ store }) => {
 
   const handleOpenReturns = () => {
     setError(null);
-    setSuccess('Ch?c nang hođơn tr? h?ng chưa được cấu hình trđơn giao diđơn. Vui lòng kiểm tra lu?ng hođơn tr? hiện c? ho?c cấu hình route hođơn tr?.');
+    setSuccess('Chức năng hoàn trả hàng chưa được cấu hình trên giao diện. Vui lòng kiểm tra luồng hoàn trả hiện có hoặc cấu hình route hoàn trả.');
   };
 
   // Reset form
@@ -2266,15 +2266,15 @@ const Nhaphang = ({ store }) => {
 
   // Cancel order and let backend rollback stock exactly once if this import already applied stock
   const handleCancelOrder = async (order) => {
-    const reason = prompt('Nhợp lệ do h?y don (không bắt bu?c):', '');
+    const reason = prompt('Nhập lý do hủy đơn (không bắt buộc):', '');
     if (reason === null) return; // User cancelled
 
     const confirmCancel = window.confirm(
       `Hủy đơn hàng ${order.maDonHang}?\n\n` +
-      'Nếu phiếu n?y đã nhập kho, hệ thống s? tự động trở lại d?ng số lượng đã cóng về ch? rollback một lđơn.\n' +
-      'Nếu phiếu chưa tổng nh?p kho, tồn kho s? không b? thay đổi.\n\n' +
+      'Nếu phiếu này đã nhập kho, hệ thống sẽ tự động trừ lại đúng số lượng đã cộng và chỉ rollback một lần.\n' +
+      'Nếu phiếu chưa từng nhập kho, tồn kho sẽ không bị thay đổi.\n\n' +
       `L? do: ${reason || 'Không có'}\n\n` +
-      'Bản c? ch?c chọn?'
+      'Bạn có chắc chắn?'
     );
 
     if (!confirmCancel) return;
@@ -2286,8 +2286,8 @@ const Nhaphang = ({ store }) => {
       const result = await apiJsonChecked(`${API}/imports/${order.maDonHang}/cancel`, {
         method: 'POST',
         body: { lyDo: reason, rollbackStock: true }
-      }, 'Không th? h?y đơn hàng');
-      setSuccess(`đơn h?ng ${order.maDonHang} đã được h?y${result.rollback_stock ? ' về d? rollback tồn kho' : ''}.`);
+      }, 'Không thể hủy đơn hàng');
+      setSuccess(`Đơn hàng ${order.maDonHang} đã được hủy${result.rollback_stock ? ' và đã rollback tồn kho' : ''}.`);
 
       // Remove from local history if present
       if (currentOrder?.maDonHang === order.maDonHang) {
@@ -2313,7 +2313,7 @@ const Nhaphang = ({ store }) => {
 
     } catch (err) {
       console.error('Error cancelling order:', err);
-      setError('Không th? h?y đơn hàng. Vui lòng thử lại sau.');
+      setError('Không thể hủy đơn hàng. Vui lòng thử lại sau.');
     } finally {
       setSaving(false);
     }
@@ -2322,8 +2322,8 @@ const Nhaphang = ({ store }) => {
   const handleDeleteOrder = async (order) => {
     const confirmDelete = window.confirm(
       `Xóa phiếu nhập ${order.maDonHang}?\n\n` +
-      'Nếu phiếu đã nhập kho, backend s? rollback tồn kho d?ng một lđơn trước khi đơn khđi danh sách.\n' +
-      'Thao t?c n?y không tạo phiếu mới về không rollback l?p nđủ gđi lỗi.'
+      'Nếu phiếu đã nhập kho, backend sẽ rollback tồn kho đúng một lần trước khi ẩn khỏi danh sách.\n' +
+      'Thao tác này không tạo phiếu mới và không rollback lặp nếu gọi lại.'
     );
     if (!confirmDelete) return;
 
@@ -2367,7 +2367,7 @@ const Nhaphang = ({ store }) => {
     if (selectedHistoryIds.length === 0) return;
     const confirmDelete = window.confirm(
       `Xóa ${selectedHistoryIds.length} phiếu nhập đã chọn?\n\n` +
-      'Backend s? rollback tồn kho d?ng một lđơn cho tổng phiếu đã nhập kho về b? qua rollback l?p.'
+      'Backend sẽ rollback tồn kho đúng một lần cho từng phiếu đã nhập kho và bỏ qua rollback lặp.'
     );
     if (!confirmDelete) return;
 
@@ -2381,7 +2381,7 @@ const Nhaphang = ({ store }) => {
       });
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || 'Không th? xóa h?ng lo?t phiếu nhập');
+        throw new Error(errData.error || 'Không thể xóa hàng loạt phiếu nhập');
       }
       const result = await response.json();
       setOrderHistory(prev => prev.filter(o => !selectedHistoryIds.includes(String(o.maDonHang || o.id))));
@@ -2393,7 +2393,7 @@ const Nhaphang = ({ store }) => {
       fetchAllProducts();
     } catch (err) {
       console.error('Error bulk deleting import orders:', err);
-      setError(err.message || 'Không th? xóa h?ng lo?t phiếu nhập. Vui lòng thử lại sau.');
+      setError(err.message || 'Không thể xóa hàng loạt phiếu nhập. Vui lòng thử lại sau.');
     } finally {
       setSaving(false);
     }
@@ -2401,12 +2401,12 @@ const Nhaphang = ({ store }) => {
 
   const handlePayCurrentOrder = async () => {
     if (!editingImportKey) {
-      setError('Vui lòng tạo ho?c chọn phiếu nhập trước khi thanh toán.');
+      setError('Vui lòng tạo hoặc chọn phiếu nhập trước khi thanh toán.');
       setTimeout(() => setError(null), 3000);
       return;
     }
     if (hasUnsavedPaymentAffectingChanges) {
-      setError('Phiếu nhập dang c? thay đổi sản phẩm ho?c tổng tiđơn chưa luu. Vui lòng cập nhật phiếu trước khi thanh toán d? tr?nh sai công nợ.');
+      setError('Phiếu nhập đang có thay đổi sản phẩm hoặc tổng tiền chưa lưu. Vui lòng cập nhật phiếu trước khi thanh toán để tránh sai công nợ.');
       setTimeout(() => setError(null), 5000);
       return;
     }
@@ -2525,7 +2525,7 @@ const Nhaphang = ({ store }) => {
           className="sapo-page-title inline-flex items-center gap-2 disabled:opacity-60"
         >
           <span className="text-xl leading-none text-gray-400">?</span>
-          Quay lỗi danh sách don nh?p
+          Quay lại danh sách đơn nhập
           {currentOrder && <span className="text-xs font-medium text-gray-400">{isEditingOrder ? 'đang sửa' : 'đang xem'} {currentOrder.maDonHang}</span>}
         </button>
         <div className="sapo-actions">
@@ -2538,14 +2538,14 @@ const Nhaphang = ({ store }) => {
             <HelpCircle size={16} /> Hướng dẫn
           </button>
           <button onClick={handleExit} disabled={saving} className="sapo-btn">
-            Tho?t
+            Thoát
           </button>
           <button
             onClick={handleCreateOnly}
             disabled={saving || products.length === 0 || !selectedSupplier || hasQuantityError || hasImportCodeError}
             className="sapo-btn"
           >
-            {isEditingOrder ? 'Cập nhật phiếu' : 'Tạo & chưa nh?p'}
+            {isEditingOrder ? 'Cập nhật phiếu' : 'Tạo & chưa nhập'}
           </button>
           <button
             onClick={handleCreateAndReceive}
@@ -2635,7 +2635,7 @@ const Nhaphang = ({ store }) => {
                               </div>
                             ))
                           ) : (
-                            <div className="p-3 text-center text-sm text-gray-500">Không tâm th?y</div>
+                            <div className="p-3 text-center text-sm text-gray-500">Không tìm thấy</div>
                           )
                         ) : (
                           suppliers.map(supplier => (
@@ -2702,17 +2702,17 @@ const Nhaphang = ({ store }) => {
                     disabled={saving}
                   />
                   {!importCodeInputError && !isEditingOrder && (
-                    <p className="mt-1 text-xs text-gray-400">Nhập mã phiếu nhà cung cấp nđủ c?; d? tr?ng hệ thống t? sinh mã PN.</p>
+                    <p className="mt-1 text-xs text-gray-400">Nhập mã phiếu nhà cung cấp nếu có; để trống hệ thống tự sinh mã PN.</p>
                   )}
                   {importCodeInputError && <p className="mt-1 text-xs font-medium text-red-600">{importCodeInputError}</p>}
                 </label>
                 <label className="block min-w-0">
-                  <span className="mb-1 block text-xs font-medium text-gray-500">Chi nh?nh</span>
-                  <input className="input-field w-full bg-gray-50" value={store?.name || 'Chi nh?nh mặc định'} readOnly />
+                  <span className="mb-1 block text-xs font-medium text-gray-500">Chi nhánh</span>
+                  <input className="input-field w-full bg-gray-50" value={store?.name || 'Chi nhánh mặc định'} readOnly />
                 </label>
                 <label className="block min-w-0">
-                  <span className="mb-1 block text-xs font-medium text-gray-500">Nhân viên ph? tr?ch</span>
-                  <input className="input-field w-full bg-gray-50" value={currentOrder?.nguoiNhap || 'Nguđi d?ng'} readOnly />
+                  <span className="mb-1 block text-xs font-medium text-gray-500">Nhân viên phụ trách</span>
+                  <input className="input-field w-full bg-gray-50" value={currentOrder?.nguoiNhap || 'Người dùng'} readOnly />
                 </label>
                 <label className="block min-w-0">
                   <span className="mb-1 block text-xs font-medium text-gray-500">Ngày hđơn giao</span>
@@ -2728,9 +2728,9 @@ const Nhaphang = ({ store }) => {
               <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
                 <label className="inline-flex items-center gap-2">
                   <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" disabled={saving} />
-                  T?ch d?ng
+                  Tách dòng
                 </label>
-                <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-gray-300 text-gray-500 hover:bg-gray-50" title="Cđủ h?nh bằng">
+                <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-gray-300 text-gray-500 hover:bg-gray-50" title="Cấu hình bảng">
                   <Settings className="h-4 w-4" />
                 </button>
               </div>
@@ -2756,7 +2756,7 @@ const Nhaphang = ({ store }) => {
                       setFilteredProducts(getScopedProductSearchResults(searchQuery));
                       setShowSearchResults(true);
                     }}
-                    placeholder={selectedSupplier ? 'Tạm sản phẩm theo tồn, SKU ho?c qu?t Barcode' : 'Chọn nhà cung cấp trước khi tâm sản phẩm'}
+                    placeholder={selectedSupplier ? 'Tìm sản phẩm theo tên, SKU hoặc quét Barcode' : 'Chọn nhà cung cấp trước khi tìm sản phẩm'}
                     className="input-field w-full pl-10 pr-4 text-sm disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                     aria-disabled={saving || !selectedSupplier}
                     disabled={saving || !selectedSupplier}
@@ -2853,7 +2853,7 @@ const Nhaphang = ({ store }) => {
                 </select>
               </div>
               {!selectedSupplier && (
-                <p className="mt-2 text-xs text-amber-600">Chọn nhà cung cấp tru?c d? thêm sản phẩm vào phiếu nhập.</p>
+                <p className="mt-2 text-xs text-amber-600">Chọn nhà cung cấp trước để thêm sản phẩm vào phiếu nhập.</p>
               )}
             </div>
             <div className="w-full max-w-full overflow-x-auto">
@@ -2866,8 +2866,8 @@ const Nhaphang = ({ store }) => {
                     <th className="w-16 px-2 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">đơn về</th>
                     <th className="w-24 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Số lượng</th>
                     <th className="w-28 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Giá nhập</th>
-                    <th className="w-24 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Chi?t khđủ</th>
-                    <th className="w-24 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Thu? GTGT</th>
+                    <th className="w-24 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Chiết khấu</th>
+                    <th className="w-24 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Thuế GTGT</th>
                     <th className="w-28 px-2 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Thành tiđơn</th>
                     <th className="w-12 px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Xóa</th>
                   </tr>
@@ -2916,7 +2916,7 @@ const Nhaphang = ({ store }) => {
                           <div className="mt-1 text-[11px] font-normal text-gray-500">Thu?: {formatVND(lineAmounts.taxAmount)}</div>
                         </td>
                         <td className="px-2 py-3 text-center align-top">
-                          <button type="button" onClick={() => handleRemoveProduct(index)} disabled={saving} className="p-1 text-gray-400 transition-colors hover:text-red-600 disabled:text-gray-300" title="Xóa d?ng"><X className="h-4 w-4" /></button>
+                          <button type="button" onClick={() => handleRemoveProduct(index)} disabled={saving} className="p-1 text-gray-400 transition-colors hover:text-red-600 disabled:text-gray-300" title="Xóa dòng"><X className="h-4 w-4" /></button>
                         </td>
                       </tr>
                     );
@@ -2926,7 +2926,7 @@ const Nhaphang = ({ store }) => {
                       <td colSpan="10" className="px-4 py-16 text-center text-sm text-gray-400">
                         <div className="sticky left-0 mx-auto flex min-h-[180px] w-[560px] max-w-[calc(100vw-4rem)] flex-col items-center justify-center">
                           <Package className="mb-3 h-12 w-12 text-gray-200" />
-                          <div className="mb-4">đơn nhập hàng của bđơn chưa c? sản phẩm n?o</div>
+                          <div className="mb-4">Đơn nhập hàng của bạn chưa có sản phẩm nào</div>
                           <button type="button" onClick={handleStartAddProduct} disabled={saving || !selectedSupplier} className="sapo-btn">
                             Thêm sản phẩm
                           </button>
@@ -2939,8 +2939,8 @@ const Nhaphang = ({ store }) => {
                   <tr>
                     <td colSpan="5" className="px-2 py-3 text-right text-sm text-gray-600">Tổng ({totalStats.quantity.toLocaleString('vi-VN')} sản phẩm)</td>
                     <td colSpan="3" className="px-2 py-3 text-right text-sm text-gray-600">
-                      <div>Chi?t khđủ: <span className="font-medium">{formatVND(totalStats.discountValue)}</span></div>
-                      <div>Thu? GTGT: <span className="font-medium">{formatVND(totalStats.taxValue)}</span></div>
+                      <div>Chiết khấu: <span className="font-medium">{formatVND(totalStats.discountValue)}</span></div>
+                      <div>Thuế GTGT: <span className="font-medium">{formatVND(totalStats.taxValue)}</span></div>
                     </td>
                     <td className="px-2 py-3 text-right"><div className="text-lg font-bold text-green-600">{formatVND(totalAmount)}</div></td>
                     <td></td>
@@ -2957,7 +2957,7 @@ const Nhaphang = ({ store }) => {
                   <div className="min-w-0">
                     <h2 className="flex items-center gap-2 text-base font-semibold text-blue-900">
                       <Package className="h-4 w-4 shrink-0" />
-                      {editingProductIndex !== null ? `Cập nhật d?ng #${editingProductIndex + 1}` : 'Thêm sản phẩm vào phiếu'}
+                      {editingProductIndex !== null ? `Cập nhật dòng #${editingProductIndex + 1}` : 'Thêm sản phẩm vào phiếu'}
                     </h2>
                     <p className="mt-0.5 truncate text-sm text-blue-700" title={selectedProduct.tenSP}>{selectedProduct.tenSP} ? M?: {selectedProduct.maSP || 'N/A'}</p>
                   </div>
@@ -3020,7 +3020,7 @@ const Nhaphang = ({ store }) => {
                     />
                   </label>
                   <label className="block min-w-0">
-                    <span className="mb-1 block text-xs font-medium text-gray-600">Chi?t khđủ (%)</span>
+                    <span className="mb-1 block text-xs font-medium text-gray-600">Chiết khấu (%)</span>
                     <input
                       type="number"
                       min="0"
@@ -3043,7 +3043,7 @@ const Nhaphang = ({ store }) => {
                     />
                   </label>
                   <label className="block min-w-0">
-                    <span className="mb-1 block text-xs font-medium text-gray-600">Thu? GTGT (%)</span>
+                    <span className="mb-1 block text-xs font-medium text-gray-600">Thuế GTGT (%)</span>
                     <input
                       type="number"
                       min="0"
@@ -3069,9 +3069,9 @@ const Nhaphang = ({ store }) => {
 
                 {selectedProductLinePreview && (
                   <div className="grid grid-cols-1 gap-3 rounded-sm border border-gray-200 bg-gray-50 p-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-                    <div><div className="text-xs text-gray-500">Tiền h?ng</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.grossAmount)}</div></div>
-                    <div><div className="text-xs text-gray-500">Sau chi?t khđủ</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.afterDiscount)}</div></div>
-                    <div><div className="text-xs text-gray-500">Thu? GTGT</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.taxAmount)}</div></div>
+                    <div><div className="text-xs text-gray-500">Tiền hàng</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.grossAmount)}</div></div>
+                    <div><div className="text-xs text-gray-500">Sau chiết khấu</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.afterDiscount)}</div></div>
+                    <div><div className="text-xs text-gray-500">Thuế GTGT</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.taxAmount)}</div></div>
                     <div><div className="text-xs text-gray-500">Thành tiđơn</div><div className="text-lg font-bold text-green-600">{formatVND(selectedProductLinePreview.lineTotal)}</div></div>
                   </div>
                 )}
@@ -3079,11 +3079,11 @@ const Nhaphang = ({ store }) => {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button onClick={() => handleAddProduct({ keepSearching: false })} disabled={saving || Boolean(selectedProductQuantityError)} className="flex w-full items-center justify-center gap-2 rounded-sm bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-400">
                     <Plus className="h-4 w-4" />
-                    {editingProductIndex !== null ? 'Cập nhật d?ng sản phẩm' : 'Thêm vào danh sách'}
+                    {editingProductIndex !== null ? 'Cập nhật dòng sản phẩm' : 'Thêm vào danh sách'}
                   </button>
-                  <button onClick={() => handleAddProduct({ keepSearching: true })} disabled={saving || Boolean(selectedProductQuantityError)} className="flex w-full items-center justify-center gap-2 rounded-sm bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:bg-emerald-400" title="Thêm sản phẩm về giá ? tìm kiếm đã nhập ti?p">
+                  <button onClick={() => handleAddProduct({ keepSearching: true })} disabled={saving || Boolean(selectedProductQuantityError)} className="flex w-full items-center justify-center gap-2 rounded-sm bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:bg-emerald-400" title="Thêm sản phẩm và giữ ô tìm kiếm để nhập tiếp">
                     <Search className="h-4 w-4" />
-                    Thêm về tâm ti?p
+                    Thêm và tìm tiếp
                   </button>
                 </div>
               </div>
@@ -3147,9 +3147,9 @@ const Nhaphang = ({ store }) => {
               <div className="space-y-3 p-4">
                 <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Sản phẩm</span><span className="text-sm font-semibold text-gray-900">{products.length}</span></div>
                 <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Tổng số lượng</span><span className="text-sm font-semibold text-gray-900">{totalStats.quantity.toLocaleString('vi-VN')}</span></div>
-                <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Tiền h?ng</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.subtotal)}</span></div>
-                <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Tổng chi?t khđủ</span><span className="text-sm font-semibold text-red-600">-{formatVND(totalStats.discountValue)}</span></div>
-                <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Thu? GTGT</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.taxValue)}</span></div>
+                <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Tiền hàng</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.subtotal)}</span></div>
+                <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Tổng chiết khấu</span><span className="text-sm font-semibold text-red-600">-{formatVND(totalStats.discountValue)}</span></div>
+                <div className="flex items-center justify-between border-b border-gray-100 py-2"><span className="text-sm text-gray-600">Thuế GTGT</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.taxValue)}</span></div>
                 <div className="pt-2">
                   <div className="text-sm font-semibold text-gray-900">Tổng thanh toán</div>
                   <div className="mt-1 break-words text-2xl font-bold text-green-600">{formatVND(totalAmount)}</div>
@@ -3176,7 +3176,7 @@ const Nhaphang = ({ store }) => {
                       <div className="font-semibold text-gray-900">{formatVND(paymentSummary.paid_amount)}</div>
                     </div>
                     <div className="rounded-sm bg-gray-50 p-2">
-                      <div className="text-gray-500">Cđơn phđi tr?</div>
+                      <div className="text-gray-500">Còn phải trả</div>
                       <div className="font-semibold text-gray-900">{formatVND(paymentSummary.remaining_amount)}</div>
                     </div>
                   </div>
@@ -3228,7 +3228,7 @@ const Nhaphang = ({ store }) => {
                         setShowSupplierResults(true);
                         setShowAllSuppliers(true); // Hiện th? full khi focus
                       }}
-                      placeholder="Tạm theo tồn, S?T, mã nhà cung cấp... (F4)"
+                      placeholder="Tìm theo tên, SĐT, mã nhà cung cấp... (F4)"
                       className="input-field w-full pl-10 pr-4 text-sm"
                       disabled={saving}
                     />
@@ -3268,7 +3268,7 @@ const Nhaphang = ({ store }) => {
                               </div>
                             ))
                           ) : (
-                            <div className="p-3 text-sm text-gray-500 text-center">Không tâm th?y</div>
+                            <div className="p-3 text-sm text-gray-500 text-center">Không tìm thấy</div>
                           )
                         ) : (
                           // Show all suppliers when dropdown opens without typing
@@ -3346,7 +3346,7 @@ const Nhaphang = ({ store }) => {
                         setFilteredProducts(getScopedProductSearchResults(searchQuery));
                         setShowSearchResults(true);
                       }}
-                      placeholder={selectedSupplier ? 'Tạm theo tồn, mã SKU, ho?c qu?t mã Barcode...(F3)' : 'Chọn nhà cung cấp trước khi thêm sản phẩm...'}
+                      placeholder={selectedSupplier ? 'Tìm theo tên, mã SKU, hoặc quét mã Barcode...(F3)' : 'Chọn nhà cung cấp trước khi thêm sản phẩm...'}
                       className="input-field w-full pl-10 pr-4 text-sm disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                       aria-disabled={saving || !selectedSupplier}
                       disabled={saving || !selectedSupplier}
@@ -3427,10 +3427,10 @@ const Nhaphang = ({ store }) => {
                     )}
                   </div>
                   {!selectedSupplier && (
-                    <p className="mt-2 text-xs text-amber-600">Chọn nhà cung cấp tru?c d? thêm nhiđủ sản phẩm vào phiếu nhập.</p>
+                    <p className="mt-2 text-xs text-amber-600">Chọn nhà cung cấp trước để thêm nhiều sản phẩm vào phiếu nhập.</p>
                   )}
                   {selectedSupplier && (
-                    <p className="mt-2 text-xs text-gray-500">?? chọn nhà cung cấp: {selectedSupplier.tenNCC}. Bâm n?t + c?nh tđơn đã chọn nhiđủ sản phẩm, sau d? bâm Chọn xong d? thêm vào phiếu nhập.</p>
+                    <p className="mt-2 text-xs text-gray-500">Đã chọn nhà cung cấp: {selectedSupplier.tenNCC}. Bấm nút + cạnh tên để chọn nhiều sản phẩm, sau đó bấm Chọn xong để thêm vào phiếu nhập.</p>
                   )}
                 </div>
               </div>
@@ -3443,7 +3443,7 @@ const Nhaphang = ({ store }) => {
                   <div className="min-w-0">
                     <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">
                       <Package className="w-4 h-4 shrink-0" />
-                      {editingProductIndex !== null ? `Cập nhật d?ng #${editingProductIndex + 1}` : 'Thêm sản phẩm vào phiếu'}
+                      {editingProductIndex !== null ? `Cập nhật dòng #${editingProductIndex + 1}` : 'Thêm sản phẩm vào phiếu'}
                     </h2>
                     <p className="text-sm text-blue-700 mt-0.5 truncate" title={selectedProduct.tenSP}>{selectedProduct.tenSP} ? M?: {selectedProduct.maSP || 'N/A'}</p>
                   </div>
@@ -3511,7 +3511,7 @@ const Nhaphang = ({ store }) => {
                       />
                     </label>
                     <label className="block min-w-0">
-                      <span className="block text-xs font-medium text-gray-600 mb-1">Chi?t khđủ (%)</span>
+                      <span className="block text-xs font-medium text-gray-600 mb-1">Chiết khấu (%)</span>
                       <input
                         type="number"
                         min="0"
@@ -3534,7 +3534,7 @@ const Nhaphang = ({ store }) => {
                       />
                     </label>
                     <label className="block min-w-0">
-                      <span className="block text-xs font-medium text-gray-600 mb-1">Thu? GTGT (%)</span>
+                      <span className="block text-xs font-medium text-gray-600 mb-1">Thuế GTGT (%)</span>
                       <input
                         type="number"
                         min="0"
@@ -3560,9 +3560,9 @@ const Nhaphang = ({ store }) => {
 
                   {selectedProductLinePreview && (
                     <div className="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-                      <div><div className="text-xs text-gray-500">Tiền h?ng</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.grossAmount)}</div></div>
-                      <div><div className="text-xs text-gray-500">Sau chi?t khđủ</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.afterDiscount)}</div></div>
-                      <div><div className="text-xs text-gray-500">Thu? GTGT</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.taxAmount)}</div></div>
+                      <div><div className="text-xs text-gray-500">Tiền hàng</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.grossAmount)}</div></div>
+                      <div><div className="text-xs text-gray-500">Sau chiết khấu</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.afterDiscount)}</div></div>
+                      <div><div className="text-xs text-gray-500">Thuế GTGT</div><div className="font-semibold text-gray-900">{formatVND(selectedProductLinePreview.taxAmount)}</div></div>
                       <div><div className="text-xs text-gray-500">Thành tiđơn</div><div className="text-lg font-bold text-green-600">{formatVND(selectedProductLinePreview.lineTotal)}</div></div>
                     </div>
                   )}
@@ -3570,11 +3570,11 @@ const Nhaphang = ({ store }) => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button onClick={() => handleAddProduct({ keepSearching: false })} disabled={saving || Boolean(selectedProductQuantityError)} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm">
                       <Plus className="w-4 h-4" />
-                      {editingProductIndex !== null ? 'Cập nhật d?ng sản phẩm' : 'Thêm vào danh sách'}
+                      {editingProductIndex !== null ? 'Cập nhật dòng sản phẩm' : 'Thêm vào danh sách'}
                     </button>
-                    <button onClick={() => handleAddProduct({ keepSearching: true })} disabled={saving || Boolean(selectedProductQuantityError)} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm" title="Thêm sản phẩm về giá nguyđơn ? tìm kiếm đã nhập ti?p">
+                    <button onClick={() => handleAddProduct({ keepSearching: true })} disabled={saving || Boolean(selectedProductQuantityError)} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center gap-2 text-sm" title="Thêm sản phẩm và giữ nguyên ô tìm kiếm để nhập tiếp">
                       <Search className="w-4 h-4" />
-                      Thêm về tâm ti?p
+                      Thêm và tìm tiếp
                     </button>
                   </div>
                 </div>
@@ -3598,8 +3598,8 @@ const Nhaphang = ({ store }) => {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">đơn về</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Số lượng</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-36">Giá nhập</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Chi?t khđủ</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Thu? GTGT</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Chiết khấu</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">Thuế GTGT</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider w-36">Thành tiđơn</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">Xóa</th>
                       </tr>
@@ -3623,7 +3623,7 @@ const Nhaphang = ({ store }) => {
                             <td className="px-4 py-3 align-top"><div className="flex items-center gap-1"><input type="number" min="0" max="100" step="0.1" value={lineAmounts.discountPercent} onChange={(e) => handleUpdateProduct(index, 'chietKhau', e.target.value)} className="min-h-10 w-full rounded-md border border-gray-300 px-2 py-2 text-right text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" disabled={saving} /><span className="text-xs text-gray-500">%</span></div></td>
                             <td className="px-4 py-3 align-top"><div className="flex items-center gap-1"><input type="number" min="0" max="100" step="0.1" value={lineAmounts.taxPercent} onChange={(e) => handleUpdateProduct(index, 'thueGTGT', e.target.value)} className="min-h-10 w-full rounded-md border border-gray-300 px-2 py-2 text-right text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500" disabled={saving} /><span className="text-xs text-gray-500">%</span></div></td>
                             <td className="px-4 py-3 text-sm font-semibold text-green-600 text-right align-top"><div>{formatVND(lineAmounts.lineTotal)}</div><div className="mt-1 text-[11px] font-normal text-gray-500">Thu?: {formatVND(lineAmounts.taxAmount)}</div></td>
-                            <td className="px-4 py-3 text-center align-top"><button type="button" onClick={() => handleRemoveProduct(index)} disabled={saving} className="text-gray-400 hover:text-red-600 disabled:text-gray-300 transition-colors p-1" title="Xóa d?ng"><X className="w-4 h-4" /></button></td>
+                            <td className="px-4 py-3 text-center align-top"><button type="button" onClick={() => handleRemoveProduct(index)} disabled={saving} className="text-gray-400 hover:text-red-600 disabled:text-gray-300 transition-colors p-1" title="Xóa dòng"><X className="w-4 h-4" /></button></td>
                           </tr>
                         );
                       })}
@@ -3632,7 +3632,7 @@ const Nhaphang = ({ store }) => {
                           <td colSpan="10" className="px-4 py-16 text-center text-sm text-gray-400">
                             <div className="sticky left-0 flex w-[520px] max-w-[calc(100vw-4rem)] flex-col items-center">
                               <Package className="mb-3 h-12 w-12 text-gray-200" />
-                              <div className="mb-4">đơn h?ng nh?p của bđơn chưa c? sản phẩm n?o</div>
+                              <div className="mb-4">Đơn hàng nhập của bạn chưa có sản phẩm nào</div>
                               <button type="button" onClick={handleStartAddProduct} disabled={saving || !selectedSupplier} className="sapo-btn">
                                 Thêm sản phẩm
                               </button>
@@ -3641,7 +3641,7 @@ const Nhaphang = ({ store }) => {
                         </tr>
                       )}
                     </tbody>
-                    <tfoot className="bg-gray-50 border-t border-gray-200"><tr><td colSpan="5" className="px-4 py-3 text-right text-sm text-gray-600">Tổng ({totalStats.quantity.toLocaleString('vi-VN')} sản phẩm)</td><td colSpan="3" className="px-4 py-3 text-right text-sm text-gray-600"><div>Chi?t khđủ: <span className="font-medium">{formatVND(totalStats.discountValue)}</span></div><div>Thu? GTGT: <span className="font-medium">{formatVND(totalStats.taxValue)}</span></div></td><td className="px-4 py-3 text-right"><div className="text-lg font-bold text-green-600">{formatVND(totalAmount)}</div></td><td></td></tr></tfoot>
+                    <tfoot className="bg-gray-50 border-t border-gray-200"><tr><td colSpan="5" className="px-4 py-3 text-right text-sm text-gray-600">Tổng ({totalStats.quantity.toLocaleString('vi-VN')} sản phẩm)</td><td colSpan="3" className="px-4 py-3 text-right text-sm text-gray-600"><div>Chiết khấu: <span className="font-medium">{formatVND(totalStats.discountValue)}</span></div><div>Thuế GTGT: <span className="font-medium">{formatVND(totalStats.taxValue)}</span></div></td><td className="px-4 py-3 text-right"><div className="text-lg font-bold text-green-600">{formatVND(totalAmount)}</div></td><td></td></tr></tfoot>
                   </table>
                 </div>
               </div>
@@ -3714,12 +3714,12 @@ const Nhaphang = ({ store }) => {
               </div>
               <div className="p-4 space-y-4">
                 <div>
-                  <label className="text-xs font-medium text-gray-500 block mb-1">Chi nh?nh</label>
-                  <input className="input-field w-full bg-gray-50" value={store?.name || 'Chi nh?nh mặc định'} readOnly />
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Chi nhánh</label>
+                  <input className="input-field w-full bg-gray-50" value={store?.name || 'Chi nhánh mặc định'} readOnly />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-1">Nhân viên</label>
-                  <input className="input-field w-full bg-gray-50" value={currentOrder?.nguoiNhap || 'Nguđi d?ng'} readOnly />
+                  <input className="input-field w-full bg-gray-50" value={currentOrder?.nguoiNhap || 'Người dùng'} readOnly />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-1">Ngày hđơn giao</label>
@@ -3727,10 +3727,10 @@ const Nhaphang = ({ store }) => {
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Sản phẩm</span><span className="text-sm font-semibold text-gray-900">{products.length}</span></div>
                 <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Tổng số lượng</span><span className="text-sm font-semibold text-gray-900">{totalStats.quantity.toLocaleString('vi-VN')}</span></div>
-                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Tiền h?ng</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.subtotal)}</span></div>
-                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Tổng chi?t khđủ</span><span className="text-sm font-semibold text-red-600">-{formatVND(totalStats.discountValue)}</span></div>
-                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Tiền sau chi?t khđủ</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.taxableValue)}</span></div>
-                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Thu? GTGT</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.taxValue)}</span></div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Tiền hàng</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.subtotal)}</span></div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Tổng chiết khấu</span><span className="text-sm font-semibold text-red-600">-{formatVND(totalStats.discountValue)}</span></div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Tiền sau chiết khấu</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.taxableValue)}</span></div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100"><span className="text-sm text-gray-600">Thuế GTGT</span><span className="text-sm font-semibold text-gray-900">{formatVND(totalStats.taxValue)}</span></div>
                 <div className="pt-2"><div className="flex items-center justify-between"><span className="text-base font-semibold text-gray-900">Tổng thanh toán</span></div><div className="text-2xl font-bold text-green-600 mt-1 break-words">{formatVND(totalAmount)}</div></div>
 
                 {/* Payment Status */}
@@ -3751,10 +3751,10 @@ const Nhaphang = ({ store }) => {
                   </button>
                   <p className={`mt-2 text-xs ${hasUnsavedPaymentAffectingChanges ? 'text-orange-600' : 'text-gray-500'}`}>
                     {hasUnsavedPaymentAffectingChanges
-                      ? 'Phiếu d? dài sản phẩm ho?c tổng tiđơn; h?y cập nhật phiếu trước khi thanh toán lỗi d? công nợ ch?nh x?c.'
+                      ? 'Phiếu đã đổi sản phẩm hoặc tổng tiền; hãy cập nhật phiếu trước khi thanh toán lại để công nợ chính xác.'
                       : editingImportKey
-                      ? 'N?t n?y ch? cập nhật phiếu hiện tại, không tạo phiếu mới về không thay đổi tồn kho.'
-                      : 'Cđơn tạo ho?c chọn phiếu nhập trước khi thanh toán.'}
+                      ? 'Nút này chỉ cập nhật phiếu hiện tại, không tạo phiếu mới và không thay đổi tồn kho.'
+                      : 'Cần tạo hoặc chọn phiếu nhập trước khi thanh toán.'}
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div className="bg-gray-50 rounded-md p-2">
@@ -3762,7 +3762,7 @@ const Nhaphang = ({ store }) => {
                       <div className="font-semibold text-gray-900">{formatVND(paymentSummary.paid_amount)}</div>
                     </div>
                     <div className="bg-gray-50 rounded-md p-2">
-                      <div className="text-gray-500">Cđơn phđi tr?</div>
+                      <div className="text-gray-500">Còn phải trả</div>
                       <div className="font-semibold text-gray-900">{formatVND(paymentSummary.remaining_amount)}</div>
                     </div>
                   </div>
@@ -3821,19 +3821,19 @@ const Nhaphang = ({ store }) => {
             content={
               <div className="space-y-4 text-sm text-gray-700">
                 <div>
-                  <h3 className="font-bold text-gray-800 mb-2">Quy tr?nh ch?nh</h3>
+                  <h3 className="font-bold text-gray-800 mb-2">Quy trình chính</h3>
                   <ol className="list-decimal pl-5 space-y-1">
-                    <li>Chọn nhà cung cấp về nh?p mã phiếu nđủ cđơn.</li>
-                    <li>Thêm sản phẩm, số lượng nh?p, giá nhập, chi?t khđủ về thu?.</li>
+                    <li>Chọn nhà cung cấp và nhập mã phiếu nếu cần.</li>
+                    <li>Thêm sản phẩm, số lượng nhập, giá nhập, chiết khấu và thuế.</li>
                     <li>Kiểm tra tổng tiđơn, trạng thái thanh toán về thông tin phiếu.</li>
-                    <li>Dùng Tạo & Nhập hàng d? cập nhật tồn kho ho?c Tạo & Luu tâm d? luu phiếu.</li>
+                    <li>Dùng Tạo & Nhập hàng để cập nhật tồn kho hoặc Tạo & Lưu tạm để lưu phiếu.</li>
                   </ol>
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
                   <ul className="list-disc pl-5 space-y-1">
-                    <li>Không th? luu phiếu nđủ chưa chọn nhà cung cấp ho?c chưa c? sản phẩm.</li>
-                    <li>Phiếu đã nhập kho khi xóa sẽ được backend rollback tồn kho d?ng một lđơn.</li>
+                    <li>Không thể lưu phiếu nếu chưa chọn nhà cung cấp hoặc chưa có sản phẩm.</li>
+                    <li>Phiếu đã nhập kho khi xóa sẽ được backend rollback tồn kho đúng một lần.</li>
                   </ul>
                 </div>
               </div>
@@ -3873,14 +3873,14 @@ const Nhaphang = ({ store }) => {
                     </th>
                     <th className="w-16 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">STT</th>
                     <th className="min-w-[120px] px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">M? don</th>
-                    <th className="min-w-[110px] px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Ngày l?p</th>
+                    <th className="min-w-[110px] px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Ngày lập</th>
                     <th className="min-w-[110px] px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Sản phẩm</th>
                     <th className="min-w-[90px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Số lượng</th>
                     <th className="min-w-[130px] px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Tổng tiđơn</th>
                     <th className="min-w-[180px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Nhà cung cấp</th>
                     <th className="min-w-[150px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Thanh toán</th>
                     <th className="min-w-[120px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Trạng thái</th>
-                    <th className="min-w-[120px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Thao t?c</th>
+                    <th className="min-w-[120px] px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -3920,7 +3920,7 @@ const Nhaphang = ({ store }) => {
                         </span>
                         {Number(order.remaining_amount || 0) > 0 && (
                           <div className="mt-1 text-[11px] text-gray-500">
-                            Cđơn {formatVND(order.remaining_amount)}
+                            Còn {formatVND(order.remaining_amount)}
                           </div>
                         )}
                       </td>
@@ -3934,9 +3934,9 @@ const Nhaphang = ({ store }) => {
                             ? 'bg-red-100 text-red-700'
                             : 'bg-gray-100 text-gray-700'
                         }`}>
-                          {order.trangThai === 'da_nhap' ? '?? nh?p' :
-                           order.trangThai === 'cho_nhap' ? 'Ch? nh?p' :
-                           order.trangThai === 'da_huy' ? '?? h?y' : order.trangThai}
+                          {order.trangThai === 'da_nhap' ? 'Đã nhập' :
+                           order.trangThai === 'cho_nhap' ? 'Chờ nhập' :
+                           order.trangThai === 'da_huy' ? 'Đã hủy' : order.trangThai}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -3976,7 +3976,7 @@ const Nhaphang = ({ store }) => {
             {orderHistory.length > 0 && (
               <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
                 <p className="text-xs text-gray-500">
-                  Luu ?: Khi h?y phiếu đã nhập kho, backend s? tự động rollback tồn kho d?ng một lđơn; phiếu luu tâm chưa nh?p kho s? không dài tồn kho.
+                  Lưu ý: Khi hủy phiếu đã nhập kho, backend sẽ tự động rollback tồn kho đúng một lần; phiếu lưu tạm chưa nhập kho sẽ không đổi tồn kho.
                 </p>
               </div>
             )}

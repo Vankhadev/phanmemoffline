@@ -1159,6 +1159,24 @@ export const accountingApi = {
   createBankAccount(payload = {}) { return apiJsonChecked('/accounting/bank-accounts', { method: 'POST', body: payload }, 'Không thể tạo tài khoản ngân hàng.'); },
   logs(params = {}) { return apiJsonChecked(`/accounting/logs${buildQuerySuffix(params)}`, {}, 'Không thể tải nhật ký hoạt động.'); },
   logDetail(id) { return apiJsonChecked(`/accounting/logs/${encodeURIComponent(id)}`, {}, 'Không thể tải chi tiết nhật ký hoạt động.'); },
+
+  // Tuổi nợ & Chậm thanh toán (Chuẩn Kế toán)
+  debtAging(params = {}) { return apiJsonChecked(`/accounting/debts/aging${buildQuerySuffix(params)}`, {}, 'Không thể tải báo cáo tuổi nợ và chậm thanh toán.'); },
+  debtAgingSummary(params = {}) { return apiJsonChecked(`/accounting/debts/aging/summary${buildQuerySuffix(params)}`, {}, 'Không thể tải tóm tắt KPI tuổi nợ.'); },
+  debtAgingAiContext(params = {}) { return apiJsonChecked(`/accounting/debts/aging/ai-context${buildQuerySuffix(params)}`, {}, 'Không thể tải ngữ cảnh AI phân tích công nợ.'); },
+  customerDebtAging(customerId, params = {}) { return apiJsonChecked(`/accounting/debts/aging/customer/${encodeURIComponent(customerId)}${buildQuerySuffix(params)}`, {}, 'Không thể tải chi tiết công nợ khách hàng.'); },
+  exportDebtAgingExcelUrl(params = {}) { return `/api/accounting/debts/aging/export-excel${buildQuerySuffix(params)}`; },
+  sendDebtAgingTelegramReport(payload = {}) { return apiJsonChecked('/accounting/debts/aging/telegram-report', { method: 'POST', body: payload }, 'Không thể gửi báo cáo nợ về Telegram.'); },
+
+  // Google Gemini AI Kế toán (Giai đoạn 2 & 3)
+  ai: {
+    getConfig() { return apiJsonChecked('/accounting/ai/config', {}, 'Không thể tải cấu hình Gemini AI.'); },
+    saveConfig(payload = {}) { return apiJsonChecked('/accounting/ai/config', { method: 'PUT', body: payload }, 'Không thể lưu cấu hình Gemini AI.'); },
+    testConnection(payload = {}) { return apiJsonChecked('/accounting/ai/test-connection', { method: 'POST', body: payload }, 'Kiểm tra kết nối Gemini AI thất bại.'); },
+    analyze(payload = {}) { return apiJsonChecked('/accounting/ai/analyze', { method: 'POST', body: payload }, 'Không thể phân tích tài chính bằng Gemini AI.'); },
+    chat(payload = {}) { return apiJsonChecked('/accounting/ai/chat', { method: 'POST', body: payload }, 'Không thể gửi câu hỏi tới Trợ lý Kế toán AI.'); },
+    reminderMessage(payload = {}) { return apiJsonChecked('/accounting/ai/reminder-message', { method: 'POST', body: payload }, 'Không thể soạn tin nhắn nhắc nợ qua AI.'); },
+  },
 };
 
 export const inventoryApi = {

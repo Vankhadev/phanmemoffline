@@ -66,7 +66,7 @@ function isRevisionConflict(error) {
   return Number(error?.status) === 409 || code === 'PRINT_TEMPLATE_REVISION_CONFLICT';
 }
 
-function buildConflictNotice(error, fallback = 'Mẫu in đã được cập nhật ? phiđơn kh?c.') {
+function buildConflictNotice(error, fallback = 'Mẫu in đã được cập nhật ở phiên bản khác.') {
   const currentRevision = error?.data?.details?.current_revision || error?.data?.current_revision;
   const suffix = currentRevision ? ` Revision hiện tại trên server: ${currentRevision}.` : '';
   return `${getErrorMessage(error, fallback)}${suffix} Bấm “Tải lại” để lấy draft mới nhất trước khi tiếp tục.`;
@@ -167,7 +167,7 @@ export default function PrintTemplateEditorModal({
       const idOrCode = latest.invoice_code || latest.id;
       if (!idOrCode) {
         setPreviewPayload({});
-        setPreviewError('Hóa don mới nh?t thiđủ mã/ID d? gđi API preview. Editor vđơn hiển thị realtime bằng dữ liệu r?ng an tođơn.');
+        setPreviewError('Hóa đơn mới nhất thiếu mã/ID để gọi API preview. Editor vẫn hiển thị realtime bằng dữ liệu rỗng an toàn.');
         return;
       }
       const payload = await invoicesApi.printData(idOrCode, templateId ? { template_id: templateId } : {});
@@ -289,7 +289,7 @@ export default function PrintTemplateEditorModal({
   const markRevisionConflict = useCallback((error, fallback) => {
     const currentRevision = error?.data?.details?.current_revision || error?.data?.current_revision || null;
     const suffix = currentRevision ? ` Revision hiện tại trđơn server: ${currentRevision}.` : '';
-    setNotice(buildNotice('error', `${getErrorMessage(error, fallback)}${suffix} Bâm ?Tải lỗi? ?? l?y bđơn mới nh?t tr??c khi tiếp tục.`));
+    setNotice(buildNotice('error', `${getErrorMessage(error, fallback)}${suffix} Bấm "Tải lại" để lấy bản mới nhất trước khi tiếp tục.`));
   }, []);
 
   const handleFitZoom = useCallback(() => {
@@ -308,7 +308,7 @@ export default function PrintTemplateEditorModal({
     setBusy('save');
     setNotice(null);
     try {
-      // Lđủ layout hiện tại vào database/config ch?nh (không tạo draft).
+      // Lưu layout hiện tại vào database/config chính (không tạo draft).
       const payload = buildTemplatePayloadFromDocument(activeTemplate, editor.document, editor.settings);
       const data = await printTemplatesApi.update(activeTemplate.id, {
         layout_json: payload.layout_json,
@@ -330,7 +330,7 @@ export default function PrintTemplateEditorModal({
       return item;
     } catch (error) {
       if (isRevisionConflict(error)) {
-        markRevisionConflict(error, 'Không th? lđủ mẫu in: ?? ???c cập nhật ? phiđơn kh?c.');
+        markRevisionConflict(error, 'Không thể lưu mẫu in: Đã được cập nhật ở phiên bản khác.');
       } else {
         setNotice(buildNotice('error', getErrorMessage(error, 'Không th? lđủ mẫu in.')));
       }
@@ -365,7 +365,7 @@ export default function PrintTemplateEditorModal({
       setNotice(buildNotice('success', 'Đã publish mẫu in. Trang in hóa đơn sẽ dùng bản published mới.'));
     } catch (error) {
       if (isRevisionConflict(error)) {
-        markRevisionConflict(error, 'Không th? publish về mẫu in đã được cập nhật ? phiđơn kh?c.');
+        markRevisionConflict(error, 'Không thể publish vì mẫu in đã được cập nhật ở phiên bản khác.');
       } else {
         setNotice(buildNotice('error', getErrorMessage(error, 'Không thể publish mẫu in.')));
       }
@@ -401,7 +401,7 @@ export default function PrintTemplateEditorModal({
         editor.setRevision(item.revision || editor.revision);
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'D? upload logo. Layout logo vđơn bind template.logo, không nh?ng binary vào JSON.'));
+      setNotice(buildNotice('success', 'Đã upload logo. Layout logo vẫn bind template.logo, không nhúng binary vào JSON.'));
     } catch (error) {
       setNotice(buildNotice('error', getErrorMessage(error, 'Không thể upload logo.')));
     } finally {
@@ -561,7 +561,7 @@ export default function PrintTemplateEditorModal({
       paperSize: 'A4',
       orientation: 'portrait',
     }));
-    setNotice(buildNotice('success', 'D? n?p mđủ đơn hàng A4 mặc định.'));
+    setNotice(buildNotice('success', 'Đã nạp mẫu đơn hàng A4 mặc định.'));
   }, []);
 
   const handleSapoReload = useCallback(async () => {
@@ -599,7 +599,7 @@ export default function PrintTemplateEditorModal({
         setSapoDraft(buildSapoDraftFromTemplate(item));
         onSaved?.(item);
       }
-      setNotice(buildNotice('success', 'D? luu mẫu in kiđủ Sapo. Trang in hóa đơn sử dụng bđơn HTML mới.'));
+      setNotice(buildNotice('success', 'Đã lưu mẫu in kiểu Sapo. Trang in hóa đơn sử dụng bản HTML mới.'));
     } catch (error) {
       setNotice(buildNotice('error', getErrorMessage(error, 'Không thể lưu mẫu in kiểu Sapo.')));
     } finally {
@@ -615,7 +615,7 @@ export default function PrintTemplateEditorModal({
         <div className="invoice-editor-topbar">
           <div>
             <h1 id="invoice-editor-title">Chỉnh sửa mẫu in đơn hàng</h1>
-            <p>{editorMode === 'sapo' ? 'Sođơn nđi dung mẫu in, chọn từ khóa về xem tr??c A4 theo dữ liệu hóa đơn th?t.' : 'K?o th?, resize, snap grid. Bâm ?Lđủ? ?? lđủ layout, bâm ?Publish? ?? định đầu bđơn in.'}</p>
+            <p>{editorMode === 'sapo' ? 'Soạn nội dung mẫu in, chọn từ khóa và xem trước A4 theo dữ liệu hóa đơn thật.' : 'Kéo thả, resize, snap grid. Bấm "Lưu" để lưu layout, bấm "Publish" để áp dụng bản in.'}</p>
           </div>
           <div className="invoice-editor-topbar-actions">
             <div className="invoice-editor-mode-toggle" role="tablist" aria-label="Chế độ chỉnh sửa mẫu in">
@@ -829,7 +829,7 @@ export default function PrintTemplateEditorModal({
               {previewError && <div className="invoice-editor-preview-source invoice-editor-preview-source-warning">{previewError}</div>}
               <div className="invoice-sapo-preview-meta">
                 <span>Preview</span>
-                <code>{sapoDraft.paperSize} ? {sapoDraft.orientation === 'landscape' ? 'Ngang' : 'D?c'}</code>
+                <code>{sapoDraft.paperSize} ? {sapoDraft.orientation === 'landscape' ? 'Ngang' : 'Dọc'}</code>
               </div>
               <div className="invoice-print-preview-frame invoice-sapo-preview-frame">
                 <InvoiceTemplateRenderer

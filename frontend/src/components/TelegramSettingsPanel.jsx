@@ -21,6 +21,7 @@ import {
   BarChart3,
   Wallet,
   Boxes,
+  Calculator,
   Trophy,
   ShieldCheck,
   Zap,
@@ -122,9 +123,9 @@ const BOT_GROUPS = [
   },
   {
     key: 'quan_ly',
-    title: '3. Nhóm Quản Lý & Báo Cáo',
-    description: 'Theo dõi tài chính sổ quỹ, thống kê doanh thu và báo cáo phân tích',
-    badge: '5 Bot',
+    title: '3. Nhóm Quản Lý, Báo Cáo & Kế Toán',
+    description: 'Theo dõi tài chính sổ quỹ, kế toán công nợ, thống kê doanh thu và báo cáo phân tích',
+    badge: '6 Bot',
     headerColor: 'from-emerald-600 to-teal-600',
     bots: [
       {
@@ -176,6 +177,16 @@ const BOT_GROUPS = [
         badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
         desc: 'Báo cáo bảng vàng xếp hạng khách hàng thân thiết, khách hàng VIP đem lại doanh thu cao nhất.',
         placeholder: 'Token bot top khách (vd: 7123456789:AAH_xxx...)',
+      },
+      {
+        key: 'bot_accounting',
+        name: 'Bot 13: Kế toán & Công nợ',
+        menuTitle: 'Kế toán & Công nợ (AI)',
+        icon: Calculator,
+        color: 'indigo',
+        badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+        desc: 'Báo cáo công nợ doanh nghiệp, tuổi nợ khách hàng, cảnh báo nợ xấu và nhận định tài chính AI gửi về nhóm Telegram.',
+        placeholder: 'Token bot kế toán (vd: 7123456789:AAH_xxx...)',
       },
     ],
   },
@@ -387,6 +398,10 @@ export default function TelegramSettingsPanel() {
     }
   };
 
+  const totalBotsCount = useMemo(() => {
+    return BOT_GROUPS.reduce((acc, g) => acc + (g.bots?.length || 0), 0);
+  }, []);
+
   const configuredCount = useMemo(() => {
     let count = 0;
     for (const group of BOT_GROUPS) {
@@ -401,7 +416,7 @@ export default function TelegramSettingsPanel() {
     return (
       <div className="card flex min-h-[300px] flex-col items-center justify-center gap-3 text-gray-500">
         <Loader2 size={32} className="animate-spin text-blue-600" />
-        <span className="text-sm font-medium">Đang tải dữ liệu cấu hình 12 Bot Telegram...</span>
+        <span className="text-sm font-medium">Đang tải dữ liệu cấu hình {totalBotsCount} Bot Telegram...</span>
       </div>
     );
   }
@@ -417,13 +432,13 @@ export default function TelegramSettingsPanel() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-gray-800">Cấu hình 12 Bot Telegram Báo Cáo</h2>
+                <h2 className="text-lg font-bold text-gray-800">Cấu hình {totalBotsCount} Bot Telegram Báo Cáo</h2>
                 <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
-                  {configuredCount}/12 bot đã nhập token
+                  {configuredCount}/{totalBotsCount} bot đã nhập token
                 </span>
               </div>
               <p className="mt-1 text-sm text-gray-600">
-                12 con bot độc lập báo cáo từng nghiệp vụ (khớp menu) cùng gửi dữ liệu về chung <b>1 Nhóm Telegram</b>.
+                {totalBotsCount} con bot độc lập báo cáo từng nghiệp vụ (khớp menu) cùng gửi dữ liệu về chung <b>1 Nhóm Telegram</b>.
               </p>
             </div>
           </div>
@@ -547,7 +562,7 @@ export default function TelegramSettingsPanel() {
               className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:opacity-50"
             >
               {testingAll ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-              {testingAll ? 'Đang kiểm tra 12 Bot...' : 'Kiểm tra tất cả 12 Bot'}
+              {testingAll ? `Đang kiểm tra ${totalBotsCount} Bot...` : `Kiểm tra tất cả ${totalBotsCount} Bot`}
             </button>
           </div>
         </div>
@@ -557,10 +572,10 @@ export default function TelegramSettingsPanel() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <label htmlFor="telegram-group-id" className="block text-sm font-bold text-gray-800">
-                1. Ô Nhập ID Nhóm Telegram (Group Chat ID dùng chung cho cả 12 Bot)
+                1. Ô Nhập ID Nhóm Telegram (Group Chat ID dùng chung cho cả {totalBotsCount} Bot)
               </label>
               <p className="text-xs text-gray-500 mt-0.5">
-                Tất cả 12 Bot sẽ cùng gửi báo cáo thay đổi vào nhóm này. Định dạng thường là dãy số âm bắt đầu bằng <code>-100</code>.
+                Tất cả {totalBotsCount} Bot sẽ cùng gửi báo cáo thay đổi vào nhóm này. Định dạng thường là dãy số âm bắt đầu bằng <code>-100</code>.
               </p>
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-800 shadow-xs">
@@ -725,7 +740,7 @@ export default function TelegramSettingsPanel() {
       <div className="card sticky bottom-4 z-20 flex flex-col gap-3 rounded-2xl border-blue-200 bg-white/95 p-4 shadow-xl backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Zap size={18} className="text-amber-500 shrink-0" />
-          <span>Hệ thống 12 Bot Telegram sẵn sàng hoạt động tự động khi bạn bấm Lưu.</span>
+          <span>Hệ thống {totalBotsCount} Bot Telegram sẵn sàng hoạt động tự động khi bạn bấm Lưu.</span>
         </div>
 
         <div className="flex items-center gap-3">
@@ -744,7 +759,7 @@ export default function TelegramSettingsPanel() {
             className="btn-success inline-flex min-h-10 items-center gap-2 rounded-xl px-6 py-2 text-sm font-semibold shadow-md shadow-emerald-600/20 disabled:opacity-60"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-            {saving ? 'Đang lưu...' : 'Lưu cấu hình 12 Bot'}
+            {saving ? 'Đang lưu...' : `Lưu cấu hình ${totalBotsCount} Bot`}
           </button>
         </div>
       </div>

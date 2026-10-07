@@ -33,7 +33,7 @@ export default function ChangeHistoryModal({ isOpen, onClose, tableName, recordI
   };
 
   const handleRestore = async (historyId) => {
-    if (!confirm('Bản c? ch?c chọn muđơn khôi phục bđơn ghi về phiđơn bđơn n?y không?')) return;
+    if (!confirm('Bạn có chắc chắn muốn khôi phục bản ghi về phiên bản này không?')) return;
     
     setRestoringId(historyId);
     try {

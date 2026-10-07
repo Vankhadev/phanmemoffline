@@ -385,65 +385,12 @@ async function sendInventoryAuditTelegramReport(options = {}) {
   };
 }
 
-let isPolling = false;
-let lastUpdateId = 0;
-
 /**
- * Lắng nghe lệnh trực tiếp từ Telegram (/kiemkho, /tonkho, /kho) để Bot Kho Hàng tự động trả lời báo cáo
+ * Lắng nghe lệnh trực tiếp từ Telegram (/kiemkho, /tonkho, /kho) và nút bấm mở rộng chi tiết sản phẩm
  */
 function startTelegramInventoryBotListener() {
-  if (isPolling) return;
-  isPolling = true;
-
-  (async () => {
-    while (isPolling) {
-      try {
-        const settings = getTelegramSettings();
-        const botCfg = settings.bots?.bot_inventory;
-        if (!settings.enabled || !botCfg?.enabled || !botCfg?.token) {
-          await sleep(10000);
-          continue;
-        }
-
-        const url = `https://api.telegram.org/bot${botCfg.token}/getUpdates?offset=${lastUpdateId + 1}&timeout=15`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000);
-
-        let response;
-        try {
-          response = await fetch(url, { signal: controller.signal });
-        } finally {
-          clearTimeout(timeoutId);
-        }
-
-        if (!response.ok) {
-          await sleep(10000);
-          continue;
-        }
-
-        const json = await response.json();
-        if (json.ok && Array.isArray(json.result)) {
-          for (const update of json.result) {
-            lastUpdateId = Math.max(lastUpdateId, update.update_id);
-            const msg = update.message || update.channel_post;
-            const text = (msg?.text || '').trim().toLowerCase();
-
-            if (text === '/kiemkho' || text === '/kho' || text === '/tonkho' || text.startsWith('/kiemkho') || text === 'kiem kho') {
-              const sender = msg.from ? `${msg.from.first_name || ''} ${msg.from.last_name || ''}`.trim() : 'Telegram User';
-              console.log(`[BOT KHO HÀNG] Nhận lệnh kiểm kho từ Telegram (${sender}): "${text}"`);
-              await sendInventoryAuditTelegramReport({ user: sender || 'Telegram User' });
-            }
-          }
-        }
-      } catch (err) {
-        // Sleep on any network or timeout error without crashing
-        await sleep(10000);
-      }
-    }
-  })().catch(err => {
-    console.warn('[BOT KHO HÀNG] Lỗi listener:', err.message);
-    isPolling = false;
-  });
+  const { startTelegramBotListener } = require('./telegramService');
+  startTelegramBotListener();
 }
 
 module.exports = {

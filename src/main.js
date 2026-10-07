@@ -366,6 +366,12 @@ async function startBackend(options = {}) {
     KHA_DB_PATH: dbPath,
     ELECTRON_USER_DATA: userData,
     KHA_RUNTIME_DIR: path.join(userData, 'runtime'),
+    KHA_FRONTEND_DIST: app.isPackaged
+      ? path.join(process.resourcesPath, 'frontend', 'dist')
+      : path.resolve(__dirname, '..', 'frontend', 'dist'),
+    KHA_DOWNLOADS_DIR: app.isPackaged
+      ? path.join(process.resourcesPath, 'downloads')
+      : path.resolve(__dirname, '..', 'frontend', 'public', 'downloads'),
     // Financial data takes precedence over a slightly faster startup. Guardian
     // services create verified recovery points and migrations get a rollback copy.
     KHA_LOCAL_LIGHTWEIGHT_MODE: '0',

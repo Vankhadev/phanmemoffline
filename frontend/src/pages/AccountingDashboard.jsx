@@ -44,20 +44,21 @@ function formatNumber(value) {
 }
 
 const ACCOUNTING_LINKS = [
-  { to: '/ke-toan/bao-cao-thue', label: 'Báo cáo thuế GTGT', description: 'Thu? đầu vào, đầu ra về phđi n?p', icon: ReceiptText, tone: 'blue' },
-  { to: '/ke-toan/bao-cao-ton-kho', label: 'Báo cáo tồn kho', description: 'Gi? vđơn, giá trị tđơn về cảnh báo kho', icon: Warehouse, tone: 'amber' },
-  { to: '/ke-toan/nhat-ky', label: 'Nhật ký ho?t d?ng', description: 'Tra cđủ thay đổi nghi?p về kế toán', icon: FileClock, tone: 'violet' },
+  { to: '/ke-toan/cong-no', label: 'Tuổi nợ & Trợ lý Kế toán AI', description: 'Phân tích 4 nhóm tuổi nợ, khoanh vùng nợ xấu & soạn tin đòi nợ Gemini', icon: UsersRound, tone: 'emerald' },
+  { to: '/ke-toan/bao-cao-thue', label: 'Báo cáo thuế GTGT', description: 'Thuế đầu vào, đầu ra và phải nộp', icon: ReceiptText, tone: 'blue' },
+  { to: '/ke-toan/bao-cao-ton-kho', label: 'Báo cáo tồn kho', description: 'Giá vốn, giá trị tồn và cảnh báo kho', icon: Warehouse, tone: 'amber' },
+  { to: '/ke-toan/nhat-ky', label: 'Nhật ký hoạt động', description: 'Tra cứu thay đổi nghiệp vụ kế toán', icon: FileClock, tone: 'violet' },
 ];
 
 const PREPARED_FEATURES = [
-  { label: 'Qu? kế toán', description: 'Tổng hợp thu, chi về số dư qu?', icon: Landmark },
-  { label: 'Cùng n?', description: 'Khách hàng về nhà cung cấp', icon: UsersRound },
-  { label: 'Hóa don diđơn t?', description: 'Hóa don đầu vào về đầu ra', icon: BookOpenCheck },
-  { label: 'Tài khoản ngđơn h?ng', description: 'Danh mục tài khoản nhân/chi', icon: Banknote },
+  { label: 'Quỹ kế toán', description: 'Tổng hợp thu, chi và số dư quỹ', icon: Landmark },
+  { label: 'Hóa đơn điện tử', description: 'Hóa đơn đầu vào và đầu ra', icon: BookOpenCheck },
+  { label: 'Tài khoản ngân hàng', description: 'Danh mục tài khoản nhận/chi', icon: Banknote },
 ];
 
 function toneClasses(tone) {
   const tones = {
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-800',
     blue: 'border-blue-200 bg-blue-50 text-blue-700',
     amber: 'border-amber-200 bg-amber-50 text-amber-700',
     violet: 'border-violet-200 bg-violet-50 text-violet-700',
@@ -77,7 +78,7 @@ export default function AccountingDashboard({ user }) {
 
   const loadSummary = useCallback(async () => {
     if (!filters.from || !filters.to || filters.from > filters.to) {
-      setError('Kho?ng ngày không hợp l?.');
+      setError('Khoảng ngày không hợp lệ.');
       return;
     }
     setLoading(true);
@@ -87,7 +88,7 @@ export default function AccountingDashboard({ user }) {
       setSummary(data?.summary || {});
     } catch (requestError) {
       setSummary(null);
-      setError(getApiErrorMessage(requestError?.data || requestError, requestError?.message || 'Không thử lại tổng hợp doanh thu.'));
+      setError(getApiErrorMessage(requestError?.data || requestError, requestError?.message || 'Không thể tải tổng hợp doanh thu.'));
     } finally {
       setLoading(false);
     }
@@ -117,7 +118,7 @@ export default function AccountingDashboard({ user }) {
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-200/80">Module kế toán</div>
               <h1 className="mt-1 text-2xl font-bold">{isCashier ? 'Báo cáo doanh thu' : 'Tổng quan kế toán'}</h1>
-              <p className="mt-1 max-w-3xl text-sm text-emerald-100/75">{isCashier ? 'Tài khoản thu ngđơn ch? được xem tổng hợp doanh thu theo k?.' : 'điâm truy c?p nhanh đến báo cáo thuế, tồn kho, nhật ký về các dữ liệu kế toán c?t lỗi.'}</p>
+              <p className="mt-1 max-w-3xl text-sm text-emerald-100/75">{isCashier ? 'Tài khoản thu ngân chỉ được xem tổng hợp doanh thu theo kỳ.' : 'Điểm truy cập nhanh đến báo cáo thuế, tồn kho, nhật ký và các dữ liệu kế toán cốt lõi.'}</p>
             </div>
           </div>
         </div>
@@ -125,8 +126,8 @@ export default function AccountingDashboard({ user }) {
 
       <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[180px_180px_auto]">
-          <div><label className="mb-1 block text-xs font-semibold text-gray-500">T? ngày</label><input type="date" className="input-field" value={filters.from} max={filters.to || undefined} onChange={event => setFilters(current => ({ ...current, from: event.target.value }))} /></div>
-          <div><label className="mb-1 block text-xs font-semibold text-gray-500">?đơn ngày</label><input type="date" className="input-field" value={filters.to} min={filters.from || undefined} onChange={event => setFilters(current => ({ ...current, to: event.target.value }))} /></div>
+          <div><label className="mb-1 block text-xs font-semibold text-gray-500">Từ ngày</label><input type="date" className="input-field" value={filters.from} max={filters.to || undefined} onChange={event => setFilters(current => ({ ...current, from: event.target.value }))} /></div>
+          <div><label className="mb-1 block text-xs font-semibold text-gray-500">Đến ngày</label><input type="date" className="input-field" value={filters.to} min={filters.from || undefined} onChange={event => setFilters(current => ({ ...current, to: event.target.value }))} /></div>
           <div className="flex items-end"><button type="button" onClick={loadSummary} disabled={loading} className="btn-primary min-h-11 w-full sm:w-auto">{loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Xem tổng hợp</button></div>
         </div>
         <div className="mt-3 inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"><CalendarDays size={13} /> {filters.from} - {filters.to}</div>
@@ -135,7 +136,7 @@ export default function AccountingDashboard({ user }) {
 
       <section className={`grid grid-cols-1 gap-3 ${isCashier ? 'sm:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-4'}`}>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide"><TrendingUp size={16} /> Tổng doanh thu</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatVND(summary?.total_revenue)}</div></div>
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-700"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide"><ReceiptText size={16} /> S? hóa đơn</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatNumber(summary?.invoice_count)}</div></div>
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-700"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide"><ReceiptText size={16} /> Số hóa đơn</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatNumber(summary?.invoice_count)}</div></div>
         {!isCashier && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-700"><div className="text-xs font-bold uppercase tracking-wide">Tổng giá vốn</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatVND(summary?.total_cost)}</div></div>}
         {!isCashier && <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-violet-700"><div className="text-xs font-bold uppercase tracking-wide">Lợi nhuận</div><div className="mt-2 text-2xl font-extrabold">{loading ? '...' : formatVND(summary?.total_profit)}</div></div>}
       </section>
@@ -148,17 +149,17 @@ export default function AccountingDashboard({ user }) {
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">Nđi dung ch?nh</h3>
+                <h3 className="font-bold text-gray-800 mb-2">Nội dung chính</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Xem tổng doanh thu, s? hóa đơn, giá vốn về lợi nhuận.</li>
-                  <li>M? nhanh báo cáo thuế, tồn kho về nhật ký ho?t d?ng.</li>
-                  <li>Lực theo kho?ng ngày d? dài chiđủ số liệu.</li>
+                  <li>Xem tổng doanh thu, số hóa đơn, giá vốn và lợi nhuận.</li>
+                  <li>Mở nhanh báo cáo thuế, tồn kho và nhật ký hoạt động.</li>
+                  <li>Lọc theo khoảng ngày để đối chiếu số liệu.</li>
                 </ul>
               </div>
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">Luu ?</h3>
+                <h3 className="font-bold text-gray-800 mb-2">Lưu ý</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Báo cáo t? lâm mới khi hóa đơn, sản phẩm ho?c phiếu nhập thay đổi.</li>
+                  <li>Báo cáo tự làm mới khi hóa đơn, sản phẩm hoặc phiếu nhập thay đổi.</li>
                 </ul>
               </div>
             </div>
@@ -174,7 +175,7 @@ export default function AccountingDashboard({ user }) {
               return <Link key={item.to} to={item.to} className={`group rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md ${toneClasses(item.tone)}`}><div className="flex items-start justify-between gap-3"><div className="rounded-xl bg-white/70 p-2"><Icon size={21} /></div><ArrowRight size={17} className="transition group-hover:translate-x-1" /></div><div className="mt-3 font-bold">{item.label}</div><div className="mt-1 text-sm opacity-75">{item.description}</div></Link>;
             })}
           </section>
-          <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"><h2 className="font-bold text-gray-800">API kế toán d? sđơn s?ng</h2><p className="mt-1 text-sm text-gray-500">Các nhâm duđi d?y đã được chuđơn b? helper t?ch h?p; phâm vi hiện tại chưa triđơn khai CRUD đầy đủ.</p><div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{PREPARED_FEATURES.map(item => { const Icon = item.icon; return <div key={item.label} className="rounded-xl border border-gray-200 bg-gray-50 p-3"><Icon size={18} className="text-gray-500" /><div className="mt-2 text-sm font-bold text-gray-700">{item.label}</div><div className="mt-1 text-xs text-gray-500">{item.description}</div></div>; })}</div></section>
+          <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"><h2 className="font-bold text-gray-800">API kế toán đã sẵn sàng</h2><p className="mt-1 text-sm text-gray-500">Các nhóm dưới đây đã được chuẩn bị helper tích hợp; phạm vi hiện tại chưa triển khai CRUD đầy đủ.</p><div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{PREPARED_FEATURES.map(item => { const Icon = item.icon; return <div key={item.label} className="rounded-xl border border-gray-200 bg-gray-50 p-3"><Icon size={18} className="text-gray-500" /><div className="mt-2 text-sm font-bold text-gray-700">{item.label}</div><div className="mt-1 text-xs text-gray-500">{item.description}</div></div>; })}</div></section>
         </>
       )}
     </div>

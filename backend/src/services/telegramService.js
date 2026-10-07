@@ -90,6 +90,13 @@ const BOT_DEFINITIONS = [
     description: 'Báo cáo bảng xếp hạng khách hàng VIP chi tiêu cao nhất',
     icon: 'Trophy',
   },
+  {
+    key: 'bot_accounting',
+    name: 'Bot Kế toán & Công nợ',
+    menuGroup: 'quan_ly',
+    description: 'Báo cáo công nợ, tuổi nợ khách hàng, cảnh báo nợ xấu và phân tích tài chính AI',
+    icon: 'Calculator',
+  },
 ];
 
 function buildDefaultConfig() {
@@ -262,7 +269,7 @@ function saveTelegramSettings(input = {}) {
   return next;
 }
 
-async function sendRawTelegramMessage(token, chatId, textHtml, attempt = 1) {
+async function sendRawTelegramMessage(token, chatId, textHtml, attempt = 1, extraOptions = {}) {
   if (!token || !chatId || !textHtml) {
     return { ok: false, error: 'Thiếu token, chat_id hoặc nội dung tin nhắn.' };
   }
@@ -275,15 +282,18 @@ async function sendRawTelegramMessage(token, chatId, textHtml, attempt = 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
 
+    const body = {
+      chat_id: cleanChatId,
+      text: textHtml,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      ...extraOptions,
+    };
+
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: cleanChatId,
-        text: textHtml,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
 
@@ -307,6 +317,7 @@ async function sendRawTelegramMessage(token, chatId, textHtml, attempt = 1) {
             chat_id: cleanChatId,
             text: plainText,
             disable_web_page_preview: true,
+            ...extraOptions,
           }),
           signal: retryController.signal,
         });
@@ -329,13 +340,195 @@ async function sendRawTelegramMessage(token, chatId, textHtml, attempt = 1) {
     if (attempt <= 1) {
       // Thử lại 1 lần sau 1.2s nếu timeout hoặc gián đoạn mạng
       await new Promise(r => setTimeout(r, 1200));
-      return sendRawTelegramMessage(token, chatId, textHtml, attempt + 1);
+      return sendRawTelegramMessage(token, chatId, textHtml, attempt + 1, extraOptions);
     }
     if (err.name === 'AbortError') {
       return { ok: false, error: 'Quá thời gian kết nối (timeout 8s) tới Telegram API.' };
     }
     return { ok: false, error: err.message || 'Lỗi mạng hoặc không thể kết nối tới Telegram.' };
   }
+}
+
+async function editTelegramMessage(token, chatId, messageId, textHtml, replyMarkup = null) {
+  if (!token || !chatId || !messageId || !textHtml) {
+    return { ok: false, error: 'Thiếu thông tin để sửa tin nhắn Telegram.' };
+  }
+
+  const cleanToken = String(token).trim();
+  const cleanChatId = String(chatId).trim();
+  const url = `https://api.telegram.org/bot${cleanToken}/editMessageText`;
+
+  const body = {
+    chat_id: cleanChatId,
+    message_id: messageId,
+    text: textHtml,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+  };
+  if (replyMarkup) {
+    body.reply_markup = replyMarkup;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    const data = await res.json().catch(() => null);
+    if (data && data.ok) return { ok: true, result: data.result };
+
+    const desc = String(data?.description || '');
+    if (desc.includes('message is not modified')) {
+      return { ok: true, notModified: true };
+    }
+
+    if (desc.includes("can't parse entities") || desc.includes('entity') || desc.includes('Bad Request')) {
+      const plainText = String(textHtml).replace(/<[^>]+>/g, '').trim();
+      const retryRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: cleanChatId,
+          message_id: messageId,
+          text: plainText,
+          disable_web_page_preview: true,
+          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+        }),
+      });
+      const retryData = await retryRes.json().catch(() => null);
+      if (retryData && retryData.ok) return { ok: true, result: retryData.result };
+    }
+
+    return { ok: false, error: desc || `HTTP ${res.status}: Lỗi sửa tin nhắn Telegram.` };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+async function answerTelegramCallbackQuery(token, callbackQueryId, options = {}) {
+  if (!token || !callbackQueryId) return;
+  const cleanToken = String(token).trim();
+  const url = `https://api.telegram.org/bot${cleanToken}/answerCallbackQuery`;
+
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text: options.text || '',
+        show_alert: options.show_alert === true,
+      }),
+    });
+  } catch (_) {}
+}
+
+const recentOrdersCache = new Map();
+const MAX_RECENT_ORDERS = 500;
+
+function cacheOrderData(key, payload) {
+  if (!key) return;
+  const cleanKey = String(key).trim().replace(/^#/, '');
+  if (recentOrdersCache.size >= MAX_RECENT_ORDERS) {
+    const firstKey = recentOrdersCache.keys().next().value;
+    recentOrdersCache.delete(firstKey);
+  }
+  recentOrdersCache.set(cleanKey, {
+    ...payload,
+    cachedAt: Date.now(),
+  });
+}
+
+function getOrderData(key) {
+  if (!key) return null;
+  const cleanKey = String(key).trim().replace(/^#/, '');
+  if (recentOrdersCache.has(cleanKey)) {
+    return recentOrdersCache.get(cleanKey);
+  }
+  return lookupOrderFromDb(cleanKey);
+}
+
+function lookupOrderFromDb(orderKey) {
+  try {
+    const { getOne, getAll } = require('../db/database');
+    const { resolveInvoiceDetailDisplayFields } = require('../utils/productDisplayName');
+    const cleanKey = String(orderKey).replace(/^#/, '').trim();
+
+    const inv = getOne('invoices', i => 
+      String(i.id) === cleanKey || 
+      String(i.invoice_code || '').replace(/^#/, '').trim().toUpperCase() === cleanKey.toUpperCase()
+    );
+    if (!inv) return null;
+
+    const details = getAll('invoice_details', d => Number(d.invoice_id) === Number(inv.id))
+      .map(detail => {
+        const displayFields = resolveInvoiceDetailDisplayFields(detail, id => getOne('products', p => Number(p.id) === Number(id)));
+        return {
+          ...detail,
+          ...displayFields,
+          product_name: displayFields?.product_name || detail.product_name || detail.name || 'Sản phẩm',
+          quantity: detail.quantity || detail.qty || 1,
+          unit_price: detail.unit_price || detail.price || 0,
+          line_total: detail.line_total || detail.total || ((detail.quantity || 1) * (detail.unit_price || 0)),
+        };
+      });
+
+    const customer = inv.customer_id ? getOne('customers', c => Number(c.id) === Number(inv.customer_id)) : null;
+
+    return {
+      botKey: 'bot_create_order',
+      eventType: 'Tạo đơn mới',
+      data: {
+        invoice: {
+          ...inv,
+          customer_name: inv.customer_name || customer?.name || 'Khách lẻ',
+          customer_phone: inv.customer_phone || customer?.phone || '',
+          details,
+        },
+        creator: inv.invoice_writer || 'Nhân viên bán hàng',
+      },
+    };
+  } catch (err) {
+    console.warn('[TELEGRAM] Lỗi tìm đơn hàng từ DB:', err.message);
+    return null;
+  }
+}
+
+function buildReplyMarkupForNotification(botKey, data = {}) {
+  const inv = data.invoice || data;
+  let items = [];
+  if (botKey === 'bot_create_order') {
+    items = Array.isArray(inv.details) ? inv.details : [];
+  } else if (botKey === 'bot_order_list') {
+    items = Array.isArray(data.details) && data.details.length > 0
+      ? data.details
+      : (Array.isArray(inv.details) ? inv.details : []);
+  }
+
+  if (items.length > 10) {
+    const orderKey = inv.invoice_code || inv.id;
+    if (orderKey) {
+      const hiddenCount = items.length - 10;
+      return {
+        inline_keyboard: [
+          [
+            {
+              text: `🔽 Xem thêm ${hiddenCount} mặt hàng khác (Tổng ${items.length} món)`,
+              callback_data: `exp_ord:${String(orderKey).replace(/^#/, '')}`,
+            },
+          ],
+        ],
+      };
+    }
+  }
+  return null;
 }
 
 async function testSingleBot(botKey, overrideToken = '', overrideGroupId = '') {
@@ -398,7 +591,7 @@ async function testAllBots(overrideGroupId = '') {
 
   return {
     ok: successCount > 0,
-    summary: `Kiểm tra xong: ${successCount}/${configuredCount} bot hoạt động tốt (Tổng 12 bot).`,
+    summary: `Kiểm tra xong: ${successCount}/${configuredCount} bot hoạt động tốt (Tổng ${BOT_DEFINITIONS.length} bot).`,
     results,
   };
 }
@@ -407,13 +600,15 @@ async function testAllBots(overrideGroupId = '') {
 // Formatters cho 12 nghiệp vụ tương ứng
 // ─────────────────────────────────────────────────────────────
 
-function formatCreateOrderMessage(data = {}) {
+function formatCreateOrderMessage(data = {}, options = {}) {
   const inv = data.invoice || data;
   const items = Array.isArray(inv.details) ? inv.details : [];
   const total = Number(inv.total) || 0;
   const oldDebt = Number(inv.old_debt) || 0;
   const paid = Number(inv.paid_amount) || 0;
   const payable = Math.max(0, total + oldDebt - paid);
+  const isExpanded = options.expanded === true;
+  const DEFAULT_LIMIT = 10;
 
   const lines = [
     `🛒 <b>[TẠO ĐƠN HÀNG MỚI]</b>`,
@@ -435,16 +630,46 @@ function formatCreateOrderMessage(data = {}) {
   lines.push(`💳 <b>Hình thức:</b> ${escapeHtml(inv.payment_method || 'Tiền mặt')}`);
 
   if (items.length > 0) {
-    lines.push(`📦 <b>Chi tiết sản phẩm (${items.length} món):</b>`);
-    const previewItems = items.slice(0, 8);
-    for (const item of previewItems) {
-      const name = item.product_name || item.name || 'Sản phẩm';
-      const qty = item.quantity || item.qty || 1;
-      const price = item.line_total || item.total || (qty * (item.unit_price || item.price || 0));
-      lines.push(` • ${escapeHtml(name)} x${qty} (${formatVnd(price)})`);
-    }
-    if (items.length > 8) {
-      lines.push(` • <i>...và ${items.length - 8} mặt hàng khác</i>`);
+    if (items.length <= DEFAULT_LIMIT) {
+      lines.push(`📦 <b>Chi tiết sản phẩm (${items.length} món):</b>`);
+      for (const item of items) {
+        const name = item.product_name || item.name || 'Sản phẩm';
+        const qty = item.quantity || item.qty || 1;
+        const price = item.line_total || item.total || (qty * (item.unit_price || item.price || 0));
+        lines.push(` • ${escapeHtml(name)} x${qty} (${formatVnd(price)})`);
+      }
+    } else if (isExpanded) {
+      lines.push(`📦 <b>Chi tiết sản phẩm (${items.length} món - Đầy đủ):</b>`);
+      const maxShow = Math.min(items.length, 45);
+      for (let i = 0; i < maxShow; i++) {
+        const item = items[i];
+        const name = item.product_name || item.name || 'Sản phẩm';
+        const qty = item.quantity || item.qty || 1;
+        const price = item.line_total || item.total || (qty * (item.unit_price || item.price || 0));
+        lines.push(` • ${escapeHtml(name)} x${qty} (${formatVnd(price)})`);
+      }
+      if (items.length > maxShow) {
+        lines.push(` • <i>...và ${items.length - maxShow} mặt hàng khác (vượt giới hạn tin nhắn)</i>`);
+      }
+    } else {
+      // Mặc định hiện 10 sản phẩm, còn lại ẩn đi trong thẻ mở rộng
+      lines.push(`📦 <b>Chi tiết sản phẩm (${items.length} món):</b>`);
+      const previewItems = items.slice(0, DEFAULT_LIMIT);
+      for (const item of previewItems) {
+        const name = item.product_name || item.name || 'Sản phẩm';
+        const qty = item.quantity || item.qty || 1;
+        const price = item.line_total || item.total || (qty * (item.unit_price || item.price || 0));
+        lines.push(` • ${escapeHtml(name)} x${qty} (${formatVnd(price)})`);
+      }
+      const hiddenCount = items.length - DEFAULT_LIMIT;
+      const hiddenItems = items.slice(DEFAULT_LIMIT, Math.min(items.length, 35));
+      const hiddenLines = hiddenItems.map(item => {
+        const name = item.product_name || item.name || 'Sản phẩm';
+        const qty = item.quantity || item.qty || 1;
+        const price = item.line_total || item.total || (qty * (item.unit_price || item.price || 0));
+        return ` • ${escapeHtml(name)} x${qty} (${formatVnd(price)})`;
+      }).join('\n');
+      lines.push(`<blockquote expandable><b>📦 ...và ${hiddenCount} mặt hàng khác (Nhấn để xem):</b>\n${hiddenLines}</blockquote>`);
     }
   }
 
@@ -455,7 +680,7 @@ function formatCreateOrderMessage(data = {}) {
   return lines.join('\n');
 }
 
-function formatOrderListMessage(data = {}) {
+function formatOrderListMessage(data = {}, options = {}) {
   const {
     action = 'Cập nhật',
     invoice = {},
@@ -470,6 +695,8 @@ function formatOrderListMessage(data = {}) {
   const oldDebt = Number(invoice.old_debt) || 0;
   const paid = Number(invoice.paid_amount) || 0;
   const payable = Math.max(0, total + oldDebt - paid);
+  const isExpanded = options.expanded === true;
+  const DEFAULT_LIMIT = 10;
 
   let icon = '📋';
   if (action.includes('Hủy') || action.includes('hủy')) icon = '🗑️';
@@ -503,12 +730,32 @@ function formatOrderListMessage(data = {}) {
 
   const items = Array.isArray(details) && details.length > 0 ? details : (Array.isArray(invoice.details) ? invoice.details : []);
   if (items.length > 0) {
-    lines.push(`📦 <b>Chi tiết (${items.length} món):</b>`);
-    for (const item of items.slice(0, 5)) {
-      lines.push(` • ${escapeHtml(item.product_name || item.name || 'SP')} x${item.quantity || 1} (${formatVnd(item.line_total || item.total || 0)})`);
-    }
-    if (items.length > 5) {
-      lines.push(` • <i>...và ${items.length - 5} mặt hàng khác</i>`);
+    if (items.length <= DEFAULT_LIMIT) {
+      lines.push(`📦 <b>Chi tiết (${items.length} món):</b>`);
+      for (const item of items) {
+        lines.push(` • ${escapeHtml(item.product_name || item.name || 'SP')} x${item.quantity || 1} (${formatVnd(item.line_total || item.total || 0)})`);
+      }
+    } else if (isExpanded) {
+      lines.push(`📦 <b>Chi tiết (${items.length} món - Đầy đủ):</b>`);
+      const maxShow = Math.min(items.length, 45);
+      for (let i = 0; i < maxShow; i++) {
+        const item = items[i];
+        lines.push(` • ${escapeHtml(item.product_name || item.name || 'SP')} x${item.quantity || 1} (${formatVnd(item.line_total || item.total || 0)})`);
+      }
+      if (items.length > maxShow) {
+        lines.push(` • <i>...và ${items.length - maxShow} mặt hàng khác (vượt giới hạn tin nhắn)</i>`);
+      }
+    } else {
+      lines.push(`📦 <b>Chi tiết (${items.length} món):</b>`);
+      for (const item of items.slice(0, DEFAULT_LIMIT)) {
+        lines.push(` • ${escapeHtml(item.product_name || item.name || 'SP')} x${item.quantity || 1} (${formatVnd(item.line_total || item.total || 0)})`);
+      }
+      const hiddenCount = items.length - DEFAULT_LIMIT;
+      const hiddenItems = items.slice(DEFAULT_LIMIT, Math.min(items.length, 35));
+      const hiddenLines = hiddenItems.map(item => {
+        return ` • ${escapeHtml(item.product_name || item.name || 'SP')} x${item.quantity || 1} (${formatVnd(item.line_total || item.total || 0)})`;
+      }).join('\n');
+      lines.push(`<blockquote expandable><b>📦 ...và ${hiddenCount} mặt hàng khác (Nhấn để xem):</b>\n${hiddenLines}</blockquote>`);
     }
   }
 
@@ -709,12 +956,12 @@ function formatTopCustomersMessage(data = {}) {
 // Non-blocking notification dispatch
 // ─────────────────────────────────────────────────────────────
 
-function buildNotificationHtml(botKey, eventType, data = {}) {
+function buildNotificationHtml(botKey, eventType, data = {}, options = {}) {
   switch (botKey) {
     case 'bot_create_order':
-      return formatCreateOrderMessage(data);
+      return formatCreateOrderMessage(data, options);
     case 'bot_order_list':
-      return formatOrderListMessage(data);
+      return formatOrderListMessage(data, options);
     case 'bot_products':
       return formatProductMessage(data);
     case 'bot_inventory':
@@ -808,8 +1055,26 @@ function notifyTelegram(botKey, eventType, data = {}) {
         return;
       }
 
-      const html = buildNotificationHtml(botKey, eventType, data);
-      const res = await sendRawTelegramMessage(resolved.token, resolved.groupId, html);
+      // Xây dựng nút bấm thu gọn / mở rộng chi tiết sản phẩm nếu có trên 10 mặt hàng
+      const replyMarkup = buildReplyMarkupForNotification(botKey, data);
+      if (replyMarkup) {
+        const inv = data.invoice || data;
+        const orderKey = inv.invoice_code || inv.id;
+        if (orderKey) {
+          cacheOrderData(orderKey, { botKey, eventType, data });
+          if (inv.id) cacheOrderData(inv.id, { botKey, eventType, data });
+          if (inv.invoice_code) cacheOrderData(inv.invoice_code, { botKey, eventType, data });
+        }
+      }
+
+      const html = buildNotificationHtml(botKey, eventType, data, { expanded: false });
+      const res = await sendRawTelegramMessage(
+        resolved.token,
+        resolved.groupId,
+        html,
+        1,
+        replyMarkup ? { reply_markup: replyMarkup } : {}
+      );
       if (!res.ok) {
         console.warn(`[TELEGRAM ${botKey}] Gửi thông báo không thành công:`, res.error);
       }
@@ -819,11 +1084,235 @@ function notifyTelegram(botKey, eventType, data = {}) {
   });
 }
 
+/**
+ * Xử lý sự kiện khi người dùng ấn nút Inline Keyboard trên Telegram
+ * để Mở rộng toàn bộ sản phẩm hoặc Thu gọn về 10 sản phẩm mặc định
+ */
+async function toggleOrderItemsDisplay(token, chatId, messageId, callbackQueryId, orderKey, expand) {
+  const cached = getOrderData(orderKey);
+  if (!cached) {
+    await answerTelegramCallbackQuery(token, callbackQueryId, {
+      text: `⚠️ Không tìm thấy chi tiết đơn hàng #${orderKey}`,
+      show_alert: false,
+    });
+    return;
+  }
+
+  const { botKey = 'bot_create_order', eventType = 'Tạo đơn mới', data = {} } = cached;
+  const inv = data.invoice || data;
+  const items = Array.isArray(inv.details)
+    ? inv.details
+    : (Array.isArray(data.details) ? data.details : []);
+  const cleanOrderKey = String(orderKey).replace(/^#/, '');
+
+  let newHtml = '';
+  let replyMarkup = null;
+
+  if (expand) {
+    newHtml = buildNotificationHtml(botKey, eventType, data, { expanded: true });
+    replyMarkup = {
+      inline_keyboard: [
+        [
+          {
+            text: `🔼 Thu gọn (Hiện 10 sản phẩm)`,
+            callback_data: `col_ord:${cleanOrderKey}`,
+          },
+        ],
+      ],
+    };
+    await answerTelegramCallbackQuery(token, callbackQueryId, {
+      text: `✅ Đã hiển thị toàn bộ ${items.length} sản phẩm`,
+      show_alert: false,
+    });
+  } else {
+    newHtml = buildNotificationHtml(botKey, eventType, data, { expanded: false });
+    const hiddenCount = Math.max(0, items.length - 10);
+    replyMarkup = {
+      inline_keyboard: [
+        [
+          {
+            text: `🔽 Xem thêm ${hiddenCount} mặt hàng khác (Tổng ${items.length} món)`,
+            callback_data: `exp_ord:${cleanOrderKey}`,
+          },
+        ],
+      ],
+    };
+    await answerTelegramCallbackQuery(token, callbackQueryId, {
+      text: `Đã thu gọn danh sách sản phẩm`,
+      show_alert: false,
+    });
+  }
+
+  await editTelegramMessage(token, chatId, messageId, newHtml, replyMarkup);
+}
+
+async function handleTelegramCallbackQuery(token, callbackQuery) {
+  try {
+    const data = String(callbackQuery.data || '');
+    const message = callbackQuery.message;
+    if (!message) {
+      await answerTelegramCallbackQuery(token, callbackQuery.id);
+      return;
+    }
+
+    const chatId = message.chat?.id;
+    const messageId = message.message_id;
+
+    if (data.startsWith('exp_ord:')) {
+      const orderKey = data.slice('exp_ord:'.length);
+      await toggleOrderItemsDisplay(token, chatId, messageId, callbackQuery.id, orderKey, true);
+    } else if (data.startsWith('col_ord:')) {
+      const orderKey = data.slice('col_ord:'.length);
+      await toggleOrderItemsDisplay(token, chatId, messageId, callbackQuery.id, orderKey, false);
+    } else {
+      await answerTelegramCallbackQuery(token, callbackQuery.id);
+    }
+  } catch (err) {
+    console.warn('[TELEGRAM] Lỗi xử lý callback query:', err.message);
+    try {
+      await answerTelegramCallbackQuery(token, callbackQuery.id, { text: 'Không thể xử lý yêu cầu lúc này.' });
+    } catch (_) {}
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Unified Telegram Bot Listener (Polling getUpdates)
+// Lắng nghe nút bấm Inline (ẩn/hiện chi tiết sản phẩm) và lệnh nhóm (/kiemkho, /tonkho)
+// ─────────────────────────────────────────────────────────────
+
+let isListenerActive = false;
+const pollerStateByToken = new Map(); // token -> { lastUpdateId, isRunning }
+
+function getUniqueActiveTokens() {
+  const settings = getTelegramSettings();
+  if (!settings || settings.enabled === false) return [];
+  const tokens = new Set();
+  for (const botKey of Object.keys(settings.bots || {})) {
+    const resolved = resolveBotConfig(settings, botKey);
+    if (resolved && resolved.token && resolved.groupId) {
+      tokens.add(resolved.token);
+    }
+  }
+  return Array.from(tokens);
+}
+
+function startTelegramBotListener() {
+  if (isListenerActive) return;
+  isListenerActive = true;
+
+  // Master manager loop: định kỳ kiểm tra các token đang hoạt động và khởi động polling
+  (async () => {
+    while (isListenerActive) {
+      try {
+        const tokens = getUniqueActiveTokens();
+        for (const token of tokens) {
+          if (!pollerStateByToken.has(token) || !pollerStateByToken.get(token).isRunning) {
+            runTokenPoller(token);
+          }
+        }
+      } catch (err) {
+        console.warn('[TELEGRAM LISTENER] Lỗi quản lý poller:', err.message);
+      }
+      await new Promise(r => setTimeout(r, 15000));
+    }
+  })().catch(err => {
+    console.warn('[TELEGRAM LISTENER] Lỗi vòng lặp chính:', err.message);
+    isListenerActive = false;
+  });
+}
+
+function runTokenPoller(token) {
+  const state = pollerStateByToken.get(token) || { lastUpdateId: 0, isRunning: false };
+  state.isRunning = true;
+  pollerStateByToken.set(token, state);
+
+  (async () => {
+    while (isListenerActive && state.isRunning) {
+      try {
+        const settings = getTelegramSettings();
+        if (!settings || settings.enabled === false) {
+          await new Promise(r => setTimeout(r, 10000));
+          continue;
+        }
+
+        const url = `https://api.telegram.org/bot${token}/getUpdates?offset=${state.lastUpdateId + 1}&timeout=15`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+        let response;
+        try {
+          response = await fetch(url, { signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!response.ok) {
+          await new Promise(r => setTimeout(r, 10000));
+          continue;
+        }
+
+        const json = await response.json().catch(() => null);
+        if (json && json.ok && Array.isArray(json.result)) {
+          for (const update of json.result) {
+            state.lastUpdateId = Math.max(state.lastUpdateId, update.update_id);
+
+            // 1. Xử lý Callback Query (Bấm nút xem thêm / thu gọn chi tiết sản phẩm đơn hàng)
+            if (update.callback_query) {
+              await handleTelegramCallbackQuery(token, update.callback_query);
+            }
+
+            // 2. Xử lý Lệnh từ chat Telegram (/kiemkho, /tonkho, /kho)
+            const msg = update.message || update.channel_post;
+            const text = (msg?.text || '').trim().toLowerCase();
+            if (text === '/kiemkho' || text === '/kho' || text === '/tonkho' || text.startsWith('/kiemkho') || text === 'kiem kho') {
+              const sender = msg.from ? `${msg.from.first_name || ''} ${msg.from.last_name || ''}`.trim() : 'Telegram User';
+              console.log(`[TELEGRAM LISTENER] Nhận lệnh kiểm kho từ Telegram (${sender}): "${text}"`);
+              try {
+                const { sendInventoryAuditTelegramReport } = require('./inventoryAuditService');
+                await sendInventoryAuditTelegramReport({ user: sender || 'Telegram User' });
+              } catch (auditErr) {
+                console.warn('[TELEGRAM LISTENER] Lỗi khi tạo báo cáo kiểm kho:', auditErr.message);
+              }
+            }
+
+            // 3. Xử lý Lệnh từ chat Telegram (/congno, /tuoino, /no)
+            if (text === '/congno' || text === '/tuoino' || text === '/no' || text.startsWith('/congno') || text === 'cong no') {
+              const sender = msg.from ? `${msg.from.first_name || ''} ${msg.from.last_name || ''}`.trim() : 'Telegram User';
+              console.log(`[TELEGRAM LISTENER] Nhận lệnh báo cáo công nợ từ Telegram (${sender}): "${text}"`);
+              try {
+                const { sendDebtAgingTelegramReport } = require('./debtTelegramAlertService');
+                await sendDebtAgingTelegramReport({}, sender);
+              } catch (debtErr) {
+                console.warn('[TELEGRAM LISTENER] Lỗi khi tạo báo cáo công nợ Telegram:', debtErr.message);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Nghỉ an toàn khi rớt mạng hoặc timeout mà không bao giờ crash app
+        await new Promise(r => setTimeout(r, 10000));
+      }
+    }
+  })().catch(err => {
+    console.warn(`[TELEGRAM LISTENER] Poller token ${token.slice(0, 10)}... dừng:`, err.message);
+    state.isRunning = false;
+  });
+}
+
+function stopTelegramBotListener() {
+  isListenerActive = false;
+  for (const state of pollerStateByToken.values()) {
+    state.isRunning = false;
+  }
+}
+
 module.exports = {
   BOT_DEFINITIONS,
   getTelegramSettings,
   saveTelegramSettings,
   sendRawTelegramMessage,
+  editTelegramMessage,
+  answerTelegramCallbackQuery,
   testSingleBot,
   testAllBots,
   resolveBotConfig,
@@ -840,4 +1329,12 @@ module.exports = {
   formatOrderReportsMessage,
   formatProductReportsMessage,
   formatTopCustomersMessage,
+  cacheOrderData,
+  getOrderData,
+  lookupOrderFromDb,
+  buildReplyMarkupForNotification,
+  toggleOrderItemsDisplay,
+  handleTelegramCallbackQuery,
+  startTelegramBotListener,
+  stopTelegramBotListener,
 };

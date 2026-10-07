@@ -83,7 +83,7 @@ const IMPORT_ALIASES = {
     customer_phone: ['customer_phone', 'sdt', 'so dien thoai', 'phone', 'sđt', 'số điện thoại'],
     customer_email: ['customer_email', 'email khach hang', 'email khách hàng', 'email'],
     customer_type: ['customer_type', 'loai khach', 'nhom khach', 'group', 'type', 'loại khách', 'nhóm khách'],
-    product_sku: ['product_sku', 'sku', 'ma san pham', 'ma hang', 'variant sku', 'mã sản phẩm', 'mã h?ng'],
+    product_sku: ['product_sku', 'sku', 'ma san pham', 'ma hang', 'variant sku', 'mã sản phẩm', 'mã hàng'],
     product_name: ['product_name', 'ten san pham', 'san pham', 'item name', 'tên sản phẩm', 'sản phẩm'],
     quantity: ['quantity', 'qty', 'so luong', 'sl', 'số lượng'],
     unit_price: ['unit_price', 'don gia', 'gia ban', 'price', 'đơn giá', 'giá bán'],
@@ -168,7 +168,7 @@ const TEMPLATE_ROWS = {
       'Phương thức thanh toán': 'cash',
       'Trạng thái đơn': 'completed',
       'Thời gian tạo': '2026-05-10 09:00:00',
-      'Ghi ch?': 'Một don có thể c? nhiđủ d?ng c?ng mã đơn hàng',
+      'Ghi chú': 'Một đơn có thể có nhiều dòng cùng mã đơn hàng',
     },
     {
       'M? đơn hàng': 'HDIMPORT002',
@@ -190,7 +190,7 @@ const TEMPLATE_ROWS = {
       'Phương thức thanh toán': 'debt',
       'Trạng thái đơn': 'pending',
       'Thời gian tạo': '2026-05-10 10:00:00',
-      'Ghi ch?': 'M? khách phđi tđơn tđi về kh?p nhâm khách',
+      'Ghi chú': 'Mã khách phải tồn tại và khớp nhóm khách',
     },
   ],
 };
@@ -200,8 +200,8 @@ function buildGuideRows(dataType, negativeStockLimitLabel = '0') {
     products: [
       ['Cột', 'Bắt buộc', 'Ghi chú'],
       ['Loại dòng', 'Khuyến nghị', 'PARENT cho sản phẩm cha, VARIANT cho biến thể; có Parent SKU thì backend suy luận là VARIANT.'],
-      ['SKU', 'C?', 'SKU/mã sản phẩm ho?c SKU biến thể, không được tr?ng sai loại.'],
-      ['Parent SKU', 'C? vđi VARIANT', 'Phải kh?p SKU sản phẩm cha trong file ho?c đã có trong hệ thống.'],
+      ['SKU', 'Có', 'SKU/mã sản phẩm hoặc SKU biến thể, không được trùng sai loại.'],
+      ['Parent SKU', 'Có với VARIANT', 'Phải khớp SKU sản phẩm cha trong file hoặc đã có trong hệ thống.'],
       ['Tên sản phẩm', 'Có với bản ghi mới', 'Tên sản phẩm cha hoặc tên biến thể.'],
       ['Giá/Tồn kho', 'Không', `Giá nhập số không âm; tồn kho có thể âm đến ${negativeStockLimitLabel} (ví dụ -5, -20) và phải là số nguyên; thấp hơn ngưỡng sẽ bị backend chặn.`],
       ['Danh mục text / Default category id', 'Không', 'Khớp danh mục hiện có theo tên/từ khóa hoặc id.'],
@@ -209,8 +209,8 @@ function buildGuideRows(dataType, negativeStockLimitLabel = '0') {
     ],
     invoices: [
       ['Cột', 'Bắt buộc', 'Ghi chú'],
-      ['M? đơn hàng', 'C?', 'Các d?ng c?ng mã don sẽ được gom th?nh một don nhiđủ sản phẩm.'],
-      ['M? khách hàng / Tồn / SDT / Email / Nhâm khách', 'Nđơn c? mã khách hàng', 'Khách phđi tđơn tđi; nđủ c? nhâm khách th? phđi kh?p loại khách d? tr?nh import nhâm khách l?/khách s?.'],
+      ['Mã đơn hàng', 'Có', 'Các dòng cùng mã đơn sẽ được gom thành một đơn nhiều sản phẩm.'],
+      ['Mã khách hàng / Tên / SĐT / Email / Nhóm khách', 'Nên có mã khách hàng', 'Khách phải tồn tại; nếu có nhóm khách thì phải khớp loại khách để tránh import nhầm khách lẻ/khách sỉ.'],
       ['SKU hoặc Tên sản phẩm', 'Có', 'Sản phẩm/biến thể phải tồn tại trong hệ thống.'],
       ['Số lượng', 'Có', `Số lượng bán phải lớn hơn 0; có thể bán khi tồn hiện tại 0/âm nếu tồn dự kiến không nhỏ hơn ${negativeStockLimitLabel}. Backend sẽ chặn nếu vượt ngưỡng.`],
       ['Đơn giá / Giảm giá / Thành tiền', 'Không', 'Nếu tổng tiền file khác tổng chi tiết, hệ thống ưu tiên tính lại từ chi tiết.'],
@@ -523,7 +523,7 @@ export default function ExcelImportPanel({
       setStatus({ tone: 'error', message: 'Vui lòng chọn ít nhất một dòng hợp lệ để import.' });
       return null;
     }
-    if (!window.confirm(`Import ${selected.length} d?ng đã chọn? Backend s? validate lỗi trước khi ghi dữ liệu.`)) return null;
+    if (!window.confirm(`Import ${selected.length} dòng đã chọn? Backend sẽ validate trước khi ghi dữ liệu.`)) return null;
     const selectedIds = new Set(selected);
     const selectedRows = excel.previewItems
       .filter(item => selectedIds.has(`import:${item.line}:${item.rowIndex}`))
@@ -569,7 +569,7 @@ export default function ExcelImportPanel({
     <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4 space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h3 className="font-bold flex items-center gap-2"><UploadCloud size={18} className="text-blue-600" /> {title || `Import ${dataType === 'invoices' ? 'hđã đơn/đơn h?ng' : 'sản phẩm'} t? Excel/CSV`}</h3>
+          <h3 className="font-bold flex items-center gap-2"><UploadCloud size={18} className="text-blue-600" /> {title || `Import ${dataType === 'invoices' ? 'hóa đơn / đơn hàng' : 'sản phẩm'} từ Excel/CSV`}</h3>
           <p className="text-xs text-gray-600 mt-1">{description || 'Frontend parse file bằng xlsx rồi gửi JSON rows cho backend preview/commit, không upload binary.'}</p>
           <p className="mt-1 text-[11px] font-medium text-orange-700">
             Nghiệp vụ âm kho: hệ thống cho phép tồn âm đến {negativeStockLimitLabel}; hóa đơn/import bị chặn nếu tồn dự kiến thấp hơn ngưỡng này.
@@ -635,12 +635,12 @@ export default function ExcelImportPanel({
           {busy('preview') ? <Loader2 size={15} className="animate-spin" /> : <Eye size={15} />} Preview import
         </button>
         <button type="button" onClick={commitImport} disabled={busyKey !== '' || selected.length === 0} className="btn-success flex items-center gap-1.5 disabled:opacity-60">
-          {busy('commit') ? <Loader2 size={15} className="animate-spin" /> : <PackageCheck size={15} />} Commit d?ng đã chọn ({selected.length})
+          {busy('commit') ? <Loader2 size={15} className="animate-spin" /> : <PackageCheck size={15} />} Commit dòng đã chọn ({selected.length})
         </button>
         <button type="button" onClick={() => { setExcel(prev => ({ ...prev, previewItems: [], previewSummary: null, previewErrors: [], previewWarnings: [], commitResult: null })); setSelected([]); }} className="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm flex items-center gap-1.5">
           <RefreshCw size={15} /> Reset preview
         </button>
-        <div className="text-xs text-gray-600">D? d?c {formatNumber(excel.rows.length)} d?ng, {formatNumber(excel.columns.length)} c?t.</div>
+        <div className="text-xs text-gray-600">Đã đọc {formatNumber(excel.rows.length)} dòng, {formatNumber(excel.columns.length)} cột.</div>
       </div>
 
       {excel.previewSummary && (
@@ -679,7 +679,7 @@ export default function ExcelImportPanel({
       {excel.previewItems.length > 0 && (
         <div className="space-y-3">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-            <input className="input-field flex-1 text-sm bg-white" placeholder="Lực d?ng import, mã, SKU, khách hàng, lỗi..." value={filter.query} onChange={event => setFilter(prev => ({ ...prev, query: event.target.value }))} />
+            <input className="input-field flex-1 text-sm bg-white" placeholder="Lọc dòng import, mã, SKU, khách hàng, lỗi..." value={filter.query} onChange={event => setFilter(prev => ({ ...prev, query: event.target.value }))} />
             <select className="input-field text-sm bg-white lg:w-44" value={filter.action} onChange={event => setFilter(prev => ({ ...prev, action: event.target.value }))}>
               {['all', 'create', 'update', 'duplicate', 'error', 'skipped'].map(action => <option key={action} value={action}>{action === 'all' ? 'Tất cả status' : actionLabel(action)}</option>)}
             </select>

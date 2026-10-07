@@ -219,7 +219,7 @@ export default function NhaCungCap() {
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!form.name.trim()) {
-      alert('Vui lượng nhập tđơn nhà cung cấp!');
+      alert('Vui lòng nhập tên nhà cung cấp!');
       return;
     }
     setSaving(true);
@@ -241,7 +241,7 @@ export default function NhaCungCap() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Xóa nhà cung cấp n?y?')) return;
+    if (!confirm('Xóa nhà cung cấp này?')) return;
     try {
       await apiJsonChecked(resolveApiUrl(`/partners/${id}`), { method: 'DELETE' }, 'Không th? xóa nhà cung cấp.');
       alert('? ?? xóa nhà cung cấp!');
@@ -312,7 +312,7 @@ export default function NhaCungCap() {
 
         const supplier = {
           name: getCellValue(row, ['Tồn NCC', 'Tồn nhà cung cấp', 'name']),
-          phone: getCellValue(row, ['S? điện thoại', 'S?T', 'phone']),
+          phone: getCellValue(row, ['Số điện thoại', 'SĐT', 'phone']),
           tax_code: getCellValue(row, ['M? s? thuế', 'MST', 'tax_code']),
           email: getCellValue(row, ['Email', 'email']),
           address: getCellValue(row, ['?đã ch?', 'address']),
@@ -333,7 +333,7 @@ export default function NhaCungCap() {
       }
 
       const confirmed = confirm(
-        `Tạm th?y ${validSuppliers.length} nhà cung cấp hợp lệ. Lỗi/b? qua: ${skipped}.\nBđơn c? muđơn nh?p dữ liệu n?y không?`
+        `Tìm thấy ${validSuppliers.length} nhà cung cấp hợp lệ. Lỗi/bỏ qua: ${skipped}.\nBạn có muốn nhập dữ liệu này không?`
       );
       if (!confirmed) return;
 
@@ -346,19 +346,19 @@ export default function NhaCungCap() {
           await apiJsonChecked('/partners', {
             method: 'POST',
             body: supplier,
-          }, 'Không th? nh?p nhà cung cấp t? Excel.');
+          }, 'Không thể nhập nhà cung cấp từ Excel.');
           success += 1;
         } catch (err) {
-          console.error('Lỗi nh?p nhà cung cấp:', err);
+          console.error('Lỗi nhập nhà cung cấp:', err);
           failed += 1;
         }
       }
 
       await fetchSuppliers();
-      alert(`Nhập Excel hođơn tốt!\n- Thành công: ${success}\n- Lỗi/b? qua: ${skipped + failed}`);
+      alert(`Nhập Excel hoàn tất!\n- Thành công: ${success}\n- Lỗi/bỏ qua: ${skipped + failed}`);
     } catch (err) {
-      console.error('Lỗi d?c file Excel:', err);
-      alert('Không th? d?c file Excel: ' + err.message);
+      console.error('Lỗi đọc file Excel:', err);
+      alert('Không thể đọc file Excel: ' + err.message);
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -373,7 +373,7 @@ export default function NhaCungCap() {
 
   const exportExcel = () => {
     if (filtered.length === 0) {
-      alert('Không có nhà cung cấp d? xu?t Excel.');
+      alert('Không có nhà cung cấp để xuất Excel.');
       return;
     }
 
@@ -383,7 +383,7 @@ export default function NhaCungCap() {
       'M? s? thuế': p.tax_code || '',
       'Email': p.email || '',
       '?đã ch?': p.address || '',
-      'Loại hóa đơn': p.invoice_type === 'electronic' ? 'C? hóa đơn diđơn t?' : 'Không hóa đơn diđơn t?',
+      'Loại hóa đơn': p.invoice_type === 'electronic' ? 'Có hóa đơn điện tử' : 'Không hóa đơn điện tử',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     ws['!cols'] = [
@@ -447,7 +447,7 @@ export default function NhaCungCap() {
           <div className="text-[11px] text-gray-500 leading-4">
             {summary.import_count ? <div>{summary.import_count} phiếu nhập</div> : null}
             {summary.remaining_amount > 0 ? (
-              <div>Cđơn {formatPaymentMoney(summary.remaining_amount)}</div>
+              <div>Còn {formatPaymentMoney(summary.remaining_amount)}</div>
             ) : summary.total_amount > 0 ? (
               <div>?? tr? {formatPaymentMoney(summary.paid_amount)}</div>
             ) : null}
@@ -478,7 +478,7 @@ export default function NhaCungCap() {
             disabled={importing}
             className="px-4 py-2 border border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-sm font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Upload size={16} /> {importing ? 'đang nh?p...' : 'Nhập Excel'}
+            <Upload size={16} /> {importing ? 'Đang nhập...' : 'Nhập Excel'}
           </button>
           <button onClick={exportExcel} className="px-4 py-2 border border-orange-300 text-orange-600 hover:bg-orange-50 rounded-lg text-sm font-medium flex items-center gap-1.5">
             <FileDown size={16} /> Xuất Excel
@@ -491,7 +491,7 @@ export default function NhaCungCap() {
 
       <input
         className="input-field mb-4"
-        placeholder="?? Tạm nhà cung cấp theo tồn, S?T ho?c MST..."
+        placeholder="🔍 Tìm nhà cung cấp theo tên, SĐT hoặc MST..."
         value={search}
         onChange={e => setSearch(e.target.value)}
       />
@@ -500,14 +500,14 @@ export default function NhaCungCap() {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-orange-50 text-orange-700 text-xs">
-              <th className="p-2 text-left w-48">Tồn dài t?c</th>
-              <th className="p-2 text-left w-32">S?T</th>
+              <th className="p-2 text-left w-48">Tên đối tác</th>
+              <th className="p-2 text-left w-32">SĐT</th>
               <th className="p-2 text-left w-32">MST</th>
               <th className="p-2 text-left w-40">Email</th>
               <th className="p-2 text-left w-24">Loại H?</th>
               <th className="p-2 text-left w-24">Thanh toán</th>
               <th className="p-2 text-left w-64">?đã ch?</th>
-              <th className="p-2 text-center w-24">H?nh d?ng</th>
+              <th className="p-2 text-center w-24">Hành động</th>
             </tr>
           </thead>
           <tbody>
@@ -628,7 +628,7 @@ export default function NhaCungCap() {
                       onChange={() => setForm({ ...form, invoice_type: 'non_electronic' })}
                       className="accent-blue-600"
                     />
-                    <span className="text-sm">Không hóa đơn diđơn t?</span>
+                    <span className="text-sm">Không hóa đơn điện tử</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -639,7 +639,7 @@ export default function NhaCungCap() {
                       onChange={() => setForm({ ...form, invoice_type: 'electronic' })}
                       className="accent-red-600"
                     />
-                    <span className="text-sm">C? hóa đơn diđơn t?</span>
+                    <span className="text-sm">Có hóa đơn điện tử</span>
                   </label>
                 </div>
               </div>
@@ -669,27 +669,27 @@ export default function NhaCungCap() {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">? Thêm nhà cung cấp mới</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nhân n?t <strong>"Thêm nhà cung cấp"</strong> ? g?c trđơn phđi</li>
-                  <li>điện các thông tin bắt bu?c: <strong>Tồn NCC</strong></li>
-                  <li>Các thông tin t?y chọn: S?T, MST, Email, ?đã ch?</li>
-                  <li>Chọn <strong>Loại hóa đơn</strong>: C? H??T ho?c Không H??T</li>
-                  <li>Nhân "Luu" d? hođơn tốt</li>
+                  <li>Nhấn nút <strong>"Thêm nhà cung cấp"</strong> ở góc trên phải</li>
+                  <li>Điền các thông tin bắt buộc: <strong>Tên NCC</strong></li>
+                  <li>Các thông tin tùy chọn: SĐT, MST, Email, Địa chỉ</li>
+                  <li>Chọn <strong>Loại hóa đơn</strong>: Có HĐĐT hoặc Không HĐĐT</li>
+                  <li>Nhấn "Lưu" để hoàn tất</li>
                 </ul>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Chỉnh sửa nhà cung cấp</h3>
-                <p>Nhân n?t <strong>"Sửa"</strong> ? c?t H?nh d?ng d? cập nhật thông tin nhà cung cấp. Các thông tin có thể thay đổi: S?T, MST, Email, ?đã ch?, Loại hóa đơn.</p>
+                <p>Nhấn nút <strong>"Sửa"</strong> ở cột Hành động để cập nhật thông tin nhà cung cấp. Các thông tin có thể thay đổi: SĐT, MST, Email, Địa chỉ, Loại hóa đơn.</p>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">??? Xóa nhà cung cấp</h3>
-                <p>Nhân n?t <strong>"Xóa"</strong> ? c?t H?nh d?ng d? xóa nhà cung cấp. <strong className="text-red-600">Luu ?:</strong> Không th? xóa nđủ nhà cung cấp dang được sử dụng trong sản phẩm.</p>
+                <p>Nhấn nút <strong>"Xóa"</strong> ở cột Hành động để xóa nhà cung cấp. <strong className="text-red-600">Lưu ý:</strong> Không thể xóa nếu nhà cung cấp đang được sử dụng trong sản phẩm.</p>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2"> Tìm kiếm</h3>
-                <p>Nhập từ khóa vào ? tìm kiếm d? l?c danh sách theo:</p>
+                <p>Nhập từ khóa vào ô tìm kiếm để lọc danh sách theo:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>Tồn nhà cung cấp</li>
                   <li>S? điện thoại</li>
@@ -699,27 +699,27 @@ export default function NhaCungCap() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Nhập Excel</h3>
-                <p>Nhân n?t <strong>"Nhập Excel"</strong>, chọn file .xlsx ho?c .xls, kiểm tra thông báo xác nhận rđi d?ng ? đã nhập tổng nhà cung cấp vào hệ thống.</p>
+                <p>Nhấn nút <strong>"Nhập Excel"</strong>, chọn file .xlsx hoặc .xls, kiểm tra thông báo xác nhận rồi đồng ý để nhập danh sách nhà cung cấp vào hệ thống.</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
-                  <li>C?t bắt bu?c: <strong>Tồn NCC</strong> ho?c <strong>Tồn nhà cung cấp</strong> ho?c <strong>name</strong></li>
-                  <li>C?t t?y chọn: <strong>S? điện thoại/S?T/phone</strong>, <strong>M? s? thuế/MST/tax_code</strong>, <strong>Email/email</strong>, <strong>?đã ch?/address</strong>, <strong>Loại hóa đơn/invoice_type</strong></li>
-                  <li>Dùng tr?ng ho?c d?ng thiđủ tđơn nhà cung cấp sẽ được b? qua về t?nh vào s? lỗi/b? qua</li>
-                  <li>Loại hóa đơn nhân các giá trị nhu "C? hóa đơn diđơn t?", "C? H??T", "electronic"; giá trị kh?c s? mặc định l? không hóa đơn diđơn t?</li>
+                  <li>Cột bắt buộc: <strong>Tên NCC</strong> hoặc <strong>Tên nhà cung cấp</strong> hoặc <strong>name</strong></li>
+                  <li>Cột tùy chọn: <strong>Số điện thoại/SĐT/phone</strong>, <strong>Mã số thuế/MST/tax_code</strong>, <strong>Email/email</strong>, <strong>Địa chỉ/address</strong>, <strong>Loại hóa đơn/invoice_type</strong></li>
+                  <li>Dòng trống hoặc dòng thiếu tên nhà cung cấp sẽ được bỏ qua và tính vào số lỗi/bỏ qua</li>
+                  <li>Loại hóa đơn nhận các giá trị như "Có hóa đơn điện tử", "Có HĐĐT", "electronic"; giá trị khác sẽ mặc định là không hóa đơn điện tử</li>
                 </ul>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Xuất Excel</h3>
-                <p>Nhân n?t <strong>"Xuất Excel"</strong> đã tải danh sách nhà cung cấp dang hiển thị theo bộ lọc tìm kiếm ra file .xlsx. File chđã các c?t: Tồn NCC, S? điện thoại, M? s? thuế, Email, ?đã ch?, Loại hóa đơn.</p>
+                <p>Nhấn nút <strong>"Xuất Excel"</strong> để tải danh sách nhà cung cấp đang hiển thị theo bộ lọc tìm kiếm ra file .xlsx. File chứa các cột: Tên NCC, Số điện thoại, Mã số thuế, Email, Địa chỉ, Loại hóa đơn.</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h3 className="font-bold text-blue-800 mb-2">?? M?o & Luu ?</h3>
+                <h3 className="font-bold text-blue-800 mb-2">💡 Mẹo & Lưu ý</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
-                  <li><strong>Loại hóa đơn:</strong> Chọn "C? hóa đơn diđơn t?" nđủ nhà cung cấp cung cấp hóa đơn GTGT, chọn "Không hóa đơn diđơn t?" cho hóa đơn thuếng</li>
-                  <li><strong>MST:</strong> Nhập đầy đủ 10-13 s? d? d? tra cđủ về xu?t hóa đơn</li>
+                  <li><strong>Loại hóa đơn:</strong> Chọn "Có hóa đơn điện tử" nếu nhà cung cấp cung cấp hóa đơn GTGT, chọn "Không hóa đơn điện tử" cho hóa đơn thường</li>
+                  <li><strong>MST:</strong> Nhập đầy đủ 10-13 số để dễ tra cứu và xuất hóa đơn</li>
                   <li>Thông tin nhà cung cấp s? hiển thị trong trang Sản phẩm khi chọn nhà cung cấp cho sản phẩm mới</li>
-                  <li>Giá nhập sản phẩm có thể kh?c nhau t?y theo nhà cung cấp - nđơn thêm nhiđủ nhà cung cấp đã có nhiđủ lđã chọn</li>
+                  <li>Giá nhập sản phẩm có thể khác nhau tùy theo nhà cung cấp - nên thêm nhiều nhà cung cấp để có nhiều lựa chọn</li>
                 </ul>
               </div>
             </div>

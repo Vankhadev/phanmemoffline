@@ -259,10 +259,10 @@ export default function Home({ user, store = {} }) {
       bgColor: 'bg-red-50',
     },
     {
-      title: 'âm kho',
+      title: 'Âm kho',
       value: stats.negativeStockCount.toLocaleString('vi-VN'),
       sub: stats.negativeStockCount > 0
-        ? `${stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} ${negativeStockNearLimitLabel || `gđơn ${negativeStockLimitLabel}`} ? th?p nh?t ${formatStockValue(stats.lowestNegativeStock)}`
+        ? `${stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} ${negativeStockNearLimitLabel || `gần ${negativeStockLimitLabel}`} • thấp nhất ${formatStockValue(stats.lowestNegativeStock)}`
         : `Không có sản phẩm âm kho; ngưỡng ${negativeStockLimitLabel}`,
       icon: AlertCircle,
       textColor: stats.negativeStockNearLimitCount > 0 ? 'text-orange-600' : 'text-red-600',
@@ -391,7 +391,7 @@ export default function Home({ user, store = {} }) {
         <div className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${stats.negativeStockNearLimitCount > 0 ? 'border-orange-200 bg-orange-50 text-orange-900' : 'border-red-200 bg-red-50 text-red-800'}`}>
           <div className="font-bold">⚠ Có {stats.negativeStockCount.toLocaleString('vi-VN')} sản phẩm đang âm kho</div>
           <div className="mt-1 text-xs">
-            {stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} sản phẩm {negativeStockNearLimitLabel || `gđơn ngu?ng ${negativeStockLimitLabel}`}; th?p nh?t {formatStockValue(stats.lowestNegativeStock)}.
+            {stats.negativeStockNearLimitCount.toLocaleString('vi-VN')} sản phẩm {negativeStockNearLimitLabel || `gần ngưỡng ${negativeStockLimitLabel}`}; thấp nhất {formatStockValue(stats.lowestNegativeStock)}.
           </div>
           {stats.negativeStockProducts.length > 0 ? (
             <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">

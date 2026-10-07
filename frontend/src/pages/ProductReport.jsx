@@ -150,7 +150,7 @@ function getPeriodRange({ period, selectedDate, selectedMonth, selectedYear, fro
   if (!hasDateValue(to)) return { valid: false, message: 'Vui lòng chọn ngày kết thúc.' };
   if (!normalizedFrom) return { valid: false, message: 'Ngày bắt đầu không hợp l?.' };
   if (!normalizedTo) return { valid: false, message: 'Ngày kết thúc không hợp l?.' };
-  if (normalizedFrom > normalizedTo) return { valid: false, message: 'Ngày bắt đầu không được lđơn hon ngày kết thúc.' };
+  if (normalizedFrom > normalizedTo) return { valid: false, message: 'Ngày bắt đầu không được lớn hơn ngày kết thúc.' };
   return { valid: true, from: normalizedFrom, to: normalizedTo };
 }
 
@@ -205,7 +205,7 @@ const PERIOD_OPTIONS = [
 
 const STATUS_OPTIONS = [
   { value: 'completed', label: 'Đơn hoàn thành' },
-  { value: 'exclude_cancelled', label: 'Tất cả tr? don h?y' },
+  { value: 'exclude_cancelled', label: 'Tất cả trừ đơn hủy' },
 ];
 
 function buildProductReportRequest(filters) {
@@ -237,7 +237,7 @@ function getPeriodDescription(filters, range) {
 
   if (filters.period === 'year') return `theo nam ${filters.selectedYear}`;
 
-  return `theo kho?ng ngày t? ${formatDateKey(range.from)} đến ${formatDateKey(range.to)}`;
+  return `theo khoảng ngày từ ${formatDateKey(range.from)} đến ${formatDateKey(range.to)}`;
 }
 
 function getStatusLabel(status) {
@@ -365,7 +365,7 @@ function DatePickerField({
               type="button"
               className="rounded-xl border border-gray-200 p-2 text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
               onClick={() => changeMonth(-1)}
-              aria-label="Tháng tru?c"
+              aria-label="Tháng trước"
             >
               <ChevronLeft size={16} />
             </button>
@@ -638,7 +638,7 @@ function DateRangeInlinePicker({
   const normalizedTo = normalizeDateInputValue(to);
   const hasInvalidRange = Boolean(normalizedFrom && normalizedTo && normalizedFrom > normalizedTo);
   const helperText = hasInvalidRange
-    ? 'Ngày bắt đầu không được lđơn hon ngày kết thúc.'
+    ? 'Ngày bắt đầu không được lớn hơn ngày kết thúc.'
     : label;
   const canApply = !disabled && !isApplying && Boolean(normalizedFrom && normalizedTo && !hasInvalidRange);
 
@@ -659,7 +659,7 @@ function DateRangeInlinePicker({
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
             <Calendar size={15} />
           </span>
-          Chọn kho?ng ngày báo cáo
+          Chọn khoảng ngày báo cáo
         </div>
         <button
           type="button"
@@ -668,7 +668,7 @@ function DateRangeInlinePicker({
           disabled={!canApply}
         >
           {isApplying ? <Loader size={16} className="animate-spin" /> : <Search size={16} />}
-          ?p d?ng
+          Áp dụng
         </button>
       </div>
 
@@ -763,7 +763,7 @@ export default function ProductReport() {
       if (err.name === 'AbortError') return false;
       if (reportRequestRef.current.id !== requestId) return false;
       setReport(null);
-      setError(err.message || 'Không l?p được báo cáo sản phẩm');
+      setError(err.message || 'Không lập được báo cáo sản phẩm');
       return false;
     } finally {
       if (reportRequestRef.current.id === requestId) setLoading(false);
@@ -926,14 +926,14 @@ export default function ProductReport() {
     });
 
     const summaryRows = [
-      { 'Ch? tiđủ': 'T? ngày', 'Gi? tr?': formatDateKey(range.from) },
+      { 'Chỉ tiêu': 'T? ngày', 'Giá trị': formatDateKey(range.from) },
       { 'Ch? tiđủ': '?đơn ngày', 'Gi? tr?': formatDateKey(range.to) },
       { 'Ch? tiđủ': 'Kiđủ thời gian', 'Gi? tr?': PERIOD_OPTIONS.find(option => option.value === (range.period || period))?.label || period },
       { 'Ch? tiđủ': 'Trạng thái don', 'Gi? tr?': STATUS_OPTIONS.find(option => option.value === (range.status || status))?.label || status },
       { 'Ch? tiđủ': 'S? đơn hàng', 'Gi? tr?': Number(summary.orderCount) || 0 },
       { 'Ch? tiđủ': 'Tổng s? sản phẩm bđơn', 'Gi? tr?': Number(summary.totalQuantity) || 0 },
       { 'Ch? tiđủ': 'Tổng doanh thu', 'Gi? tr?': Number(summary.totalRevenue) || 0 },
-      { 'Ch? tiđủ': 'Xuất l?c', 'Gi? tr?': new Date().toLocaleString('vi-VN') },
+      { 'Ch? tiđủ': 'Xuất lúc', 'Gi? tr?': new Date().toLocaleString('vi-VN') },
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -1002,7 +1002,7 @@ export default function ProductReport() {
                 </div>
               </div>
               <p className="text-sm text-blue-100/80 max-w-3xl">
-                Tháng kỳ s? đơn hàng, số lượng sản phẩm d? bđơn về doanh thu theo ngày/tháng/nam. Mặc định ch? t?nh don hođơn th?nh về loại tr? don h?y.
+                Thống kê số đơn hàng, số lượng sản phẩm đã bán và doanh thu theo ngày/tháng/năm. Mặc định chỉ tính đơn hoàn thành và loại trừ đơn hủy.
               </p>
             </div>
 
@@ -1072,7 +1072,7 @@ export default function ProductReport() {
             )}
 
             <div className="xl:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-gray-500">Kho?ng ngày</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Khoảng ngày</label>
               <DateRangeInlinePicker
                 from={rangePickerFrom}
                 to={rangePickerTo}
@@ -1159,7 +1159,7 @@ export default function ProductReport() {
               <DollarSign size={15} /> Tổng doanh thu
             </div>
             <div className="mt-1 text-2xl font-bold">{formatVND(summary.totalRevenue)}</div>
-            <div className="mt-1 text-xs opacity-80">T?nh theo tồng tiđơn hóa đơn</div>
+            <div className="mt-1 text-xs opacity-80">Tính theo tổng tiền hóa đơn</div>
           </div>
         </div>
       )}
@@ -1172,12 +1172,12 @@ export default function ProductReport() {
               <h2 className="font-bold text-gray-800">Bằng báo cáo sản phẩm</h2>
             </div>
             <p className="mt-1 text-sm text-gray-500">
-              Tổng hợp theo ngày về sản phẩm/SKU: số lượng bđơn, tiđơn h?ng, chi?t khđủ, thuế về th?nh tiđơn.
+              Tổng hợp theo ngày và sản phẩm/SKU: số lượng bán, tiền hàng, chiết khấu, thuế và thành tiền.
             </p>
           </div>
           {report && (
             <div className="text-sm font-medium text-gray-600">
-              {formatNumber(rows.length)} d?ng ? {formatVND(summary.netAmount)} th?nh tiđơn d?ng h?ng
+              {formatNumber(rows.length)} dòng • {formatVND(summary.netAmount)} thành tiền dòng hàng
             </div>
           )}
         </div>
@@ -1187,12 +1187,12 @@ export default function ProductReport() {
             <thead>
               <tr className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-3 text-left">Ngày</th>
-                <th className="px-4 py-3 text-left">Tồn phiđơn bđơn</th>
+                <th className="px-4 py-3 text-left">Tên phiên bản</th>
                 <th className="px-4 py-3 text-left">M? SKU</th>
-                <th className="px-4 py-3 text-right">Số lượng h?ng bđơn</th>
-                <th className="px-4 py-3 text-right">Tiền h?ng</th>
+                <th className="px-4 py-3 text-right">Số lượng hàng bán</th>
+                <th className="px-4 py-3 text-right">Tiền hàng</th>
                 <th className="px-4 py-3 text-right">Chiết khấu sản phẩm</th>
-                <th className="px-4 py-3 text-right">Chi?t khđủ phđơn b?</th>
+                <th className="px-4 py-3 text-right">Chiết khấu phân bổ</th>
                 <th className="px-4 py-3 text-right">Thuế</th>
                 <th className="px-4 py-3 text-right">Thành tiđơn</th>
               </tr>
@@ -1216,7 +1216,7 @@ export default function ProductReport() {
               ))}
               {rows.length > 0 && (
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                  <td className="px-4 py-3" colSpan={3}>Tổng c?ng</td>
+                  <td className="px-4 py-3" colSpan={3}>Tổng cộng</td>
                   <td className="px-4 py-3 text-right text-blue-700">{formatNumber(summary.totalQuantity)}</td>
                   <td className="px-4 py-3 text-right">{formatVND(summary.grossAmount)}</td>
                   <td className="px-4 py-3 text-right text-rose-600">{formatVND(summary.productDiscount)}</td>
@@ -1232,13 +1232,13 @@ export default function ProductReport() {
         {loading ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-400">
             <Loader size={32} className="animate-spin text-blue-400" />
-            <div className="font-medium text-gray-600">đang l?p báo cáo sản phẩm...</div>
+            <div className="font-medium text-gray-600">Đang lập báo cáo sản phẩm...</div>
           </div>
         ) : report && rows.length === 0 ? (
           <div className="py-16 text-center">
             <div className="mb-3 text-5xl opacity-20">?Y"?</div>
-            <div className="font-semibold text-gray-600">Không có sản phẩm bđơn ra trong kho?ng thời gian đã chọn</div>
-            <div className="mt-1 text-sm text-gray-400">Báo cáo ch? t?nh don phù hợp trạng thái đã chọn về luđơn loại tr? don h?y.</div>
+            <div className="font-semibold text-gray-600">Không có sản phẩm bán ra trong khoảng thời gian đã chọn</div>
+            <div className="mt-1 text-sm text-gray-400">Báo cáo chỉ tính đơn phù hợp trạng thái đã chọn và luôn loại trừ đơn hủy.</div>
           </div>
         ) : !report ? (
           <div className="py-16 text-center">
@@ -1344,7 +1344,7 @@ export default function ProductReport() {
                       <div>
                         <div>Khoảng ngày tùy chỉnh</div>
                         <p className="mt-1 text-xs font-medium text-blue-700/75">
-                          Chọn d?c l?p ngày bắt đầu về ngày kết thúc, hệ thống l?c bao gâm c? hai ngày đã chọn.
+                          Chọn độc lập ngày bắt đầu và ngày kết thúc, hệ thống lọc bao gồm cả hai ngày đã chọn.
                         </p>
                       </div>
                     </div>
@@ -1388,7 +1388,7 @@ export default function ProductReport() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-700">Kho?ng dữ liệu</label>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">Khoảng dữ liệu</label>
                   <div className={`flex min-h-[44px] items-center rounded-xl border px-3 py-2 text-sm font-medium ${createRange.valid ? 'border-blue-100 bg-blue-50 text-blue-700' : 'border-red-200 bg-red-50 text-red-600'}`}>
                     {createRange.valid
                       ? `T? ${formatDateKey(createRange.from)} đến ${formatDateKey(createRange.to)}`
@@ -1398,7 +1398,7 @@ export default function ProductReport() {
               </div>
 
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                Báo cáo s? gđi API hiện c?, luđơn loại tr? don b? h?y về cập nhật ngay bằng c?ng 3 ch? s?: s? đơn hàng, tổng sản phẩm d? bđơn, tổng doanh thu.
+                Báo cáo sẽ gọi API hiện có, luôn loại trừ đơn bị hủy và cập nhật ngay bảng tổng 3 chỉ số: số đơn hàng, tổng sản phẩm đã bán, tổng doanh thu.
               </div>
 
               {createError && (
@@ -1436,11 +1436,11 @@ export default function ProductReport() {
           onClose={() => setShowHelp(false)}
           title="Hướng dẫn báo cáo sản phẩm"
           content={[
-            'Bu?c 1: Chọn kỳ báo cáo theo ngày, tháng, nam ho?c kho?ng thời gian t?y ch?nh.',
-            'Bu?c 2: Chọn trạng thái đơn hàng d? quy?t d?nh dữ liệu n?o được t?nh vào báo cáo.',
-            'Bu?c 3: Xem tru?c kho?ng dữ liệu d? kiểm tra lỗi mãc thời gian trước khi tạo báo cáo.',
-            'Bu?c 4: Nhân Tạo báo cáo đã tải số lượng bđơn, doanh thu về danh sách sản phẩm theo k?.',
-            'Bu?c 5: Dùng n?t xu?t file đã tải Excel khi cđơn dài so?t ho?c gđi quản lý.',
+            'Bước 1: Chọn kỳ báo cáo theo ngày, tháng, năm hoặc khoảng thời gian tùy chỉnh.',
+            'Bước 2: Chọn trạng thái đơn hàng để quyết định dữ liệu nào được tính vào báo cáo.',
+            'Bước 3: Xem trước khoảng dữ liệu để kiểm tra mốc thời gian trước khi tạo báo cáo.',
+            'Bước 4: Nhấn Tạo báo cáo để tải số lượng bán, doanh thu và danh sách sản phẩm theo kỳ.',
+            'Bước 5: Dùng nút Xuất file để tải Excel khi cần đối soát hoặc gửi quản lý.',
           ]}
         />
       )}

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, SYNC_UPDATED_EVENT, apiJsonChecked, getApiErrorMessage, resolveApiUrl, resolveBackendAssetUrl } from '../utils/apiClient';
+import { ApiError, SYNC_UPDATED_EVENT, apiJsonChecked, accountingApi, getApiErrorMessage, resolveApiUrl, resolveBackendAssetUrl } from '../utils/apiClient';
 import {
-  Search, Plus, Trash2, ChevronDown, ChevronRight, Filter, UserPlus, Users, FileText, ReceiptText, X, Image as ImageIcon, Minus, Package
+  Search, Plus, Trash2, ChevronDown, ChevronRight, Filter, UserPlus, Users, FileText, ReceiptText, X, Image as ImageIcon, Minus, Package, AlertTriangle
 } from 'lucide-react';
 import { buildCategoriesById, filterProductTree, normalizeSearchText, getProductDisplayName, getProductVariants, getVariantIdentity } from '../utils/productSearch';
 import { attachClientOrderMetadata, generateClientOrderId } from '../utils/clientOrderId';
@@ -221,6 +221,32 @@ export default function CreateOrder({ user, store }) {
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [paidAmount, setPaidAmount] = useState(0);
   const [oldDebtAmount, setOldDebtAmount] = useState(0);
+  const [customerDebtAging, setCustomerDebtAging] = useState(null);
+  const [loadingCustomerDebt, setLoadingCustomerDebt] = useState(false);
+
+  const fetchCustomerDebtAging = async (customerId) => {
+    if (!customerId) {
+      setCustomerDebtAging(null);
+      return;
+    }
+    setLoadingCustomerDebt(true);
+    try {
+      const res = await accountingApi.customerDebtAging(customerId);
+      if (res && res.ok && res.customer) {
+        setCustomerDebtAging(res.customer);
+        if (res.customer.total_remaining_debt > 0) {
+          setOldDebtAmount(res.customer.total_remaining_debt);
+        }
+      } else {
+        setCustomerDebtAging(null);
+      }
+    } catch (_) {
+      setCustomerDebtAging(null);
+    } finally {
+      setLoadingCustomerDebt(false);
+    }
+  };
+
   const [note, setNote] = useState('');
   const [splitLine, setSplitLine] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -431,6 +457,7 @@ export default function CreateOrder({ user, store }) {
       const full = { ...newCustomer, id: data.id };
       setCustomers(prev => [...prev, full]);
       setSelectedCustomer(full);
+      fetchCustomerDebtAging(data.id);
       applyPriceTypeToCart(customerTypeToPriceType(full.customer_type));
       setCustomerSearch('');
       setShowCustomerForm(false);
@@ -2094,6 +2121,7 @@ export default function CreateOrder({ user, store }) {
                           const newPriceType = customerTypeToPriceType(c.customer_type);
                           // Cập nhật giá trong giỏ nếu có sản phẩm/combo
                           applyPriceTypeToCart(newPriceType);
+                          fetchCustomerDebtAging(c.id);
                         }}
                         className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b last:border-b-0">
                         <div className="font-medium">{c.name}</div>
@@ -2104,17 +2132,54 @@ export default function CreateOrder({ user, store }) {
                 )}
               </div>
               {selectedCustomer ? (
-                <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="font-semibold text-sm">{selectedCustomer.name}</div>
-                    <div className="text-xs text-gray-500">{selectedCustomer.phone} | {selectedCustomer.email || '—'}</div>
-                    <div className="text-xs text-blue-600 font-medium">{selectedCustomer.customer_type}</div>
+                <div className="mt-2 space-y-2">
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="font-semibold text-sm">{selectedCustomer.name}</div>
+                      <div className="text-xs text-gray-500">{selectedCustomer.phone} | {selectedCustomer.email || '—'}</div>
+                      <div className="text-xs text-blue-600 font-medium">{selectedCustomer.customer_type}</div>
+                    </div>
+                    <button onClick={() => {
+                      setSelectedCustomer(null);
+                      setCustomerDebtAging(null);
+                      setOldDebtAmount(0);
+                      // Khi bỏ chọn khách → quay về giá lẻ
+                      applyPriceTypeToCart('retail');
+                    }} className="text-red-400 hover:text-red-600 text-xs">✕ Bỏ chọn</button>
                   </div>
-                  <button onClick={() => {
-                    setSelectedCustomer(null);
-                    // Khi bỏ chọn khách → quay về giá lẻ
-                    applyPriceTypeToCart('retail');
-                  }} className="text-red-400 hover:text-red-600 text-xs">✕ Bỏ chọn</button>
+
+                  {/* Cảnh báo nợ quá hạn / Tuổi nợ */}
+                  {customerDebtAging && customerDebtAging.total_remaining_debt > 0 && (
+                    <div className={`p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
+                      customerDebtAging.overdue_invoices_count > 0 || customerDebtAging.max_debt_days > 15
+                        ? 'border-amber-300 bg-amber-50 text-amber-900'
+                        : 'border-blue-200 bg-blue-50/70 text-blue-900'
+                    }`}>
+                      <AlertTriangle size={15} className={`shrink-0 mt-0.5 ${
+                        customerDebtAging.overdue_invoices_count > 0 ? 'text-amber-600' : 'text-blue-500'
+                      }`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold flex items-center gap-1.5 flex-wrap">
+                          <span>Công nợ hiện tại: {Number(customerDebtAging.total_remaining_debt).toLocaleString('vi-VN')} đ</span>
+                          {customerDebtAging.max_debt_days > 0 && (
+                            <span className="rounded bg-amber-200/80 px-1.5 py-0.2 text-[11px] text-amber-900 font-semibold">
+                              Tuổi nợ: {customerDebtAging.max_debt_days} ngày
+                            </span>
+                          )}
+                          {customerDebtAging.overdue_invoices_count > 0 && (
+                            <span className="rounded bg-rose-200 px-1.5 py-0.2 text-[11px] font-bold text-rose-800">
+                              Quá hạn {customerDebtAging.overdue_invoices_count} đơn!
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] opacity-80 mt-0.5">
+                          {customerDebtAging.overdue_invoices_count > 0
+                            ? '⚠️ Khách đang có đơn nợ chậm thanh toán. Vui lòng nhắc khách thanh toán trước khi cho nợ thêm đơn mới!'
+                            : 'Đã tự động cộng dồn nợ cũ vào mục thanh toán bên phải.'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="sapo-muted-empty">
@@ -2358,7 +2423,7 @@ export default function CreateOrder({ user, store }) {
                                 <span className="pos-product-name-wrap">{getProductDisplayName(item)}</span>
                               )}
                             </div>
-                            <div className="text-[10px] text-gray-400">{isService ? 'Dịch vụ kh?c' : 'Sản phẩm đã chọn'}</div>
+                            <div className="text-[10px] text-gray-400">{isService ? 'Dịch vụ khác' : 'Sản phẩm đã chọn'}</div>
                             {isCombo && (
                               <div className="text-[10px] text-purple-500 mt-0.5 truncate max-w-xs">{getComboItemSummary(item)}</div>
                             )}

@@ -267,7 +267,7 @@ function rowMatchesStockTab(row, tabKey) {
 function getInventoryStatusLabel(row, settings) {
   const meta = getStockDisplayMeta(getRowStock(row), settings);
   if (meta.isNegative || meta.isBreached) return 'âm kho';
-  if (meta.isNearLimit) return meta.extraLabel || 'Gđơn ngu?ng âm';
+  if (meta.isNearLimit) return meta.extraLabel || 'Gần ngưỡng âm';
   return meta.label || '?';
 }
 
@@ -321,7 +321,7 @@ function StockBadge({ stock, settings }) {
       <span className={`inline-block font-bold px-2 py-0.5 rounded text-xs ${negativeBadgeClass}`}>{meta.display}</span>
       {(meta.isNegative || meta.isNearLimit || meta.isBreached) && (
         <span className={`inline-block font-extrabold tracking-wide px-2 py-0.5 rounded-full text-[10px] ${meta.isNearLimit && !meta.isBreached ? 'bg-orange-100 text-orange-800 border border-orange-200' : 'bg-red-600 text-white border border-red-700'}`}>
-          {meta.isBreached ? 'VU?T NGU?NG' : '?M KHO'}
+          {meta.isBreached ? 'VƯỢT NGƯỠNG' : 'ÂM KHO'}
         </span>
       )}
       {meta.isNearLimit && <span className="text-[10px] font-semibold text-orange-700">{meta.extraLabel || getNegativeStockNearLimitLabel(settings)}</span>}
@@ -697,11 +697,11 @@ export default function KhoHang() {
 
   const emptyMessage = isNegativeStockTab
     ? (negativeStockError && !isUsingNegativeStockFallback
-      ? 'Không thử lại danh sách âm kho t? API. Dữ liệu fallback hiện không kh? d?ng.'
+      ? 'Không thể tải lại danh sách âm kho từ API. Dữ liệu dự phòng hiện không khả dụng.'
       : 'Không có sản phẩm âm kho phù hợp vđi bộ lọc hiện tại.')
     : selectedCategory?.key !== 'all'
       ? `Danh mục ?${selectedCategory.label}? chưa c? sản phẩm phù hợp.`
-      : 'Không có sản phẩm n?o phù hợp.';
+      : 'Không có sản phẩm nào phù hợp.';
 
   const negativeStockFilterSignature = useMemo(() => [
     debouncedSearch,
@@ -797,7 +797,7 @@ export default function KhoHang() {
     fetchNegativeStock({ page: negativeStockPage, silent: !signatureChanged && negativeStockRows.length > 0 });
   }, [isNegativeStockTab, negativeStockFilterSignature, negativeStockPage, negativeStockRefreshTick]);
 
-  // -- Refresh khi c? don mới ho?c sync t? thi?t b? kh?c --
+  // -- Refresh khi có đơn mới hoặc sync từ thiết bị khác --
   useEffect(() => {
     const refreshNegativeStockIfNeeded = () => {
       if (isNegativeStockTabKey(activeStockTab)) setNegativeStockRefreshTick(tick => tick + 1);
@@ -1135,11 +1135,11 @@ export default function KhoHang() {
 
       {isUsingNegativeStockFallback && (
         <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-          Không gđi được API âm kho ({negativeStockError}). đang tâm hiển thị fallback t? danh sách sản phẩm đã tải d? tr?nh gián dođơn UI.
+          Không gọi được API âm kho ({negativeStockError}). Đang tạm hiển thị dự phòng từ danh sách sản phẩm đã tải để tránh gián đoạn UI.
         </div>
       )}
 
-      {/* ===== TABLE: TT | Chevron | Tồn | M?/SKU | Danh mục | Kho | Tồn kho | Giá nhập | Gi? bđơn | Trạng thái ===== */}
+      {/* ===== TABLE: TT | Chevron | Tên | Mã/SKU | Danh mục | Kho | Tồn kho | Giá nhập | Giá bán | Trạng thái ===== */}
       <div className="card overflow-hidden p-0">
         <div className="min-w-0">
           <div className="hidden items-center gap-2 px-3 py-2 bg-gray-100 text-xs text-gray-600 font-semibold border-b sticky top-0 z-10 md:flex">
@@ -1149,9 +1149,9 @@ export default function KhoHang() {
             <div className="hidden w-32 lg:block">M? / SKU</div>
             <div className="hidden w-36 sm:block">Danh mục</div>
             <div className="hidden w-32 lg:block">Kho hàng</div>
-            <div className="w-24 text-center font-bold">Số lượng tđơn</div>
+            <div className="w-24 text-center font-bold">Số lượng tồn</div>
             <div className="hidden w-28 text-right md:block">Giá nhập</div>
-            <div className="hidden w-28 text-right md:block">Gi? bđơn</div>
+            <div className="hidden w-28 text-right md:block">Giá bán</div>
             <div className="hidden w-28 text-center xl:block">Trạng thái</div>
           </div>
 
@@ -1161,7 +1161,7 @@ export default function KhoHang() {
             <div className="text-center text-gray-400 py-16 px-4">
               <div className="text-5xl mb-3 opacity-20">{isNegativeStockTab ? '??' : '??'}</div>
               <div className="font-medium text-gray-500">{emptyMessage}</div>
-              <div className="text-xs mt-2">{isNegativeStockTab ? 'Hủy th? xóa từ khóa, dài danh mục/kho ho?c ch? dữ liệu realtime cập nhật.' : 'Hủy chọn tab, danh mục, kho hàng kh?c ho?c xóa bắt từ khóa tìm kiếm.'}</div>
+              <div className="text-xs mt-2">{isNegativeStockTab ? 'Hãy thử xóa từ khóa, đổi danh mục/kho hoặc chờ dữ liệu realtime cập nhật.' : 'Hãy chọn tab, danh mục, kho hàng khác hoặc xóa bớt từ khóa tìm kiếm.'}</div>
             </div>
           )}
 
@@ -1188,7 +1188,7 @@ export default function KhoHang() {
                   {/* STT */}
                   <div className="w-8 text-center text-xs text-gray-400">{isNegativeStockTab ? ((negativeStockPage - 1) * NEGATIVE_STOCK_PAGE_SIZE) + idx + 1 : idx + 1}</div>
 
-                  {/* Chevron / Loại d?ng */}
+                  {/* Chevron / Loại dòng */}
                   <div className="w-8 text-center">
                     {isParentRow && hasVariants ? (
                       <button

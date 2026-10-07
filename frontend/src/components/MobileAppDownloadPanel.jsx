@@ -69,10 +69,11 @@ export default function MobileAppDownloadPanel() {
     loadNetworkInfo();
   }, [loadNetworkInfo]);
 
-  // URL thực tế để tạo QR Code
+  // URL thực tế để tạo QR Code (tự động khớp cổng Web/Backend đang chạy)
+  const activePort = networkInfo?.webPort || networkInfo?.frontendPort || networkInfo?.backendPort || 7000;
   const activeUrl = qrMode === 'app'
-    ? (customMobileUrl.trim() || networkInfo?.defaultMobileUrl || `http://${networkInfo?.primaryIp || '127.0.0.1'}:5174`)
-    : (customApkUrl.trim() || networkInfo?.apkDownloadUrl || `${networkInfo?.defaultMobileUrl || ''}/downloads/banhangpos-mobile.apk`);
+    ? (customMobileUrl.trim() || networkInfo?.defaultMobileUrl || `http://${networkInfo?.primaryIp || '127.0.0.1'}:${activePort}`)
+    : (customApkUrl.trim() || networkInfo?.apkDownloadUrl || `${networkInfo?.defaultMobileUrl || `http://${networkInfo?.primaryIp || '127.0.0.1'}:${activePort}`}/downloads/banhangpos-mobile.apk`);
 
   // Tạo QR Code khi activeUrl thay đổi
   useEffect(() => {
@@ -283,8 +284,8 @@ export default function MobileAppDownloadPanel() {
                 <span className="font-mono font-bold text-gray-800">{networkInfo?.primaryIp || '127.0.0.1'}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-gray-500">Cổng Frontend / Web POS:</span>
-                <span className="font-mono">{networkInfo?.frontendPort || 5174}</span>
+                <span className="text-gray-500">Cổng Web POS / Di Động:</span>
+                <span className="font-mono font-semibold text-purple-700">{networkInfo?.webPort || networkInfo?.frontendPort || 7000}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Cổng Backend API:</span>
@@ -398,10 +399,19 @@ export default function MobileAppDownloadPanel() {
                 <p className="text-gray-600">
                   Tải trực tiếp file <code>.apk</code> về điện thoại để cài đặt mà không cần Google Play Store.
                 </p>
+                {networkInfo?.apkInfo?.available ? (
+                  <div className="text-[11px] text-emerald-700 font-medium bg-emerald-50 rounded-lg p-2 border border-emerald-200">
+                    ✅ File APK sẵn sàng tải: <b>{networkInfo.apkInfo.fileName}</b> ({(networkInfo.apkInfo.size / (1024 * 1024)).toFixed(1)} MB)
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-amber-700 font-medium bg-amber-50 rounded-lg p-2 border border-amber-200">
+                    💡 Khuyên dùng <b>Cách 1 (PWA)</b> để mở và ghim ứng dụng ra màn hình chính ngay lập tức.
+                  </div>
+                )}
                 <div className="pt-1">
                   <a
-                    href={networkInfo?.apkDownloadUrl || '#'}
-                    download
+                    href={networkInfo?.apkDownloadUrl || activeUrl || '#'}
+                    download={networkInfo?.apkInfo?.fileName || 'banhangpos-mobile.apk'}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 transition"
                   >
                     <Download size={13} /> Tải file APK Android

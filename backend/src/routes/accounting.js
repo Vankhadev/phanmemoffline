@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const {
   getAll,
@@ -10,8 +10,10 @@ const {
   withAtomicDbWrite,
   isCompletedInvoiceStatus,
 } = require('../db/database');
-const { requirePermission, requireAnyPermission } = require('../middleware/auth');
+const { requirePermission, requireAnyPermission, requireAuth } = require('../middleware/auth');
 const accountingService = require('../services/accountingService');
+const debtAgingService = require('../services/debtAgingService');
+const geminiAccountingService = require('../services/geminiAccountingService');
 const { logActivity } = require('../services/accountingLogService');
 
 const DEFAULT_PAGE = 1;
@@ -246,6 +248,214 @@ router.get('/debts/suppliers', requirePermission('debts.read'), (req, res) => {
     res.json(publicTableList('supplier_debts', req, { dateFields: ['debt_date', 'created_at'], searchFields: ['source_code', 'status', 'note'] }));
   } catch (error) {
     res.status(500).json({ ok: false, error: 'Lỗi khi lấy công nợ nhà cung cấp', detail: error.message });
+  }
+});
+
+// ============================================================
+//  BÁO CÁO TUỔI NỢ (DEBT AGING) & CHẬM THANH TOÁN
+// ============================================================
+
+/**
+ * GET /api/accounting/debts/aging
+ * Phân tích tuổi nợ và khách hàng chậm thanh toán
+ * Hỗ trợ bộ lọc period_type, year, month, quarter, from, to, status, aging_bucket, search, customer_id, page, limit
+ */
+router.get('/debts/aging', requireAnyPermission(['debts.read', 'accounting.read', 'accounting.manage']), (req, res) => {
+  try {
+    const report = debtAgingService.getDebtAgingAnalysis(req.query);
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Lỗi khi phân tích tuổi nợ và chậm thanh toán', detail: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/debts/aging/summary
+ * Lấy nhanh các thẻ KPI tổng thể và phân bổ % tuổi nợ cho biểu đồ
+ */
+router.get('/debts/aging/summary', requireAnyPermission(['debts.read', 'accounting.read', 'accounting.manage']), (req, res) => {
+  try {
+    const report = debtAgingService.getDebtAgingAnalysis(req.query);
+    res.json({
+      ok: true,
+      as_of_date: report.as_of_date,
+      filter_period: report.filter_period,
+      kpi_summary: report.kpi_summary,
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Lỗi khi lấy tổng quan KPI công nợ', detail: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/debts/aging/ai-context
+ * Trích xuất dữ liệu cô đọng và văn bản phân tích sẵn sàng cấp cho Gemini AI
+ */
+router.get('/debts/aging/ai-context', requireAnyPermission(['debts.read', 'accounting.read', 'accounting.manage']), (req, res) => {
+  try {
+    const report = debtAgingService.getDebtAgingAnalysis(req.query);
+    res.json({
+      ok: true,
+      ai_summary_context: report.ai_summary_context,
+      kpi_summary: report.kpi_summary,
+      filter_period: report.filter_period,
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Lỗi khi tạo ngữ cảnh AI phân tích công nợ', detail: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/debts/aging/customer/:customerId
+ * Sổ chi tiết công nợ của 1 khách hàng cụ thể
+ */
+router.get('/debts/aging/customer/:customerId', requireAnyPermission(['debts.read', 'accounting.read', 'accounting.manage']), (req, res) => {
+  try {
+    const customerId = Number(req.params.customerId);
+    const report = debtAgingService.getSingleCustomerDebtReport(customerId, req.query);
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Lỗi khi lấy chi tiết công nợ khách hàng', detail: error.message });
+  }
+});
+
+/**
+ * GET /api/accounting/debts/aging/export-excel
+ * Xuất file Excel báo cáo tuổi nợ và khách chậm thanh toán chuẩn kế toán
+ */
+router.get('/debts/aging/export-excel', requireAnyPermission(['debts.read', 'accounting.read', 'accounting.manage']), (req, res) => {
+  try {
+    const { fromDate, toDate } = debtAgingService.resolveDateRange(req.query);
+    const fileName = `Bao_cao_cong_no_tuoi_no_${fromDate}_den_${toDate}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+    const stream = debtAgingService.exportDebtAgingExcel(req.query);
+    stream.pipe(res);
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Lỗi khi xuất file Excel báo cáo công nợ', detail: error.message });
+  }
+});
+
+/**
+ * POST /api/accounting/debts/aging/telegram-report
+ * Gửi báo cáo tuổi nợ và cảnh báo nợ xấu về nhóm Telegram
+ */
+router.post('/debts/aging/telegram-report', requireAnyPermission(['debts.read', 'accounting.read', 'accounting.manage']), async (req, res) => {
+  try {
+    const { sendDebtAgingTelegramReport } = require('../services/debtTelegramAlertService');
+    const queryOptions = { ...(req.query || {}), ...(req.body || {}) };
+    const requester = req.user?.name || req.user?.username || 'Admin';
+    const result = await sendDebtAgingTelegramReport(queryOptions, requester);
+    if (!result.ok) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Lỗi khi gửi báo cáo công nợ về Telegram', detail: error.message });
+  }
+});
+
+// ============================================================
+//  TÍCH HỢP GOOGLE GEMINI AI - KẾ TOÁN & CÔNG NỢ (GIAI ĐOẠN 2)
+// ============================================================
+
+/**
+ * GET /api/accounting/ai/config
+ * Lấy cấu hình Gemini API (key đã được che để an toàn)
+ */
+router.get('/ai/config', requireAnyPermission(['accounting.manage', 'accounting.read', 'system.settings.read', 'settings.read', 'debts.read', 'invoices.read', 'dashboard.read', 'users.read']), (req, res) => {
+  try {
+    const config = geminiAccountingService.getGeminiConfig();
+    res.json({ ok: true, config });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Lỗi khi lấy cấu hình Gemini AI', detail: error.message });
+  }
+});
+
+/**
+ * PUT /api/accounting/ai/config
+ * Cập nhật cấu hình Gemini API Key và model
+ */
+router.put('/ai/config', requireAnyPermission(['accounting.manage', 'system.settings.manage', 'settings.manage', 'settings.read', 'accounting.read']), (req, res) => {
+  try {
+    const { apiKey, model, temperature } = req.body || {};
+    const result = geminiAccountingService.saveGeminiConfig({ apiKey, model, temperature });
+    logActivity(req, 'gemini_ai.update_config', { type: 'system_setting', key: 'gemini_accounting_config' }, null, result.config, 'Cập nhật cấu hình Gemini AI Kế toán', { skipSave: true, accountId: req.accountId });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Lỗi khi lưu cấu hình Gemini AI', detail: error.message });
+  }
+});
+
+/**
+ * POST /api/accounting/ai/test-connection
+ * Kiểm tra kết nối tới Google Gemini API
+ */
+router.post('/ai/test-connection', requireAnyPermission(['accounting.manage', 'accounting.read', 'system.settings.manage', 'settings.manage', 'settings.read', 'debts.read']), async (req, res) => {
+  try {
+    const { apiKey, model } = req.body || {};
+    const result = await geminiAccountingService.testGeminiConnection(apiKey, model);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ ok: false, error: geminiAccountingService.formatGeminiErrorMessage(error) });
+  }
+});
+
+/**
+ * POST /api/accounting/ai/analyze
+ * Phân tích chuyên sâu sức khỏe tài chính & cảnh báo khách hàng nợ xấu
+ */
+router.post('/ai/analyze', requireAnyPermission(['debts.read', 'debts.manage', 'accounting.read', 'accounting.manage']), async (req, res) => {
+  try {
+    const queryOptions = { ...(req.query || {}), ...(req.body || {}) };
+    const analysis = await geminiAccountingService.analyzeDebtHealth(queryOptions);
+    res.json(analysis);
+  } catch (error) {
+    res.status(500).json({ ok: false, error: geminiAccountingService.formatGeminiErrorMessage(error) });
+  }
+});
+
+/**
+ * POST /api/accounting/ai/chat
+ * Trợ lý Kế toán AI hỏi đáp thông minh dựa trên số liệu thực tế
+ */
+router.post('/ai/chat', requireAnyPermission(['debts.read', 'debts.manage', 'accounting.read', 'accounting.manage', 'invoices.read', 'orders.read', 'reports.read', 'products.read', 'settings.read', 'users.read', 'dashboard.read']), async (req, res) => {
+  try {
+    const { question, queryOptions, history, model, image } = req.body || {};
+    if ((!question || !String(question).trim()) && !image) {
+      return res.status(400).json({ ok: false, error: 'Vui lòng nhập nội dung câu hỏi hoặc dán hình ảnh cần phân tích' });
+    }
+    const result = await geminiAccountingService.askDebtAssistant({ question, queryOptions, history, model, image });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ ok: false, error: geminiAccountingService.formatGeminiErrorMessage(error) });
+  }
+});
+
+/**
+ * POST /api/accounting/ai/reminder-message
+ * Tự động tạo tin nhắn nhắc nợ thông minh & khéo léo cho khách hàng
+ */
+router.post('/ai/reminder-message', requireAnyPermission(['debts.read', 'debts.manage', 'accounting.read', 'accounting.manage']), async (req, res) => {
+  try {
+    const { customer_id, customerId, invoice_id, invoiceId, style, customNotes, model } = req.body || {};
+    const targetCustomerId = customer_id || customerId;
+    const targetInvoiceId = invoice_id || invoiceId;
+    if (!targetCustomerId) {
+      return res.status(400).json({ ok: false, error: 'Vui lòng cung cấp customer_id cần nhắc nợ' });
+    }
+    const result = await geminiAccountingService.generateDebtReminderMessage({
+      customerId: targetCustomerId,
+      invoiceId: targetInvoiceId,
+      style: style || 'professional',
+      customNotes: customNotes || '',
+      model,
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ ok: false, error: geminiAccountingService.formatGeminiErrorMessage(error) });
   }
 });
 

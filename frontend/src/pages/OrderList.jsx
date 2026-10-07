@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiJson, apiJsonChecked, clearApiCache, resolveApiUrl, requestSyncCheck } from '../utils/apiClient';
 import { globalSyncEmitter } from '../utils/eventEmitter';
-import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud, Printer, FileDown } from 'lucide-react';
+import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud, Printer, FileDown, Calendar } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { getProductDisplayName, scoreProductMatch } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
 import OfflineSyncBadge from '../components/OfflineSyncBadge';
@@ -126,7 +127,20 @@ function formatDate(d) {
   return new Date(d).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-const CANCELLED_ORDER_STATUS_VALUES = new Set(['cancelled', 'canceled', 'da_huy', 'da huy', 'd? h?y', 'da~ hu?y', 'huy', 'h?y']);
+function getOrderDateYMD(inv) {
+  const raw = inv?.created_at || inv?.invoice_date || inv?.date;
+  if (!raw) return '';
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return '';
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  } catch {
+    return '';
+  }
+}
+
+const CANCELLED_ORDER_STATUS_VALUES = new Set(['cancelled', 'canceled', 'da_huy', 'da huy', 'da_huy', 'huy']);
 const CANCELLED_ORDER_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 function normalizeStatusValue(value) {
@@ -271,6 +285,8 @@ export default function OrderList() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterSource, setFilterSource] = useState('all');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
   const [loading, setLoading] = useState(true);
   const [serverOnline, setServerOnline] = useState(false);
   const [allOrders, setAllOrders] = useState([]);
@@ -532,8 +548,15 @@ export default function OrderList() {
     const matchSource = filterSource === 'all' ||
       sourceKey === filterSource ||
       (filterSource === 'sync' && sourceKey === 'sync');
-    return matchSearch && matchStatus && matchSource;
-  }), [displayOrders, filterSource, filterStatus, normalizedSearch]);
+
+    // Lọc theo khoảng ngày tạo đơn
+    const orderYmd = getOrderDateYMD(inv);
+    let matchDate = true;
+    if (filterDateFrom && orderYmd && orderYmd < filterDateFrom) matchDate = false;
+    if (filterDateTo && orderYmd && orderYmd > filterDateTo) matchDate = false;
+
+    return matchSearch && matchStatus && matchSource && matchDate;
+  }), [displayOrders, filterSource, filterStatus, filterDateFrom, filterDateTo, normalizedSearch]);
 
   useEffect(() => {
     const orderIds = new Set(displayOrders.map(inv => getOrderIdentityKey(inv)).filter(Boolean));
@@ -614,7 +637,7 @@ export default function OrderList() {
 
   const handleBulkDelete = async () => {
     if (selectedOrders.length === 0) return;
-    if (!confirm(`Hủy ${selectedOrders.length} đơn hàng đã chọn?\n\nH?ng sẽ được hođơn về kho.`)) return;
+    if (!confirm(`Hủy ${selectedOrders.length} đơn hàng đã chọn?\n\nHàng sẽ được hoàn về kho.`)) return;
 
     setIsBulkDeleting(true);
     try {
@@ -649,6 +672,65 @@ export default function OrderList() {
     } finally {
       setIsBulkDeleting(false);
     }
+  };
+
+  const handleExportExcel = () => {
+    if (!filtered || filtered.length === 0) {
+      alert('Không có đơn hàng nào trong danh sách đang lọc để xuất Excel.');
+      return;
+    }
+
+    const rows = filtered.map((inv, index) => {
+      const summary = getInvoicePaymentSummary(inv);
+      const st = getOrderStatusMeta(inv.status);
+      const sourceBadge = getOrderSourceBadge(inv);
+
+      return {
+        'STT': index + 1,
+        'Mã đơn hàng': displayOrderCode(inv.invoice_code),
+        'Mã gốc': inv.invoice_code || inv.client_order_id || '',
+        'Ngày tạo': formatDate(inv.created_at || inv.invoice_date || inv.date),
+        'Khách hàng': inv.customer_name || 'Khách lẻ',
+        'Số điện thoại': inv.customer_phone || inv.phone || '',
+        'Tiền hàng (VNĐ)': Number(inv.subtotal) || 0,
+        'Giảm giá (VNĐ)': Number(inv.discount_amount) || 0,
+        'Thuế VAT (VNĐ)': Number(inv.vat_amount) || 0,
+        'Phí ship (VNĐ)': Number(inv.delivery_fee) || 0,
+        'Tổng tiền (VNĐ)': Number(inv.total) || 0,
+        'Đã thanh toán (VNĐ)': summary.paid,
+        'Còn nợ (VNĐ)': summary.remaining,
+        'Hình thức thanh toán': formatPaymentMethod(inv.payment_method),
+        'Trạng thái': st?.text || inv.status || 'Chờ xác nhận',
+        'Nguồn đơn': sourceBadge?.text || 'Web',
+        'Ghi chú': inv.note || '',
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 6 },  // STT
+      { wch: 16 }, // Mã đơn
+      { wch: 20 }, // Mã gốc
+      { wch: 22 }, // Ngày tạo
+      { wch: 24 }, // Khách hàng
+      { wch: 15 }, // SĐT
+      { wch: 16 }, // Tiền hàng
+      { wch: 14 }, // Giảm giá
+      { wch: 14 }, // VAT
+      { wch: 14 }, // Phí ship
+      { wch: 18 }, // Tổng tiền
+      { wch: 18 }, // Đã thanh toán
+      { wch: 18 }, // Còn nợ
+      { wch: 20 }, // Hình thức
+      { wch: 16 }, // Trạng thái
+      { wch: 12 }, // Nguồn
+      { wch: 25 }, // Ghi chú
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Danh sách đơn hàng');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `danh_sach_don_hang_${timestamp}.xlsx`);
   };
 
   const getInvoicePrintTarget = (inv = {}) => inv.id || inv.invoice_code || inv.client_order_id || '';
@@ -1587,6 +1669,13 @@ export default function OrderList() {
             <div className="flex flex-wrap items-center gap-2 lg:justify-end">
               <OfflineSyncBadge />
               <button
+                onClick={handleExportExcel}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold flex items-center gap-2 shadow-sm transition"
+                title="Xuất toàn bộ đơn hàng đang lọc ra file Excel (.xlsx)"
+              >
+                <FileDown size={15} /> Xuất Excel
+              </button>
+              <button
                 onClick={() => setShowHelp(true)}
                 className="px-3.5 py-2 rounded-xl border border-white/15 bg-white/10 hover:bg-white/15 text-sm font-medium flex items-center gap-2"
               >
@@ -1646,7 +1735,7 @@ export default function OrderList() {
         <ExcelImportPanel
           dataType="invoices"
           title="Import hóa đơn/đơn hàng từ Excel/CSV"
-          description={`Preview/validate đơn hàng về chi tiết sản phẩm trước khi commit; cho phép bđơn khi tđơn 0/âm nđủ tđơn d? kiđơn không th?p hon ${negativeStockLimitLabel}, một don nhiđủ d?ng được gom theo mã don.`}
+          description={`Preview/validate đơn hàng và chi tiết sản phẩm trước khi commit; cho phép bán khi tồn 0/âm nếu tồn dự kiến không thấp hơn ${negativeStockLimitLabel}, một đơn nhiều dòng được gom theo mã đơn.`}
           negativeStockSettings={negativeStockSettings}
           onCommitted={async () => {
             setLoading(true);
@@ -1681,18 +1770,18 @@ export default function OrderList() {
         </div>
 
         <div className="p-4 border-t border-gray-100">
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_220px_220px_220px]">
-          <div className="relative" onClick={() => document.getElementById('order-search')?.focus()}>
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              id="order-search"
-              autoFocus
-              className="input-field w-full pl-9"
-              placeholder="Tìm theo mã đơn, DHXXXXX, tên khách hàng..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_180px_160px_270px]">
+            <div className="relative" onClick={() => document.getElementById('order-search')?.focus()}>
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                id="order-search"
+                autoFocus
+                className="input-field w-full pl-9"
+                placeholder="Tìm theo mã đơn, DHXXXXX, tên khách hàng..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
             <select className="input-field" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
               <option value="all">Tất cả trạng thái</option>
               <option value="pending">⏳ Chờ xác nhận</option>
@@ -1706,6 +1795,84 @@ export default function OrderList() {
                 <option key={option.key} value={option.key}>{option.label}{option.count !== undefined ? ` (${option.count})` : ''}</option>
               ))}
             </select>
+            {/* Bộ lọc ngày tháng (Từ ngày - Đến ngày) */}
+            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs shadow-2xs">
+              <Calendar size={14} className="text-gray-400 shrink-0" />
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={e => setFilterDateFrom(e.target.value)}
+                className="bg-transparent border-0 p-0 text-xs text-gray-700 focus:ring-0 w-28 cursor-pointer"
+                title="Lọc từ ngày"
+              />
+              <span className="text-gray-400">-</span>
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={e => setFilterDateTo(e.target.value)}
+                className="bg-transparent border-0 p-0 text-xs text-gray-700 focus:ring-0 w-28 cursor-pointer"
+                title="Lọc đến ngày"
+              />
+              {(filterDateFrom || filterDateTo) && (
+                <button
+                  type="button"
+                  onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }}
+                  className="text-gray-400 hover:text-rose-600 transition ml-auto"
+                  title="Xóa bộ lọc ngày"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Hàng chọn nhanh khoảng thời gian */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-gray-400 font-medium mr-1">Lọc nhanh:</span>
+            <button
+              type="button"
+              onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }}
+              className={`px-2.5 py-1 rounded-lg border transition ${!filterDateFrom && !filterDateTo ? 'bg-blue-50 border-blue-200 text-blue-700 font-semibold' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >
+              Tất cả
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const today = new Date().toISOString().slice(0, 10);
+                setFilterDateFrom(today);
+                setFilterDateTo(today);
+              }}
+              className={`px-2.5 py-1 rounded-lg border transition ${filterDateFrom === new Date().toISOString().slice(0, 10) && filterDateTo === new Date().toISOString().slice(0, 10) ? 'bg-blue-50 border-blue-200 text-blue-700 font-semibold' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >
+              Hôm nay
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date();
+                const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+                const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+                setFilterDateFrom(firstDay);
+                setFilterDateTo(lastDay);
+              }}
+              className="px-2.5 py-1 rounded-lg border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition"
+            >
+              Tháng này
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date();
+                const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+                const lastDay = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+                setFilterDateFrom(firstDay);
+                setFilterDateTo(lastDay);
+              }}
+              className="px-2.5 py-1 rounded-lg border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition"
+            >
+              Tháng trước
+            </button>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -2789,7 +2956,7 @@ export default function OrderList() {
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">🔍 Lọc & Tìm kiếm</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Tìm kiếm theo mã don (DH XXXXX) ho?c tđơn khách hàng</li>
+                  <li>Tìm kiếm theo mã đơn (DH XXXXX) hoặc tên khách hàng</li>
                   <li>Lọc theo trạng thái từ dropdown</li>
                   <li>Kết hợp cả hai để tìm nhanh</li>
                 </ul>

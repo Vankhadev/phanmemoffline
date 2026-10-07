@@ -215,6 +215,51 @@ app.use(PUBLIC_PRINT_TEMPLATE_UPLOAD_PATH, express.static(PRINT_TEMPLATE_UPLOAD_
   maxAge: '1d',
 }));
 
+// ============================================================
+//  DOWNLOADS STATIC ROUTE (APK & File cài đặt di động)
+// ============================================================
+const { getCandidateDownloadDirs, checkApkFileExists } = require('./routes/mobile');
+
+app.use('/downloads', (req, res, next) => {
+  const requestedFile = path.basename(req.path || '');
+  if (!requestedFile || requestedFile === '.' || requestedFile === '..') {
+    return next();
+  }
+
+  const dirs = getCandidateDownloadDirs();
+  for (const dir of dirs) {
+    const fullPath = path.join(dir, requestedFile);
+    if (fs.existsSync(fullPath)) {
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat.isFile() && stat.size > 0) {
+          const ext = path.extname(requestedFile).toLowerCase();
+          if (ext === '.apk') {
+            res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+            res.setHeader('Content-Disposition', 'attachment; filename="' + requestedFile + '"');
+            res.setHeader('Cache-Control', 'no-store');
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+          }
+          return res.sendFile(fullPath);
+        }
+      } catch (_) {}
+    }
+  }
+
+  if (requestedFile.toLowerCase().endsWith('.apk')) {
+    const apkInfo = checkApkFileExists();
+    if (apkInfo && apkInfo.available && apkInfo.fullPath && fs.existsSync(apkInfo.fullPath)) {
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      res.setHeader('Content-Disposition', 'attachment; filename="' + apkInfo.fileName + '"');
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.sendFile(apkInfo.fullPath);
+    }
+  }
+
+  next();
+});
+
 app.use((err, req, res, next) => {
   if (!err) return next();
   const isJsonBodyError = err.type === 'entity.too.large' || err.type === 'entity.parse.failed' || err instanceof SyntaxError;
@@ -372,6 +417,50 @@ app.get('/api/dashboard/summary', requireAuth, requirePermission('stats.read'), 
 app.get('/api/dashboard', requireAuth, requirePermission('stats.read'), (_req, res) => {
   res.json(buildDashboardPayload());
 });
+
+// ============================================================
+//  PHỤC VỤ WEB APP / PWA CHO THIẾT BỊ DI ĐỘNG CÙNG MẠNG WIFI
+// ============================================================
+function getFrontendDistDir() {
+  const candidates = [
+    process.env.KHA_FRONTEND_DIST,
+    process.resourcesPath ? path.join(process.resourcesPath, 'frontend', 'dist') : null,
+    process.resourcesPath ? path.join(process.resourcesPath, 'app.asar', 'frontend', 'dist') : null,
+    path.resolve(__dirname, '..', '..', 'frontend', 'dist'),
+    path.resolve(__dirname, '..', '..', '..', 'frontend', 'dist'),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, 'index.html'))) {
+        return candidate;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+const frontendDistDir = getFrontendDistDir();
+if (frontendDistDir) {
+  console.log(`[KHA SERVER] Đang phục vụ Web App/PWA từ thư mục: ${frontendDistDir}`);
+  app.use(express.static(frontendDistDir, {
+    index: false,
+    maxAge: '1h',
+  }));
+
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    if (req.path.startsWith('/api') || req.path.startsWith('/downloads') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    const indexPath = path.join(frontendDistDir, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.sendFile(indexPath);
+    }
+    next();
+  });
+}
 
 // ============================================================
 //  CRON: mỗi 5 phút - kiểm tra & đồng bộ daily_stats

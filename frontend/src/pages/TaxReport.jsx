@@ -2,14 +2,15 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   CalendarDays,
   FileCheck2,
-  HelpCircle,
   Loader2,
   RefreshCw,
   Search,
   ShieldCheck,
   TrendingDown,
   TrendingUp,
+  FileDown,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { accountingApi, getApiErrorMessage, SYNC_UPDATED_EVENT } from '../utils/apiClient';
 import HelpModal from '../components/HelpModal';
 
@@ -22,25 +23,26 @@ function toDateInput(date) {
 }
 
 function getDefaultRange() {
-  const today = new Date();
+  const now = new Date();
+  const month = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
   return {
     period: 'month',
-    month: `${today.getFullYear()}-${pad2(today.getMonth() + 1)}`,
-    from: toDateInput(new Date(today.getFullYear(), today.getMonth(), 1)),
-    to: toDateInput(today),
+    month,
+    from: toDateInput(new Date(now.getFullYear(), now.getMonth(), 1)),
+    to: toDateInput(now),
   };
 }
 
-function getMonthRange(month) {
-  const match = String(month || '').match(/^(\d{4})-(\d{2})$/);
-  if (!match) return null;
-  const year = Number(match[1]);
-  const monthIndex = Number(match[2]);
-  if (monthIndex < 1 || monthIndex > 12) return null;
-  const lastDay = new Date(year, monthIndex, 0).getDate();
+function getMonthRange(monthValue) {
+  if (!monthValue || !/^\d{4}-\d{2}$/.test(monthValue)) return null;
+  const [yearStr, monthStr] = monthValue.split('-');
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+  const firstDay = new Date(year, monthIndex, 1);
+  const lastDay = new Date(year, monthIndex + 1, 0);
   return {
-    from: `${year}-${pad2(monthIndex)}-01`,
-    to: `${year}-${pad2(monthIndex)}-${pad2(lastDay)}`,
+    from: toDateInput(firstDay),
+    to: toDateInput(lastDay),
   };
 }
 
@@ -49,8 +51,8 @@ function resolveRange(filters) {
     const range = getMonthRange(filters.month);
     return range ? { valid: true, ...range } : { valid: false, message: 'Vui lòng chọn tháng hợp lệ.' };
   }
-  if (!filters.from || !filters.to) return { valid: false, message: 'Vui lòng chọn d? ngày bắt đầu về ngày kết thúc.' };
-  if (filters.from > filters.to) return { valid: false, message: 'Ngày bắt đầu không được lđơn hon ngày kết thúc.' };
+  if (!filters.from || !filters.to) return { valid: false, message: 'Vui lòng chọn đủ ngày bắt đầu và ngày kết thúc.' };
+  if (filters.from > filters.to) return { valid: false, message: 'Ngày bắt đầu không được lớn hơn ngày kết thúc.' };
   return { valid: true, from: filters.from, to: filters.to };
 }
 
@@ -63,7 +65,7 @@ function formatVND(value) {
 }
 
 function formatDate(value) {
-  if (!value) return '?';
+  if (!value) return '-';
   const match = String(value).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (match) return `${match[3]}/${match[2]}/${match[1]}`;
   const date = new Date(value);
@@ -98,18 +100,18 @@ function SourceTable({ title, rows, type }) {
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="flex flex-col gap-1 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="font-bold text-gray-800">{title}</div>
-        <div className="text-xs text-gray-500">{rows.length.toLocaleString('vi-VN')} ch?ng t?</div>
+        <div className="text-xs text-gray-500">{rows.length.toLocaleString('vi-VN')} chứng từ</div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[800px] text-sm">
           <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
             <tr>
               <th className="px-4 py-3 text-left">Ngày</th>
-              <th className="px-4 py-3 text-left">S? hóa đơn / ch?ng t?</th>
+              <th className="px-4 py-3 text-left">Số hóa đơn / chứng từ</th>
               <th className="px-4 py-3 text-left">{isInput ? 'Nhà cung cấp' : 'Người mua'}</th>
-              <th className="px-4 py-3 text-right">Gi? tr? chđủ thuế</th>
-              <th className="px-4 py-3 text-right">Thu? GTGT</th>
-              <th className="px-4 py-3 text-right">Tổng tiđơn</th>
+              <th className="px-4 py-3 text-right">Giá trị chịu thuế</th>
+              <th className="px-4 py-3 text-right">Thuế GTGT</th>
+              <th className="px-4 py-3 text-right">Tổng tiền</th>
             </tr>
           </thead>
           <tbody>
@@ -117,10 +119,10 @@ function SourceTable({ title, rows, type }) {
               <tr key={`${type}-${row.source || ''}-${row.source_id || index}`} className="border-t border-gray-100 hover:bg-gray-50">
                 <td className="whitespace-nowrap px-4 py-3">{formatDate(row.invoice_date || row.date)}</td>
                 <td className="px-4 py-3">
-                  <div className="font-semibold text-gray-800">{row.invoice_no || row.source_code || '?'}</div>
+                  <div className="font-semibold text-gray-800">{row.invoice_no || row.source_code || '-'}</div>
                   <div className="mt-0.5 text-xs text-gray-400">{row.source || 'Dữ liệu kế toán'}</div>
                 </td>
-                <td className="px-4 py-3 text-gray-600">{isInput ? (row.supplier_name || '?') : (row.buyer_name || '?')}</td>
+                <td className="px-4 py-3 text-gray-600">{isInput ? (row.supplier_name || '-') : (row.buyer_name || '-')}</td>
                 <td className="px-4 py-3 text-right">{formatVND(row.taxable_amount)}</td>
                 <td className={`px-4 py-3 text-right font-bold ${isInput ? 'text-blue-700' : 'text-amber-700'}`}>{formatVND(row.vat_amount)}</td>
                 <td className="px-4 py-3 text-right font-semibold text-gray-800">{formatVND(row.total)}</td>
@@ -130,7 +132,7 @@ function SourceTable({ title, rows, type }) {
         </table>
       </div>
       {rows.length === 0 && (
-        <div className="px-4 py-12 text-center text-sm text-gray-400">Không có ch?ng t? trong kỳ đã chọn.</div>
+        <div className="px-4 py-12 text-center text-sm text-gray-400">Không có chứng từ trong kỳ đã chọn.</div>
       )}
     </div>
   );
@@ -168,7 +170,7 @@ export default function TaxReport() {
       return true;
     } catch (requestError) {
       setReport(null);
-      setError(extractError(requestError, 'Không thử lại báo cáo thuế GTGT.'));
+      setError(extractError(requestError, 'Không thể tải báo cáo thuế GTGT.'));
       return false;
     } finally {
       setLoading(false);
@@ -185,10 +187,10 @@ export default function TaxReport() {
     setNotice('');
     try {
       await accountingApi.generateTaxReport({ from: activeRange.from, to: activeRange.to });
-      setNotice(`?? luu snapshot báo cáo thuế t? ${formatDate(activeRange.from)} đến ${formatDate(activeRange.to)}.`);
+      setNotice(`Đã lưu snapshot báo cáo thuế từ ${formatDate(activeRange.from)} đến ${formatDate(activeRange.to)}.`);
       await loadReport(filters);
     } catch (requestError) {
-      setError(extractError(requestError, 'Không th? tạo snapshot báo cáo thuế GTGT.'));
+      setError(extractError(requestError, 'Không thể tạo snapshot báo cáo thuế GTGT.'));
     } finally {
       setGenerating(false);
     }
@@ -216,6 +218,99 @@ export default function TaxReport() {
     };
   }, [loadReport]);
 
+  const [currentYearNumber, currentMonthNumber] = useMemo(() => {
+    if (filters.month && /^\d{4}-\d{2}$/.test(filters.month)) {
+      const parts = filters.month.split('-');
+      return [parts[0], parts[1]];
+    }
+    const now = new Date();
+    return [String(now.getFullYear()), pad2(now.getMonth() + 1)];
+  }, [filters.month]);
+
+  const handleExportExcel = () => {
+    if (!report) {
+      alert('Vui lòng tải hoặc xem báo cáo thuế GTGT trước khi xuất Excel!');
+      return;
+    }
+
+    const workbook = XLSX.utils.book_new();
+
+    // Sheet 1: Tổng hợp thuế GTGT
+    const payableVal = Number(report.vat_payable) || 0;
+    const summaryData = [
+      { 'CHỈ TIÊU BÁO CÁO': 'Kỳ báo cáo', 'GIÁ TRỊ': `${formatDate(activeRange.from)} - ${formatDate(activeRange.to)}`, 'GHI CHÚ': '' },
+      { 'CHỈ TIÊU BÁO CÁO': 'Thời điểm lập báo cáo', 'GIÁ TRỊ': new Date().toLocaleString('vi-VN'), 'GHI CHÚ': '' },
+      { 'CHỈ TIÊU BÁO CÁO': '1. Tổng doanh thu bán ra chịu thuế', 'GIÁ TRỊ': Number(report.output_taxable_amount) || 0, 'GHI CHÚ': 'VNĐ' },
+      { 'CHỈ TIÊU BÁO CÁO': '2. Tổng thuế GTGT bán ra (Đầu ra)', 'GIÁ TRỊ': Number(report.total_output_vat) || 0, 'GHI CHÚ': 'VNĐ' },
+      { 'CHỈ TIÊU BÁO CÁO': '3. Tổng giá trị hàng hóa mua vào chịu thuế', 'GIÁ TRỊ': Number(report.input_taxable_amount) || 0, 'GHI CHÚ': 'VNĐ' },
+      { 'CHỈ TIÊU BÁO CÁO': '4. Tổng thuế GTGT mua vào (Đầu vào được khấu trừ)', 'GIÁ TRỊ': Number(report.total_input_vat) || 0, 'GHI CHÚ': 'VNĐ' },
+      { 'CHỈ TIÊU BÁO CÁO': payableVal >= 0 ? '5. Số thuế GTGT phải nộp kỳ này' : '5. Số thuế GTGT còn được khấu trừ chuyển kỳ sau', 'GIÁ TRỊ': Math.abs(payableVal), 'GHI CHÚ': payableVal >= 0 ? 'Nộp ngân sách' : 'Còn khấu trừ' },
+      { 'CHỈ TIÊU BÁO CÁO': 'Tổng số chứng từ bán ra (Đầu ra)', 'GIÁ TRỊ': outputRows.length, 'GHI CHÚ': 'Hóa đơn / đơn hàng' },
+      { 'CHỈ TIÊU BÁO CÁO': 'Tổng số chứng từ mua vào (Đầu vào)', 'GIÁ TRỊ': inputRows.length, 'GHI CHÚ': 'Hóa đơn / phiếu nhập' },
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    wsSummary['!cols'] = [{ wch: 48 }, { wch: 25 }, { wch: 25 }];
+    XLSX.utils.book_append_sheet(workbook, wsSummary, 'Tổng hợp thuế GTGT');
+
+    // Sheet 2: Bảng kê bán ra (Đầu ra)
+    const outData = outputRows.map((row, idx) => ({
+      'STT': idx + 1,
+      'Ngày chứng từ': formatDate(row.invoice_date || row.date),
+      'Số hóa đơn / Mã chứng từ': row.invoice_no || row.source_code || '',
+      'Khách hàng / Người mua': row.buyer_name || 'Khách lẻ',
+      'Nguồn phát sinh': row.source || 'Hóa đơn bán hàng',
+      'Doanh thu chịu thuế (VNĐ)': Number(row.taxable_amount) || 0,
+      'Thuế GTGT đầu ra (VNĐ)': Number(row.vat_amount) || 0,
+      'Tổng thanh toán (VNĐ)': Number(row.total) || 0,
+    }));
+    if (outData.length > 0) {
+      outData.push({
+        'STT': '',
+        'Ngày chứng từ': '',
+        'Số hóa đơn / Mã chứng từ': '',
+        'Khách hàng / Người mua': 'TỔNG CỘNG',
+        'Nguồn phát sinh': '',
+        'Doanh thu chịu thuế (VNĐ)': Number(report.output_taxable_amount) || 0,
+        'Thuế GTGT đầu ra (VNĐ)': Number(report.total_output_vat) || 0,
+        'Tổng thanh toán (VNĐ)': outData.reduce((s, r) => s + (Number(r['Tổng thanh toán (VNĐ)']) || 0), 0),
+      });
+    }
+    const wsOut = XLSX.utils.json_to_sheet(outData);
+    wsOut['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 24 }, { wch: 28 }, { wch: 20 }, { wch: 24 }, { wch: 22 }, { wch: 24 }];
+    XLSX.utils.book_append_sheet(workbook, wsOut, 'Bảng kê bán ra (Đầu ra)');
+
+    // Sheet 3: Bảng kê mua vào (Đầu vào)
+    const inData = inputRows.map((row, idx) => ({
+      'STT': idx + 1,
+      'Ngày chứng từ': formatDate(row.invoice_date || row.date),
+      'Số hóa đơn / Phiếu nhập': row.invoice_no || row.source_code || '',
+      'Nhà cung cấp': row.supplier_name || 'Nhà cung cấp',
+      'Nguồn phát sinh': row.source || 'Phiếu nhập kho / HĐ đầu vào',
+      'Giá trị chịu thuế (VNĐ)': Number(row.taxable_amount) || 0,
+      'Thuế GTGT đầu vào (VNĐ)': Number(row.vat_amount) || 0,
+      'Tổng thanh toán (VNĐ)': Number(row.total) || 0,
+    }));
+    if (inData.length > 0) {
+      inData.push({
+        'STT': '',
+        'Ngày chứng từ': '',
+        'Số hóa đơn / Phiếu nhập': '',
+        'Nhà cung cấp': 'TỔNG CỘNG',
+        'Nguồn phát sinh': '',
+        'Giá trị chịu thuế (VNĐ)': Number(report.input_taxable_amount) || 0,
+        'Thuế GTGT đầu vào (VNĐ)': Number(report.total_input_vat) || 0,
+        'Tổng thanh toán (VNĐ)': inData.reduce((s, r) => s + (Number(r['Tổng thanh toán (VNĐ)']) || 0), 0),
+      });
+    }
+    const wsIn = XLSX.utils.json_to_sheet(inData);
+    wsIn['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 24 }, { wch: 28 }, { wch: 24 }, { wch: 24 }, { wch: 22 }, { wch: 24 }];
+    XLSX.utils.book_append_sheet(workbook, wsIn, 'Bảng kê mua vào (Đầu vào)');
+
+    const fileDateStr = activeRange.valid ? `${activeRange.from}_den_${activeRange.to}` : 'KyBaoCao';
+    const fileName = `BaoCao_ThueGTGT_${fileDateStr}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
   return (
     <div className="min-w-0 space-y-4">
       <section className="overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-950 via-blue-950 to-slate-900 text-white shadow-lg">
@@ -223,15 +318,32 @@ export default function TaxReport() {
           <div className="flex items-start gap-3">
             <div className="rounded-2xl border border-white/10 bg-white/10 p-3"><ShieldCheck size={26} className="text-blue-200" /></div>
             <div>
-              <div className="text-xs font-bold uppercase tracking-[0.22em] text-blue-200/80">Kế toán ? Thu? GTGT</div>
+              <div className="text-xs font-bold uppercase tracking-[0.22em] text-blue-200/80">Kế toán • Thuế GTGT</div>
               <h1 className="mt-1 text-2xl font-bold">Báo cáo thuế GTGT</h1>
-              <p className="mt-1 max-w-3xl text-sm text-blue-100/75">Tổng hợp thuế đầu vào, thuế đầu ra về s? thuế phđi n?p t? hóa đơn, phiếu nhập về dữ liệu kế toán trong k?.</p>
+              <p className="mt-1 max-w-3xl text-sm text-blue-100/75">Tổng hợp thuế đầu vào, thuế đầu ra và số thuế phải nộp từ hóa đơn, phiếu nhập và dữ liệu kế toán trong kỳ.</p>
             </div>
           </div>
-          <button type="button" onClick={generateSnapshot} disabled={generating || loading || !activeRange.valid} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60">
-            {generating ? <Loader2 size={17} className="animate-spin" /> : <FileCheck2 size={17} />}
-            {generating ? 'đang luu...' : 'Luu snapshot kỳ n?y'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={loading || !report}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 transition-colors shadow-sm"
+              title="Xuất file Excel (.xlsx) gồm bảng kê bán ra, mua vào và tổng hợp thuế"
+            >
+              <FileDown size={17} />
+              Xuất Excel
+            </button>
+            <button
+              type="button"
+              onClick={generateSnapshot}
+              disabled={generating || loading || !activeRange.valid}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 transition-colors shadow-sm"
+            >
+              {generating ? <Loader2 size={17} className="animate-spin" /> : <FileCheck2 size={17} />}
+              {generating ? 'Đang lưu...' : 'Lưu snapshot kỳ này'}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -248,7 +360,7 @@ export default function TaxReport() {
                   <li>Chọn kỳ báo cáo theo tháng hoặc khoảng ngày.</li>
                   <li>Nhấn Xem báo cáo để nạp dữ liệu.</li>
                   <li>Dùng Lưu snapshot kỳ này để lưu trạng thái báo cáo.</li>
-                  <li>Kiểm tra bảng đầu vào và đầu ra trước khi kết xuất.</li>
+                  <li>Nhấn nút <b>Xuất Excel</b> để tải file bảng kê và tổng hợp thuế GTGT.</li>
                 </ul>
               </div>
               <div>
@@ -268,22 +380,67 @@ export default function TaxReport() {
             <label className="mb-1 block text-xs font-semibold text-gray-500">Loại kỳ</label>
             <select className="input-field" value={filters.period} onChange={event => setFilters(current => ({ ...current, period: event.target.value }))}>
               <option value="month">Theo tháng</option>
-              <option value="custom">Kho?ng ngày</option>
+              <option value="custom">Khoảng ngày</option>
             </select>
           </div>
           {filters.period === 'month' ? (
-            <div className="md:col-span-2">
-              <label className="mb-1 block text-xs font-semibold text-gray-500">Tháng báo cáo</label>
-              <input type="month" className="input-field" value={filters.month} onChange={event => setFilters(current => ({ ...current, month: event.target.value }))} />
-            </div>
+            <>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-500">Tháng báo cáo</label>
+                <select
+                  className="input-field font-medium text-gray-800"
+                  value={currentMonthNumber}
+                  onChange={event => {
+                    const nextM = event.target.value;
+                    const nextMonthVal = `${currentYearNumber}-${nextM}`;
+                    const nextFilters = { ...filters, month: nextMonthVal };
+                    setFilters(nextFilters);
+                    loadReport(nextFilters);
+                  }}
+                >
+                  <option value="01">Tháng 1</option>
+                  <option value="02">Tháng 2</option>
+                  <option value="03">Tháng 3</option>
+                  <option value="04">Tháng 4</option>
+                  <option value="05">Tháng 5</option>
+                  <option value="06">Tháng 6</option>
+                  <option value="07">Tháng 7</option>
+                  <option value="08">Tháng 8</option>
+                  <option value="09">Tháng 9</option>
+                  <option value="10">Tháng 10</option>
+                  <option value="11">Tháng 11</option>
+                  <option value="12">Tháng 12</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-gray-500">Năm</label>
+                <select
+                  className="input-field font-medium text-gray-800"
+                  value={currentYearNumber}
+                  onChange={event => {
+                    const nextY = event.target.value;
+                    const nextMonthVal = `${nextY}-${currentMonthNumber}`;
+                    const nextFilters = { ...filters, month: nextMonthVal };
+                    setFilters(nextFilters);
+                    loadReport(nextFilters);
+                  }}
+                >
+                  {[2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
+                    <option key={y} value={String(y)}>
+                      Năm {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
           ) : (
             <>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-500">T? ngày</label>
+                <label className="mb-1 block text-xs font-semibold text-gray-500">Từ ngày</label>
                 <input type="date" className="input-field" value={filters.from} max={filters.to || undefined} onChange={event => setFilters(current => ({ ...current, from: event.target.value }))} />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-500">?đơn ngày</label>
+                <label className="mb-1 block text-xs font-semibold text-gray-500">Đến ngày</label>
                 <input type="date" className="input-field" value={filters.to} min={filters.from || undefined} onChange={event => setFilters(current => ({ ...current, to: event.target.value }))} />
               </div>
             </>
@@ -292,7 +449,17 @@ export default function TaxReport() {
             <button type="button" onClick={() => loadReport()} disabled={loading || !activeRange.valid} className="btn-primary min-h-11 flex-1 xl:flex-none">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Xem báo cáo
             </button>
-            <button type="button" onClick={() => loadReport()} disabled={loading} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50" title="Tải lỗi">
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={loading || !report}
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 text-sm font-semibold transition-colors shadow-sm"
+              title="Xuất file Excel"
+            >
+              <FileDown size={16} />
+              <span className="hidden sm:inline">Xuất Excel</span>
+            </button>
+            <button type="button" onClick={() => loadReport()} disabled={loading} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50" title="Tải lại">
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             </button>
           </div>
@@ -308,21 +475,21 @@ export default function TaxReport() {
       {loading && !report ? (
         <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white text-gray-500">
           <Loader2 size={32} className="animate-spin text-blue-500" />
-          <span className="font-semibold">đang l?p báo cáo thuế GTGT...</span>
+          <span className="font-semibold">Đang lập báo cáo thuế GTGT...</span>
         </div>
       ) : report ? (
         <>
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard icon={TrendingDown} label="Thu? GTGT đầu vào" value={report.total_input_vat} description={`${inputRows.length} ch?ng t? đầu vào`} tone="blue" />
-            <SummaryCard icon={TrendingUp} label="Thu? GTGT đầu ra" value={report.total_output_vat} description={`${outputRows.length} ch?ng t? đầu ra`} tone="amber" />
-            <SummaryCard icon={ShieldCheck} label={payable >= 0 ? 'Thu? phđi n?p' : 'Thu? cđơn được khđủ tr?'} value={Math.abs(payable)} description="Thu? đầu ra tr? thuế đầu vào" tone={payable >= 0 ? 'red' : 'emerald'} />
-            <SummaryCard icon={FileCheck2} label="Doanh thu chđủ thuế" value={report.output_taxable_amount} description={`?đủ vào chđủ thuế: ${formatVND(report.input_taxable_amount)}`} tone="emerald" />
+            <SummaryCard icon={TrendingDown} label="Thuế GTGT đầu vào" value={report.total_input_vat} description={`${inputRows.length} chứng từ đầu vào`} tone="blue" />
+            <SummaryCard icon={TrendingUp} label="Thuế GTGT đầu ra" value={report.total_output_vat} description={`${outputRows.length} chứng từ đầu ra`} tone="amber" />
+            <SummaryCard icon={ShieldCheck} label={payable >= 0 ? 'Thuế phải nộp' : 'Thuế còn được khấu trừ'} value={Math.abs(payable)} description="Thuế đầu ra trừ thuế đầu vào" tone={payable >= 0 ? 'red' : 'emerald'} />
+            <SummaryCard icon={FileCheck2} label="Doanh thu chịu thuế" value={report.output_taxable_amount} description={`Đầu vào chịu thuế: ${formatVND(report.input_taxable_amount)}`} tone="emerald" />
           </section>
           <SourceTable title="Chi tiết thuế GTGT đầu ra" rows={outputRows} type="output" />
           <SourceTable title="Chi tiết thuế GTGT đầu vào" rows={inputRows} type="input" />
         </>
       ) : !error ? (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-16 text-center text-gray-400">Chọn kỳ về nhân ?Xem báo cáo? đã tải dữ liệu.</div>
+        <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-16 text-center text-gray-400">Chọn kỳ và nhấn "Xem báo cáo" để tải dữ liệu.</div>
       ) : null}
     </div>
   );

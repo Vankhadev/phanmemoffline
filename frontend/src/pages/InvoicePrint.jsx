@@ -10,8 +10,8 @@ import { getApiErrorMessage, invoicesApi, PRINT_TEMPLATE_UPDATED_EVENT, printTem
 const PRINT_SETTINGS_KEY = 'kha.invoicePrint.settings';
 const PAPER_OPTIONS = ['K80', 'K57', 'A5', 'A4'];
 const PRINTER_MODE_OPTIONS = [
-  { value: 'office', label: 'M?y in A4/A5' },
-  { value: 'thermal', label: 'M?y in nhi?t' },
+  { value: 'office', label: 'Máy in A4/A5' },
+  { value: 'thermal', label: 'Máy in nhiệt' },
 ];
 const SCALE_PRESETS = [0.8, 0.9, 0.95, 1];
 const MIN_SCALE = 0.5;
@@ -78,7 +78,7 @@ function writePrintSettings(settings) {
   try {
     window.localStorage.setItem(PRINT_SETTINGS_KEY, JSON.stringify(settings));
   } catch (_error) {
-    // B? qua nđủ tr?nh duy?t khđã localStorage.
+    // Bỏ qua nếu trình duyệt khóa localStorage.
   }
 }
 
@@ -240,7 +240,7 @@ export default function InvoicePrint() {
 
   const loadInvoice = useCallback(async () => {
     if (!idOrCode) {
-      setError('Thiđủ mã ho?c ID hóa đơn.');
+      setError('Thiếu mã hoặc ID hóa đơn.');
       setLoading(false);
       return;
     }
@@ -257,7 +257,7 @@ export default function InvoicePrint() {
         payload = await invoicesApi.printData(idOrCode, {});
         setToast({
           tone: 'warning',
-          message: `${getErrorMessage(printDataErr, 'Template được chọn không kh? d?ng.')} ?? tđi hóa đơn bằng mđủ mặc định d? tiếp tục preview/in.`,
+          message: `${getErrorMessage(printDataErr, 'Template được chọn không khả dụng.')} Đã tải hóa đơn bằng mẫu mặc định để tiếp tục preview/in.`,
         });
       }
 
@@ -270,7 +270,7 @@ export default function InvoicePrint() {
       let nextPayload = payload;
       const templateError = payload.metadata?.print_template_error;
       if (templateError?.message) {
-        setToast({ tone: 'warning', message: getApiErrorMessage(templateError, 'API mẫu in trở lại; frontend dang d?ng mđủ an tođơn d? preview/in.') });
+        setToast({ tone: 'warning', message: getApiErrorMessage(templateError, 'API mẫu in phản hồi; frontend đang dùng mẫu an toàn để preview/in.') });
       }
 
       if (!getBackendTemplate(payload)) {
@@ -313,10 +313,10 @@ export default function InvoicePrint() {
                 };
               }
             } catch (_defaultTemplateErr) {
-              // Gi? fallback frontend bđơn duđi nđủ API mđủ mặc định cung lỗi.
+              // Giữ fallback frontend bên dưới nếu API mẫu mặc định cũng lỗi.
             }
           }
-          setToast({ tone: 'warning', message: getErrorMessage(templateErr, 'Chua tải được mẫu in t? API /api/print-templates; dang d?ng mđủ mặc định frontend d? preview/in.') });
+          setToast({ tone: 'warning', message: getErrorMessage(templateErr, 'Chưa tải được mẫu in từ API /api/print-templates; đang dùng mẫu mặc định frontend để preview/in.') });
         }
       }
 
@@ -393,7 +393,7 @@ export default function InvoicePrint() {
         openPrintDialog();
       }
     } catch (err) {
-      setPrintError(err?.message || 'Không th? mã h?p thođi in của h? diđủ h?nh.');
+      setPrintError(err?.message || 'Không thể mở hộp thoại in của hệ điều hành.');
     }
   }, [data, documentMode, invoiceCode]);
 
@@ -503,7 +503,7 @@ export default function InvoicePrint() {
       try {
         pdf.setLanguage?.('vi-VN');
       } catch (_languageError) {
-        // jsPDF cu có thể không hỗ trợ setLanguage; nđi dung ti?ng Vi?t vđơn được raster đơn d?nh t? DOM.
+        // jsPDF cũ có thể không hỗ trợ setLanguage; nội dung tiếng Việt vẫn được raster ổn định từ DOM.
       }
       const imgData = canvas.toDataURL('image/png', 1);
       pdf.addImage(imgData, 'PNG', 0, 0, page.width, page.height, undefined, 'FAST');
@@ -525,7 +525,7 @@ export default function InvoicePrint() {
           <div>
             <h1>In {documentLabel.toLowerCase()} {page.paperSize}</h1>
             <p>
-              {invoiceCode ? `M?/ID: ${invoiceCode}` : 'Preview gđi dữ liệu th?t t? API backend'}
+              {invoiceCode ? `Mã/ID: ${invoiceCode}` : 'Preview gọi dữ liệu thật từ API backend'}
               {hasBackendTemplate ? ` ? Mđủ: ${activeTemplate.template_name || activeTemplate.name || activeTemplate.id}` : ` ? Mặc định ${page.paperSize}`}
             </p>
           </div>
@@ -545,7 +545,7 @@ export default function InvoicePrint() {
             </select>
           </label>
           <label className="invoice-control-group">
-            <span>Scale nđi dung</span>
+            <span>Scale nội dung</span>
             <select
               value={SCALE_PRESETS.includes(settings.scale) ? String(settings.scale) : 'custom'}
               onChange={event => {
@@ -555,7 +555,7 @@ export default function InvoicePrint() {
               {SCALE_PRESETS.map(scale => (
                 <option key={scale} value={scale}>{Math.round(scale * 100)}%</option>
               ))}
-              <option value="custom">T?y ch?nh</option>
+              <option value="custom">Tùy chỉnh</option>
             </select>
           </label>
           <label className="invoice-control-group invoice-control-number">
@@ -572,14 +572,14 @@ export default function InvoicePrint() {
           <button type="button" onClick={() => adjustScale(-SCALE_STEP)} className="invoice-toolbar-btn invoice-toolbar-btn-light" title="Thu nh?">
             <ZoomOut size={16} /> Thu nh?
           </button>
-          <button type="button" onClick={() => adjustScale(SCALE_STEP)} className="invoice-toolbar-btn invoice-toolbar-btn-light" title="Ph?ng to">
-            <ZoomIn size={16} /> Ph?ng to
+          <button type="button" onClick={() => adjustScale(SCALE_STEP)} className="invoice-toolbar-btn invoice-toolbar-btn-light" title="Phóng to">
+            <ZoomIn size={16} /> Phóng to
           </button>
           <button type="button" onClick={resetScale} className="invoice-toolbar-btn invoice-toolbar-btn-light">
             Reset 95%
           </button>
           <button type="button" onClick={toggleOrientation} className="invoice-toolbar-btn invoice-toolbar-btn-light" disabled={page.paperSize.startsWith('K')}>
-            <RotateCw size={16} /> {page.paperSize.startsWith('K') ? 'Cuđơn d?c' : (page.orientation === 'landscape' ? 'Kh? ngang' : 'Kh? d?c')}
+            <RotateCw size={16} /> {page.paperSize.startsWith('K') ? 'Cuộn dọc' : (page.orientation === 'landscape' ? 'Khổ ngang' : 'Khổ dọc')}
           </button>
           <button type="button" onClick={loadInvoice} disabled={loading} className="invoice-toolbar-btn invoice-toolbar-btn-light">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Tải lỗi
@@ -608,7 +608,7 @@ export default function InvoicePrint() {
           <Loader size={28} className="animate-spin text-blue-500" />
           <div>
             <b>đang tđi dữ liệu hóa đơn...</b>
-            <p>Preview ch? hiển thị sau khi API backend tr? dữ liệu th?t.</p>
+            <p>Preview chỉ hiển thị sau khi API backend trả dữ liệu thật.</p>
           </div>
         </div>
       ) : error ? (

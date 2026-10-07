@@ -1,12 +1,75 @@
+## [3.1.19] - 2026-10-07
+
+### Added
+- **Xuất Excel Báo cáo thuế GTGT & Chuẩn hóa Chọn Tháng tiếng Việt:**
+  - Bổ sung nút **Xuất Excel** chuyên nghiệp tại màn hình Báo cáo thuế GTGT ([`TaxReport.jsx`](file:///g:/phanmenoffline/frontend/src/pages/TaxReport.jsx)). File Excel `.xlsx` kết xuất gồm 3 sheet chuyên sâu theo chuẩn kế toán:
+    1. *Tổng hợp thuế GTGT*: Tóm tắt doanh thu chịu thuế, thuế đầu ra, giá trị mua vào, thuế đầu vào được khấu trừ, số thuế GTGT phải nộp kỳ này hoặc còn được khấu trừ.
+    2. *Bảng kê bán ra (Đầu ra)*: Chi tiết toàn bộ chứng từ hóa đơn bán hàng trong kỳ với ngày tháng, khách hàng, doanh thu chịu thuế, thuế GTGT đầu ra, tổng tiền thanh toán và dòng tổng cộng.
+    3. *Bảng kê mua vào (Đầu vào)*: Chi tiết toàn bộ phiếu nhập kho / hóa đơn đầu vào với nhà cung cấp, giá trị chịu thuế, thuế GTGT đầu vào, tổng thanh toán và dòng tổng cộng.
+  - Chuẩn hóa bộ chọn thời gian theo tháng: Chuyển đổi từ ô input nguyên bản của trình duyệt sang 2 dropdown thuần Việt: **Tháng 1 đến Tháng 12** và **Năm**, giải quyết triệt để vấn đề hiển thị tiếng Anh (ví dụ "August 2026") trên các máy khách hàng.
+  - Tự động đồng bộ và nạp báo cáo ngay khi người dùng chọn tháng hoặc năm.
+
+- **Tích hợp sẵn bản quyền Google Gemini AI & Thị giác Đa phương thức (Multimodal Vision):**
+  - Nhúng sẵn Gemini API Key bản quyền chính thức vào hệ thống, khách hàng cập nhật phiên bản mới là sử dụng được ngay toàn bộ tính năng Trợ lý AI Kế toán, Phân tích dòng tiền và Hỏi đáp mà không cần phải tự tạo hay nhập key.
+  - Bổ sung tính năng nhận diện hình ảnh cho Trợ lý AI (`FloatingAiChatWidget.jsx`): Chủ cửa hàng có thể dán ảnh chụp màn hình (`Ctrl+V`), kéo thả ảnh đơn hàng / hóa đơn / chứng từ trực tiếp vào khung chat để AI đọc hiểu, phân tích và hướng dẫn thao tác chi tiết.
+  - Bổ sung tài liệu tri thức về toàn bộ menu và phân hệ của phần mềm vào prompt hệ thống của Gemini AI, giúp bot hướng dẫn chủ cửa hàng từng bước chính xác và thân thiện.
+
+- **Nâng cấp Danh sách Đơn hàng (`OrderList.jsx`):**
+  - Bổ sung bộ lọc thời gian nâng cao (Hôm nay, Hôm qua, 7 ngày qua, Tháng này, Khoảng ngày tùy chọn).
+  - Bổ sung tính năng **Xuất Excel** đầy đủ 17 cột thông tin chi tiết cho danh sách đơn hàng.
+
 ## [3.1.18] - 2026-09-26
 
 ### Added
+- **Tự động hóa Báo cáo Định kỳ & Cảnh báo Nợ xấu Thông minh (Giai đoạn 5):**
+  - Xây dựng dịch vụ [`debtTelegramAlertService.js`](file:///g:/phanmenoffline/backend/src/services/debtTelegramAlertService.js) tự động tổng hợp báo cáo công nợ & tuổi nợ chuẩn doanh nghiệp kèm lời khuyên AI thu hồi dòng tiền và gửi về nhóm Telegram của cửa hàng.
+  - Tích hợp bộ lắng nghe lệnh chat Telegram: Nhận diện lệnh `/congno`, `/tuoino`, `/no` từ nhóm Telegram để tự động gửi báo cáo tuổi nợ và danh sách khách hàng nợ xấu tức thì.
+  - Cung cấp API `POST /api/accounting/debts/aging/telegram-report` kèm nút bấm "Gửi Telegram" trực tiếp trên giao diện Báo cáo Tuổi nợ.
+  - Cảnh báo nợ quá hạn chủ động trong quy trình Bán hàng ([`CreateOrder.jsx`](file:///g:/phanmenoffline/frontend/src/pages/CreateOrder.jsx)): Tự động kiểm tra tuổi nợ khi chọn khách hàng, hiển thị cảnh báo đỏ/vàng nếu khách có đơn nợ chậm trả, và tự động cộng dồn nợ cũ vào mục thanh toán.
+  - Thêm script kiểm thử `test:gemini-accounting` vào `backend/package.json`.
+- **Cấu hình Gemini API Key trong Cài đặt & Tối ưu hóa (Giai đoạn 4):**
+  - Bổ sung Tab "Gemini AI Kế toán" trong màn hình Cài đặt hệ thống ([`Settings.jsx`](file:///g:/phanmenoffline/frontend/src/pages/Settings.jsx) & [`GeminiAccountingSettingsPanel.jsx`](file:///g:/phanmenoffline/frontend/src/components/GeminiAccountingSettingsPanel.jsx)).
+  - Hỗ trợ nhập và che an toàn API Key, chuyển đổi linh hoạt giữa các model tối ưu mới nhất, tùy chỉnh nhiệt độ phản hồi (`temperature`).
+  - Nút "Kiểm tra kết nối AI" hiển thị trạng thái và câu trả lời mẫu thời gian thực, lưu trữ an toàn trong DB `system_settings`.
+  - Hướng dẫn trực quan 4 bước lấy API Key miễn phí từ Google AI Studio.
+- **Frontend Giao diện Kế toán & AI Dashboard (Giai đoạn 3):**
+  - Xây dựng màn hình Báo cáo Tuổi nợ Doanh nghiệp ([`DebtAgingReport.jsx`](file:///g:/phanmenoffline/frontend/src/pages/DebtAgingReport.jsx)) với bộ lọc thời gian đa dạng (Hôm nay, Tuần này, Tháng này, Tháng trước, Quý này, Năm nay, Tùy chỉnh), Thẻ KPI tài chính tổng quan, Thanh phân bổ trực quan 4 nhóm tuổi nợ (0-15, 16-30, 31-60, >60 ngày).
+  - Chế độ xem kép: Bảng tổng hợp theo Khách hàng và Bảng chi tiết từng Hóa đơn nợ; hỗ trợ Xuất file Excel Công Nợ 2 sheet.
+  - Tích hợp Trợ lý Kế toán AI: Drawer phân tích sức khỏe dòng tiền & nhận định nợ xấu, Khung chat tương tác thời gian thực bằng tiếng Việt tự nhiên với lịch sử trò chuyện.
+  - Modal Soạn tin nhắn nhắc nợ thông minh: Chọn 3 phong cách (Nhẹ nhàng, Chuyên nghiệp, Dứt khoát), tự động chèn thông tin hóa đơn và STK ngân hàng, hỗ trợ 1-Click Copy và liên kết mở Zalo trực tiếp.
+  - Thêm mục "Tuổi nợ & Trợ lý AI" trong thanh điều hướng Desktop & Mobile ([`App.jsx`](file:///g:/phanmenoffline/frontend/src/App.jsx)), liên kết thẻ nhanh từ [`AccountingDashboard.jsx`](file:///g:/phanmenoffline/frontend/src/pages/AccountingDashboard.jsx).
+- **Backend Kế toán - Tích hợp Trí tuệ Nhân tạo Google Gemini AI (Giai đoạn 2):**
+  - Xây dựng module dịch vụ AI chuyên sâu [`geminiAccountingService.js`](file:///g:/phanmenoffline/backend/src/services/geminiAccountingService.js) gọi trực tiếp REST API Google Generative Language (`https.request` native không phụ thuộc SDK ngoài, tương thích tối đa môi trường Electron/Offline/Online).
+  - Quản lý cấu hình API Key an toàn trong cơ sở dữ liệu `system_settings` (key `gemini_accounting_config`), che key an toàn khi trả về giao diện (`AIzaSy...****`), hỗ trợ các model tối ưu: `gemini-3.5-flash-lite`, `gemini-flash-lite-latest`, `gemini-3.6-flash`.
+  - Cung cấp bộ 6 API endpoints AI tại [`accounting.js`](file:///g:/phanmenoffline/backend/src/routes/accounting.js):
+  - 1. `GET /api/accounting/ai/config`: Lấy cấu hình Gemini API Key và model đang hoạt động.
+  - 2. `PUT /api/accounting/ai/config`: Cập nhật API Key, lựa chọn model và nhiệt độ phản hồi (`temperature`).
+  - 3. `POST /api/accounting/ai/test-connection`: Kiểm tra tính hợp lệ và độ trễ kết nối API Key tới máy chủ Google Gemini.
+  - 4. `POST /api/accounting/ai/analyze`: Phân tích chuyên sâu sức khỏe tài chính & cảnh báo khách hàng nợ xấu theo chuẩn kế toán (đánh giá dòng tiền, phát hiện nợ xấu, đề xuất 3-4 hành động khẩn cấp).
+  - 5. `POST /api/accounting/ai/chat`: Trợ lý Kế toán AI hỏi đáp thông minh dựa trên số liệu thực tế cửa hàng (hỗ trợ ngữ cảnh lịch sử trò chuyện nhiều lượt).
+  - 6. `POST /api/accounting/ai/reminder-message`: Tự động soạn tin nhắn nhắc nợ thông minh & khéo léo cho khách hàng (3 phong cách: `gentle` nhẹ nhàng, `professional` chuyên nghiệp, `firm` dứt khoát) tự động chèn STK ngân hàng và mã hóa đơn.
+  - Bộ kiểm thử tự động toàn diện [`backend/scripts/test-gemini-accounting.js`](file:///g:/phanmenoffline/backend/scripts/test-gemini-accounting.js) vượt qua 7/7 bài test tích hợp.
+- **Backend Kế toán - Phân tích Tuổi nợ (Debt Aging) & Chậm thanh toán (Chuẩn Kế toán Doanh nghiệp - Giai đoạn 1):**
+  - Xây dựng module phân tích tuổi nợ và tình trạng thanh toán chuyên sâu [`debtAgingService.js`](file:///g:/phanmenoffline/backend/src/services/debtAgingService.js) phân loại 4 nhóm tuổi nợ: `0 - 15 ngày` (Trong hạn), `16 - 30 ngày` (Quá hạn nhẹ), `31 - 60 ngày` (Cần nhắc nợ), `Trên 60 ngày` (Rủi ro nợ xấu).
+  - Tự động tính toán số ngày nợ (`debt_age_days`), ngày trễ hạn (`days_overdue`), tỷ lệ tiến độ thanh toán (`payment_progress_percent`), mức độ rủi ro thu hồi (`risk_level`: `low`, `medium`, `high`, `critical`) và trạng thái (`unpaid`, `partial`, `overdue`, `bad_debt`).
+  - Hỗ trợ linh hoạt bộ lọc thời gian: theo Ngày, Tuần, Tháng, Quý, Năm hoặc Khoảng ngày tùy ý.
+  - Cung cấp bộ 5 API endpoints tại [`accounting.js`](file:///g:/phanmenoffline/backend/src/routes/accounting.js):
+  - 1. `GET /api/accounting/debts/aging`: Báo cáo tổng hợp tuổi nợ theo khách hàng và chi tiết từng hóa đơn, hỗ trợ phân trang & tìm kiếm.
+  - 2. `GET /api/accounting/debts/aging/summary`: Thẻ KPI tài chính tổng quan (Tổng nợ, Nợ quá hạn, Tỷ lệ quá hạn, Phân bổ theo 4 nhóm tuổi nợ).
+  - 3. `GET /api/accounting/debts/aging/customer/:customerId`: Sổ chi tiết công nợ của một khách hàng cụ thể.
+  - 4. `GET /api/accounting/debts/aging/ai-context`: Dữ liệu phân tích và tóm tắt tiếng Việt cô đọng sẵn sàng cấp cho Gemini AI.
+  - 5. `GET /api/accounting/debts/aging/export-excel`: Xuất file Excel 2 sheet (Tổng hợp khách hàng + Chi tiết hóa đơn nợ) chuẩn form kế toán doanh nghiệp.
+- **Chi tiết sản phẩm tương tác trên Telegram (Mặc định 10 sản phẩm & Ẩn/Hiện linh hoạt):** Khi bot Telegram báo đơn hàng mới (`bot_create_order`) hoặc cập nhật đơn hàng (`bot_order_list`), phần chi tiết sản phẩm mặc định hiển thị 10 sản phẩm đầu tiên. Các sản phẩm còn lại được giấu gọn gàng bên trong khối trích dẫn mở rộng Telegram (`<blockquote expandable>`), đi kèm nút bấm tương tác Inline Keyboard `[🔽 Xem thêm ... mặt hàng khác]`. Người dùng có thể bấm trực tiếp vào khối tin nhắn hoặc nhấn nút để bung toàn bộ danh sách món hàng, và bấm `[🔼 Thu gọn]` để giấu lại bất cứ lúc nào.
+- **Unified Telegram Bot Listener:** Tích hợp bộ lắng nghe Polling thông minh cho tất cả các Bot đang hoạt động, vừa xử lý mượt mà sự kiện bấm nút tương tác đơn hàng, vừa tiếp nhận lệnh `/kiemkho`, `/tonkho`, `/kho` từ nhóm chat mà không gây xung đột hay gián đoạn.
 - **Bot Kho Hàng Telegram - Báo cáo kiểm kho tự động:** Bổ sung tính năng kiểm kho và gửi báo cáo toàn diện về Telegram ngay trên trang Quản lý Kho Hàng (`/kho-hang`). Thống kê chi tiết tồn kho sản phẩm cha, biến thể, âm kho, cảnh báo sắp hết hàng. Chia nhỏ tin nhắn chống quá tải Telegram (< 3.800 ký tự). Bot hỗ trợ lắng nghe trực tiếp các lệnh `/kiemkho`, `/tonkho`, `/kho` từ nhóm chat Telegram.
 - **Fallback thông minh đa Bot Telegram (`resolveBotConfig`):** Người dùng chỉ cần cấu hình 1 token bot bất kỳ trong hệ thống, tất cả 12 sự kiện thông báo đều tự động sử dụng token đó để gửi về nhóm chung.
 - **Quản lý thanh toán & Nợ cũ trực tiếp trong Xem Đơn Hàng:** Cho phép sửa nhanh nợ cũ (`old_debt`) và tiền đã thu (`paid_amount`) ngay trong modal xem chi tiết đơn hàng, kèm nút "Trả đủ" và nút "Lưu thanh toán" cập nhật thời gian thực.
 - **Thông báo sự kiện In hóa đơn & Đồng bộ thiết bị di động:** Gửi thông báo Telegram khi in nhanh hoặc mở xem/in hóa đơn A5, cũng như khi đơn hàng ngoại tuyến được đồng bộ về máy chủ.
 
 ### Improved & Fixed
+- **Khắc phục lỗi kết nối & tải App di động trên máy khách (`ERR_CONNECTION_REFUSED`):**
+  - **Nguyên nhân trước đây:** Khi lập trình thử nghiệm (Local Test), máy chạy lệnh `npm run dev` nên cổng Vite `5174` đang mở. Nhưng khi khách hàng cài phần mềm đóng gói (Electron), chỉ có cổng Backend (`7000`) chạy, không có cổng `5174`, dẫn đến việc quét mã QR hoặc mở link `http://192.168.1.15:5174/...` bị trình duyệt báo lỗi `ERR_CONNECTION_REFUSED` (Từ chối kết nối).
+  - **Khắc phục:** Hệ thống tự động kiểm tra cổng hoạt động thực tế. Khi chạy ở bản khách hàng, mã QR và liên kết tự động chuyển về cổng Backend (`7000`). Đồng thời Backend được tích hợp phục vụ trực tiếp giao diện Web POS / PWA và route `/downloads` tải file APK với đầy đủ tiêu đề Android APK, cho phép điện thoại iPhone & Android mở và cài đặt app trơn tru.
 - **Chi tiết thông báo Telegram phong phú:** Bổ sung danh sách chi tiết các món hàng (tên, số lượng, thành tiền), tiền đơn, nợ cũ, đã thu và thành tiền cần thanh toán trong thông báo tạo đơn và sửa đơn; hiển thị icon trực quan theo từng hành động.
 - **Hoàn thiện kết xuất mẫu in hóa đơn A5:** Căn lề và tỷ lệ in A5 chuẩn xác, không bị tràn trang.
 - **Dọn dẹp mã nguồn:** Loại bỏ import dư thừa và tăng cường độ ổn định cho dịch vụ tài khoản.

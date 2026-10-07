@@ -55,9 +55,9 @@ class RestoreModuleErrorBoundary extends Component {
     if (this.state.error) {
       return (
         <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-700">
-          <div className="font-bold">Module khôi phục dữ liệu đang g?p lđi.</div>
-          <div className="mt-1">{this.state.error?.message || 'Kh?ng th? hiển thị khu vềc khôi phục.'}</div>
-          <button type="button" className="mt-2 rounded-lg border border-red-200 bg-white px-3 py-1 font-semibold text-red-700" onClick={() => this.setState({ error: null })}>Th? lđi</button>
+          <div className="font-bold">Module khôi phục dữ liệu đang gặp lỗi.</div>
+          <div className="mt-1">{this.state.error?.message || 'Không thể hiển thị khu vực khôi phục.'}</div>
+          <button type="button" className="mt-2 rounded-lg border border-red-200 bg-white px-3 py-1 font-semibold text-red-700" onClick={() => this.setState({ error: null })}>Thử lại</button>
         </div>
       );
     }

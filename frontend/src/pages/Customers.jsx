@@ -183,7 +183,7 @@ export default function Customers() {
     }
   };
   const handleTypeDelete = async (id) => {
-    if (!confirm('Xóa loại khách n?y?')) return;
+    if (!confirm('Xóa loại khách này?')) return;
     try {
       await customerTypesApi.remove(id);
       fetchCustomerTypes();
@@ -242,7 +242,7 @@ export default function Customers() {
       .slice(0, 5)
       .map(c => `? ${c.name || `#${c.id}`}`)
       .join('\n');
-    const moreText = selectedCustomerIds.length > 5 ? `\n... về ${selectedCustomerIds.length - 5} khách hàng kh?c` : '';
+    const moreText = selectedCustomerIds.length > 5 ? `\n... và ${selectedCustomerIds.length - 5} khách hàng khác` : '';
     if (!confirm(`Xóa ${selectedCustomerIds.length} khách hàng đã chọn?\n\n${selectedNames}${moreText}\n\nDữ liệu đơn hàng liđơn quan sẽ được giá nguyđơn.`)) return;
 
     setIsBulkDeleting(true);
@@ -254,7 +254,7 @@ export default function Customers() {
       await fetchCustomers();
       alert(`? ?? xóa ${deletedCount} khách hàng.${skippedCount > 0 ? `\n?? b? qua ${skippedCount} mãc không cón xóa/không hợp l?.` : ''}`);
     } catch (err) {
-      alert(getErrorMessage(err, 'Không th? xóa h?ng lo?t khách hàng.'));
+      alert(getErrorMessage(err, 'Không thể xóa hàng loạt khách hàng.'));
     } finally {
       setIsBulkDeleting(false);
     }
@@ -309,12 +309,12 @@ export default function Customers() {
         }
 
         const customer = {
-          name: getExcelCellValue(row, ['Tồn khách hàng', 'Tồn KH', 'H? tđơn', 'name']),
-          phone: getExcelCellValue(row, ['S? điện thoại', 'S?T', 'Phone', 'phone']),
+          name: getExcelCellValue(row, ['Tên khách hàng', 'Tên KH', 'Họ tên', 'name']),
+          phone: getExcelCellValue(row, ['Số điện thoại', 'SĐT', 'Phone', 'phone']),
           email: getExcelCellValue(row, ['Email', 'email']),
-          tax_code: getExcelCellValue(row, ['M? s? thuế', 'MST', 'tax_code']),
+          tax_code: getExcelCellValue(row, ['Mã số thuế', 'MST', 'tax_code']),
           address: getExcelCellValue(row, ['?đã ch?', 'address']),
-          customer_type: getExcelCellValue(row, ['Nhâm/Loại', 'Loại khách hàng', 'Loại KH', 'customer_type']),
+          customer_type: getExcelCellValue(row, ['Nhóm/Loại', 'Loại khách hàng', 'Loại KH', 'customer_type']),
           note: getExcelCellValue(row, ['Ghi ch?', 'note']),
         };
 
@@ -334,7 +334,7 @@ export default function Customers() {
       }
 
       const confirmed = confirm(
-        `Tạm th?y ${validCustomers.length} khách hàng hợp lệ. Lỗi/b? qua: ${skipped}.\nBđơn c? muđơn nh?p dữ liệu n?y không?`
+        `Tìm thấy ${validCustomers.length} khách hàng hợp lệ. Lỗi/bỏ qua: ${skipped}.\nBạn có muốn nhập dữ liệu này không?`
       );
       if (!confirmed) return;
 
@@ -347,16 +347,16 @@ export default function Customers() {
           await customersApi.create(customer);
           success += 1;
         } catch (err) {
-          console.error('Lỗi nh?p khách hàng:', err);
+          console.error('Lỗi nhập khách hàng:', err);
           failed += 1;
         }
       }
 
       await fetchCustomers();
-      alert(`Nhập Excel hođơn tốt!\n- Thành công: ${success}\n- Lỗi/b? qua: ${skipped + failed}`);
+      alert(`Nhập Excel hoàn tất!\n- Thành công: ${success}\n- Lỗi/bỏ qua: ${skipped + failed}`);
     } catch (err) {
-      console.error('Lỗi d?c file Excel:', err);
-      alert('Không th? d?c file Excel: ' + (err?.message || err));
+      console.error('Lỗi đọc file Excel:', err);
+      alert('Không thể đọc file Excel: ' + (err?.message || err));
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -371,19 +371,19 @@ export default function Customers() {
 
   const exportCustomersList = () => {
     if (filtered.length === 0) {
-      alert('Không có khách hàng d? xu?t Excel.');
+      alert('Không có khách hàng để xuất Excel.');
       return;
     }
 
     const rows = filtered.map((customer, index) => ({
       'STT': index + 1,
       'M? khách hàng': customer.customer_code || customer.id || '',
-      'Tồn khách hàng': customer.name || '',
-      'S? điện thoại': customer.phone || '',
+      'Tên khách hàng': customer.name || '',
+      'Số điện thoại': customer.phone || '',
       'Email': customer.email || '',
-      'M? s? thuế': customer.tax_code || '',
+      'Mã số thuế': customer.tax_code || '',
       '?đã ch?': customer.address || '',
-      'Nhâm/Loại': getTypeLabel(customer.customer_type),
+      'Nhóm/Loại': getTypeLabel(customer.customer_type),
       'Ghi ch?': customer.note || '',
       'Ngày tạo': formatExcelDateTime(customer.created_at),
       'Ngày cập nhật': formatExcelDateTime(customer.updated_at),
@@ -418,7 +418,7 @@ export default function Customers() {
   const exportCustomersReport = async () => {
     const [year, month] = reportMonth.split('-');
 
-    // L?y hóa đơn tháng d?
+    // Lấy hóa đơn tháng đó
     const res = await fetch(`${API}/invoices`);
     const invoices = await res.json();
 
@@ -438,8 +438,8 @@ export default function Customers() {
     });
 
     let csv = '\uFEFF';
-    csv += `B?O C?O KH?CH H?NG TH?NG ${month}/${year}\n`;
-    csv += `STT, Tồn khách hàng, S?T, S? đơn hàng, Tổng tiđơn (VND)\n`;
+    csv += `BÁO CÁO KHÁCH HÀNG THÁNG ${month}/${year}\n`;
+    csv += `STT, Tên khách hàng, SĐT, Số đơn hàng, Tổng tiền (VND)\n`;
 
     let stt = 1;
     let totalRevenue = 0;
@@ -451,7 +451,7 @@ export default function Customers() {
     });
 
     csv += `\nTỔNG CỘNG, ${rows.length} khách, , ${rows.reduce((s, c) => s + c.total_orders, 0)}, ${Math.round(totalRevenue)}\n`;
-    csv += `Ngày xu?t: ${new Date().toLocaleString('vi-VN')}\n`;
+    csv += `Ngày xuất: ${new Date().toLocaleString('vi-VN')}\n`;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -480,7 +480,7 @@ export default function Customers() {
           <button type="button" onClick={openImportFilePicker}
             disabled={importing}
             className="px-3 py-2 border border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
-            <UploadCloud size={13} /> {importing ? 'đang nh?p...' : 'Nhập Excel'}
+            <UploadCloud size={13} /> {importing ? 'Đang nhập...' : 'Nhập Excel'}
           </button>
           <button type="button" onClick={exportCustomersList}
             className="px-3 py-2 border border-yellow-300 text-yellow-600 hover:bg-yellow-50 rounded-lg text-xs font-medium flex items-center gap-1">
@@ -514,7 +514,7 @@ export default function Customers() {
       </div>
 
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <input className="input-field md:flex-1" placeholder=" Tạm khách hàng theo tồn, S?T, email, mã KH, MST..." value={search} onChange={e => setSearch(e.target.value)} />
+        <input className="input-field md:flex-1" placeholder=" Tìm khách hàng theo tên, SĐT, email, mã KH, MST..." value={search} onChange={e => setSearch(e.target.value)} />
         <div className="flex flex-wrap items-center gap-2">
           {selectedCustomerIds.length > 0 && (
             <button onClick={handleBulkDelete} disabled={isBulkDeleting} className="px-4 py-2 border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -527,14 +527,14 @@ export default function Customers() {
 
       {selectedCustomerIds.length > 0 && (
         <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <span>?? chọn <strong>{selectedCustomerIds.length}</strong> khách hàng. Checkbox chọn tất cả ?p d?ng cho <strong>{filtered.length}</strong> khách hàng dang hiển thị.</span>
+          <span>Đã chọn <strong>{selectedCustomerIds.length}</strong> khách hàng. Checkbox chọn tất cả áp dụng cho <strong>{filtered.length}</strong> khách hàng dang hiển thị.</span>
           <button type="button" onClick={() => setSelectedCustomerIds([])} className="text-xs font-medium text-amber-700 underline hover:text-amber-900 self-start sm:self-auto">B? chọn tất cả</button>
         </div>
       )}
 
       <div className="md:hidden space-y-3">
         {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> đang tđi...</div>}
-        {!loading && filtered.length === 0 && <div className="rounded-xl border-2 border-dashed bg-white p-8 text-center text-gray-400">Không có khách hàng n?o</div>}
+        {!loading && filtered.length === 0 && <div className="rounded-xl border-2 border-dashed bg-white p-8 text-center text-gray-400">Không có khách hàng nào</div>}
         {!loading && filtered.length > 0 && (
           <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
             <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-gray-600">
@@ -567,7 +567,7 @@ export default function Customers() {
                   <div className="font-semibold text-gray-900">{c.name}</div>
                   {c.customer_code && <div className="text-[11px] text-gray-400">M?: {c.customer_code}</div>}
                   <div className="mt-2 grid grid-cols-1 gap-1 text-sm text-gray-600">
-                    <div><span className="text-gray-400">S?T:</span> {c.phone || '?'}</div>
+                    <div><span className="text-gray-400">SĐT:</span> {c.phone || '?'}</div>
                     <div><span className="text-gray-400">Email:</span> {c.email || '?'}</div>
                     <div><span className="text-gray-400">MST:</span> <span className="font-mono text-xs">{c.tax_code || '?'}</span></div>
                   </div>
@@ -610,11 +610,11 @@ export default function Customers() {
                 />
               </th>
               <th className="p-2 text-left">Tồn khách hàng</th>
-              <th className="p-2 text-left">S?T</th>
+              <th className="p-2 text-left">SĐT</th>
               <th className="p-2 text-left">Email</th>
               <th className="p-2 text-left">MST</th>
               <th className="p-2 text-left">Loại</th>
-              <th className="p-2 text-center">H?nh d?ng</th>
+              <th className="p-2 text-center">Hành động</th>
             </tr>
           </thead>
           <tbody>
@@ -661,7 +661,7 @@ export default function Customers() {
           </tbody>
         </table>
         {loading && <div className="text-center text-gray-400 py-10 flex items-center justify-center gap-2"><Loader size={16} className="animate-spin" /> đang tđi...</div>}
-        {!loading && filtered.length === 0 && <div className="text-center text-gray-400 py-10">Không có khách hàng n?o</div>}
+        {!loading && filtered.length === 0 && <div className="text-center text-gray-400 py-10">Không có khách hàng nào</div>}
       </div>
 
       {/* Form modal */}
@@ -680,11 +680,11 @@ export default function Customers() {
             <div className="space-y-3 mb-4">
               <div><label className="text-xs text-gray-500">Tồn KH</label><input ref={customerNameInputRef} className="input-field w-full" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Tồn..." /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-xs text-gray-500">S?T</label><input className="input-field" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div><label className="text-xs text-gray-500">SĐT</label><input className="input-field" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
                 <div><label className="text-xs text-gray-500">Email</label><input className="input-field" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="text-xs text-gray-500">M? s? thuế</label><input className="input-field" value={form.tax_code} onChange={e => setForm({ ...form, tax_code: e.target.value })} /></div>
+                <div><label className="text-xs text-gray-500">Mã số thuế</label><input className="input-field" value={form.tax_code} onChange={e => setForm({ ...form, tax_code: e.target.value })} /></div>
                 <div><label className="text-xs text-gray-500">Loại KH</label>
                   <select className="input-field" value={form.customer_type || ''} onChange={e => setForm({ ...form, customer_type: e.target.value })}>
                     {customerTypes.length > 0 ? customerTypes.map(t => (
@@ -704,7 +704,7 @@ export default function Customers() {
         </div>
       )}
 
-      {/* ===== QU?N L? LO?I KH?CH H?NG ===== */}
+      {/* ===== QUẢN LÝ LOẠI KHÁCH HÀNG ===== */}
       {showTypeManager && (
         <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 overflow-y-auto p-3 sm:p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] flex flex-col">
@@ -713,7 +713,7 @@ export default function Customers() {
                 <h2 className="text-lg font-bold text-purple-800 flex items-center gap-2">
                   <Tag size={20} /> Quản lý loại khách hàng
                 </h2>
-                <p className="text-xs text-purple-500">Thêm, sửa, xóa nhâm khách hàng</p>
+                <p className="text-xs text-purple-500">Thêm, sửa, xóa nhóm khách hàng</p>
               </div>
               <button onClick={() => setShowTypeManager(false)} className="text-gray-400 hover:text-gray-600 text-xl">?</button>
             </div>
@@ -756,7 +756,7 @@ export default function Customers() {
         </div>
       )}
 
-      {/* ===== FORM TH?M/S?A LO?I KH ===== */}
+      {/* ===== FORM THÊM/SỬA LOẠI KH ===== */}
       {showTypeForm && (
         <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-[60] overflow-y-auto p-3 sm:p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-4 sm:p-6 max-h-[90dvh] overflow-auto">
@@ -771,10 +771,10 @@ export default function Customers() {
                 <label className="text-xs text-gray-500 block mb-1">Tồn loại khách hàng <span className="text-red-500">*</span></label>
                 <input ref={typeNameInputRef} className="input-field w-full" value={typeForm.name}
                   onChange={e => setTypeForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="VD: Khách gđi, Cùng t?c viđơn, ?đi l?..." />
+                  placeholder="VD: Khách sỉ, Cộng tác viên, Đại lý..." />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Mđủ nhâm</label>
+                <label className="text-xs text-gray-500 block mb-1">Màu nhóm</label>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <div className="flex flex-wrap gap-2">
                     {COLOR_PRESETS.map(c => (
@@ -791,7 +791,7 @@ export default function Customers() {
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                   <div className="w-8 h-8 rounded-full border" style={{ backgroundColor: typeForm.color || '#3b82f6' }} />
-                  <span className="text-xs text-gray-500">Xem tru?c: <span className="font-medium px-2 py-0.5 rounded text-white text-xs" style={{ backgroundColor: typeForm.color || '#3b82f6' }}>
+                  <span className="text-xs text-gray-500">Xem trước: <span className="font-medium px-2 py-0.5 rounded text-white text-xs" style={{ backgroundColor: typeForm.color || '#3b82f6' }}>
                     {typeForm.name || 'Tồn loại'}
                   </span></span>
                 </div>
@@ -817,44 +817,44 @@ export default function Customers() {
             <div className="space-y-4 text-sm text-gray-700">
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Tổng quan</h3>
-                <p>Trang Quản lý Khách hàng giáp bđơn luu tr? thông tin khách hàng, phđơn loại theo nhâm, về theo dài lịch sử mua h?ng. Thông tin khách hàng s? xu?t hiện khi tạo đơn hàng.</p>
+                <p>Trang Quản lý Khách hàng giúp bạn lưu trữ thông tin khách hàng, phân loại theo nhóm, và theo dõi lịch sử mua hàng. Thông tin khách hàng sẽ xuất hiện khi tạo đơn hàng.</p>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">? Thêm khách hàng mới</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nhân n?t <strong>"Thêm khách hàng"</strong> ? g?c trđơn phđi</li>
-                  <li>điện các thông tin bắt bu?c: <strong>Tồn</strong></li>
-                  <li>Các thông tin t?y chọn: S?T, Email, MST</li>
-                  <li>Chọn <strong>Loại khách hàng</strong> (nđủ c?)</li>
-                  <li>Nhân "Luu" d? hođơn tốt</li>
+                  <li>Nhấn nút <strong>"Thêm khách hàng"</strong> ở góc trên phải</li>
+                  <li>Điền các thông tin bắt buộc: <strong>Tên</strong></li>
+                  <li>Các thông tin tùy chọn: SĐT, Email, MST</li>
+                  <li>Chọn <strong>Loại khách hàng</strong> (nếu có)</li>
+                  <li>Nhấn "Lưu" để hoàn tất</li>
                 </ul>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Chỉnh sửa khách hàng</h3>
-                <p>Nhân n?t <strong>"Sửa"</strong> ? c?t H?nh d?ng d? cập nhật thông tin khách hàng. C? th? thay đổi: S?T, Email, MST, Loại khách hàng.</p>
+                <p>Nhấn nút <strong>"Sửa"</strong> ở cột Hành động để cập nhật thông tin khách hàng. Có thể thay đổi: SĐT, Email, MST, Loại khách hàng.</p>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">??? Xóa khách hàng</h3>
-                <p>Nhân n?t <strong>"Xóa"</strong> ? c?t H?nh d?ng d? xóa khách hàng. <strong className="text-red-600">Luu ?:</strong> Không th? xóa nđủ khách hàng đã có đơn hàng.</p>
+                <p>Nhấn nút <strong>"Xóa"</strong> ở cột Hành động để xóa khách hàng. <strong className="text-red-600">Lưu ý:</strong> Không thể xóa nếu khách hàng đã có đơn hàng.</p>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">??? Quản lý loại khách hàng</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nhân n?t <strong>"Quản lý loại KH"</strong> d? mã của s? quản lý</li>
-                  <li><strong>Thêm loại:</strong> Nhập tđơn về chọn mđủ s?c</li>
-                  <li><strong>Sửa loại:</strong> Nhân vào tđơn loại d? dài tđơn/mđủ</li>
-                  <li><strong>Xóa loại:</strong> Nhân icon ??? (ch? xóa được nđủ không có khách thuếc loại n?y)</li>
-                  <li>Mđủ loại s? hiển thị khi chọn khách hàng trong đơn hàng</li>
+                  <li>Nhấn nút <strong>"Quản lý loại KH"</strong> để mở cửa sổ quản lý</li>
+                  <li><strong>Thêm loại:</strong> Nhập tên và chọn màu sắc</li>
+                  <li><strong>Sửa loại:</strong> Nhấn vào tên loại để đổi tên/màu</li>
+                  <li><strong>Xóa loại:</strong> Nhấn icon xóa (chỉ xóa được nếu không có khách thuộc loại này)</li>
+                  <li>Màu loại sẽ hiển thị khi chọn khách hàng trong đơn hàng</li>
                 </ul>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Tìm kiếm</h3>
-                <p>Nhập từ khóa vào ? tìm kiếm d? l?c theo:</p>
+                <p>Nhập từ khóa vào ô tìm kiếm để lọc theo:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>Tồn khách hàng</li>
                   <li>S? điện thoại</li>
@@ -863,16 +863,16 @@ export default function Customers() {
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">?? Xuất báo cáo khách hàng</h3>
-                <p>Chọn tháng về nhân "Xuất Excel" đã tải báo cáo khách hàng vđi tháng kỳ s? đơn hàng về tổng chi tiđủ trong tháng.</p>
+                <p>Chọn tháng và nhấn "Xuất Excel" để tải báo cáo khách hàng theo tháng gồm số đơn hàng và tổng chi tiêu trong tháng.</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h3 className="font-bold text-blue-800 mb-2">?? M?o & Luu ?</h3>
+                <h3 className="font-bold text-blue-800 mb-2">💡 Mẹo & Lưu ý</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
-                  <li><strong>Loại khách hàng:</strong> Dùng d? phđơn nhâm (VIP, S?, L?...), mới loại c? mđủ ri?ng</li>
-                  <li><strong>MST:</strong> Nhập đầy đủ cho khách doanh nghi?p d? xu?t hóa đơn</li>
-                  <li>Khách hàng s? hiển thị trong trang POS khi tạo đơn hàng</li>
-                  <li>C? th? thêm khách hàng trực tiếp trong trang POS nđủ chưa c?</li>
+                  <li><strong>Loại khách hàng:</strong> Dùng để phân nhóm (VIP, Sỉ, Lẻ...), mỗi loại có màu riêng</li>
+                  <li><strong>MST:</strong> Nhập đầy đủ cho khách doanh nghiệp để xuất hóa đơn</li>
+                  <li>Khách hàng sẽ hiển thị trong trang POS khi tạo đơn hàng</li>
+                  <li>Có thể thêm khách hàng trực tiếp trong trang POS nếu chưa có</li>
                 </ul>
               </div>
             </div>

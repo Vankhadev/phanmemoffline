@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate,
 import LiveSyncBadge from './components/LiveSyncBadge';
 import HelpModal from './components/HelpModal';
 import QuickMobileConnectModal from './components/QuickMobileConnectModal';
+import FloatingAiChatWidget from './components/FloatingAiChatWidget';
 import ErrorBoundary from './components/ErrorBoundary'; // page-level error guard
 import OfflineSyncBadge from './components/OfflineSyncBadge';
 import { initOfflineAutoSync } from './utils/offlineSyncManager';
@@ -29,6 +30,7 @@ import {
   ShoppingCart,
   Sliders,
   Smartphone,
+  Sparkles,
   Truck,
   Trophy,
   Users,
@@ -74,6 +76,7 @@ const ProductReport = lazy(() => import('./pages/ProductReport'));
 const CashBook = lazy(() => import('./pages/CashBook'));
 const InvoicePrint = lazy(() => import('./pages/InvoicePrint'));
 const AccountingDashboard = lazy(() => import('./pages/AccountingDashboard'));
+const DebtAgingReport = lazy(() => import('./pages/DebtAgingReport'));
 const TaxReport = lazy(() => import('./pages/TaxReport'));
 const InventoryReport = lazy(() => import('./pages/InventoryReport'));
 const AccountingLogs = lazy(() => import('./pages/AccountingLogs'));
@@ -154,6 +157,7 @@ const ROUTE_PERMISSIONS = {
   '/thong-ke': ['stats.read'],
   '/so-quy': ['cashbook.read'],
   '/ke-toan': ['accounting.read', 'revenue_reports.read'],
+  '/ke-toan/cong-no': ['accounting.read', 'debts.read', 'invoices.read'],
   '/ke-toan/bao-cao-thue': ['tax_reports.read'],
   '/ke-toan/bao-cao-ton-kho': ['inventory_reports.read'],
   '/ke-toan/nhat-ky': ['activity_logs.read'],
@@ -499,6 +503,14 @@ function buildScreenGuide(navGroups, currentPath) {
       'Kiểm tra số thuế phải nộp trước khi chốt kỳ.',
       'Lưu snapshot nếu cần giữ lại trạng thái báo cáo hiện tại.',
     ],
+    '/ke-toan/cong-no': [
+      'Chọn kỳ thời gian để phân tích các khoản công nợ.',
+      'Xem nhanh các thẻ KPI và biểu đồ 4 nhóm tuổi nợ (0-15, 16-30, 31-60, >60 ngày).',
+      'Chuyển đổi giữa chế độ Tổng hợp theo Khách hàng và Chi tiết từng Hóa đơn.',
+      'Bấm Nhắc nợ để Trợ lý AI tự động soạn tin nhắn đòi nợ theo phong cách phù hợp.',
+      'Bấm Trợ lý Kế toán AI để phân tích sức khỏe dòng tiền hoặc đặt câu hỏi tự nhiên.',
+      'Bấm Xuất Excel Công Nợ để tải file báo cáo chuẩn kế toán doanh nghiệp.',
+    ],
     '/ke-toan/bao-cao-ton-kho': [
       'Chọn kỳ báo cáo và ngưỡng cảnh báo tồn kho.',
       'Kiểm tra các mặt hàng sắp hết, hết hàng hoặc âm kho.',
@@ -658,6 +670,7 @@ function AppLayout({
   const [openMenus, setOpenMenus] = useState(() => ({
     don_hang: location.pathname.startsWith('/tao-don-hang') || location.pathname.startsWith('/danh-sach-don-hang'),
     danh_muc: location.pathname.startsWith('/san-pham') || location.pathname.startsWith('/kho-hang') || location.pathname.startsWith('/khach-hang') || location.pathname.startsWith('/nhap-hang') || location.pathname.startsWith('/nha-cung-cap'),
+    ke_toan: location.pathname.startsWith('/ke-toan'),
     quan_ly: location.pathname.startsWith('/thong-ke') || location.pathname.startsWith('/so-quy') || location.pathname.startsWith('/bao-cao-theo-don-hang') || location.pathname.startsWith('/bao-cao-theo-san-pham') || location.pathname.startsWith('/top-khach-hang') || location.pathname.startsWith('/bang-luong-nhan-vien') || location.pathname.startsWith('/cai-dat'),
   }));
   const [updateToast, setUpdateToast] = useState(null);
@@ -744,6 +757,7 @@ function AppLayout({
       const autoOpenMatchers = {
         don_hang: ['/tao-don-hang', '/danh-sach-don-hang'],
         danh_muc: ['/san-pham', '/kho-hang', '/khach-hang', '/nhap-hang', '/nha-cung-cap'],
+        ke_toan: ['/ke-toan'],
         quan_ly: ['/thong-ke', '/so-quy', '/bao-cao-theo-don-hang', '/bao-cao-theo-san-pham', '/top-khach-hang', '/bang-luong-nhan-vien', '/cai-dat'],
       };
 
@@ -791,6 +805,18 @@ function AppLayout({
           { to: '/khach-hang', label: 'Khách hàng', icon: Users },
           { to: '/nhap-hang', label: 'Nhập hàng', icon: ShoppingCart },
           { to: '/nha-cung-cap', label: 'Đối Tác', icon: Truck },
+        ],
+      },
+      {
+        key: 'ke_toan',
+        label: 'Kế toán & AI',
+        icon: Scale,
+        items: [
+          { to: '/ke-toan/cong-no', label: 'Tuổi nợ & Trợ lý AI', icon: Sparkles },
+          { to: '/ke-toan', label: 'Tổng quan kế toán', icon: BarChart3 },
+          { to: '/ke-toan/bao-cao-thue', label: 'Báo cáo thuế GTGT', icon: ReceiptText },
+          { to: '/ke-toan/bao-cao-ton-kho', label: 'Báo cáo tồn kho', icon: Warehouse },
+          { to: '/ke-toan/nhat-ky', label: 'Nhật ký hoạt động', icon: FileClock },
         ],
       },
       {
@@ -970,6 +996,7 @@ function AppLayout({
               <Route path="/thong-ke" element={<ProtectedRoute user={user} permissions={permissions} path="/thong-ke"><ErrorBoundary><Stats /></ErrorBoundary></ProtectedRoute>} />
               <Route path="/so-quy" element={<ProtectedRoute user={user} permissions={permissions} path="/so-quy"><ErrorBoundary><CashBook /></ErrorBoundary></ProtectedRoute>} />
               <Route path="/ke-toan" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan"><ErrorBoundary><AccountingDashboard user={user} /></ErrorBoundary></ProtectedRoute>} />
+              <Route path="/ke-toan/cong-no" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/cong-no"><ErrorBoundary><DebtAgingReport user={user} /></ErrorBoundary></ProtectedRoute>} />
               <Route path="/ke-toan/bao-cao-thue" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-thue"><ErrorBoundary><TaxReport /></ErrorBoundary></ProtectedRoute>} />
               <Route path="/ke-toan/bao-cao-ton-kho" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/bao-cao-ton-kho"><ErrorBoundary><InventoryReport /></ErrorBoundary></ProtectedRoute>} />
               <Route path="/ke-toan/nhat-ky" element={<ProtectedRoute user={user} permissions={permissions} path="/ke-toan/nhat-ky"><ErrorBoundary><AccountingLogs /></ErrorBoundary></ProtectedRoute>} />
@@ -1026,6 +1053,7 @@ function AppLayout({
         isOpen={showMobileModal}
         onClose={() => setShowMobileModal(false)}
       />
+      <FloatingAiChatWidget />
       {upgradeToast && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-200">
@@ -1343,7 +1371,7 @@ function DesktopApp() {
       try {
         await authApi.logout();
       } catch (_) {
-        // Nếu token d? hết hạn, apiClient d? cleanup về ph?t s? kiđơn 401.
+        // Nếu token đã hết hạn, apiClient đã cleanup và phát sự kiện 401.
       }
     }
     clearAuthSession({ clearVolatile: true, includePending: true });

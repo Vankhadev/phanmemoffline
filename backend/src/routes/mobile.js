@@ -3,12 +3,68 @@ const router = express.Router();
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+const net = require('net');
 const { getDb, withAtomicDbWrite, now } = require('../db/database');
 const { requireAuth, requireAnyPermission } = require('../middleware/auth');
 
 const MOBILE_CONFIG_SETTING_KEY = 'mobile_app_config';
-const FRONTEND_PUBLIC_DIR = path.resolve(__dirname, '..', '..', '..', 'frontend', 'public');
-const DOWNLOADS_DIR = path.resolve(FRONTEND_PUBLIC_DIR, 'downloads');
+
+/**
+ * Danh sách các thư mục có thể chứa file cài đặt APK
+ * Hỗ trợ cả môi trường phát triển (dev repo) và Electron production (resources, userData, backend/data)
+ */
+function getCandidateDownloadDirs() {
+  const dirs = [
+    // 1. backend/downloads
+    path.resolve(__dirname, '..', '..', 'downloads'),
+    // 2. dataDir/downloads (userData trong Electron hoặc backend/data)
+    path.resolve(process.env.DATA_DIR || path.resolve(__dirname, '..', '..', 'data'), 'downloads'),
+    // 3. resources/downloads (Packaged Electron extraResources)
+    process.resourcesPath ? path.join(process.resourcesPath, 'downloads') : null,
+    // 4. resources/frontend/dist/downloads
+    process.resourcesPath ? path.join(process.resourcesPath, 'frontend', 'dist', 'downloads') : null,
+    // 5. frontend/dist/downloads (Compiled build)
+    path.resolve(__dirname, '..', '..', '..', 'frontend', 'dist', 'downloads'),
+    // 6. frontend/public/downloads (Dev source)
+    path.resolve(__dirname, '..', '..', '..', 'frontend', 'public', 'downloads'),
+    // 7. Custom env path
+    process.env.KHA_DOWNLOADS_DIR || null,
+  ].filter(Boolean);
+
+  return Array.from(new Set(dirs));
+}
+
+/**
+ * Kiểm tra file APK có sẵn trên máy hay không
+ * Ưu tiên banhangpos-mobile.apk, sau đó đến file .apk bất kỳ
+ */
+function checkApkFileExists() {
+  const dirs = getCandidateDownloadDirs();
+  for (const dir of dirs) {
+    try {
+      if (!fs.existsSync(dir)) continue;
+      const files = fs.readdirSync(dir);
+      let apkFile = files.find(f => f.toLowerCase() === 'banhangpos-mobile.apk');
+      if (!apkFile) {
+        apkFile = files.find(f => f.toLowerCase().endsWith('.apk'));
+      }
+      if (apkFile) {
+        const fullPath = path.join(dir, apkFile);
+        const stat = fs.statSync(fullPath);
+        if (stat.isFile() && stat.size > 0) {
+          return {
+            available: true,
+            fileName: apkFile,
+            size: stat.size,
+            path: `/downloads/${apkFile}`,
+            fullPath,
+          };
+        }
+      }
+    } catch (_) {}
+  }
+  return { available: false, fileName: '', size: 0, path: '' };
+}
 
 /**
  * Quét toàn bộ card mạng để tìm các địa chỉ IPv4 không phải loopback (127.0.0.1)
@@ -57,52 +113,63 @@ function getMobileConfigFromDb() {
   return {};
 }
 
-function checkApkFileExists() {
-  try {
-    if (!fs.existsSync(DOWNLOADS_DIR)) return { available: false, fileName: '', size: 0 };
-    const files = fs.readdirSync(DOWNLOADS_DIR);
-    const apkFile = files.find(f => f.toLowerCase().endsWith('.apk'));
-    if (apkFile) {
-      const stat = fs.statSync(path.join(DOWNLOADS_DIR, apkFile));
-      return {
-        available: true,
-        fileName: apkFile,
-        size: stat.size,
-        path: `/downloads/${apkFile}`,
-      };
+/**
+ * Kiểm tra một cổng TCP có đang mở và lắng nghe hay không
+ */
+function isPortActive(port, host = '127.0.0.1', timeoutMs = 250) {
+  return new Promise(resolve => {
+    const socket = new net.Socket();
+    let isConnected = false;
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => {
+      isConnected = true;
+      socket.destroy();
+    });
+    socket.once('timeout', () => socket.destroy());
+    socket.once('error', () => {});
+    socket.once('close', () => resolve(isConnected));
+    try {
+      socket.connect(port, host);
+    } catch (_) {
+      resolve(false);
     }
-  } catch (_) {}
-  return { available: false, fileName: '', size: 0 };
+  });
 }
 
 /**
  * GET /api/mobile/network-info
  * Cung cấp thông tin địa chỉ IP LAN, cổng, URL mở App và link tải APK
  */
-router.get('/network-info', (req, res) => {
+router.get('/network-info', async (req, res) => {
   try {
     const addresses = getLocalNetworkAddresses();
     const primaryIp = addresses.length > 0 ? addresses[0].ip : '127.0.0.1';
 
-    // Cổng frontend mặc định là 5174, backend là 7000
-    const frontendPort = Number(process.env.VITE_FRONTEND_PORT || process.env.FRONTEND_PORT || 5174);
     const backendPort = Number(process.env.PORT || process.env.KHA_BACKEND_PORT || 7000);
+    const configuredFrontendPort = Number(process.env.VITE_FRONTEND_PORT || process.env.FRONTEND_PORT || 5174);
+
+    // Kiểm tra xem Vite dev server có đang chạy trên cổng configuredFrontendPort không.
+    // Nếu trong Electron đóng gói (production), Vite KHÔNG chạy, nên webPort chính là backendPort (7000).
+    const isViteActive = await isPortActive(configuredFrontendPort, '127.0.0.1', 200);
+    const webPort = isViteActive ? configuredFrontendPort : backendPort;
 
     const savedConfig = getMobileConfigFromDb();
-    const defaultMobileUrl = `http://${primaryIp}:${frontendPort}`;
+    const defaultMobileUrl = `http://${primaryIp}:${webPort}`;
     const effectiveMobileUrl = savedConfig.customMobileUrl?.trim() || defaultMobileUrl;
 
     const apkInfo = checkApkFileExists();
     const defaultApkUrl = apkInfo.available
-      ? `http://${primaryIp}:${frontendPort}${apkInfo.path}`
-      : (savedConfig.customApkUrl?.trim() || '');
+      ? `http://${primaryIp}:${webPort}${apkInfo.path}`
+      : (savedConfig.customApkUrl?.trim() || `http://${primaryIp}:${webPort}/downloads/banhangpos-mobile.apk`);
 
     res.json({
       ok: true,
       primaryIp,
       addresses,
-      frontendPort,
+      webPort,
+      frontendPort: webPort,
       backendPort,
+      isDevServer: isViteActive,
       defaultMobileUrl,
       customMobileUrl: savedConfig.customMobileUrl || '',
       effectiveMobileUrl,
@@ -174,3 +241,6 @@ router.put('/network-info', requireAuth, requireAnyPermission(['settings.manage'
 });
 
 module.exports = router;
+module.exports.getCandidateDownloadDirs = getCandidateDownloadDirs;
+module.exports.checkApkFileExists = checkApkFileExists;
+

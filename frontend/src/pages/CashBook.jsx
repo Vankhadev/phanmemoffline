@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiJson, apiJsonChecked, resolveApiUrl } from '../utils/apiClient';
 import { globalSyncEmitter } from '../utils/eventEmitter';
 import { Plus, Edit2, Trash2, TrendingUp, TrendingDown, Calendar, Filter, Upload, Download, X, DollarSign } from 'lucide-react';
@@ -6,6 +6,10 @@ import * as XLSX from 'xlsx';
 import HelpModal from '../components/HelpModal';
 
 const API = resolveApiUrl('');
+
+function formatVND(n) {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(n) || 0);
+}
 
 export default function CashBook() {
   const [transactions, setTransactions] = useState([]);
@@ -39,10 +43,10 @@ export default function CashBook() {
       if (activeFilter.to) params.append('to', activeFilter.to);
       if (params.toString()) url += `?${params.toString()}`;
 
-      const data = await apiJson(url, {}, 'Không thử lại s? qu?.');
+      const data = await apiJson(url, {}, 'Không thể tải sổ quỹ.');
       setTransactions(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Lỗi tđi s? qu?:', err);
+      console.error('Lỗi tải sổ quỹ:', err);
     } finally {
       setLoading(false);
     }
@@ -62,22 +66,6 @@ export default function CashBook() {
       unsubscribeDebt();
     };
   }, [fetchTransactions]);
-
-  const fetchSummary = async () => {
-    try {
-      let url = `${API}/cash-book/summary`;
-      if (filter.from || filter.to) {
-        const params = new URLSearchParams();
-        if (filter.from) params.append('from', filter.from);
-        if (filter.to) params.append('to', filter.to);
-        url += `?${params.toString()}`;
-      }
-      return await apiJson(url, {}, 'Không thử lại tổng hợp s? qu?.');
-    } catch (err) {
-      console.error('Lỗi tđi tổng hợp:', err);
-      return null;
-    }
-  };
 
   const openAdd = () => {
     setEditing(null);
@@ -112,7 +100,7 @@ export default function CashBook() {
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!form.amount || parseFloat(form.amount) <= 0) {
-      alert('Vui lượng nhập s? tiđơn hợp lệ!');
+      alert('Vui lòng nhập số tiền hợp lệ!');
       return;
     }
     setSaving(true);
@@ -122,8 +110,8 @@ export default function CashBook() {
       await apiJsonChecked(url, {
         method,
         body: form,
-      }, editing ? 'Không th? cập nhật giao dịch.' : 'Không th? thêm giao dịch.');
-      alert(editing ? '? ?? cập nhật!' : '? ?? thêm giao dịch!');
+      }, editing ? 'Không thể cập nhật giao dịch.' : 'Không thể thêm giao dịch.');
+      alert(editing ? 'Đã cập nhật giao dịch thành công!' : 'Đã thêm giao dịch thành công!');
       setShowForm(false);
       fetchTransactions();
     } catch (err) {
@@ -153,10 +141,10 @@ export default function CashBook() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Xóa giao dịch n?y?')) return;
+    if (!confirm('Xóa giao dịch này?')) return;
     try {
-      await apiJsonChecked(`${API}/cash-book/${id}`, { method: 'DELETE' }, 'Không th? xóa giao dịch.');
-      alert('? ?? xóa!');
+      await apiJsonChecked(`${API}/cash-book/${id}`, { method: 'DELETE' }, 'Không thể xóa giao dịch.');
+      alert('Đã xóa giao dịch thành công!');
       fetchTransactions();
     } catch (err) {
       alert('Lỗi kết nối: ' + err.message);
@@ -176,25 +164,23 @@ export default function CashBook() {
   const exportExcel = () => {
     const data = transactions.map(t => ({
       'Ngày': t.date,
-      'Gi?': t.time || '',
+      'Giờ': t.time || '',
       'Loại': t.type === 'income' ? 'Thu' : 'Chi',
       'Danh mục': t.category || '',
-      'S? tiđơn': t.amount,
-      'Ghi ch?': t.note || '',
-      'M? tham chiđủ': t.reference_id || '',
-      'Loại tham chiđủ': t.reference_type || '',
+      'Số tiền': t.amount,
+      'Ghi chú': t.note || '',
+      'Mã tham chiếu': t.reference_id || '',
+      'Loại tham chiếu': t.reference_type || '',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'S? qu?');
+    XLSX.utils.book_append_sheet(wb, ws, 'Sổ quỹ');
     XLSX.writeFile(wb, `so_quy_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  const formatVND = (n) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
-
-  // T?nh tổng hợp trđơn filtered data
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
+  // Tính tổng hợp trên dữ liệu đã lọc
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const balance = totalIncome - totalExpense;
 
   return (
@@ -202,7 +188,7 @@ export default function CashBook() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <DollarSign className="text-green-600" size={24} />
-          S? qu?
+          Sổ quỹ
         </h1>
         <div className="flex gap-2">
           <button onClick={exportExcel} className="px-4 py-2 border border-green-300 text-green-600 hover:bg-green-50 rounded-lg text-sm font-medium flex items-center gap-1.5">
@@ -220,15 +206,15 @@ export default function CashBook() {
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="card border-t-4 border-green-500">
-          <div className="text-xs text-gray-500 mb-1">T?NG THU</div>
+          <div className="text-xs text-gray-500 mb-1">TỔNG THU</div>
           <div className="text-2xl font-bold text-green-600">{formatVND(totalIncome)}</div>
         </div>
         <div className="card border-t-4 border-red-500">
-          <div className="text-xs text-gray-500 mb-1">T?NG CHI</div>
+          <div className="text-xs text-gray-500 mb-1">TỔNG CHI</div>
           <div className="text-2xl font-bold text-red-600">{formatVND(totalExpense)}</div>
         </div>
         <div className={`card border-t-4 ${balance >= 0 ? 'border-blue-500' : 'border-orange-500'}`}>
-          <div className="text-xs text-gray-500 mb-1">S? DU</div>
+          <div className="text-xs text-gray-500 mb-1">SỐ DƯ</div>
           <div className={`text-2xl font-bold ${balance >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
             {formatVND(balance)}
           </div>
@@ -247,7 +233,7 @@ export default function CashBook() {
           <span className="text-gray-500">-</span>
           <input type="date" className="input-field w-36" value={filter.to} onChange={e => setFilter({ ...filter, to: e.target.value })} />
           <button onClick={applyFilter} className="px-4 py-2 bg-blue-600 text-white rounded text-sm flex items-center gap-1">
-            <Filter size={14} /> Lực
+            <Filter size={14} /> Lọc
           </button>
           <button onClick={clearFilter} className="px-4 py-2 bg-gray-300 text-gray-700 rounded text-sm">
             Xóa bộ lọc
@@ -261,39 +247,39 @@ export default function CashBook() {
           <thead>
             <tr className="bg-gray-100 text-gray-600">
               <th className="p-2 text-left">Ngày</th>
-              <th className="p-2 text-left">Gi?</th>
+              <th className="p-2 text-left">Giờ</th>
               <th className="p-2 text-left">Loại</th>
               <th className="p-2 text-left">Danh mục</th>
-              <th className="p-2 text-right">S? tiđơn</th>
-              <th className="p-2 text-left">Ghi ch?</th>
-              <th className="p-2 text-center">H?nh d?ng</th>
+              <th className="p-2 text-right">Số tiền</th>
+              <th className="p-2 text-left">Ghi chú</th>
+              <th className="p-2 text-center">Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="text-center text-gray-400 py-10">đang tđi...</td></tr>
+              <tr><td colSpan={7} className="text-center text-gray-400 py-10">Đang tải...</td></tr>
             ) : transactions.length === 0 ? (
               <tr><td colSpan={7} className="text-center text-gray-400 py-10">Chưa có giao dịch</td></tr>
             ) : (
               transactions.map(t => (
                 <tr key={t.id} className="border-b hover:bg-gray-50">
                   <td className="p-2">{t.date}</td>
-                  <td className="p-2 text-gray-500">{t.time || '?'}</td>
+                  <td className="p-2 text-gray-500">{t.time || '-'}</td>
                   <td className="p-2">
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${t.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                       {t.type === 'income' ? 'Thu' : 'Chi'}
                     </span>
                   </td>
-                  <td className="p-2 text-gray-600">{t.category || '?'}</td>
+                  <td className="p-2 text-gray-600">{t.category || '-'}</td>
                   <td className={`p-2 text-right font-semibold ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
                     {formatVND(t.amount)}
                   </td>
-                  <td className="p-2 text-gray-500 text-xs">{t.note || '?'}</td>
+                  <td className="p-2 text-gray-500 text-xs">{t.note || '-'}</td>
                   <td className="p-2 text-center">
-                    <button onClick={() => openEdit(t)} className="text-blue-600 hover:text-blue-800 text-xs mr-2">
+                    <button onClick={() => openEdit(t)} className="text-blue-600 hover:text-blue-800 text-xs mr-2" title="Sửa">
                       <Edit2 size={12} />
                     </button>
-                    <button onClick={() => handleDelete(t.id)} className="text-red-500 hover:text-red-700 text-xs">
+                    <button onClick={() => handleDelete(t.id)} className="text-red-500 hover:text-red-700 text-xs" title="Xóa">
                       <Trash2 size={12} />
                     </button>
                   </td>
@@ -325,7 +311,7 @@ export default function CashBook() {
                   <input type="date" className="input-field w-full" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Gi?</label>
+                  <label className="text-xs text-gray-500 block mb-1">Giờ</label>
                   <input type="time" className="input-field w-full" value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} />
                 </div>
               </div>
@@ -339,24 +325,24 @@ export default function CashBook() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">Danh mục</label>
-                  <input className="input-field w-full" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="VD: Bản h?ng, Mua h?ng..." />
+                  <input className="input-field w-full" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="VD: Bán hàng, Mua hàng..." />
                 </div>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">S? tiđơn <span className="text-red-500">*</span></label>
+                <label className="text-xs text-gray-500 block mb-1">Số tiền <span className="text-red-500">*</span></label>
                 <input type="number" className="input-field w-full" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" required />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Ghi ch?</label>
-                <textarea className="input-field w-full" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="Ghi ch?..." rows={2} />
+                <label className="text-xs text-gray-500 block mb-1">Ghi chú</label>
+                <textarea className="input-field w-full" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="Ghi chú..." rows={2} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">M? tham chiđủ</label>
+                  <label className="text-xs text-gray-500 block mb-1">Mã tham chiếu</label>
                   <input className="input-field w-full" value={form.reference_id} onChange={e => setForm({ ...form, reference_id: e.target.value })} placeholder="VD: HD001" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">Loại tham chiđủ</label>
+                  <label className="text-xs text-gray-500 block mb-1">Loại tham chiếu</label>
                   <input className="input-field w-full" value={form.reference_type} onChange={e => setForm({ ...form, reference_type: e.target.value })} placeholder="invoice, return..." />
                 </div>
               </div>
@@ -364,7 +350,7 @@ export default function CashBook() {
 
             <div className="flex gap-2 mt-4">
               <button onClick={handleSubmit} disabled={saving} className="btn-success flex-1 disabled:opacity-50">
-                ?? {saving ? 'đang luu...' : 'Luu'}
+                {saving ? 'Đang lưu...' : 'Lưu giao dịch'}
               </button>
               <button onClick={() => setShowForm(false)} className="btn-danger flex-1">Hủy</button>
             </div>
@@ -375,74 +361,74 @@ export default function CashBook() {
       {/* Help Modal */}
       {showHelp && (
         <HelpModal
-          title="Hướng dẫn sử dụng S? qu?"
+          title="Hướng dẫn sử dụng Sổ quỹ"
           onClose={() => setShowHelp(false)}
           content={
             <div className="space-y-4 text-sm text-gray-700">
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? Tổng quan</h3>
-                <p>S? qu? giáp bđơn ghi nhân về theo dài các khođơn thu chi của cửa hàng. Dữ liệu được luu tự động về không một khi tốt mãy.</p>
+                <h3 className="font-bold text-gray-800 mb-2">📌 Tổng quan</h3>
+                <p>Sổ quỹ giúp bạn ghi nhận và theo dõi các khoản thu chi của cửa hàng. Dữ liệu được lưu tự động và không mất khi tắt máy.</p>
               </div>
 
               <div>
                 <h3 className="font-bold text-gray-800 mb-2">Thu nhập tự động từ đơn hàng</h3>
                 <p className="text-blue-600">Khi bạn xác nhận đơn hàng (trạng thái "Đã thanh toán"), hệ thống sẽ tự động tạo giao dịch thu vào sổ quỹ với:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
-                  <li>Danh mục: "Doanh thu t? đơn hàng"</li>
-                  <li>S? tiđơn: Tổng giá trị hóa đơn</li>
-                  <li>Ghi ch?: Chđã mã hóa đơn (về d?: "Hóa don HD00001")</li>
-                  <li>Liđơn kỳt: C? th? trace về đơn hàng g?c qua mã tham chiđủ</li>
+                  <li>Danh mục: "Doanh thu từ đơn hàng"</li>
+                  <li>Số tiền: Tổng giá trị hóa đơn</li>
+                  <li>Ghi chú: Chứa mã hóa đơn (ví dụ: "Hóa đơn HD00001")</li>
+                  <li>Liên kết: Có thể truy vết về đơn hàng gốc qua mã tham chiếu</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">? Thêm giao dịch th? c?ng</h3>
+                <h3 className="font-bold text-gray-800 mb-2">➕ Thêm giao dịch thủ công</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nhân n?t <strong>"Thêm giao dịch"</strong> ? g?c trđơn phđi</li>
-                  <li>Chọn loại: <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Thu</span> ho?c <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">Chi</span></li>
-                  <li>Nhập ngày, giá (mặc định l? hiện tại)</li>
-                  <li>Nhập s? tiđơn về danh mục (VD: "Bản h?ng", "Mua h?ng", "Tiền diđơn"...)</li>
-                  <li>C? th? thêm ghi ch? về mã tham chiđủ (HD001...)</li>
+                  <li>Nhấn nút <strong>"Thêm giao dịch"</strong> ở góc trên phải</li>
+                  <li>Chọn loại: <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Thu</span> hoặc <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">Chi</span></li>
+                  <li>Nhập ngày, giờ (mặc định là hiện tại)</li>
+                  <li>Nhập số tiền và danh mục (VD: "Bán hàng", "Mua hàng", "Tiền điện"...)</li>
+                  <li>Có thể thêm ghi chú và mã tham chiếu (HD001...)</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? Các số liệu hiển thị</h3>
+                <h3 className="font-bold text-gray-800 mb-2">📊 Các số liệu hiển thị</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li><strong>Tổng thu:</strong> Tất cả khođơn thu (loại income)</li>
-                  <li><strong>Tổng chi:</strong> Tất cả khođơn chi (loại expense)</li>
-                  <li><strong>S? du:</strong> Tổng thu - Tổng chi</li>
+                  <li><strong>Tổng thu:</strong> Tất cả khoản thu (loại income)</li>
+                  <li><strong>Tổng chi:</strong> Tất cả khoản chi (loại expense)</li>
+                  <li><strong>Số dư:</strong> Tổng thu - Tổng chi</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? Lực danh sách</h3>
+                <h3 className="font-bold text-gray-800 mb-2">🔍 Lọc danh sách</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Chọn loại (Thu/Chi) d? l?c</li>
-                  <li>Chọn kho?ng ngày d? xem giao dịch trong thời gian có thể</li>
-                  <li>Nhân "Lực" d? ?p d?ng, "Xóa bộ lọc" d? xem tất cả</li>
+                  <li>Chọn loại (Thu/Chi) để lọc</li>
+                  <li>Chọn khoảng ngày để xem giao dịch trong khoảng thời gian cụ thể</li>
+                  <li>Nhấn "Lọc" để áp dụng, "Xóa bộ lọc" để xem tất cả</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? Chỉnh sửa & Xóa</h3>
+                <h3 className="font-bold text-gray-800 mb-2">✏️ Chỉnh sửa & Xóa</h3>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Nhân icon <strong>?? Sửa</strong> d? chỉnh sửa giao dịch</li>
-                  <li>Nhân icon <strong>??? Xóa</strong> d? xóa giao dịch</li>
+                  <li>Nhấn biểu tượng <strong>Sửa</strong> để chỉnh sửa giao dịch</li>
+                  <li>Nhấn biểu tượng <strong>Xóa</strong> để xóa giao dịch</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="font-bold text-gray-800 mb-2">?? Xuất Excel</h3>
-                <p>Nhân n?t "Xuất Excel" đã tải tođơn b? danh sách giao dịch ra file .xlsx. File chđã các c?t: Ngày, Gi?, Loại, Danh mục, S? tiđơn, Ghi ch?...</p>
+                <h3 className="font-bold text-gray-800 mb-2">📥 Xuất Excel</h3>
+                <p>Nhấn nút "Xuất Excel" để tải toàn bộ danh sách giao dịch ra file .xlsx. File chứa các cột: Ngày, Giờ, Loại, Danh mục, Số tiền, Ghi chú...</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h3 className="font-bold text-blue-800 mb-2">?? M?o hay</h3>
+                <h3 className="font-bold text-blue-800 mb-2">💡 Mẹo hay</h3>
                 <ul className="list-disc pl-5 space-y-1 text-blue-700">
-                  <li>Tạo quy d?nh: Nhập chi ph? vđi danh mục r? r?ng (Tiền diđơn, Tiền nu?c, Thu? một bằng...)</li>
-                  <li>Ghi ch? mã hóa đơn vào "M? tham chiđủ" d? d? theo dài</li>
-                  <li>Kiểm tra s? qu? h?ng tuđơn d? dài chiđủ</li>
+                  <li>Tạo quy định: Nhập chi phí với danh mục rõ ràng (Tiền điện, Tiền nước, Thuê mặt bằng...)</li>
+                  <li>Ghi chú mã hóa đơn vào "Mã tham chiếu" để dễ theo dõi</li>
+                  <li>Kiểm tra sổ quỹ hàng tuần để đối chiếu</li>
                 </ul>
               </div>
             </div>

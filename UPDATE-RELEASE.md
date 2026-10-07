@@ -8,46 +8,46 @@
 - File manifest legacy [`release/update-manifest.json`](release/update-manifest.json:1) vẫn được giữ để tooling ngoài app có thể đọc SHA256/size theo từng kiến trúc.
 - Bản Windows phát hành cả hai kiến trúc: `x64` và `ia32`. Tên asset luôn có hậu tố kiến trúc để tránh người dùng Windows 32-bit tải nhầm bản x64.
 
-## Bảng phát hành chính thức v3.1.18
+## Bảng phát hành chính thức v3.1.19
 
 | Hạng mục | Nội dung |
 | --- | --- |
-| Phiên bản | 3.1.18 |
-| Ngày phát hành | 2026-09-26 |
+| Phiên bản | 3.1.19 |
+| Ngày phát hành | 2026-10-07 |
 | Kênh phát hành | GitHub Release latest cho Windows x64 và ia32 |
 | Trạng thái | Đã cập nhật source code, metadata, sẵn sàng tag và push để GitHub Actions publish |
 
 ### Ghi chú thay đổi tổng quan
 
-Bản 3.1.18 bổ sung bot kiểm kho tự động báo cáo Telegram toàn diện, cơ chế fallback thông minh đa bot giúp chỉ cần 1 token Telegram là chạy toàn bộ thông báo hệ thống, quản lý và chỉnh sửa thanh toán / nợ cũ trực tiếp trong chi tiết đơn hàng, thông báo Telegram khi in ấn hóa đơn và đồng bộ ngoại tuyến, cùng cải tiến in hóa đơn khổ A5.
+Bản 3.1.19 bổ sung tính năng Xuất Excel chuyên sâu cho Báo cáo thuế GTGT (3 sheet: Tổng hợp thuế GTGT, Bảng kê bán ra - Đầu ra, Bảng kê mua vào - Đầu vào), chuẩn hóa bộ chọn tháng tiếng Việt (Tháng 1 đến Tháng 12 và Năm) thay cho ô input tiếng Anh của trình duyệt, nhúng sẵn bản quyền Google Gemini AI Key mặc định giúp khách hàng dùng ngay không cần nhập key, Trợ lý AI hỗ trợ dán ảnh (Ctrl+V) và kéo thả ảnh đọc hóa đơn/chứng từ (Vision), cùng tính năng xuất Excel 17 cột và bộ lọc ngày tại Danh sách đơn hàng.
 
 ### Phát hành
 
-- Đồng bộ version 3.1.18 trong package root, backend, frontend và các lockfile tương ứng.
-- Cập nhật changelog, tài liệu release, manifest ví dụ, tên asset và tag kiểm tra theo v3.1.18.
+- Đồng bộ version 3.1.19 trong package root, backend, frontend và các lockfile tương ứng.
+- Cập nhật changelog, tài liệu release, manifest ví dụ, tên asset và tag kiểm tra theo v3.1.19.
 - GitHub Actions build/publish bộ cài riêng cho Windows x64 và ia32 kèm latest.yml/update-manifest.json từ artifact thực tế sau khi push tag.
 
 ### QA và build
 
 - Rà soát diff release để chỉ stage các tệp version/tài liệu và thay đổi nghiệp vụ thuộc phạm vi phát hành.
 - Chạy build frontend và kiểm tra cú pháp backend trước khi commit/tag.
-- Giữ nguyên metadata generated production nếu chưa có installer v3.1.18 để sinh SHA/size chính xác.
+- Giữ nguyên metadata generated production nếu chưa có installer v3.1.19 để sinh SHA/size chính xác.
 
 ### Lưu ý quan trọng cho người dùng
 
-- Windows 10/11 64-bit: dùng `banhangoffline-setup-v3.1.18-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn”: dùng `banhangoffline-setup-v3.1.18-ia32.exe`.
+- Windows 10/11 64-bit: dùng `banhangoffline-setup-v3.1.19-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn”: dùng `banhangoffline-setup-v3.1.19-ia32.exe`.
 - Chỉ tải từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên file, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
 - Người dùng trong app có thể vào Cài đặt -> Cập nhật để kiểm tra và tự động nâng cấp lên phiên bản mới nhất.
 
 ## Asset GitHub Release bắt buộc
 
-Khi phát hành version `3.1.18`, release cần tối thiểu các asset:
+Khi phát hành version `3.1.19`, release cần tối thiểu các asset:
 
-- `banhangoffline-setup-v3.1.18-x64.exe`
-- `banhangoffline-setup-v3.1.18-x64.exe.blockmap`
-- `banhangoffline-setup-v3.1.18-ia32.exe`
-- `banhangoffline-setup-v3.1.18-ia32.exe.blockmap`
+- `banhangoffline-setup-v3.1.19-x64.exe`
+- `banhangoffline-setup-v3.1.19-x64.exe.blockmap`
+- `banhangoffline-setup-v3.1.19-ia32.exe`
+- `banhangoffline-setup-v3.1.19-ia32.exe.blockmap`
 - `latest.yml`
 - `update-manifest.json`
 

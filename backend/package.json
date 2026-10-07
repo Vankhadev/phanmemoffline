@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-backend",
-  "version": "3.1.18",
+  "version": "3.1.19",
   "description": "Backend for Bán Hàng Pos",
   "main": "src/server.js",
   "scripts": {
@@ -22,7 +22,9 @@
     "test:sqlite-driver:node": "node scripts/test-sqlite-driver.js",
     "test:sqlite-driver:electron": "node scripts/test-sqlite-driver-electron.js",
     "test:db-relations": "node scripts/verify-relational-sqlite.js",
-    "test:db-transactions": "node scripts/verify-relational-sqlite.js"
+    "test:db-transactions": "node scripts/verify-relational-sqlite.js",
+    "test:debt-aging": "node scripts/test-debt-aging.js",
+    "test:gemini-accounting": "node scripts/test-gemini-accounting.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
