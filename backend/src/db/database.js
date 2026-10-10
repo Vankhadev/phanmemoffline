@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Lightweight JSON database layer for the offline-first backend.
  *
  * The helpers in this module intentionally keep a small synchronous API because
@@ -690,6 +690,11 @@ const INVOICE_COMPLETED_STATUSES = new Set([
   'da thanh toan',
   'đã thanh toán',
   'dã thanh toán',
+  'pending',
+  'cho_thanh_toan',
+  'cho thanh toan',
+  'chờ thanh toán',
+  'chờ',
 ]);
 const INVOICE_CANCEL_RETENTION_MS = 24 * 60 * 60 * 1000;
 const INVOICE_STATUS_CANCELLED_AT_INDEX_FIELDS = Object.freeze(['status', 'cancelled_at']);

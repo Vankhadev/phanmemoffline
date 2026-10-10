@@ -1,3 +1,18 @@
+## [3.1.20] - 2026-10-10
+
+### Added
+- **Bộ lọc thời gian nhanh cho Báo cáo Kế toán tổng hợp (`AccountingDashboard.jsx`):**
+  - Bổ sung thanh nút chọn nhanh khoảng thời gian: **Hôm nay**, **Tuần này**, **Từ đầu tháng**, **Cả tháng này**, **Tháng trước** và **Tùy chỉnh**.
+  - Tối ưu giao diện hiển thị 2 cột trên điện thoại và máy tính bảng, nâng cao trải nghiệm tra cứu doanh thu và chi phí tức thì.
+
+### Changed & Fixed
+- **Tối ưu nghiệp vụ Công nợ khi Bán hàng (`CreateOrder.jsx`):**
+  - Điều chỉnh quy trình tạo đơn: Không tự động cộng dồn nợ cũ vào tổng thanh toán đơn hàng mới, giúp chủ cửa hàng linh hoạt quyết định thu riêng đơn hiện tại hoặc chủ động nhập số nợ cũ cần thu gộp.
+  - Cập nhật thông điệp cảnh báo nợ quá hạn và nợ cũ thân thiện, chính xác hơn.
+- **Chuẩn hóa trạng thái đơn hàng & Sửa lỗi danh sách hóa đơn (`invoices.js`, `database.js`, `invoiceCreationService.js`):**
+  - Sửa lỗi tham chiếu biến trong danh sách hóa đơn `invoices.js`.
+  - Mở rộng tập trạng thái đơn hàng hợp lệ (`pending`, `cho_thanh_toan`), đảm bảo ghi nhận và lọc báo cáo chính xác.
+
 ## [3.1.19] - 2026-10-07
 
 ### Added

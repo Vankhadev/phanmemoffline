@@ -667,7 +667,7 @@ function createInvoiceFromPayload(payload = {}, req = null, options = {}) {
   const creatorMetadata = buildCreatorMetadata(payload, req, options);
   const status = payload.status
     || options.defaultStatus
-    || (money.payable_amount > 0 && money.paid_amount >= money.payable_amount ? 'completed' : 'pending');
+    || (money.payable_amount > 0 && money.paid_amount >= money.payable_amount ? 'completed' : 'completed');
   const invoiceCreatedAt = payload.created_at || now();
 
   const runCreation = () => {

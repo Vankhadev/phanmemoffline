@@ -234,9 +234,9 @@ export default function CreateOrder({ user, store }) {
       const res = await accountingApi.customerDebtAging(customerId);
       if (res && res.ok && res.customer) {
         setCustomerDebtAging(res.customer);
-        if (res.customer.total_remaining_debt > 0) {
-          setOldDebtAmount(res.customer.total_remaining_debt);
-        }
+        // Không tự động cộng dồn nợ cũ vào đơn mới nữa.
+        // Nợ cũ sẽ do chủ cửa hàng tự nhập thủ công ở ô "Nợ cũ" trong khung thanh toán
+        // hoặc ở danh sách đơn hàng.
       } else {
         setCustomerDebtAging(null);
       }
@@ -2175,7 +2175,7 @@ export default function CreateOrder({ user, store }) {
                         <div className="text-[11px] opacity-80 mt-0.5">
                           {customerDebtAging.overdue_invoices_count > 0
                             ? '⚠️ Khách đang có đơn nợ chậm thanh toán. Vui lòng nhắc khách thanh toán trước khi cho nợ thêm đơn mới!'
-                            : 'Đã tự động cộng dồn nợ cũ vào mục thanh toán bên phải.'}
+                            : 'Khách đang có công nợ cũ. Nếu muốn cộng vào đơn này, hãy nhập thủ công ở ô "Nợ cũ" bên phải.'}
                         </div>
                       </div>
                     </div>

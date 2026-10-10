@@ -69,6 +69,7 @@ function toneClasses(tone) {
 export default function AccountingDashboard({ user }) {
   const defaults = useMemo(() => getDefaultRange(), []);
   const [filters, setFilters] = useState(defaults);
+  const [activePreset, setActivePreset] = useState('month_to_now');
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -125,12 +126,75 @@ export default function AccountingDashboard({ user }) {
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[180px_180px_auto]">
-          <div><label className="mb-1 block text-xs font-semibold text-gray-500">Từ ngày</label><input type="date" className="input-field" value={filters.from} max={filters.to || undefined} onChange={event => setFilters(current => ({ ...current, from: event.target.value }))} /></div>
-          <div><label className="mb-1 block text-xs font-semibold text-gray-500">Đến ngày</label><input type="date" className="input-field" value={filters.to} min={filters.from || undefined} onChange={event => setFilters(current => ({ ...current, to: event.target.value }))} /></div>
-          <div className="flex items-end"><button type="button" onClick={loadSummary} disabled={loading} className="btn-primary min-h-11 w-full sm:w-auto">{loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Xem tổng hợp</button></div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-[1fr_1fr_auto]">
+          <div><label className="mb-1 block text-xs font-semibold text-gray-500">Từ ngày</label><input type="date" className="input-field w-full" value={filters.from} max={filters.to || undefined} onChange={event => { setActivePreset('custom'); setFilters(current => ({ ...current, from: event.target.value })); }} /></div>
+          <div><label className="mb-1 block text-xs font-semibold text-gray-500">Đến ngày</label><input type="date" className="input-field w-full" value={filters.to} min={filters.from || undefined} onChange={event => { setActivePreset('custom'); setFilters(current => ({ ...current, to: event.target.value })); }} /></div>
+          <div className="col-span-2 flex items-end md:col-span-1"><button type="button" onClick={loadSummary} disabled={loading} className="btn-primary min-h-11 w-full md:w-auto">{loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Xem tổng hợp</button></div>
         </div>
-        <div className="mt-3 inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"><CalendarDays size={13} /> {filters.from} - {filters.to}</div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"><CalendarDays size={13} /> Khoảng thời gian:</span>
+          {[
+            { key: 'today', label: 'Hôm nay', getRange: () => {
+              const now = new Date();
+              const iso = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+              return { from: iso, to: iso };
+            } },
+            { key: 'this_week', label: 'Tuần này', getRange: () => {
+              const now = new Date();
+              const dayOfWeek = now.getDay() || 7; // CN = 7
+              const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (dayOfWeek - 1));
+              const sunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (7 - dayOfWeek));
+              return { from: toDateInput(monday), to: toDateInput(sunday) };
+            } },
+            { key: 'month_to_now', label: 'Từ đầu tháng', getRange: () => {
+              const now = new Date();
+              return { from: toDateInput(new Date(now.getFullYear(), now.getMonth(), 1)), to: toDateInput(now) };
+            } },
+            { key: 'this_month', label: 'Cả tháng này', getRange: () => {
+              const now = new Date();
+              const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+              return { from: toDateInput(new Date(now.getFullYear(), now.getMonth(), 1)), to: toDateInput(lastDay) };
+            } },
+            { key: 'last_month', label: 'Tháng trước', getRange: () => {
+              const now = new Date();
+              const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+              const to = new Date(now.getFullYear(), now.getMonth(), 0);
+              return { from: toDateInput(from), to: toDateInput(to) };
+            } },
+            { key: 'custom', label: 'Tùy chỉnh', getRange: null },
+          ].map((preset) => {
+            const isActive = preset.key === activePreset;
+            const isDisabled = !preset.getRange;
+            return (
+              <button
+                key={preset.key}
+                type="button"
+                disabled={isDisabled}
+                onClick={() => {
+                  if (preset.getRange) {
+                    setFilters(preset.getRange());
+                    setActivePreset(preset.key);
+                  } else {
+                    setActivePreset('custom');
+                  }
+                }}
+                className={`rounded-lg border px-3 py-1 text-xs font-semibold transition ${
+                  isActive
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : isDisabled
+                    ? 'cursor-not-allowed border-gray-100 bg-gray-50 text-gray-400'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+                title={isDisabled ? 'Hãy chọn ngày bằng 2 ô Từ/Đến ngày phía trên' : ''}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+          <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-100">
+            {filters.from} - {filters.to}
+          </span>
+        </div>
         {error && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
       </section>
 
