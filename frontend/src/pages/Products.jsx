@@ -87,6 +87,39 @@ function formatVND(n) {
   return vndFormatter.format(n || 0);
 }
 
+export function getPriceLossInfo(item) {
+  if (!item) return null;
+  const imp = Number(item.import_price) || 0;
+  if (imp <= 0) return null;
+
+  const ret = Number(item.retail_price) || 0;
+  const who = Number(item.wholesale_price) || 0;
+  const vip = Number(item.vip_price) || 0;
+
+  const lossList = [];
+  if (ret > 0 && imp > ret) {
+    lossList.push({ type: 'retail', label: 'Giá lẻ', price: ret, diff: imp - ret });
+  }
+  if (who > 0 && imp > who) {
+    lossList.push({ type: 'wholesale', label: 'Giá sỉ', price: who, diff: imp - who });
+  }
+  if (vip > 0 && imp > vip) {
+    lossList.push({ type: 'vip', label: 'Giá VIP', price: vip, diff: imp - vip });
+  }
+
+  if (lossList.length === 0) return null;
+  lossList.sort((a, b) => b.diff - a.diff);
+
+  return {
+    isLoss: true,
+    importPrice: imp,
+    maxLoss: lossList[0].diff,
+    losses: lossList,
+    primaryLoss: lossList[0],
+    summary: lossList.map(l => `${l.label} ${formatVND(l.price)} (thấp hơn giá nhập ${formatVND(l.diff)})`).join(', '),
+  };
+}
+
 const QUANTITY_STEP = 0.1;
 const MIN_QUANTITY = 0.1;
 
@@ -181,6 +214,20 @@ const ProductFormModal = memo(function ProductFormModal({
   const stockValueNumber = parseStockInputNumber(form.stock, 0);
   const stockIsNegative = Number.isFinite(stockValueNumber) && stockValueNumber < 0;
 
+  const curImport = Number(form.import_price) || 0;
+  const curRetail = Number(form.retail_price) || 0;
+  const curWholesale = Number(form.wholesale_price) || 0;
+  const curVip = Number(form.vip_price) || 0;
+
+  const currentLosses = useMemo(() => {
+    if (curImport <= 0) return [];
+    const list = [];
+    if (curRetail > 0 && curImport > curRetail) list.push({ type: 'retail', label: 'Giá lẻ', price: curRetail, diff: curImport - curRetail });
+    if (curWholesale > 0 && curImport > curWholesale) list.push({ type: 'wholesale', label: 'Giá sỉ', price: curWholesale, diff: curImport - curWholesale });
+    if (curVip > 0 && curImport > curVip) list.push({ type: 'vip', label: 'Giá VIP', price: curVip, diff: curImport - curVip });
+    return list;
+  }, [curImport, curRetail, curWholesale, curVip]);
+
   useEffect(() => {
     setForm(createProductFormInitial(initialForm));
   }, [initialForm]);
@@ -225,6 +272,26 @@ const ProductFormModal = memo(function ProductFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3 mb-4">
+          {currentLosses.length > 0 && (
+            <div className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900 space-y-1.5 mb-2">
+              <div className="font-bold flex items-center gap-1.5 text-rose-800 text-sm">
+                <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+                <span>Cảnh báo: Giá nhập đang cao hơn giá bán (Bán lỗ)!</span>
+              </div>
+              <div className="text-xs">
+                Giá nhập: <strong className="text-rose-800">{formatVND(curImport)}</strong>
+                {' cao hơn: '}
+                {currentLosses.map(l => (
+                  <span key={l.type} className="inline-block mr-2 font-medium">
+                    {l.label} <strong className="underline text-rose-700">{formatVND(l.price)}</strong> (Lỗ <strong className="text-red-700">{formatVND(l.diff)}</strong> / sản phẩm)
+                  </span>
+                ))}
+              </div>
+              <div className="text-rose-900 text-[11px]">
+                👉 Chủ cửa hàng vui lòng tăng giá bán lên ít nhất bằng hoặc cao hơn giá nhập để tránh bị bán lỗ khi tạo đơn!
+              </div>
+            </div>
+          )}
           {editing && (editing.import_price_increased || (Number(editing.prev_import_price) > 0 && Number(editing.import_price) > Number(editing.prev_import_price))) && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 space-y-2 mb-2">
               <div className="font-bold flex items-center gap-1.5 text-amber-800 text-sm">
@@ -334,6 +401,20 @@ const VariantFormModal = memo(function VariantFormModal({
   const stockValueNumber = parseStockInputNumber(form.stock, 0);
   const stockIsNegative = Number.isFinite(stockValueNumber) && stockValueNumber < 0;
 
+  const curImport = Number(form.import_price) || 0;
+  const curRetail = Number(form.retail_price) || 0;
+  const curWholesale = Number(form.wholesale_price) || 0;
+  const curVip = Number(form.vip_price) || 0;
+
+  const currentLosses = useMemo(() => {
+    if (curImport <= 0) return [];
+    const list = [];
+    if (curRetail > 0 && curImport > curRetail) list.push({ type: 'retail', label: 'Giá lẻ', price: curRetail, diff: curImport - curRetail });
+    if (curWholesale > 0 && curImport > curWholesale) list.push({ type: 'wholesale', label: 'Giá sỉ', price: curWholesale, diff: curImport - curWholesale });
+    if (curVip > 0 && curImport > curVip) list.push({ type: 'vip', label: 'Giá VIP', price: curVip, diff: curImport - curVip });
+    return list;
+  }, [curImport, curRetail, curWholesale, curVip]);
+
   useEffect(() => {
     setForm(createVariantFormInitial(initialForm));
   }, [initialForm]);
@@ -379,6 +460,26 @@ const VariantFormModal = memo(function VariantFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3 mb-4">
+          {currentLosses.length > 0 && (
+            <div className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900 space-y-1.5 mb-2">
+              <div className="font-bold flex items-center gap-1.5 text-rose-800 text-sm">
+                <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+                <span>Cảnh báo: Giá nhập đang cao hơn giá bán (Bán lỗ)!</span>
+              </div>
+              <div className="text-xs">
+                Giá nhập: <strong className="text-rose-800">{formatVND(curImport)}</strong>
+                {' cao hơn: '}
+                {currentLosses.map(l => (
+                  <span key={l.type} className="inline-block mr-2 font-medium">
+                    {l.label} <strong className="underline text-rose-700">{formatVND(l.price)}</strong> (Lỗ <strong className="text-red-700">{formatVND(l.diff)}</strong> / sản phẩm)
+                  </span>
+                ))}
+              </div>
+              <div className="text-rose-900 text-[11px]">
+                👉 Chủ cửa hàng vui lòng tăng giá bán lên ít nhất bằng hoặc cao hơn giá nhập để tránh bị bán lỗ khi tạo đơn!
+              </div>
+            </div>
+          )}
           {editingVariant && (editingVariant.import_price_increased || (Number(editingVariant.prev_import_price) > 0 && Number(editingVariant.import_price) > Number(editingVariant.prev_import_price))) && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 space-y-2 mb-2">
               <div className="font-bold flex items-center gap-1.5 text-amber-800 text-sm">
@@ -482,6 +583,13 @@ const ProductRow = memo(function ProductRow({
   const variants = Array.isArray(p.variants) ? p.variants : EMPTY_ARRAY;
   const variantCount = getProductVariantCount(p);
   const hasVariants = variantCount > 0;
+  const parentPriceLoss = !hasVariants ? getPriceLossInfo(p) : null;
+  const variantsWithLoss = hasVariants && Array.isArray(p.variants)
+    ? p.variants.filter(v => getPriceLossInfo(v))
+    : [];
+  const hasPriceLossVariant = variantsWithLoss.length > 0;
+  const priceLossVariantsCount = variantsWithLoss.length;
+
   const isParentPriceIncreased = !hasVariants && (
     p.import_price_increased === true ||
     (Number(p.prev_import_price) > 0 && Number(p.import_price) > Number(p.prev_import_price))
@@ -523,7 +631,18 @@ const ProductRow = memo(function ProductRow({
         <div className="flex-1 min-w-[12rem] md:min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`font-medium text-sm ${!hasVariants ? parentStockMeta.nameClass : ''}`}>{p.name}</span>
-            {isParentPriceIncreased && (
+            {parentPriceLoss ? (
+              <span
+                className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs"
+                title={`Cảnh báo: Giá nhập ${formatVND(p.import_price)} cao hơn ${parentPriceLoss.summary}. Vui lòng chỉnh lại giá bán!`}
+              >
+                <AlertTriangle size={12} className="text-rose-600 shrink-0" />
+                <span>Giá nhập &gt; Giá bán</span>
+                <span className="font-mono text-[10px] text-rose-800">
+                  (Nhập {formatVND(p.import_price)} &gt; {parentPriceLoss.primaryLoss.label} {formatVND(parentPriceLoss.primaryLoss.price)})
+                </span>
+              </span>
+            ) : isParentPriceIncreased ? (
               <span
                 className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs"
                 title={`Giá nhập tăng từ ${Number(p.prev_import_price) > 0 ? formatVND(p.prev_import_price) : '?'} lên ${formatVND(p.import_price)}. Vui lòng điều chỉnh lại giá bán!`}
@@ -536,8 +655,18 @@ const ProductRow = memo(function ProductRow({
                   </span>
                 )}
               </span>
-            )}
-            {hasPriceIncreasedVariant && (
+            ) : null}
+            {hasPriceLossVariant ? (
+              <button
+                type="button"
+                onClick={() => onToggleExpand(p.id)}
+                className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-rose-100 text-rose-900 border border-rose-300 hover:bg-rose-200 shadow-2xs transition"
+                title="Bấm để xem các biến thể có giá nhập cao hơn giá bán"
+              >
+                <AlertTriangle size={12} className="text-rose-600 shrink-0" />
+                <span>{priceLossVariantsCount > 0 ? `${priceLossVariantsCount} biến thể giá nhập > giá bán` : 'Biến thể giá nhập > giá bán'}</span>
+              </button>
+            ) : hasPriceIncreasedVariant ? (
               <button
                 type="button"
                 onClick={() => onToggleExpand(p.id)}
@@ -547,7 +676,7 @@ const ProductRow = memo(function ProductRow({
                 <AlertTriangle size={12} className="text-amber-600 shrink-0" />
                 <span>{increasedVariantsCount > 0 ? `${increasedVariantsCount} biến thể tăng giá nhập` : 'Biến thể tăng giá nhập'}</span>
               </button>
-            )}
+            ) : null}
             {!hasVariants && parentStockMeta.isNegative && (
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${parentStockMeta.badgeClass}`}>âm kho</span>
             )}
@@ -576,6 +705,13 @@ const ProductRow = memo(function ProductRow({
         <div className="hidden text-right text-xs w-24 md:block" title={hasVariants ? 'Giá nhập được quản lý ở từng biến thể' : undefined}>
           {hasVariants ? (
             <span className="text-gray-400">—</span>
+          ) : parentPriceLoss ? (
+            <div>
+              <div className="font-bold text-rose-700 flex items-center justify-end gap-0.5" title={`Giá nhập cao hơn giá bán! ${parentPriceLoss.summary}`}>
+                <span>{formatVND(p.import_price)}</span>
+                <span className="text-rose-600 text-[10px] font-extrabold" title="Giá nhập cao hơn giá bán">▲</span>
+              </div>
+            </div>
           ) : isParentPriceIncreased ? (
             <div>
               <div className="font-bold text-amber-700 flex items-center justify-end gap-0.5">
@@ -592,9 +728,36 @@ const ProductRow = memo(function ProductRow({
             <span className="text-gray-500">{formatVND(p.import_price)}</span>
           )}
         </div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-green-600'}`} title={hasVariants ? 'Giá lẻ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatVND(p.retail_price)}</div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-red-600'}`} title={hasVariants ? 'Giá sỉ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatVND(p.wholesale_price)}</div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-blue-600'}`} title={hasVariants ? 'Giá VIP được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatVND(p.vip_price)}</div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : (!hasVariants && Number(p.retail_price) > 0 && Number(p.import_price) > Number(p.retail_price) ? 'text-rose-600 font-bold bg-rose-50 px-1 py-0.5 rounded border border-rose-200' : 'text-green-600')}`} title={hasVariants ? 'Giá lẻ được quản lý ở từng biến thể' : (!hasVariants && Number(p.retail_price) > 0 && Number(p.import_price) > Number(p.retail_price) ? `Bán lỗ! Giá lẻ (${formatVND(p.retail_price)}) thấp hơn giá nhập (${formatVND(p.import_price)})` : undefined)}>
+          {hasVariants ? '—' : (
+            !hasVariants && Number(p.retail_price) > 0 && Number(p.import_price) > Number(p.retail_price) ? (
+              <span className="flex items-center justify-end gap-0.5">
+                <span>{formatVND(p.retail_price)}</span>
+                <span className="text-[10px] text-rose-600">⚠️</span>
+              </span>
+            ) : formatVND(p.retail_price)
+          )}
+        </div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : (!hasVariants && Number(p.wholesale_price) > 0 && Number(p.import_price) > Number(p.wholesale_price) ? 'text-rose-600 font-bold bg-rose-50 px-1 py-0.5 rounded border border-rose-200' : 'text-red-600')}`} title={hasVariants ? 'Giá sỉ được quản lý ở từng biến thể' : (!hasVariants && Number(p.wholesale_price) > 0 && Number(p.import_price) > Number(p.wholesale_price) ? `Bán lỗ! Giá sỉ (${formatVND(p.wholesale_price)}) thấp hơn giá nhập (${formatVND(p.import_price)})` : undefined)}>
+          {hasVariants ? '—' : (
+            !hasVariants && Number(p.wholesale_price) > 0 && Number(p.import_price) > Number(p.wholesale_price) ? (
+              <span className="flex items-center justify-end gap-0.5">
+                <span>{formatVND(p.wholesale_price)}</span>
+                <span className="text-[10px] text-rose-600">⚠️</span>
+              </span>
+            ) : formatVND(p.wholesale_price)
+          )}
+        </div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : (!hasVariants && Number(p.vip_price) > 0 && Number(p.import_price) > Number(p.vip_price) ? 'text-rose-600 font-bold bg-rose-50 px-1 py-0.5 rounded border border-rose-200' : 'text-blue-600')}`} title={hasVariants ? 'Giá VIP được quản lý ở từng biến thể' : (!hasVariants && Number(p.vip_price) > 0 && Number(p.import_price) > Number(p.vip_price) ? `Bán lỗ! Giá VIP (${formatVND(p.vip_price)}) thấp hơn giá nhập (${formatVND(p.import_price)})` : undefined)}>
+          {hasVariants ? '—' : (
+            !hasVariants && Number(p.vip_price) > 0 && Number(p.import_price) > Number(p.vip_price) ? (
+              <span className="flex items-center justify-end gap-0.5">
+                <span>{formatVND(p.vip_price)}</span>
+                <span className="text-[10px] text-rose-600">⚠️</span>
+              </span>
+            ) : formatVND(p.vip_price)
+          )}
+        </div>
 
         <div className="flex items-center gap-1 w-full justify-end border-t border-gray-100 pt-2 md:w-auto md:border-t-0 md:pt-0">
           {isParentPriceIncreased && (
@@ -624,13 +787,25 @@ const ProductRow = memo(function ProductRow({
 
       {variantRows.map(v => {
         const variantStockMeta = getStockDisplayMeta(v.stock, negativeStockSettings);
+        const variantPriceLoss = getPriceLossInfo(v);
         const isVariantPriceIncreased = v.import_price_increased === true || (Number(v.prev_import_price) > 0 && Number(v.import_price) > Number(v.prev_import_price));
         return (
         <div key={v.id} className={`flex flex-wrap items-center gap-2 px-3 py-3 pl-8 sm:pl-12 border-t md:flex-nowrap md:py-2 ${variantStockMeta.rowClass || 'bg-gray-50'}`}>
           <div className="flex-1 min-w-[12rem] md:min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className={`text-sm ${variantStockMeta.nameClass || 'text-gray-700'}`}>{v.name}</span>
-              {isVariantPriceIncreased && (
+              {variantPriceLoss ? (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs"
+                  title={`Cảnh báo: Giá nhập ${formatVND(v.import_price)} cao hơn ${variantPriceLoss.summary}. Vui lòng chỉnh lại giá bán!`}
+                >
+                  <AlertTriangle size={11} className="text-rose-600 shrink-0" />
+                  <span>Giá nhập &gt; Giá bán</span>
+                  <span className="font-mono text-[9px] text-rose-800">
+                    (Nhập {formatVND(v.import_price)} &gt; {variantPriceLoss.primaryLoss.label} {formatVND(variantPriceLoss.primaryLoss.price)})
+                  </span>
+                </span>
+              ) : isVariantPriceIncreased ? (
                 <span
                   className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs"
                   title={`Giá nhập tăng từ ${Number(v.prev_import_price) > 0 ? formatVND(v.prev_import_price) : '?'} lên ${formatVND(v.import_price)}. Bấm "Sửa" để chỉnh giá bán hoặc "Đã chỉnh giá" để tắt cảnh báo!`}
@@ -643,7 +818,7 @@ const ProductRow = memo(function ProductRow({
                     </span>
                   )}
                 </span>
-              )}
+              ) : null}
             </div>
             <div className="text-xs text-gray-400">
               {v.sku} • {getCategoryName(v) || getCategoryName(p)} • {getSupplierName(v.supplier_id || p.supplier_id)}
@@ -655,7 +830,12 @@ const ProductRow = memo(function ProductRow({
           </div>
 
           <div className="hidden text-right text-xs w-24 md:block">
-            {isVariantPriceIncreased ? (
+            {variantPriceLoss ? (
+              <div className="font-bold text-rose-700 flex items-center justify-end gap-0.5" title={`Giá nhập cao hơn giá bán! ${variantPriceLoss.summary}`}>
+                <span>{formatVND(v.import_price)}</span>
+                <span className="text-rose-600 text-[10px] font-extrabold">▲</span>
+              </div>
+            ) : isVariantPriceIncreased ? (
               <div>
                 <div className="font-bold text-amber-700 flex items-center justify-end gap-0.5">
                   <span>{formatVND(v.import_price)}</span>
@@ -671,9 +851,30 @@ const ProductRow = memo(function ProductRow({
               <span className="text-gray-500">{formatVND(v.import_price)}</span>
             )}
           </div>
-          <div className="hidden text-right text-xs text-green-600 font-medium w-24 md:block">{formatVND(v.retail_price)}</div>
-          <div className="hidden text-right text-xs text-red-600 font-medium w-24 md:block">{formatVND(v.wholesale_price)}</div>
-          <div className="hidden text-right text-xs text-blue-600 font-medium w-24 md:block">{formatVND(v.vip_price)}</div>
+          <div className={`hidden text-right text-xs font-medium w-24 md:block ${Number(v.retail_price) > 0 && Number(v.import_price) > Number(v.retail_price) ? 'text-rose-600 font-bold bg-rose-50 px-1 py-0.5 rounded border border-rose-200' : 'text-green-600'}`} title={Number(v.retail_price) > 0 && Number(v.import_price) > Number(v.retail_price) ? `Bán lỗ! Giá lẻ (${formatVND(v.retail_price)}) thấp hơn giá nhập (${formatVND(v.import_price)})` : undefined}>
+            {Number(v.retail_price) > 0 && Number(v.import_price) > Number(v.retail_price) ? (
+              <span className="flex items-center justify-end gap-0.5">
+                <span>{formatVND(v.retail_price)}</span>
+                <span className="text-[10px] text-rose-600">⚠️</span>
+              </span>
+            ) : formatVND(v.retail_price)}
+          </div>
+          <div className={`hidden text-right text-xs font-medium w-24 md:block ${Number(v.wholesale_price) > 0 && Number(v.import_price) > Number(v.wholesale_price) ? 'text-rose-600 font-bold bg-rose-50 px-1 py-0.5 rounded border border-rose-200' : 'text-red-600'}`} title={Number(v.wholesale_price) > 0 && Number(v.import_price) > Number(v.wholesale_price) ? `Bán lỗ! Giá sỉ (${formatVND(v.wholesale_price)}) thấp hơn giá nhập (${formatVND(v.import_price)})` : undefined}>
+            {Number(v.wholesale_price) > 0 && Number(v.import_price) > Number(v.wholesale_price) ? (
+              <span className="flex items-center justify-end gap-0.5">
+                <span>{formatVND(v.wholesale_price)}</span>
+                <span className="text-[10px] text-rose-600">⚠️</span>
+              </span>
+            ) : formatVND(v.wholesale_price)}
+          </div>
+          <div className={`hidden text-right text-xs font-medium w-24 md:block ${Number(v.vip_price) > 0 && Number(v.import_price) > Number(v.vip_price) ? 'text-rose-600 font-bold bg-rose-50 px-1 py-0.5 rounded border border-rose-200' : 'text-blue-600'}`} title={Number(v.vip_price) > 0 && Number(v.import_price) > Number(v.vip_price) ? `Bán lỗ! Giá VIP (${formatVND(v.vip_price)}) thấp hơn giá nhập (${formatVND(v.import_price)})` : undefined}>
+            {Number(v.vip_price) > 0 && Number(v.import_price) > Number(v.vip_price) ? (
+              <span className="flex items-center justify-end gap-0.5">
+                <span>{formatVND(v.vip_price)}</span>
+                <span className="text-[10px] text-rose-600">⚠️</span>
+              </span>
+            ) : formatVND(v.vip_price)}
+          </div>
 
           <div className="flex items-center gap-1 w-full justify-end border-t border-gray-200 pt-2 md:w-auto md:border-t-0 md:pt-0">
             {isVariantPriceIncreased && (
@@ -1916,8 +2117,13 @@ export default function Products({ store }) {
   const normalizedSearch = useMemo(() => normalizeSearchText(deferredSearch), [deferredSearch]);
   const isSearching = Boolean(normalizedSearch);
   const searchFilteringPending = search !== deferredSearch;
-  const isProductPriceIncreased = useCallback((p) => {
+  const isProductPriceAlert = useCallback((p) => {
     if (!p) return false;
+    // 1. Bản thân sản phẩm có giá nhập cao hơn giá bán (Bán lỗ)
+    if (getPriceLossInfo(p)) return true;
+    // 2. Biến thể có giá nhập cao hơn giá bán
+    if (Array.isArray(p.variants) && p.variants.some(v => getPriceLossInfo(v))) return true;
+    // 3. Giá nhập mới tăng từ đợt nhập trước
     const curImport = Number(p.import_price) || 0;
     const prevImport = Number(p.prev_import_price) || 0;
     if (p.import_price_increased === true) return true;
@@ -1928,13 +2134,13 @@ export default function Products({ store }) {
   }, []);
 
   const tabCounts = useMemo(() => {
-    let priceIncreased = 0;
+    let priceAlertCount = 0;
     let inStock = 0;
     let outOfStock = 0;
     let negativeStock = 0;
 
     for (const p of products) {
-      if (isProductPriceIncreased(p)) priceIncreased++;
+      if (isProductPriceAlert(p)) priceAlertCount++;
       const stock = Number(p.stock) || 0;
       if (stock > 0) inStock++;
       else if (stock === 0) outOfStock++;
@@ -1943,24 +2149,24 @@ export default function Products({ store }) {
 
     return {
       all: products.length,
-      price_increased: priceIncreased,
+      price_alert: priceAlertCount,
       in_stock: inStock,
       out_of_stock: outOfStock,
       negative: negativeStock,
     };
-  }, [products, isProductPriceIncreased]);
+  }, [products, isProductPriceAlert]);
 
   const statusTabs = useMemo(() => [
     { key: 'all', label: 'Tất cả', count: tabCounts.all },
-    { key: 'price_increased', label: '⚠️ Giá nhập tăng', count: tabCounts.price_increased, isWarning: true },
+    { key: 'price_loss', label: '⚠️ Giá nhập > Giá bán', count: tabCounts.price_alert, isWarning: true },
     { key: 'in_stock', label: 'Còn hàng', count: tabCounts.in_stock },
     { key: 'out_of_stock', label: 'Hết hàng', count: tabCounts.out_of_stock },
     { key: 'negative', label: 'Âm kho', count: tabCounts.negative, isNegative: true },
   ], [tabCounts]);
 
   const tabFilteredProducts = useMemo(() => {
-    if (filterTab === 'price_increased') {
-      return products.filter(isProductPriceIncreased);
+    if (filterTab === 'price_loss' || filterTab === 'price_increased') {
+      return products.filter(isProductPriceAlert);
     }
     if (filterTab === 'in_stock') {
       return products.filter(p => Number(p.stock) > 0);
@@ -1972,7 +2178,7 @@ export default function Products({ store }) {
       return products.filter(p => Number(p.stock) < 0);
     }
     return products;
-  }, [products, filterTab, isProductPriceIncreased]);
+  }, [products, filterTab, isProductPriceAlert]);
 
   const filtered = useMemo(
     () => filterProductTree(tabFilteredProducts, deferredSearch, { categoriesById, includeAllVariantsOnParentMatch: false }),
@@ -1992,10 +2198,12 @@ export default function Products({ store }) {
 
   useEffect(() => {
     setCurrentPage(1);
-    if (filterTab === 'price_increased') {
+    if (filterTab === 'price_loss' || filterTab === 'price_increased') {
       const nextExpanded = {};
       for (const p of products) {
-        if (p.has_price_increased_variant || (Array.isArray(p.variants) && p.variants.some(v => v.import_price_increased || (Number(v.prev_import_price) > 0 && Number(v.import_price) > Number(v.prev_import_price))))) {
+        if (
+          (Array.isArray(p.variants) && p.variants.some(v => getPriceLossInfo(v) || v.import_price_increased || (Number(v.prev_import_price) > 0 && Number(v.import_price) > Number(v.prev_import_price))))
+        ) {
           nextExpanded[p.id] = true;
         }
       }

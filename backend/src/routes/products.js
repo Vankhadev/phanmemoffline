@@ -112,6 +112,38 @@ function dedupeVariants(variants = []) {
   return result;
 }
 
+function checkImportHigherThanSelling(item) {
+  if (!item) return null;
+  const imp = Number(item.import_price) || 0;
+  if (imp <= 0) return null;
+
+  const ret = Number(item.retail_price) || 0;
+  const who = Number(item.wholesale_price) || 0;
+  const vip = Number(item.vip_price) || 0;
+
+  const lossList = [];
+  if (ret > 0 && imp > ret) {
+    lossList.push({ type: 'retail', label: 'Giá lẻ', price: ret, diff: imp - ret });
+  }
+  if (who > 0 && imp > who) {
+    lossList.push({ type: 'wholesale', label: 'Giá sỉ', price: who, diff: imp - who });
+  }
+  if (vip > 0 && imp > vip) {
+    lossList.push({ type: 'vip', label: 'Giá VIP', price: vip, diff: imp - vip });
+  }
+
+  if (lossList.length === 0) return null;
+  lossList.sort((a, b) => b.diff - a.diff);
+
+  return {
+    is_loss: true,
+    import_price: imp,
+    max_loss: lossList[0].diff,
+    losses: lossList,
+    primary_loss: lossList[0],
+  };
+}
+
 function buildProductsTree() {
   const categoriesById = getCategoriesById();
   const all = getAll('products', p => isActiveProduct(p))
@@ -132,21 +164,32 @@ function buildProductsTree() {
 
   return parents.map(parent => {
     const enrichedParent = enrichProduct(parent, null, categoriesById);
+    const parentPriceLoss = checkImportHigherThanSelling(enrichedParent);
     const variants = dedupeVariants([
       ...(variantsByParentId.get(Number(parent.id)) || []),
       ...getInlineVariants(parent),
     ]);
-    const enrichedVariants = variants.map(v => ({
-      ...enrichProduct(v, enrichedParent, categoriesById),
-      parent_id: v.parent_id || parent.id,
-      parent_name: v.parent_name || parent.name,
-      parent_sku: v.parent_sku || parent.sku,
-      is_variant: true,
-    }));
+    const enrichedVariants = variants.map(v => {
+      const vEnriched = enrichProduct(v, enrichedParent, categoriesById);
+      const vPriceLoss = checkImportHigherThanSelling(vEnriched);
+      return {
+        ...vEnriched,
+        parent_id: v.parent_id || parent.id,
+        parent_name: v.parent_name || parent.name,
+        parent_sku: v.parent_sku || parent.sku,
+        is_variant: true,
+        price_loss_info: vPriceLoss,
+        is_import_higher_than_selling: Boolean(vPriceLoss),
+      };
+    });
+    const hasPriceLossVariant = enrichedVariants.some(v => Boolean(v.is_import_higher_than_selling));
     const hasPriceIncreasedVariant = enrichedVariants.some(v => Boolean(v.import_price_increased) || (Number(v.prev_import_price) > 0 && Number(v.import_price) > Number(v.prev_import_price)));
     const isPriceIncreased = Boolean(enrichedParent.import_price_increased) || (Number(enrichedParent.prev_import_price) > 0 && Number(enrichedParent.import_price) > Number(enrichedParent.prev_import_price));
     return {
       ...enrichedParent,
+      price_loss_info: parentPriceLoss,
+      is_import_higher_than_selling: Boolean(parentPriceLoss),
+      has_variant_import_higher_than_selling: hasPriceLossVariant,
       import_price_increased: isPriceIncreased,
       has_price_increased_variant: hasPriceIncreasedVariant,
       variants: enrichedVariants,

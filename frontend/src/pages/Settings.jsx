@@ -103,7 +103,7 @@ const INITIAL_PRINT_TEMPLATE_FORM = Object.freeze({
 
 const NEGATIVE_STOCK_FEATURE_NAME = 'Xuất âm tồn kho';
 const NEGATIVE_STOCK_FEATURE_DESCRIPTION = 'Admin có thể chỉnh số lượng tồn âm tối đa trực tiếp từ giao diện.';
-const RELEASE_VERSION = '1.3.8';
+const RELEASE_VERSION = '3.1.22';
 const RELEASE_DOWNLOAD_BASE_URL = 'https://github.com/Vankhadev/phanmemoffline/releases/latest/download/';
 const WINDOWS_INSTALLERS = Object.freeze([
   {
