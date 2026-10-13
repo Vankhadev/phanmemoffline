@@ -1746,6 +1746,7 @@ export default function CreateOrder({ user, store }) {
       delivery_fee: deliveryFee,
       invoice_writer: invoiceWriter, receiver_name: receiverName || resolvedCustomerName,
       delivery_date: deliveryDate || null,
+      status: (paidAmount > 0 && paidAmount >= payableAmount) ? 'completed' : 'pending',
       details: buildOrderDetailsPayload(),
     }, { client_order_id: clientOrderId });
     const showSuccess = (invoice_code, invoice_id = null, saveToPending = true) => {
@@ -1771,7 +1772,7 @@ export default function CreateOrder({ user, store }) {
         cart: [...cart],
         selectedCustomer,
         created_at: new Date().toISOString(),
-        status: 'pending',
+        status: (paidAmount > 0 && paidAmount >= payableAmount) ? 'completed' : 'pending',
         payment_method: paymentMethod,
         invoice_writer: invoiceWriter,
         receiver_name: receiverName,

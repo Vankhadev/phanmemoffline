@@ -374,7 +374,7 @@ function buildInvoicePrintPayload(idOrCode) {
       created_at: invoice.created_at || null,
       updated_at: invoice.updated_at || null,
       delivery_date: invoice.delivery_date || null,
-      status: invoice.status || 'completed',
+      status: invoice.status || (Number(invoice.remaining_amount) <= 0 && Number(invoice.paid_amount) > 0 ? 'completed' : 'pending'),
       payment_method: invoice.payment_method || 'cash',
       note: invoice.note || '',
       source: invoice.source || invoice.order_source || invoice.sync_source || '',
@@ -610,7 +610,7 @@ router.get('/', async (req, res) => {
         paid_amount: Number(inv.paid_amount) || 0,
         remaining_amount: Number(inv.remaining_amount) || 0,
         payment_status: derivePaymentStatus(inv),
-        status: inv.status || 'completed',
+        status: inv.status || (Number(inv.remaining_amount) <= 0 && Number(inv.paid_amount) > 0 ? 'completed' : 'pending'),
         cancelled_at: inv.cancelled_at || null,
         payment_method: inv.payment_method || 'cash',
         source: inv.source || inv.order_source || 'web',
@@ -951,8 +951,8 @@ router.patch('/:id/confirm', async (req, res) => {
         err.status = 400;
         throw err;
       }
-      if (inv.status === 'completed') {
-        const err = new Error('Đơn đã được xác nhận trước đó');
+      if (inv.status === 'completed' && inv.payment_status === 'paid' && Number(inv.remaining_amount) <= 0) {
+        const err = new Error('Đơn đã được xác nhận thanh toán trước đó');
         err.status = 400;
         throw err;
       }

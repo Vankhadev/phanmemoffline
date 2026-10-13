@@ -8,46 +8,46 @@
 - File manifest legacy [`release/update-manifest.json`](release/update-manifest.json:1) vẫn được giữ để tooling ngoài app có thể đọc SHA256/size theo từng kiến trúc.
 - Bản Windows phát hành cả hai kiến trúc: `x64` và `ia32`. Tên asset luôn có hậu tố kiến trúc để tránh người dùng Windows 32-bit tải nhầm bản x64.
 
-## Bảng phát hành chính thức v3.1.20
+## Bảng phát hành chính thức v3.1.21
 
 | Hạng mục | Nội dung |
 | --- | --- |
-| Phiên bản | 3.1.20 |
-| Ngày phát hành | 2026-10-10 |
+| Phiên bản | 3.1.21 |
+| Ngày phát hành | 2026-10-13 |
 | Kênh phát hành | GitHub Release latest cho Windows x64 và ia32 |
 | Trạng thái | Đã cập nhật source code, metadata, sẵn sàng tag và push để GitHub Actions publish |
 
 ### Ghi chú thay đổi tổng quan
 
-Bản 3.1.20 bổ sung bộ nút chọn nhanh khoảng thời gian (Hôm nay, Tuần này, Từ đầu tháng, Cả tháng này, Tháng trước, Tùy chỉnh) tại Báo cáo Kế toán tổng hợp; tối ưu quy trình bán hàng không tự động ép cộng dồn nợ cũ giúp chủ cửa hàng linh hoạt thu gộp hoặc thu riêng; đồng thời chuẩn hóa trạng thái hóa đơn và sửa lỗi biến truy vấn danh sách hóa đơn.
+Bản 3.1.21 sửa lỗi mất nút Thanh toán ở Danh sách đơn hàng; hiển thị đầy đủ 6 nút thao tác cho các đơn chưa thanh toán hoặc chưa thu đủ tiền, và tự động ẩn nút Thanh toán khi đơn đã thanh toán xong; đồng thời chuẩn hóa trạng thái đơn hàng khi tạo mới sang chờ xác nhận và cho phép xác nhận thanh toán an toàn.
 
 ### Phát hành
 
-- Đồng bộ version 3.1.20 trong package root, backend, frontend và các lockfile tương ứng.
-- Cập nhật changelog, tài liệu release, manifest ví dụ, tên asset và tag kiểm tra theo v3.1.20.
+- Đồng bộ version 3.1.21 trong package root, backend, frontend và các lockfile tương ứng.
+- Cập nhật changelog, tài liệu release, manifest ví dụ, tên asset và tag kiểm tra theo v3.1.21.
 - GitHub Actions build/publish bộ cài riêng cho Windows x64 và ia32 kèm latest.yml/update-manifest.json từ artifact thực tế sau khi push tag.
 
 ### QA và build
 
 - Rà soát diff release để chỉ stage các tệp version/tài liệu và thay đổi nghiệp vụ thuộc phạm vi phát hành.
 - Chạy build frontend và kiểm tra cú pháp backend trước khi commit/tag.
-- Giữ nguyên metadata generated production nếu chưa có installer v3.1.20 để sinh SHA/size chính xác.
+- Giữ nguyên metadata generated production nếu chưa có installer v3.1.21 để sinh SHA/size chính xác.
 
 ### Lưu ý quan trọng cho người dùng
 
-- Windows 10/11 64-bit: dùng `banhangoffline-setup-v3.1.20-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn”: dùng `banhangoffline-setup-v3.1.20-ia32.exe`.
+- Windows 10/11 64-bit: dùng `banhangoffline-setup-v3.1.21-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn”: dùng `banhangoffline-setup-v3.1.21-ia32.exe`.
 - Chỉ tải từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên file, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
 - Người dùng trong app có thể vào Cài đặt -> Cập nhật để kiểm tra và tự động nâng cấp lên phiên bản mới nhất.
 
 ## Asset GitHub Release bắt buộc
 
-Khi phát hành version `3.1.20`, release cần tối thiểu các asset:
+Khi phát hành version `3.1.21`, release cần tối thiểu các asset:
 
-- `banhangoffline-setup-v3.1.20-x64.exe`
-- `banhangoffline-setup-v3.1.20-x64.exe.blockmap`
-- `banhangoffline-setup-v3.1.20-ia32.exe`
-- `banhangoffline-setup-v3.1.20-ia32.exe.blockmap`
+- `banhangoffline-setup-v3.1.21-x64.exe`
+- `banhangoffline-setup-v3.1.21-x64.exe.blockmap`
+- `banhangoffline-setup-v3.1.21-ia32.exe`
+- `banhangoffline-setup-v3.1.21-ia32.exe.blockmap`
 - `latest.yml`
 - `update-manifest.json`
 

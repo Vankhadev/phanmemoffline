@@ -1604,19 +1604,23 @@ export default function OrderList() {
         const pending = JSON.parse(localStorage.getItem('kha_pending_orders') || '[]');
         const idx = pending.findIndex(o => sameOrderIdentity(o, inv));
         if (idx >= 0) {
+          const totalPaid = Number(inv.total) || 0;
           pending[idx].status = 'completed';
-          pending[idx].payload = { ...(pending[idx].payload || {}), status: 'completed' };
+          pending[idx].paid_amount = totalPaid;
+          pending[idx].remaining_amount = 0;
+          pending[idx].payment_status = 'paid';
+          pending[idx].payload = { ...(pending[idx].payload || {}), status: 'completed', paid_amount: totalPaid, remaining_amount: 0, payment_status: 'paid' };
           localStorage.setItem('kha_pending_orders', JSON.stringify(pending));
           // Cập nhật allOrders
           setAllOrders(prev => prev.map(o =>
-            sameOrderIdentity(o, inv) ? { ...o, status: 'completed', _isOffline: true } : o
+            sameOrderIdentity(o, inv) ? { ...o, status: 'completed', paid_amount: totalPaid, remaining_amount: 0, payment_status: 'paid', _isOffline: true } : o
           ));
         }
-        alert('? Đã cập nhật trạng thái đơn hàng thành "Đã thanh tóan"!');
+        alert('✅ Đã cập nhật trạng thái đơn hàng thành "Đã thanh toán"!');
       } else {
         // Gọi API xác nhận đơn hàng (PATCH /invoices/:id/confirm)
         await apiJsonChecked(`/invoices/${inv.id}/confirm`, { method: 'PATCH' }, 'Không thể xác nhận thanh toán.');
-        alert('? D? xác nhận thanh toán!');
+        alert('✅ Đã xác nhận thanh toán!');
         notifyOrderChanged({ reason: 'order-paid', invoice_id: inv.id || null, invoice_code: inv.invoice_code || '' });
         await fetchInvoices();
         apiJson('/products/all/with-variants').catch(() => { });
@@ -1919,6 +1923,8 @@ export default function OrderList() {
                   return `${day}/${mo}/${y}`;
                 };
                 const paymentSummary = getInvoicePaymentSummary(inv);
+                const isOrderPaid = inv.status === 'completed' && paymentSummary.status === 'paid';
+                const showPayButton = !isCancelled && !isOrderPaid;
                 const orderKey = getOrderIdentityKey(inv);
                 const isSelected = selectedOrders.includes(orderKey);
                 const sourceBadge = getOrderSourceBadge(inv);
@@ -2028,7 +2034,7 @@ export default function OrderList() {
                       <button onClick={() => openEdit(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100" title="Sửa">
                         <Edit2 size={14} /> Sửa
                       </button>
-                      {!isCancelled && (inv._isOffline || inv.status === 'pending' || inv.status === 'processing') && (
+                      {showPayButton && (
                         <button onClick={() => handleMarkAsPaid(inv)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-2 text-xs font-medium text-green-700 hover:bg-green-100" title="Xác nhận thanh toán">
                           <CheckSquare size={14} /> Thanh toán
                         </button>
@@ -2093,6 +2099,8 @@ export default function OrderList() {
                   return `${day}/${mo}/${y}`;
                 };
                 const paymentSummary = getInvoicePaymentSummary(inv);
+                const isOrderPaid = inv.status === 'completed' && paymentSummary.status === 'paid';
+                const showPayButton = !isCancelled && !isOrderPaid;
                 const orderKey = getOrderIdentityKey(inv);
                 const isSelected = selectedOrders.includes(orderKey);
                 const paymentLabel = paymentSummary.status === 'paid'
@@ -2204,7 +2212,7 @@ export default function OrderList() {
                         <button onClick={() => openInvoicePrint(inv, { quick: true })} className="order-table-action-btn border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100" title="In nhanh hóa đơn A5">
                           <FileDown size={14} /> In nhanh
                         </button>
-                        {!isCancelled && (inv._isOffline || inv.status === 'pending' || inv.status === 'processing') && (
+                        {showPayButton && (
                           <button onClick={() => handleMarkAsPaid(inv)} className="order-table-action-btn border border-green-200 bg-green-50 text-green-700 hover:bg-green-100" title="Xác nhận thanh toán">
                             <CheckSquare size={14} /> Thanh toán
                           </button>

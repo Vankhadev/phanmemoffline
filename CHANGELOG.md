@@ -1,3 +1,15 @@
+## [3.1.21] - 2026-10-13
+
+### Fixed & Enhanced
+- **Sửa lỗi hiển thị nút Thanh toán tại Danh sách đơn hàng (`OrderList.jsx`):**
+  - Khắc phục triệt để lỗi đơn hàng chưa thanh toán bị mất nút **Thanh toán**.
+  - Đơn chưa thanh toán hoặc chưa thu đủ tiền hiển thị đầy đủ 6 nút thao tác: `[Xem]`, `[Sửa]`, `[In A5]`, `[In nhanh]`, `[Thanh toán]`, `[Hủy]`.
+  - Khi ấn xác nhận thanh toán thành công, nút **Thanh toán** tự động ẩn đi, giữ lại 5 nút thao tác như thiết kế chuẩn.
+  - Đồng bộ logic hiển thị chuẩn xác trên cả màn hình máy tính (bảng dữ liệu) và màn hình di động/tablet (dạng thẻ).
+- **Chuẩn hóa trạng thái đơn hàng khi tạo mới (`invoiceCreationService.js`, `CreateOrder.jsx`, `invoices.js`):**
+  - Đơn hàng mới tạo khi chưa thu đủ tiền được gán chính xác trạng thái `pending` (Chờ xác nhận) thay vì tự động chuyển sang hoàn thành.
+  - Cập nhật endpoint `/api/invoices/:id/confirm` cho phép xác nhận thanh toán an toàn cho các đơn chưa thu đủ tiền.
+
 ## [3.1.20] - 2026-10-10
 
 ### Added
