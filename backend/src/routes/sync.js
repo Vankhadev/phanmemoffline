@@ -48,7 +48,7 @@ const SIMPLE_PUSH_FIELDS = {
   partners: ['name', 'phone', 'tax_code', 'email', 'address', 'note', 'invoice_type', 'active', 'created_at', 'updated_at'],
   product_categories: ['name', 'group_name', 'group_key', 'keywords', 'aliases', 'color', 'sort_order', 'active', 'created_at', 'updated_at'],
   products: [
-    'parent_id', 'sku', 'name', 'import_price', 'wholesale_price', 'retail_price', 'vip_price',
+    'parent_id', 'sku', 'name', 'import_price', 'prev_import_price', 'import_price_increased', 'import_price_increased_at', 'wholesale_price', 'retail_price', 'vip_price',
     'stock', 'unit', 'category', 'default_category_id', 'supplier_id', 'barcode', 'image_url',
     'description', 'option1', 'option2', 'option3',
     'sync_source', 'active', 'created_at', 'updated_at',

@@ -1,5 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown, History } from 'lucide-react';
+import { Package, ChevronDown, ChevronRight, Plus, X, Edit2, Trash2, Layers, Upload, Download, CheckSquare, Square, HelpCircle, Tag, ArrowUp, ArrowDown, History, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ChangeHistoryModal from '../components/ChangeHistoryModal';
 import ExcelImportPanel from '../components/ExcelImportPanel';
@@ -225,8 +225,36 @@ const ProductFormModal = memo(function ProductFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3 mb-4">
+          {editing && (editing.import_price_increased || (Number(editing.prev_import_price) > 0 && Number(editing.import_price) > Number(editing.prev_import_price))) && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 space-y-2 mb-2">
+              <div className="font-bold flex items-center gap-1.5 text-amber-800 text-sm">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                <span>Cảnh báo: Giá nhập sản phẩm này đã tăng!</span>
+              </div>
+              <div className="text-xs">
+                Giá nhập cũ: <span className="line-through text-gray-500 font-semibold">{formatVND(editing.prev_import_price)}</span> ➔ Giá nhập mới: <span className="font-bold text-red-600">{formatVND(form.import_price || editing.import_price)}</span>
+                {Number(editing.prev_import_price) > 0 && Number(form.import_price || editing.import_price) > Number(editing.prev_import_price) && (
+                  <span className="ml-1 text-red-700 font-semibold">
+                    (+{formatVND(Number(form.import_price || editing.import_price) - Number(editing.prev_import_price))})
+                  </span>
+                )}
+              </div>
+              <div className="text-amber-800 text-[11px]">
+                👉 Chủ cửa hàng vui lòng kiểm tra và chỉnh lại <strong>Giá lẻ</strong>, <strong>Giá sỉ</strong> hoặc <strong>Giá VIP</strong> để tránh bị giảm lợi nhuận.
+              </div>
+              <label className="flex items-center gap-2 pt-1 font-semibold cursor-pointer text-amber-950">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.dismiss_price_alert)}
+                  onChange={e => updateField('dismiss_price_alert', e.target.checked)}
+                  className="rounded text-amber-600 focus:ring-amber-500"
+                />
+                <span>Đã cập nhật lại giá bán (Tắt cảnh báo giá tăng sau khi lưu)</span>
+              </label>
+            </div>
+          )}
           <div>
-            <label className="text-xs text-gray-500">Tồn sản phẩm <span className="text-red-500">*</span></label>
+            <label className="text-xs text-gray-500">Tên sản phẩm <span className="text-red-500">*</span></label>
             <input
               ref={nameInputRef}
               className="input-field w-full"
@@ -239,12 +267,12 @@ const ProductFormModal = memo(function ProductFormModal({
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="text-xs text-gray-500">Giá nhập</label><input type="number" className="input-field" value={form.import_price} onChange={e => updateField('import_price', e.target.value)} placeholder="giá nhập" /></div>
-            <div><label className="text-xs text-gray-500">Gi? l?</label><input type="number" className="input-field" value={form.retail_price} onChange={e => updateField('retail_price', e.target.value)} placeholder="giá l?" /></div>
+            <div><label className="text-xs text-gray-500">Giá nhập</label><input type="number" className="input-field" value={form.import_price} onChange={e => updateField('import_price', e.target.value)} placeholder="Giá nhập" /></div>
+            <div><label className="text-xs text-gray-500">Giá lẻ</label><input type="number" className="input-field" value={form.retail_price} onChange={e => updateField('retail_price', e.target.value)} placeholder="Giá lẻ" /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="text-xs text-gray-500">Gi? s?</label><input type="number" className="input-field" value={form.wholesale_price} onChange={e => updateField('wholesale_price', e.target.value)} placeholder="giá s?" /></div>
-            <div><label className="text-xs text-gray-500">Gi? VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="giá VIP" /></div>
+            <div><label className="text-xs text-gray-500">Giá sỉ</label><input type="number" className="input-field" value={form.wholesale_price} onChange={e => updateField('wholesale_price', e.target.value)} placeholder="Giá sỉ" /></div>
+            <div><label className="text-xs text-gray-500">Giá VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="Giá VIP" /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <NegativeStockInput
@@ -351,8 +379,36 @@ const VariantFormModal = memo(function VariantFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3 mb-4">
+          {editingVariant && (editingVariant.import_price_increased || (Number(editingVariant.prev_import_price) > 0 && Number(editingVariant.import_price) > Number(editingVariant.prev_import_price))) && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 space-y-2 mb-2">
+              <div className="font-bold flex items-center gap-1.5 text-amber-800 text-sm">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                <span>Cảnh báo: Giá nhập biến thể này đã tăng!</span>
+              </div>
+              <div className="text-xs">
+                Giá nhập cũ: <span className="line-through text-gray-500 font-semibold">{formatVND(editingVariant.prev_import_price)}</span> ➔ Giá nhập mới: <span className="font-bold text-red-600">{formatVND(form.import_price || editingVariant.import_price)}</span>
+                {Number(editingVariant.prev_import_price) > 0 && Number(form.import_price || editingVariant.import_price) > Number(editingVariant.prev_import_price) && (
+                  <span className="ml-1 text-red-700 font-semibold">
+                    (+{formatVND(Number(form.import_price || editingVariant.import_price) - Number(editingVariant.prev_import_price))})
+                  </span>
+                )}
+              </div>
+              <div className="text-amber-800 text-[11px]">
+                👉 Chủ cửa hàng vui lòng kiểm tra và chỉnh lại <strong>Giá lẻ</strong>, <strong>Giá sỉ</strong> hoặc <strong>Giá VIP</strong> để tránh bị giảm lợi nhuận.
+              </div>
+              <label className="flex items-center gap-2 pt-1 font-semibold cursor-pointer text-amber-950">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.dismiss_price_alert)}
+                  onChange={e => updateField('dismiss_price_alert', e.target.checked)}
+                  className="rounded text-amber-600 focus:ring-amber-500"
+                />
+                <span>Đã cập nhật lại giá bán (Tắt cảnh báo giá tăng sau khi lưu)</span>
+              </label>
+            </div>
+          )}
           <div>
-            <label className="text-xs text-gray-500">Tồn biến thể <span className="text-red-500">*</span></label>
+            <label className="text-xs text-gray-500">Tên biến thể <span className="text-red-500">*</span></label>
             <input
               ref={nameInputRef}
               className="input-field w-full"
@@ -365,12 +421,12 @@ const VariantFormModal = memo(function VariantFormModal({
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="text-xs text-gray-500">Giá nhập</label><input type="number" className="input-field" value={form.import_price} onChange={e => updateField('import_price', e.target.value)} placeholder="giá nhập" /></div>
-            <div><label className="text-xs text-gray-500">Gi? l?</label><input type="number" className="input-field" value={form.retail_price} onChange={e => updateField('retail_price', e.target.value)} placeholder="giá l?" /></div>
+            <div><label className="text-xs text-gray-500">Giá nhập</label><input type="number" className="input-field" value={form.import_price} onChange={e => updateField('import_price', e.target.value)} placeholder="Giá nhập" /></div>
+            <div><label className="text-xs text-gray-500">Giá lẻ</label><input type="number" className="input-field" value={form.retail_price} onChange={e => updateField('retail_price', e.target.value)} placeholder="Giá lẻ" /></div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div><label className="text-xs text-gray-500">Gi? s?</label><input type="number" className="input-field" value={form.wholesale_price} onChange={e => updateField('wholesale_price', e.target.value)} placeholder="giá s?" /></div>
-            <div><label className="text-xs text-gray-500">Gi? VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="giá VIP" /></div>
+            <div><label className="text-xs text-gray-500">Giá sỉ</label><input type="number" className="input-field" value={form.wholesale_price} onChange={e => updateField('wholesale_price', e.target.value)} placeholder="Giá sỉ" /></div>
+            <div><label className="text-xs text-gray-500">Giá VIP</label><input type="number" className="input-field" value={form.vip_price} onChange={e => updateField('vip_price', e.target.value)} placeholder="Giá VIP" /></div>
             <NegativeStockInput
               id="variant-stock-input"
               label="Số lượng tồn"
@@ -419,12 +475,23 @@ const ProductRow = memo(function ProductRow({
   onToggleExpand,
   onToggleSelect,
   onShowHistory,
+  onDismissPriceAlert,
   negativeStockSettings,
 }) {
   const p = product;
   const variants = Array.isArray(p.variants) ? p.variants : EMPTY_ARRAY;
   const variantCount = getProductVariantCount(p);
   const hasVariants = variantCount > 0;
+  const isParentPriceIncreased = !hasVariants && (
+    p.import_price_increased === true ||
+    (Number(p.prev_import_price) > 0 && Number(p.import_price) > Number(p.prev_import_price))
+  );
+  const priceIncreasedVariants = hasVariants && Array.isArray(p.variants)
+    ? p.variants.filter(v => v.import_price_increased === true || (Number(v.prev_import_price) > 0 && Number(v.import_price) > Number(v.prev_import_price)))
+    : [];
+  const hasPriceIncreasedVariant = hasVariants && (p.has_price_increased_variant === true || priceIncreasedVariants.length > 0);
+  const increasedVariantsCount = priceIncreasedVariants.length;
+
   const shouldRenderVariants = expanded || (isSearching && (p._matchedVariantIds?.length || 0) > 0);
   const variantRows = useMemo(() => {
     if (!shouldRenderVariants) return EMPTY_ARRAY;
@@ -441,7 +508,7 @@ const ProductRow = memo(function ProductRow({
         <button
           onClick={() => onToggleSelect(p.id)}
           className="w-5 h-5 flex items-center justify-center text-gray-600 hover:text-blue-600"
-          title={selected ? 'B? chọn' : 'Chọn'}
+          title={selected ? 'Bỏ chọn' : 'Chọn'}
         >
           {selected ? <CheckSquare size={16} /> : <Square size={16} />}
         </button>
@@ -454,8 +521,33 @@ const ProductRow = memo(function ProductRow({
         {!hasVariants && <div className="w-5" />}
 
         <div className="flex-1 min-w-[12rem] md:min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className={`font-medium text-sm ${!hasVariants ? parentStockMeta.nameClass : ''}`}>{p.name}</span>
+            {isParentPriceIncreased && (
+              <span
+                className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs"
+                title={`Giá nhập tăng từ ${Number(p.prev_import_price) > 0 ? formatVND(p.prev_import_price) : '?'} lên ${formatVND(p.import_price)}. Vui lòng điều chỉnh lại giá bán!`}
+              >
+                <AlertTriangle size={12} className="text-amber-600 shrink-0" />
+                <span>Giá nhập tăng</span>
+                {Number(p.prev_import_price) > 0 && (
+                  <span className="font-mono text-[10px] text-amber-800">
+                    ({formatVND(p.prev_import_price)} ➔ {formatVND(p.import_price)})
+                  </span>
+                )}
+              </span>
+            )}
+            {hasPriceIncreasedVariant && (
+              <button
+                type="button"
+                onClick={() => onToggleExpand(p.id)}
+                className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 shadow-2xs transition"
+                title="Bấm để xem các biến thể có giá nhập tăng"
+              >
+                <AlertTriangle size={12} className="text-amber-600 shrink-0" />
+                <span>{increasedVariantsCount > 0 ? `${increasedVariantsCount} biến thể tăng giá nhập` : 'Biến thể tăng giá nhập'}</span>
+              </button>
+            )}
             {!hasVariants && parentStockMeta.isNegative && (
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${parentStockMeta.badgeClass}`}>âm kho</span>
             )}
@@ -469,24 +561,52 @@ const ProductRow = memo(function ProductRow({
             )}
           </div>
           <div className="text-xs text-gray-400">
-            {p.sku} ? {getCategoryName(p)} ? {getSupplierName(p.supplier_id)}
+            {p.sku} • {getCategoryName(p)} • {getSupplierName(p.supplier_id)}
           </div>
         </div>
 
         {hasVariants ? (
-          <div className="text-right text-sm w-20 text-gray-300" title="Tồn kho được quản lý ? tổng biến thể">?</div>
+          <div className="text-right text-sm w-20 text-gray-300" title="Tồn kho được quản lý ở từng biến thể">—</div>
         ) : (
           <div className="text-right text-sm w-24">
             <ProductStockValue stock={p.stock} settings={negativeStockSettings} />
           </div>
         )}
 
-        <div className="hidden text-right text-xs text-gray-500 w-24 md:block" title={hasVariants ? 'Giá nhập được quản lý ? tổng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.import_price)}</div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-green-600'}`} title={hasVariants ? 'Gi? l? được quản lý ? tổng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.retail_price)}</div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-red-600'}`} title={hasVariants ? 'Gi? sẽ được quản lý ? tổng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.wholesale_price)}</div>
-        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-blue-600'}`} title={hasVariants ? 'Gi? VIP được quản lý ? tổng biến thể' : undefined}>{hasVariants ? '?' : formatVND(p.vip_price)}</div>
+        <div className="hidden text-right text-xs w-24 md:block" title={hasVariants ? 'Giá nhập được quản lý ở từng biến thể' : undefined}>
+          {hasVariants ? (
+            <span className="text-gray-400">—</span>
+          ) : isParentPriceIncreased ? (
+            <div>
+              <div className="font-bold text-amber-700 flex items-center justify-end gap-0.5">
+                <span>{formatVND(p.import_price)}</span>
+                <span className="text-red-500 text-[10px] font-extrabold" title="Giá nhập đã tăng">▲</span>
+              </div>
+              {Number(p.prev_import_price) > 0 && (
+                <div className="text-[10px] text-gray-400 line-through">
+                  {formatVND(p.prev_import_price)}
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="text-gray-500">{formatVND(p.import_price)}</span>
+          )}
+        </div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-green-600'}`} title={hasVariants ? 'Giá lẻ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatVND(p.retail_price)}</div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-red-600'}`} title={hasVariants ? 'Giá sỉ được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatVND(p.wholesale_price)}</div>
+        <div className={`hidden text-right text-xs font-medium w-24 md:block ${hasVariants ? 'text-gray-300' : 'text-blue-600'}`} title={hasVariants ? 'Giá VIP được quản lý ở từng biến thể' : undefined}>{hasVariants ? '—' : formatVND(p.vip_price)}</div>
 
-        <div className="flex items-center gap-1 w-full justify-end border-t border-gray-100 pt-2 md:w-40 md:border-t-0 md:pt-0">
+        <div className="flex items-center gap-1 w-full justify-end border-t border-gray-100 pt-2 md:w-auto md:border-t-0 md:pt-0">
+          {isParentPriceIncreased && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDismissPriceAlert?.(p.id); }}
+              className="text-amber-800 hover:text-amber-950 px-2 py-1 rounded border border-amber-300 bg-amber-50 hover:bg-amber-100 text-[11px] font-bold flex items-center gap-1 shrink-0 transition"
+              title="Xác nhận đã điều chỉnh giá bán xong và tắt cảnh báo cho sản phẩm này"
+            >
+              ✓ Đã chỉnh giá
+            </button>
+          )}
           <button onClick={() => onAddVariant(p)} className="text-green-600 hover:text-green-800 p-1.5 rounded border border-green-300 hover:bg-green-50" title="Thêm biến thể">
             <Plus size={14} />
           </button>
@@ -504,12 +624,29 @@ const ProductRow = memo(function ProductRow({
 
       {variantRows.map(v => {
         const variantStockMeta = getStockDisplayMeta(v.stock, negativeStockSettings);
+        const isVariantPriceIncreased = v.import_price_increased === true || (Number(v.prev_import_price) > 0 && Number(v.import_price) > Number(v.prev_import_price));
         return (
         <div key={v.id} className={`flex flex-wrap items-center gap-2 px-3 py-3 pl-8 sm:pl-12 border-t md:flex-nowrap md:py-2 ${variantStockMeta.rowClass || 'bg-gray-50'}`}>
           <div className="flex-1 min-w-[12rem] md:min-w-0">
-            <div className={`text-sm ${variantStockMeta.nameClass || 'text-gray-700'}`}>{v.name}</div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className={`text-sm ${variantStockMeta.nameClass || 'text-gray-700'}`}>{v.name}</span>
+              {isVariantPriceIncreased && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs"
+                  title={`Giá nhập tăng từ ${Number(v.prev_import_price) > 0 ? formatVND(v.prev_import_price) : '?'} lên ${formatVND(v.import_price)}. Bấm "Sửa" để chỉnh giá bán hoặc "Đã chỉnh giá" để tắt cảnh báo!`}
+                >
+                  <AlertTriangle size={11} className="text-amber-600 shrink-0" />
+                  <span>Giá nhập tăng</span>
+                  {Number(v.prev_import_price) > 0 && (
+                    <span className="font-mono text-[9px] text-amber-800">
+                      ({formatVND(v.prev_import_price)} ➔ {formatVND(v.import_price)})
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
             <div className="text-xs text-gray-400">
-              {v.sku} ? {getCategoryName(v) || getCategoryName(p)} ? {getSupplierName(v.supplier_id || p.supplier_id)}
+              {v.sku} • {getCategoryName(v) || getCategoryName(p)} • {getSupplierName(v.supplier_id || p.supplier_id)}
             </div>
           </div>
 
@@ -517,12 +654,38 @@ const ProductRow = memo(function ProductRow({
             <ProductStockValue stock={v.stock} settings={negativeStockSettings} />
           </div>
 
-          <div className="hidden text-right text-xs text-gray-500 w-24 md:block">{formatVND(v.import_price)}</div>
+          <div className="hidden text-right text-xs w-24 md:block">
+            {isVariantPriceIncreased ? (
+              <div>
+                <div className="font-bold text-amber-700 flex items-center justify-end gap-0.5">
+                  <span>{formatVND(v.import_price)}</span>
+                  <span className="text-red-500 text-[10px] font-extrabold" title="Giá nhập đã tăng">▲</span>
+                </div>
+                {Number(v.prev_import_price) > 0 && (
+                  <div className="text-[10px] text-gray-400 line-through">
+                    {formatVND(v.prev_import_price)}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span className="text-gray-500">{formatVND(v.import_price)}</span>
+            )}
+          </div>
           <div className="hidden text-right text-xs text-green-600 font-medium w-24 md:block">{formatVND(v.retail_price)}</div>
           <div className="hidden text-right text-xs text-red-600 font-medium w-24 md:block">{formatVND(v.wholesale_price)}</div>
           <div className="hidden text-right text-xs text-blue-600 font-medium w-24 md:block">{formatVND(v.vip_price)}</div>
 
-          <div className="flex items-center gap-1 w-full justify-end border-t border-gray-200 pt-2 md:w-40 md:border-t-0 md:pt-0">
+          <div className="flex items-center gap-1 w-full justify-end border-t border-gray-200 pt-2 md:w-auto md:border-t-0 md:pt-0">
+            {isVariantPriceIncreased && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDismissPriceAlert?.(v.id); }}
+                className="text-amber-800 hover:text-amber-950 px-1.5 py-1 rounded border border-amber-300 bg-amber-50 hover:bg-amber-100 text-[10px] font-bold shrink-0 transition"
+                title="Xác nhận đã điều chỉnh giá bán xong và tắt cảnh báo cho biến thể này"
+              >
+                ✓ Đã chỉnh giá
+              </button>
+            )}
             <button onClick={() => onShowHistory(v.id)} className="text-gray-500 hover:text-gray-700 p-1.5 rounded border border-gray-300 hover:bg-gray-50" title="Lịch sử thay đổi">
               <History size={13} />
             </button>
@@ -555,6 +718,7 @@ export default function Products({ store }) {
   const [combos, setCombos] = useState([]);
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState('');
+  const [filterTab, setFilterTab] = useState('all');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [productFormInitial, setProductFormInitial] = useState(() => createProductFormInitial());
@@ -1542,6 +1706,7 @@ export default function Products({ store }) {
       unit: p.unit || 'cái',
       category: p.category || '',
       supplier_id: p.supplier_id || '',
+      dismiss_price_alert: false,
     }));
     setShowForm(true);
   }, []);
@@ -1558,6 +1723,7 @@ export default function Products({ store }) {
       const url = currentEditing ? resolveApiUrl(`/products/${currentEditing.id}`) : resolveApiUrl('/products');
       const payload = {
         ...stripInventoryFields(nextForm),
+        dismiss_price_alert: nextForm.dismiss_price_alert === true,
         category: String(nextForm.category || '').trim(),
         stock: serviceProduct ? 0 : parseStockInputNumber(nextForm.stock, 0),
         ...(serviceProduct ? { product_type: 'service', item_type: 'service', type: 'service', is_service: true } : {}),
@@ -1633,6 +1799,7 @@ export default function Products({ store }) {
       vip_price: variant.vip_price || '',
       stock: variant.stock ?? '',
       unit: variant.unit || 'cái',
+      dismiss_price_alert: false,
     }));
     setShowVariantModal(true);
   }, []);
@@ -1651,6 +1818,7 @@ export default function Products({ store }) {
         : resolveApiUrl(`/products/${variantParent.id}/variants`);
       const variantPayload = {
         ...stripInventoryFields(nextVariantForm),
+        dismiss_price_alert: nextVariantForm.dismiss_price_alert === true,
         stock: parseStockInputNumber(nextVariantForm.stock, 0),
         updated_at: currentEditingVariant?.updated_at || undefined,
       };
@@ -1748,10 +1916,92 @@ export default function Products({ store }) {
   const normalizedSearch = useMemo(() => normalizeSearchText(deferredSearch), [deferredSearch]);
   const isSearching = Boolean(normalizedSearch);
   const searchFilteringPending = search !== deferredSearch;
+  const isProductPriceIncreased = useCallback((p) => {
+    if (!p) return false;
+    const curImport = Number(p.import_price) || 0;
+    const prevImport = Number(p.prev_import_price) || 0;
+    if (p.import_price_increased === true) return true;
+    if (prevImport > 0 && curImport > prevImport) return true;
+    if (p.has_price_increased_variant === true) return true;
+    if (Array.isArray(p.variants) && p.variants.some(v => v.import_price_increased === true || (Number(v.prev_import_price) > 0 && Number(v.import_price) > Number(v.prev_import_price)))) return true;
+    return false;
+  }, []);
+
+  const tabCounts = useMemo(() => {
+    let priceIncreased = 0;
+    let inStock = 0;
+    let outOfStock = 0;
+    let negativeStock = 0;
+
+    for (const p of products) {
+      if (isProductPriceIncreased(p)) priceIncreased++;
+      const stock = Number(p.stock) || 0;
+      if (stock > 0) inStock++;
+      else if (stock === 0) outOfStock++;
+      else if (stock < 0) negativeStock++;
+    }
+
+    return {
+      all: products.length,
+      price_increased: priceIncreased,
+      in_stock: inStock,
+      out_of_stock: outOfStock,
+      negative: negativeStock,
+    };
+  }, [products, isProductPriceIncreased]);
+
+  const statusTabs = useMemo(() => [
+    { key: 'all', label: 'Tất cả', count: tabCounts.all },
+    { key: 'price_increased', label: '⚠️ Giá nhập tăng', count: tabCounts.price_increased, isWarning: true },
+    { key: 'in_stock', label: 'Còn hàng', count: tabCounts.in_stock },
+    { key: 'out_of_stock', label: 'Hết hàng', count: tabCounts.out_of_stock },
+    { key: 'negative', label: 'Âm kho', count: tabCounts.negative, isNegative: true },
+  ], [tabCounts]);
+
+  const tabFilteredProducts = useMemo(() => {
+    if (filterTab === 'price_increased') {
+      return products.filter(isProductPriceIncreased);
+    }
+    if (filterTab === 'in_stock') {
+      return products.filter(p => Number(p.stock) > 0);
+    }
+    if (filterTab === 'out_of_stock') {
+      return products.filter(p => Number(p.stock) === 0);
+    }
+    if (filterTab === 'negative') {
+      return products.filter(p => Number(p.stock) < 0);
+    }
+    return products;
+  }, [products, filterTab, isProductPriceIncreased]);
+
   const filtered = useMemo(
-    () => filterProductTree(products, deferredSearch, { categoriesById, includeAllVariantsOnParentMatch: false }),
-    [products, deferredSearch, categoriesById]
+    () => filterProductTree(tabFilteredProducts, deferredSearch, { categoriesById, includeAllVariantsOnParentMatch: false }),
+    [tabFilteredProducts, deferredSearch, categoriesById]
   );
+
+  const handleDismissPriceAlert = useCallback(async (productId) => {
+    try {
+      await apiJsonChecked(`/products/${productId}/dismiss-price-alert`, {
+        method: 'POST',
+      }, 'Không thể tắt cảnh báo giá.');
+      await fetchProducts();
+    } catch (err) {
+      alert(`Không thể tắt cảnh báo: ${err.message}`);
+    }
+  }, [fetchProducts]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    if (filterTab === 'price_increased') {
+      const nextExpanded = {};
+      for (const p of products) {
+        if (p.has_price_increased_variant || (Array.isArray(p.variants) && p.variants.some(v => v.import_price_increased || (Number(v.prev_import_price) > 0 && Number(v.import_price) > Number(v.prev_import_price))))) {
+          nextExpanded[p.id] = true;
+        }
+      }
+      setExpandedParents(prev => ({ ...prev, ...nextExpanded }));
+    }
+  }, [filterTab, products]);
   const filteredProductIds = useMemo(() => filtered.map(p => p.id), [filtered]);
   const filteredProductIdSet = useMemo(() => new Set(filteredProductIds.map(toProductIdKey)), [filteredProductIds]);
   const selectedProductIdSet = useMemo(() => new Set(selectedProducts.map(toProductIdKey)), [selectedProducts]);
@@ -1993,6 +2243,57 @@ export default function Products({ store }) {
         </div>
       )}
 
+      {/* Tabs cảnh báo & trạng thái (như OrderList ảnh 1) */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {statusTabs.map(tab => {
+          const active = filterTab === tab.key;
+          const isWarning = tab.isWarning;
+          const hasCount = tab.count > 0;
+          let activeClass = 'bg-blue-600 text-white shadow-sm';
+          let inactiveClass = 'bg-gray-100 text-gray-600 hover:bg-gray-200';
+          let badgeActiveClass = 'bg-white/20 text-white';
+          let badgeInactiveClass = 'bg-white text-gray-500';
+
+          if (isWarning) {
+            if (active) {
+              activeClass = 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-400 ring-offset-1';
+              badgeActiveClass = 'bg-amber-900 text-amber-100';
+            } else if (hasCount) {
+              inactiveClass = 'bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 font-semibold';
+              badgeInactiveClass = 'bg-amber-200 text-amber-900 font-bold';
+            }
+          } else if (tab.isNegative && hasCount) {
+            if (active) {
+              activeClass = 'bg-red-600 text-white shadow-sm';
+            } else {
+              inactiveClass = 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100';
+              badgeInactiveClass = 'bg-red-100 text-red-800 font-bold';
+            }
+          }
+
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => {
+                setFilterTab(tab.key);
+                setCurrentPage(1);
+              }}
+              className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
+                active ? activeClass : inactiveClass
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                active ? badgeActiveClass : badgeInactiveClass
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <input className="input-field mb-3" placeholder=" 🔍 Tìm tên, SKU, danh mục, nhóm, màu, size... VD: vàng led, dạo 10cm, xanh nhạt" value={search} onChange={e => setSearch(e.target.value)} />
 
       <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-xs text-gray-500">
@@ -2049,7 +2350,7 @@ export default function Products({ store }) {
           >
             {allFilteredSelected ? <CheckSquare size={16} /> : <Square size={16} />}
           </button>
-          <div className="flex-1">Tồn sản phẩm</div>
+          <div className="flex-1">Tên sản phẩm</div>
           <div className="w-20 flex items-center justify-end gap-1">
             <span>Tồn kho</span>
             <span className="inline-flex items-center gap-0.5">
@@ -2074,9 +2375,9 @@ export default function Products({ store }) {
             </span>
           </div>
           <div className="hidden w-24 text-right md:block">Giá nhập</div>
-          <div className="hidden w-24 text-right md:block">Gi? l?</div>
-          <div className="hidden w-24 text-right md:block">Gi? s?</div>
-          <div className="hidden w-24 text-right md:block">Gi? kỳ gđi</div>
+          <div className="hidden w-24 text-right md:block">Giá lẻ</div>
+          <div className="hidden w-24 text-right md:block">Giá sỉ</div>
+          <div className="hidden w-24 text-right md:block">Giá VIP</div>
           <div className="w-40 text-right">Hành động</div>
         </div>
 
@@ -2101,6 +2402,7 @@ export default function Products({ store }) {
             onToggleExpand={toggleExpand}
             onToggleSelect={toggleSelectProduct}
             onShowHistory={handleShowHistory}
+            onDismissPriceAlert={handleDismissPriceAlert}
             negativeStockSettings={negativeStockSettings}
           />
         ))}

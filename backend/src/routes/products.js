@@ -143,8 +143,12 @@ function buildProductsTree() {
       parent_sku: v.parent_sku || parent.sku,
       is_variant: true,
     }));
+    const hasPriceIncreasedVariant = enrichedVariants.some(v => Boolean(v.import_price_increased) || (Number(v.prev_import_price) > 0 && Number(v.import_price) > Number(v.prev_import_price)));
+    const isPriceIncreased = Boolean(enrichedParent.import_price_increased) || (Number(enrichedParent.prev_import_price) > 0 && Number(enrichedParent.import_price) > Number(enrichedParent.prev_import_price));
     return {
       ...enrichedParent,
+      import_price_increased: isPriceIncreased,
+      has_price_increased_variant: hasPriceIncreasedVariant,
       variants: enrichedVariants,
       children: enrichedVariants,
       child_products: enrichedVariants,
@@ -180,6 +184,28 @@ function productPayload(body, existing = {}, parent = null) {
       : (existing.supplier_id !== undefined ? existing.supplier_id : (parent?.supplier_id || null)),
   };
 
+  const explicitDismiss = body.dismiss_price_alert === true || body.dismiss_price_alert === 'true';
+  const newImportPrice = payload.import_price;
+  const oldImportPrice = parseFloat(existing.import_price) || 0;
+
+  if (explicitDismiss) {
+    payload.import_price_increased = false;
+    payload.prev_import_price = newImportPrice;
+    payload.dismissed_price_alert_at = new Date().toISOString();
+  } else if (body.import_price_increased !== undefined) {
+    payload.import_price_increased = Boolean(body.import_price_increased);
+    payload.prev_import_price = body.prev_import_price !== undefined ? (parseFloat(body.prev_import_price) || 0) : (existing.prev_import_price || 0);
+    payload.import_price_increased_at = body.import_price_increased_at || existing.import_price_increased_at || null;
+  } else if (existing.id && newImportPrice > oldImportPrice && oldImportPrice > 0) {
+    payload.prev_import_price = oldImportPrice;
+    payload.import_price_increased = true;
+    payload.import_price_increased_at = new Date().toISOString();
+  } else {
+    payload.prev_import_price = existing.prev_import_price !== undefined ? (parseFloat(existing.prev_import_price) || 0) : 0;
+    payload.import_price_increased = Boolean(existing.import_price_increased);
+    payload.import_price_increased_at = existing.import_price_increased_at || null;
+  }
+
   if (isServiceProduct) {
     payload.product_type = 'service';
     payload.item_type = 'service';
@@ -201,6 +227,7 @@ function productPayload(body, existing = {}, parent = null) {
   const optionalFields = [
     'barcode', 'image_url', 'description', 'option1', 'option2', 'option3', 'sync_source',
     'product_type', 'item_type', 'type', 'is_service',
+    'prev_import_price', 'import_price_increased', 'import_price_increased_at', 'dismissed_price_alert_at',
   ];
   for (const field of optionalFields) {
     if (Object.prototype.hasOwnProperty.call(body, field)) payload[field] = body[field] || '';
@@ -1311,6 +1338,42 @@ router.put('/variants/:id', (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+//  POST /api/products/:id/dismiss-price-alert
+//  → Tắt cảnh báo giá tăng cho sản phẩm (hoặc biến thể)
+// ─────────────────────────────────────────────
+router.post('/:id/dismiss-price-alert', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const product = getOne('products', p => p.id === id && isActiveProduct(p));
+    if (!product) return res.status(404).json({ error: 'Không tìm thấy sản phẩm' });
+
+    withAtomicDbWrite(() => {
+      const nowTime = now();
+      update('products', id, {
+        import_price_increased: false,
+        prev_import_price: product.import_price || 0,
+        dismissed_price_alert_at: nowTime,
+        updated_at: nowTime,
+      });
+      // Nếu là sản phẩm cha, cũng tắt cảnh báo cho các biến thể con nếu có
+      const childVariants = getAll('products', v => v.parent_id === id && isActiveProduct(v));
+      for (const cv of childVariants) {
+        update('products', cv.id, {
+          import_price_increased: false,
+          prev_import_price: cv.import_price || 0,
+          dismissed_price_alert_at: nowTime,
+          updated_at: nowTime,
+        });
+      }
+    });
+
+    res.json({ ok: true, message: 'Đã tắt cảnh báo giá tăng' });
+  } catch (err) {
+    res.status(500).json({ error: 'Lỗi khi tắt cảnh báo', detail: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
 //  DELETE /api/products/variants/:id
 //  → Xóa biến thể
 // ─────────────────────────────────────────────
@@ -1364,7 +1427,7 @@ router.post('/import', (req, res) => {
     };
 
     const header = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[\s-]/g, '_'));
-    const validFields = ['sku', 'name', 'import_price', 'wholesale_price', 'retail_price', 'vip_price', 'stock', 'unit', 'category', 'default_category_id', 'parent_id', 'supplier_id'];
+    const validFields = ['sku', 'name', 'import_price', 'prev_import_price', 'import_price_increased', 'import_price_increased_at', 'wholesale_price', 'retail_price', 'vip_price', 'stock', 'unit', 'category', 'default_category_id', 'parent_id', 'supplier_id'];
     const colMap = {};
     header.forEach((h, i) => { if (validFields.includes(h)) colMap[h] = i; });
 

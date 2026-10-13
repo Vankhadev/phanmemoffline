@@ -608,6 +608,15 @@ function productPayloadFromRow(row, existing = {}, parent = null) {
     else if (!existing?.id && field === 'stock') payload[field] = 0;
     else if (!existing?.id) payload[field] = parent?.[field] || 0;
   }
+  if (existing?.id && row.import_price !== undefined) {
+    const newPrice = Number(row.import_price) || 0;
+    const oldPrice = Number(existing.import_price) || 0;
+    if (newPrice > oldPrice && oldPrice > 0) {
+      payload.prev_import_price = oldPrice;
+      payload.import_price_increased = true;
+      payload.import_price_increased_at = new Date().toISOString();
+    }
+  }
   if (row.active !== undefined) payload.active = row.active;
   else if (!existing?.id) payload.active = 1;
   payload.sync_source = existing?.sync_source || parent?.sync_source || 'excel_import';

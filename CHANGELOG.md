@@ -1,3 +1,18 @@
+## [3.1.22] - 2026-10-13
+
+### Added & Enhanced
+- **Thanh tab và huy hiệu cảnh báo tăng giá nhập tại Quản lý sản phẩm (`Products.jsx`):**
+  - Thêm thanh tab lọc trạng thái phía trên danh sách sản phẩm: `[ Tất cả ]`, `[ ⚠️ Giá nhập tăng ]` (nổi bật màu cam kèm số đếm), `[ Còn hàng ]`, `[ Hết hàng ]`, `[ Âm kho ]`.
+  - Khi chọn tab `⚠️ Giá nhập tăng`, tự động lọc và mở rộng toàn bộ sản phẩm cha có biến thể bị tăng giá nhập để chủ cửa hàng nắm bắt ngay lập tức.
+  - Hiển thị huy hiệu cảnh báo trực quan cạnh tên sản phẩm/biến thể: `⚠️ Giá nhập tăng (giá cũ ➔ giá mới)` hoặc `[X] biến thể tăng giá nhập`.
+  - Cột Giá nhập hiển thị giá mới cùng chỉ báo mũi tên đỏ `▲` và giá nhập cũ gạch ngang để đối chiếu mức chênh lệch.
+  - Bổ sung nút hành động nhanh `✓ Đã chỉnh giá` ngay trên từng dòng sản phẩm và biến thể để tắt cảnh báo tức thì khi chủ cửa hàng đã điều chỉnh xong giá bán.
+  - Bổ sung khung cảnh báo chi tiết và checkbox `Đã cập nhật lại giá bán (Tắt cảnh báo giá tăng sau khi lưu)` trong cả hộp thoại Sửa sản phẩm và Sửa biến thể.
+- **Tự động nhận diện tăng giá nhập từ Nhập hàng & Excel (`imports.js`, `excelImportService.js`, `products.js`):**
+  - Tự động so sánh giá nhập mới với giá nhập cũ khi tạo phiếu nhập kho hoặc import file Excel: Nếu giá nhập mới tăng so với giá cũ, tự động đánh dấu cờ cảnh báo và lưu vết `prev_import_price`.
+  - Thêm API endpoint `POST /api/products/:id/dismiss-price-alert` hỗ trợ tắt cảnh báo cho sản phẩm hoặc toàn bộ biến thể liên quan.
+  - Đồng bộ đầy đủ các trường `prev_import_price`, `import_price_increased`, `import_price_increased_at` qua cơ chế đồng bộ (`sync.js`).
+
 ## [3.1.21] - 2026-10-13
 
 ### Fixed & Enhanced

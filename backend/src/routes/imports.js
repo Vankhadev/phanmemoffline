@@ -268,7 +268,16 @@ function applyStockForImport(importLog, details) {
   for (const operation of operations) {
     const d = operation.detail;
     const changes = { updated_at: now() };
-    if (d.import_price) changes.import_price = Math.max(0, toNumber(d.import_price, 0));
+    const curImportPrice = Math.max(0, toNumber(operation.product.import_price, 0));
+    if (d.import_price !== undefined && d.import_price !== null) {
+      const newImportPrice = Math.max(0, toNumber(d.import_price, 0));
+      changes.import_price = newImportPrice;
+      if (newImportPrice > curImportPrice && curImportPrice > 0) {
+        changes.prev_import_price = curImportPrice;
+        changes.import_price_increased = true;
+        changes.import_price_increased_at = now();
+      }
+    }
     if (d.wholesale_price) changes.wholesale_price = Math.max(0, toNumber(d.wholesale_price, 0));
     if (d.retail_price) changes.retail_price = Math.max(0, toNumber(d.retail_price, 0));
     const { validation } = applyImportStockDelta({
