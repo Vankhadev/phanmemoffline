@@ -1,3 +1,13 @@
+## [3.1.23] - 2026-10-13
+
+### Added & Enhanced
+- **Cảnh báo sản phẩm giá nhập cao hơn giá bán (bán lỗ) tại Quản lý sản phẩm (`Products.jsx`, `products.js`):**
+  - Chuyển đổi và tối ưu tab trạng thái thành: **`[ ⚠️ Giá nhập > Giá bán ]`** lọc riêng toàn bộ sản phẩm và biến thể đang bị bán dưới giá vốn / bán lỗ, tự động bung mở danh sách biến thể con bị ảnh hưởng.
+  - Hiển thị huy hiệu cảnh báo đỏ nổi bật cạnh tên sản phẩm: `⚠️ Giá nhập > Giá bán (Nhập X > Bán Y)` hoặc `X biến thể giá nhập > giá bán` giúp chủ cửa hàng phát hiện và ngăn ngừa nguy cơ bán lỗ kịp thời.
+  - Tự động phát hiện và đánh dấu đỏ nổi bật kèm icon `⚠️` tại các cột giá bán bị thấp hơn giá vốn (Giá lẻ, Giá sỉ, Giá VIP).
+  - Cảnh báo thời gian thực ngay trong hộp thoại Sửa sản phẩm và Sửa biến thể khi giá nhập cao hơn giá bán; tự động ẩn cảnh báo ngay khi chủ cửa hàng điều chỉnh lại giá bán hợp lý.
+  - Cập nhật chuẩn hóa đường dẫn tải bộ cài thủ công trong Cài đặt (`Settings.jsx`) theo phiên bản mới nhất.
+
 ## [3.1.22] - 2026-10-13
 
 ### Added & Enhanced
