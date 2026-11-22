@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiJson, apiJsonChecked, clearApiCache, resolveApiUrl, requestSyncCheck } from '../utils/apiClient';
 import { globalSyncEmitter } from '../utils/eventEmitter';
-import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud, Printer, FileDown, Calendar } from 'lucide-react';
+import { Package, Edit2, Trash2, Eye, X, Loader, Plus, Search, CheckSquare, Square, HelpCircle, RefreshCw, Receipt, Clock3, Wallet, UploadCloud, Printer, FileDown, FolderDown, Calendar } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { getProductDisplayName, scoreProductMatch } from '../utils/productSearch';
 import ExcelImportPanel from '../components/ExcelImportPanel';
+import DownloadOrdersModal from '../components/DownloadOrdersModal';
 import OfflineSyncBadge from '../components/OfflineSyncBadge';
 import { PENDING_ORDERS_CHANGED_EVENT } from '../utils/offlineSyncManager';
 import {
@@ -378,6 +379,7 @@ export default function OrderList() {
   const [expandedParents, setExpandedParents] = useState({});
   const [showHelp, setShowHelp] = useState(false);
   const [showExcelImport, setShowExcelImport] = useState(false);
+  const [showDownloadOrdersModal, setShowDownloadOrdersModal] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const { settings: negativeStockSettings } = useNegativeStockSettings();
@@ -1678,6 +1680,13 @@ export default function OrderList() {
                 title="Xuất toàn bộ đơn hàng đang lọc ra file Excel (.xlsx)"
               >
                 <FileDown size={15} /> Xuất Excel
+              </button>
+              <button
+                onClick={() => setShowDownloadOrdersModal(true)}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold flex items-center gap-2 shadow-sm transition"
+                title="Tải đơn hàng về ổ đĩa - Tự động tạo tệp tin riêng cho từng khách hàng"
+              >
+                <FolderDown size={15} /> Tải đơn hàng
               </button>
               <button
                 onClick={() => setShowHelp(true)}
@@ -3012,6 +3021,14 @@ export default function OrderList() {
             </div>
           </div>
         </div>
+      )}
+
+      {showDownloadOrdersModal && (
+        <DownloadOrdersModal
+          isOpen={showDownloadOrdersModal}
+          onClose={() => setShowDownloadOrdersModal(false)}
+          selectedOrderIds={selectedOrders}
+        />
       )}
     </div>
   );

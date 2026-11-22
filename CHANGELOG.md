@@ -1,3 +1,21 @@
+## [3.1.24] - 2026-11-22
+
+### Added & Enhanced
+- **Tải đơn hàng về ổ đĩa tự động phân loại theo từng khách hàng (`orderDownloadService.js`, `DownloadOrdersModal.jsx`, `OrderList.jsx`, `invoices.js`):**
+  - Bổ sung nút **"Tải đơn hàng"** tại màn hình Quản lý đơn hàng (`OrderList.jsx`).
+  - Hỗ trợ xem thống kê trước khi tải (số đơn, số khách hàng, tổng tiền) với tùy chọn tải toàn bộ đơn hàng hoặc chỉ các đơn đã chọn qua checkbox.
+  - Tự động tách riêng mỗi khách hàng thành 1 file Excel riêng biệt (tên file chuẩn hóa theo tên khách hàng), chứa đầy đủ thông tin hóa đơn và bảng chi tiết từng món hàng kèm đơn giá, chiết khấu, thành tiền.
+  - Hỗ trợ lưu trực tiếp vào thư mục chỉ định trên ổ đĩa máy tính qua giao diện File System Access API hoặc tải về gói nén ZIP tiện lợi.
+- **Tích hợp hệ thống Redis & In-Memory Cache hiệu năng cao (`redisCacheService.js`, `server.js`):**
+  - Tích hợp bộ đệm đa tầng thông minh cho các API danh mục và báo cáo thường xuyên truy xuất (`/api/customers`, `/api/products`, `/api/invoices`, `/api/stats`) giúp giảm tải database và tăng tốc độ phản hồi.
+  - Cơ chế tự động dự phòng thông minh (Auto In-Memory Fallback): Tự động kích hoạt bộ nhớ đệm RAM trong Node.js khi Redis offline hoặc không cài đặt, giúp phần mềm hoạt động offline trơn tru, không phụ thuộc ngoại vi.
+  - Tự động làm sạch bộ nhớ đệm (Cache Invalidation) tức thì khi có thao tác thêm, sửa, xóa dữ liệu đơn hàng, sản phẩm, khách hàng, kho hàng.
+  - Bổ sung API giám sát và làm sạch cache: `GET /api/cache/status`, `POST /api/cache/clear`.
+- **Tối ưu kết nối thiết bị di động & mạng nội bộ LAN (`QuickMobileConnectModal.jsx`, `apiClient.js`, `mobileAppRuntime.js`):**
+  - Tự động nhận diện host/IP của máy chủ LAN khi truy cập qua mạng WiFi nội bộ (`browser-lan`), tránh lỗi chuyển hướng loopback 127.0.0.1 trên thiết bị di động.
+  - Nâng cấp hộp thoại Kết nối Mobile & quét mã QR, hiển thị hướng dẫn chi tiết và mã QR đồng bộ địa chỉ IP máy chủ chính xác.
+  - Cập nhật số hiệu phiên bản ứng dụng lên **v3.1.24** đồng bộ toàn hệ thống (`Settings.jsx`, root/frontend/backend package.json).
+
 ## [3.1.23] - 2026-10-13
 
 ### Added & Enhanced

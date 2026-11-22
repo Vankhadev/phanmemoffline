@@ -37,6 +37,10 @@ const { resolveInvoicePrintTemplate } = require('../services/printTemplateServic
 const { logActivity } = require('../services/accountingLogService');
 const { exportCustomerDebtReport } = require('../services/customerDebtReportService');
 const { notifyTelegram } = require('../services/telegramService');
+const {
+  buildOrdersZipByCustomer,
+  getCustomerOrdersSummary,
+} = require('../services/orderDownloadService');
 
 // ─────────────────────────────────────────────
 // Helper: hợp nhất chi tiết trùng product_id (chống duplicate)
@@ -581,6 +585,75 @@ router.get('/reports/customer-orders/export', async (req, res) => {
     console.error('Lỗi xuất báo cáo Excel:', err);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Lỗi xuất báo cáo Excel: ' + err.message });
+    }
+  }
+});
+
+// ─────────────────────────────────────────────
+// GET /api/invoices/download-by-customer/summary
+// Lấy danh sách thống kê file theo khách hàng trước khi tải
+// ─────────────────────────────────────────────
+router.get('/download-by-customer/summary', async (req, res) => {
+  try {
+    const scope = String(req.query.scope || 'all').trim() === 'selected' ? 'selected' : 'all';
+    const rawIds = req.query.ids;
+    const orderIds = [];
+    if (rawIds) {
+      const decoded = decodeURIComponent(String(rawIds));
+      decoded.split(',').forEach((part) => {
+        const value = part.trim();
+        if (value) orderIds.push(value);
+      });
+    }
+    const summary = getCustomerOrdersSummary({ scope, orderIds });
+    res.json({ ok: true, ...summary });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Lỗi lấy thông tin: ' + (err?.message || 'unknown') });
+  }
+});
+
+// ─────────────────────────────────────────────
+// GET /api/invoices/download-by-customer
+// Tải toàn bộ đơn hàng về ổ đĩa, tự động tách 1 tệp Excel cho mỗi khách hàng
+// (tên tệp = tên khách hàng), nén lại thành 1 file ZIP duy nhất.
+// ─────────────────────────────────────────────
+router.get('/download-by-customer', async (req, res) => {
+  try {
+    const scope = String(req.query.scope || 'all').trim() === 'selected' ? 'selected' : 'all';
+    const rawIds = req.query.ids;
+    const orderIds = [];
+
+    if (rawIds) {
+      const decoded = decodeURIComponent(String(rawIds));
+      decoded.split(',').forEach((part) => {
+        const value = part.trim();
+        if (value) orderIds.push(value);
+      });
+    }
+
+    if (scope === 'selected' && orderIds.length === 0) {
+      return res.status(400).json({ error: 'Chưa chọn đơn hàng nào để tải về.' });
+    }
+
+    const result = await buildOrdersZipByCustomer({ scope, orderIds });
+
+    if (!result.customerCount) {
+      return res.status(404).json({ error: 'Không có đơn hàng nào để tải về.' });
+    }
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(result.fileName)}"; filename*=UTF-8''${encodeURIComponent(result.fileName)}`
+    );
+    res.setHeader('Content-Length', String(result.buffer.length));
+    res.setHeader('X-Invoice-Count', String(result.invoiceCount));
+    res.setHeader('X-Customer-Count', String(result.customerCount));
+    res.end(result.buffer);
+  } catch (err) {
+    console.error('[KHA] Lỗi tải đơn hàng theo khách hàng:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Lỗi tải đơn hàng: ' + (err?.message || 'unknown') });
     }
   }
 });

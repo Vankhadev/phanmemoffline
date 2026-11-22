@@ -50,6 +50,7 @@ const integrityChecker = require('./services/integrityChecker');
 const safetyRules = require('./services/safetyRules');
 const authRepairService = require('./services/authRepairService');
 const RecoveryEngine = require('./services/RecoveryEngine');
+const redisCacheService = require('./services/redisCacheService');
 
 // --- Routes ---
 const storeRoutes     = require('./routes/store');
@@ -122,6 +123,7 @@ function buildHealthPayload() {
     envFiles: getLoadedEnvFiles().map(maskDbPath),
     printTemplatesMySql: getPrintTemplatesMySqlStatus(),
     settingsMySql: getSettingsMySqlStatus(),
+    cache: redisCacheService.getCacheStatus(),
     node: process.version,
     success: true,
     status: 'ok',
@@ -335,24 +337,36 @@ app.use('/api',                syncRoutes);
 app.use('/api/database',       requireAuth, requireAdmin, databaseRoutes);
 app.use('/api/db',             requireAuth, requireAdmin, databaseRoutes);
 // These routes can restore or disclose the entire local database.
+// Endpoint kiểm tra và quản lý Redis / Memory Cache
+app.get('/api/cache/status', (req, res) => {
+  res.json(redisCacheService.getCacheStatus());
+});
+app.get('/api/database/cache-status', (req, res) => {
+  res.json(redisCacheService.getCacheStatus());
+});
+app.post('/api/cache/clear', requireAuth, (req, res) => {
+  redisCacheService.clearAllCache();
+  res.json({ ok: true, message: 'Đã xóa sạch bộ nhớ cache.' });
+});
+
 app.use('/api/recovery',       requireAuth, requireAdmin, recoveryRoutes);
 app.use('/api/restore',        requireAuth, requireAdmin, restoreRoutes);
 app.use('/api/data-guardian',  requireAuth, requireAdmin, dataGuardianRoutes);
 app.use('/api/store',          requireAuth, requireAnyPermission(['store.read', 'store.manage']), storeRoutes);
-app.use('/api/customers',      requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customersRoutes);
-app.use('/api/products',       requireAuth, requireAnyPermission(['products.read', 'products.manage']), productsRoutes);
+app.use('/api/customers',      requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), redisCacheService.cacheMiddleware('customers', 60), redisCacheService.invalidateCacheMiddleware(['customers', 'stats']), customersRoutes);
+app.use('/api/products',       requireAuth, requireAnyPermission(['products.read', 'products.manage']), redisCacheService.cacheMiddleware('products', 60), redisCacheService.invalidateCacheMiddleware(['products', 'inventory', 'stats']), productsRoutes);
 app.use('/api/partners',       requireAuth, requireAnyPermission(['partners.read', 'partners.manage']), partnersRoutes);
-app.use('/api/invoices',       requireAuth, requireAnyPermission(['invoices.read', 'invoices.manage']), invoicesRoutes);
-app.use('/api/imports',        requireAuth, requireAnyPermission(['imports.read', 'imports.manage']), importsRoutes);
-app.use('/api/combos',         requireAuth, requireAnyPermission(['combos.read', 'combos.manage']), combosRoutes);
-app.use('/api/returns',        requireAuth, requireAnyPermission(['returns.read', 'returns.manage']), returnsRoutes);
-app.use('/api/stats',          requireAuth, requirePermission('stats.read'), statsRoutes);
+app.use('/api/invoices',       requireAuth, requireAnyPermission(['invoices.read', 'invoices.manage']), redisCacheService.cacheMiddleware('invoices', 30), redisCacheService.invalidateCacheMiddleware(['invoices', 'stats', 'customers']), invoicesRoutes);
+app.use('/api/imports',        requireAuth, requireAnyPermission(['imports.read', 'imports.manage']), redisCacheService.invalidateCacheMiddleware(['inventory', 'products', 'stats']), importsRoutes);
+app.use('/api/combos',         requireAuth, requireAnyPermission(['combos.read', 'combos.manage']), redisCacheService.invalidateCacheMiddleware(['products']), combosRoutes);
+app.use('/api/returns',        requireAuth, requireAnyPermission(['returns.read', 'returns.manage']), redisCacheService.invalidateCacheMiddleware(['invoices', 'products', 'stats']), returnsRoutes);
+app.use('/api/stats',          requireAuth, requirePermission('stats.read'), redisCacheService.cacheMiddleware('stats', 30), statsRoutes);
 app.use('/api/cash-book',      requireAuth, requireAnyPermission(['cashbook.read', 'cashbook.manage']), cashBookRoutes);
 app.use('/api/customer-types', requireAuth, requireAnyPermission(['customers.read', 'customers.manage']), customerTypesRoutes);
-app.use('/api/product-categories', requireAuth, requireAnyPermission(['products.read', 'products.manage']), productCategoriesRoutes);
+app.use('/api/product-categories', requireAuth, requireAnyPermission(['products.read', 'products.manage']), redisCacheService.invalidateCacheMiddleware(['products']), productCategoriesRoutes);
 app.use('/api/features', featuresRoutes);
 app.use('/api/updates', updatesRoutes);
-app.use('/api/inventory', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'inventory_reports.read']), inventoryRoutes);
+app.use('/api/inventory', requireAuth, requireAnyPermission(['products.read', 'products.manage', 'inventory_reports.read']), redisCacheService.cacheMiddleware('inventory', 60), redisCacheService.invalidateCacheMiddleware(['inventory', 'products', 'stats']), inventoryRoutes);
 app.use('/api/accounting', requireAuth, requireAnyPermission(['accounting.read', 'accounting.manage', 'tax_reports.read', 'tax_reports.manage', 'revenue_reports.read', 'profit_reports.read', 'debts.read', 'einvoices.read', 'bank_accounts.read', 'activity_logs.read']), accountingRoutes);
 app.use('/api/settings', requireAuth, requireAnyPermission(['settings.read', 'settings.manage']), settingsRoutes);
 app.use('/api/telegram', requireAuth, requireAnyPermission(['settings.read', 'settings.manage']), telegramRoutes);

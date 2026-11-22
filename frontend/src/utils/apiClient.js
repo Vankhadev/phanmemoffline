@@ -186,7 +186,6 @@ function readPortValue(value, fallback = '') {
 }
 
 const LOCAL_API_BASE_OVERRIDE_KEY = 'kha.localApiBaseOverride';
-const MOBILE_LAN_API_BASE = 'http://192.168.1.19:5174/api';
 const ENV_VALUES = {
   VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL || '',
   VITE_API_BASE: import.meta.env.VITE_API_BASE || '',
@@ -276,16 +275,27 @@ function isLoopbackHost(hostname) {
   return value === 'localhost' || value === '127.0.0.1' || value === '::1' || value === '[::1]';
 }
 
+function getMobileLanApiBase() {
+  if (typeof window !== 'undefined' && window.location) {
+    const currentHost = String(window.location.hostname || '').trim();
+    if (currentHost && !isLoopbackHost(currentHost)) {
+      const port = window.location.port || '7000';
+      return `${window.location.protocol}//${currentHost}:${port}/api`;
+    }
+  }
+  return '';
+}
+
 function isNativeWebViewRuntime() {
   try {
     if (typeof window === 'undefined') return false;
     if (typeof window.Capacitor?.isNativePlatform === 'function') return window.Capacitor.isNativePlatform();
     const protocol = String(window.location?.protocol || '').trim().toLowerCase();
     const hostname = String(window.location?.hostname || '').trim().toLowerCase();
-    const userAgent = String(window.navigator?.userAgent || '');
+    // Chỉ xem là native webview độc lập nếu chạy file cục bộ không có máy chủ
     return protocol === 'capacitor:'
-      || (protocol === 'https:' && hostname === 'localhost')
-      || /\bwv\b/i.test(userAgent);
+      || protocol === 'file:'
+      || (protocol === 'https:' && hostname === 'localhost');
   } catch (_) {
     return false;
   }
@@ -334,6 +344,25 @@ export function normalizeApiBaseOverride(value) {
 function readLocalApiBaseOverride() {
   const stored = normalizeApiBaseOverride(readStorageValue(LOCAL_API_BASE_OVERRIDE_KEY));
   if (!stored) return '';
+
+  // Xóa bỏ ngay lập tức nếu chứa IP cũ không tồn tại 192.168.1.19
+  if (stored.includes('192.168.1.19')) {
+    removeStorageValue(LOCAL_API_BASE_OVERRIDE_KEY);
+    return '';
+  }
+
+  // Nếu trình duyệt đang truy cập từ một IP LAN (vd: 192.168.1.16) khác với IP lưu trong storage
+  if (typeof window !== 'undefined' && window.location) {
+    const currentHost = String(window.location.hostname || '').trim();
+    if (currentHost && !isLoopbackHost(currentHost)) {
+      const parsedStored = parseUrl(stored);
+      if (parsedStored && parsedStored.hostname !== currentHost) {
+        removeStorageValue(LOCAL_API_BASE_OVERRIDE_KEY);
+        return '';
+      }
+    }
+  }
+
   const envApiBase = normalizeApiBaseOverride(readEnvApiBase());
   if (isLoopbackApiBase(stored) && (isNativeWebViewRuntime() || (envApiBase && !isLoopbackApiBase(envApiBase)))) {
     removeStorageValue(LOCAL_API_BASE_OVERRIDE_KEY);
@@ -416,18 +445,21 @@ function resolveApiBaseDetails() {
   const envApiBase = stripTrailingSlash(readEnvApiBase());
   if (envApiBase) return { base: envApiBase, source: 'env' };
 
+  // 1. Khi truy cập từ thiết bị qua mạng WiFi nội bộ (IP LAN như 192.168.x.x) hoặc domain:
+  // Luôn dùng chính địa chỉ host máy chủ mà trình duyệt đang kết nối tới!
+  const browserApiBase = stripTrailingSlash(getBrowserLanApiBase());
+  if (browserApiBase) return { base: browserApiBase, source: 'browser-lan' };
+
   const localOverrideApiBase = readLocalApiBaseOverride();
   if (localOverrideApiBase) return { base: localOverrideApiBase, source: 'local-override' };
-
-  if (isNativeWebViewRuntime()) {
-    return { base: MOBILE_LAN_API_BASE, source: 'mobile-lan-fallback' };
-  }
 
   const electronApiBase = stripTrailingSlash(readElectronApiBase());
   if (electronApiBase) return { base: electronApiBase, source: 'electron' };
 
-  const browserApiBase = stripTrailingSlash(getBrowserLanApiBase());
-  if (browserApiBase) return { base: browserApiBase, source: 'browser-fallback' };
+  if (isNativeWebViewRuntime()) {
+    const mobileLan = getMobileLanApiBase();
+    if (mobileLan) return { base: mobileLan, source: 'mobile-lan-fallback' };
+  }
 
   return { base: '', source: 'relative-proxy' };
 }
@@ -811,14 +843,14 @@ function buildApiNetworkError(url, error) {
 
 function buildLoopbackRetryUrls(url) {
   const parsed = parseUrl(url);
-  if (!parsed || !/^https?:$/i.test(parsed.protocol) || !isLoopbackHost(parsed.hostname)) return [];
+  if (!parsed || !/^https?:$/i.test(parsed.protocol)) return [];
 
   const configured = getConfiguredBackendConnection();
   const localOverride = getLocalOverrideConnection();
   const currentPort = String(parsed.port || (parsed.protocol === 'https:' ? '443' : '80')).trim();
-  const retryHost = isLoopbackHost(localOverride.host)
-    ? localOverride.host
-    : (isLoopbackHost(configured.host) ? configured.host : parsed.hostname);
+  const retryHost = isLoopbackHost(parsed.hostname)
+    ? (isLoopbackHost(localOverride.host) ? localOverride.host : (isLoopbackHost(configured.host) ? configured.host : parsed.hostname))
+    : parsed.hostname;
   const retryPorts = [];
   const addPort = (value) => {
     const port = String(value || '').trim();
@@ -829,21 +861,9 @@ function buildLoopbackRetryUrls(url) {
   addPort(localOverride.port);
   addPort(configured.port);
   addPort(parsed.port);
-  // The normal development server has one fixed backend port. Do not fan one
-  // login request across fallback ports, especially after a backend restart.
-  if (String(readEnvValue('DEV', 'false')).trim().toLowerCase() === 'true') return retryPorts
-    .filter(port => port !== currentPort)
-    .map(port => `${parsed.protocol}//${retryHost}:${port}${parsed.pathname || ''}${parsed.search || ''}`);
-
   addPort('7000');
+  addPort('5174');
   addPort('7001');
-  addPort('7002');
-  addPort('7003');
-  addPort('7004');
-  addPort('7005');
-  addPort('7010');
-  addPort('7100');
-  addPort('3101');
 
   return retryPorts
     .filter(port => port !== currentPort)
@@ -905,7 +925,7 @@ async function fetchWithLoopbackRecovery(fetchImpl, url, requestInit, originalEr
 function retryHostCandidates(url) {
   const parsed = parseUrl(url);
   if (!parsed) return '127.0.0.1';
-  return isLoopbackHost(parsed.hostname) ? parsed.hostname : '127.0.0.1';
+  return parsed.hostname || '127.0.0.1';
 }
 
 // KHA: thay api base trong url bang base moi (giu path/search).

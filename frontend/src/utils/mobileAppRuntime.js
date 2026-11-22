@@ -4,7 +4,10 @@ export const MOBILE_UPDATE_EVENT = 'kha-mobile-update:available';
 export const MOBILE_APP_DISPLAY_NAME = String(import.meta.env.VITE_MOBILE_APP_DISPLAY_NAME || 'Bán Hàng Pos').trim();
 export const MOBILE_APP_VERSION = String(import.meta.env.VITE_MOBILE_APP_VERSION || '2.0.2').trim();
 export const MOBILE_APP_VERSION_CODE = Number(import.meta.env.VITE_MOBILE_APP_VERSION_CODE || 3);
-export const MOBILE_LAN_ORIGIN = stripTrailingSlash(import.meta.env.VITE_MOBILE_LAN_ORIGIN || 'http://192.168.1.19:5174');
+export const MOBILE_LAN_ORIGIN = stripTrailingSlash(
+  import.meta.env.VITE_MOBILE_LAN_ORIGIN
+    || (typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '')
+);
 export const MOBILE_DOWNLOAD_PAGE_URL = `${MOBILE_LAN_ORIGIN}/download.html`;
 export const MOBILE_UPDATE_MANIFEST_URL = `${MOBILE_LAN_ORIGIN}/mobile-update.json`;
 export const MOBILE_UPDATE_API_URL = `${MOBILE_LAN_ORIGIN}/api/updates/check`;

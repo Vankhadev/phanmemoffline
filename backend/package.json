@@ -1,6 +1,6 @@
 {
   "name": "phanmienoffline-backend",
-  "version": "3.1.23",
+  "version": "3.1.24",
   "description": "Backend for Bán Hàng Pos",
   "main": "src/server.js",
   "scripts": {
@@ -35,7 +35,9 @@
     "express": "^5.0.1",
     "express-rate-limit": "^7.4.1",
     "helmet": "^8.1.0",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.2",
     "multer": "^2.0.1",
     "mysql2": "^3.22.4",
     "node-cron": "^3.0.3",

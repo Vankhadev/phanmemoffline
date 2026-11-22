@@ -8,46 +8,46 @@
 - File manifest legacy [`release/update-manifest.json`](release/update-manifest.json:1) vẫn được giữ để tooling ngoài app có thể đọc SHA256/size theo từng kiến trúc.
 - Bản Windows phát hành cả hai kiến trúc: `x64` và `ia32`. Tên asset luôn có hậu tố kiến trúc để tránh người dùng Windows 32-bit tải nhầm bản x64.
 
-## Bảng phát hành chính thức v3.1.23
+## Bảng phát hành chính thức v3.1.24
 
 | Hạng mục | Nội dung |
 | --- | --- |
-| Phiên bản | 3.1.23 |
-| Ngày phát hành | 2026-10-13 |
+| Phiên bản | 3.1.24 |
+| Ngày phát hành | 2026-11-22 |
 | Kênh phát hành | GitHub Release latest cho Windows x64 và ia32 |
 | Trạng thái | Đã cập nhật source code, metadata, sẵn sàng tag và push để GitHub Actions publish |
 
 ### Ghi chú thay đổi tổng quan
 
-Bản 3.1.23 tối ưu hóa và chuẩn hóa cơ chế cảnh báo bán lỗ tại Quản lý sản phẩm: bổ sung tab trạng thái `⚠️ Giá nhập > Giá bán` giúp lọc nhanh toàn bộ mặt hàng có giá vốn cao hơn giá bán (giá lẻ, giá sỉ, giá VIP); hiển thị huy hiệu mức chênh lệch bán lỗ cạnh tên sản phẩm, đánh dấu màu đỏ nổi bật ở các cột giá bán bị lỗ, cảnh báo thời gian thực trong hộp thoại Sửa sản phẩm và biến thể; cập nhật chuẩn hóa đường dẫn tải bộ cài thủ công trong Cài đặt theo version mới nhất.
+Bản 3.1.24 bổ sung tính năng Tải đơn hàng về ổ đĩa tự động phân loại và tách riêng file Excel cho từng khách hàng (nén gói ZIP hoặc lưu trực tiếp vào thư mục); tích hợp hệ thống bộ đệm Redis & In-Memory Cache hiệu năng cao với cơ chế tự động dự phòng RAM và tự động xóa cache khi thay đổi dữ liệu; tối ưu hóa kết nối thiết bị di động qua mạng WiFi nội bộ LAN với tính năng tự động nhận diện IP máy chủ và mã QR kết nối nhanh.
 
 ### Phát hành
 
-- Đồng bộ version 3.1.23 trong package root, backend, frontend và các lockfile tương ứng.
-- Cập nhật changelog, tài liệu release, manifest ví dụ, tên asset và tag kiểm tra theo v3.1.23.
+- Đồng bộ version 3.1.24 trong package root, backend, frontend và các lockfile tương ứng.
+- Cập nhật changelog, tài liệu release, manifest ví dụ, tên asset và tag kiểm tra theo v3.1.24.
 - GitHub Actions build/publish bộ cài riêng cho Windows x64 và ia32 kèm latest.yml/update-manifest.json từ artifact thực tế sau khi push tag.
 
 ### QA và build
 
 - Rà soát diff release để chỉ stage các tệp version/tài liệu và thay đổi nghiệp vụ thuộc phạm vi phát hành.
 - Chạy build frontend và kiểm tra cú pháp backend trước khi commit/tag.
-- Giữ nguyên metadata generated production nếu chưa có installer v3.1.23 để sinh SHA/size chính xác.
+- Giữ nguyên metadata generated production nếu chưa có installer v3.1.24 để sinh SHA/size chính xác.
 
 ### Lưu ý quan trọng cho người dùng
 
-- Windows 10/11 64-bit: dùng `banhangoffline-setup-v3.1.23-x64.exe`.
-- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn”: dùng `banhangoffline-setup-v3.1.23-ia32.exe`.
+- Windows 10/11 64-bit: dùng `banhangoffline-setup-v3.1.24-x64.exe`.
+- Windows 32-bit hoặc máy báo “Ứng dụng này không thể chạy trên PC của bạn”: dùng `banhangoffline-setup-v3.1.24-ia32.exe`.
 - Chỉ tải từ GitHub Release chính thức của repo `Vankhadev/phanmemoffline`; không chạy file nếu tên file, nguồn tải, SHA256 hoặc kích thước không khớp manifest phát hành.
 - Người dùng trong app có thể vào Cài đặt -> Cập nhật để kiểm tra và tự động nâng cấp lên phiên bản mới nhất.
 
 ## Asset GitHub Release bắt buộc
 
-Khi phát hành version `3.1.23`, release cần tối thiểu các asset:
+Khi phát hành version `3.1.24`, release cần tối thiểu các asset:
 
-- `banhangoffline-setup-v3.1.23-x64.exe`
-- `banhangoffline-setup-v3.1.23-x64.exe.blockmap`
-- `banhangoffline-setup-v3.1.23-ia32.exe`
-- `banhangoffline-setup-v3.1.23-ia32.exe.blockmap`
+- `banhangoffline-setup-v3.1.24-x64.exe`
+- `banhangoffline-setup-v3.1.24-x64.exe.blockmap`
+- `banhangoffline-setup-v3.1.24-ia32.exe`
+- `banhangoffline-setup-v3.1.24-ia32.exe.blockmap`
 - `latest.yml`
 - `update-manifest.json`
 
